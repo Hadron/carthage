@@ -50,3 +50,13 @@ def test_override_replaces_subinjector(injector):
     injector(func2)
     
 
+
+
+def test_injector_instantiates(injector):
+    class SomeClass(dependency_injection.Injectable): pass
+    @inject(s = SomeClass)
+    def func(s):
+        assert isinstance(s, SomeClass)
+    injector.add_provider(SomeClass)
+    injector(func)
+    
