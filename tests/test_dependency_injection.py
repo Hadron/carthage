@@ -7,13 +7,18 @@
 # LICENSE for details.
 
 from carthage import dependency_injection
-from carthage.dependency_injection import inject
+from carthage.dependency_injection import inject, InjectionKey
+from test_helpers import async_test
 
-import pytest
+import asyncio, pytest
 
 @pytest.fixture()
 def injector():
     return dependency_injection.Injector()
+
+@pytest.fixture()
+def a_injector(injector, loop):
+    return injector(dependency_injection.AsyncInjector, loop = loop)
 
 def test_injector_provides_self(injector):
     @inject(i = dependency_injection.Injector)
@@ -67,4 +72,53 @@ def test_injector_instantiates(injector):
         assert isinstance(s, SomeClass)
     injector.add_provider(SomeClass)
     injector(func)
+    
+def test_async_injector_construction(loop, injector):
+    @inject(a = dependency_injection.AsyncInjector)
+    def f(a):
+        assert isinstance(a,dependency_injection.AsyncInjector)
+    injector.add_provider(loop)
+    injector(f)
+    
+
+@async_test
+async def test_construct_using_coro(a_injector, loop):
+    async def coro():
+        return 42
+    k = dependency_injection.InjectionKey('run_coro')
+    @inject(v = k)
+    def f(v):
+        assert v == 42
+    a_injector.add_provider(k, coro)
+    await a_injector(f)
+
+@async_test
+async def test_async_function(a_injector, loop):
+    class Dependency(dependency_injection.Injectable): pass
+    async def setup_dependency(): return Dependency()
+    called = False
+    @inject(d = Dependency)
+    async def coro(d):
+        assert isinstance(d, Dependency)
+        nonlocal called
+        called = True
+    a_injector.add_provider(InjectionKey(Dependency), setup_dependency)
+    await a_injector(coro)
+    assert called is True
+    
+    
+
+@async_test
+async def test_async_ready(a_injector, loop):
+    class AsyncDependency(dependency_injection.AsyncInjectable):
+        async def async_ready(self):
+            self.ready = True
+            return self
+
+        def __init__(self):
+            self.ready = False
+    @inject(r = AsyncDependency)
+    def is_ready(r):
+        assert r.ready
+    await a_injector(is_ready, r = AsyncDependency)
     
