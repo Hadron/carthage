@@ -248,7 +248,7 @@ def inject(**dependencies):
 class AsyncInjectable(Injectable):
 
     async def async_ready(self):
-        return
+        return self
 
 
 @inject(loop = asyncio.AbstractEventLoop, injector = Injector)
@@ -260,7 +260,7 @@ class AsyncInjector(Injectable):
     should behave the same.
 '''
 
-    def __init__(self, loop, injector):
+    def __init__(self, injector, loop):
         self.injector = type(injector)(injector) # create our own sub injector
         self.injector.add_provider(self)
         self.loop = loop
