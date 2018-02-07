@@ -114,3 +114,46 @@ async def test_async_ready(a_injector, loop):
         assert r.ready
     await a_injector(is_ready, r = AsyncDependency)
     
+
+def test_allow_multiple(injector):
+    from carthage.config import ConfigLayout
+    injector.add_provider(ConfigLayout, allow_multiple = True)
+    s1 = dependency_injection.Injector(injector)
+    s2 = dependency_injection.Injector(injector)
+    assert s1 is not s2
+    assert s1.parent_injector is injector
+    assert s2.parent_injector is injector
+    c1 = s1.get_instance(ConfigLayout)
+    c2 = s2.get_instance(ConfigLayout)
+    assert isinstance(c1, ConfigLayout)
+    assert isinstance(c2, ConfigLayout)
+    assert c1 is not c2
+    c3 = injector.get_instance(ConfigLayout)
+    assert isinstance(c3, ConfigLayout)
+    assert c3 is not c1
+    assert c3 is not c2
+    
+
+def test_allow_multiple_provider_at_root(injector):
+    from carthage.config import ConfigLayout
+    injector.add_provider(ConfigLayout, allow_multiple = True)
+    s1 = dependency_injection.Injector(injector)
+    s2 = dependency_injection.Injector(injector)
+    assert s1 is not s2
+    c3 = injector.get_instance(ConfigLayout)
+    c1 = s1.get_instance(ConfigLayout)
+    c2 = s2.get_instance(ConfigLayout)
+    assert c3 is c1
+    assert c2 is c3
+    
+
+def test_allow_multiple_false(injector):
+    from carthage.config import ConfigLayout
+    injector.add_provider(ConfigLayout, allow_multiple = False)
+    s1 = dependency_injection.Injector(injector)
+    s2 = dependency_injection.Injector(injector)
+    assert s1 is not s2
+    c1 = s1.get_instance(ConfigLayout)
+    c2 = s2.get_instance(ConfigLayout)
+    assert c1 is c2
+    

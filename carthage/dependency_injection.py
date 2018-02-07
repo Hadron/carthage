@@ -20,6 +20,32 @@ class Injectable:
         if k is InjectionKey(cls): return True
         return  k in cls.supplimentary_injection_keys(k)
 
+class DependencyProvider:
+    __slots__ = ('provider',
+                 'allow_multiple',
+                 )
+
+    def __init__(self, provider, allow_multiple = False):
+        self.provider = provider
+        self.allow_multiple = allow_multiple
+
+    def __repr__(self):
+        return "<DependencyProvider allow_multiple={}: {}>".format(
+self.allow_multiple, repr(self.provider))
+
+    @property
+    def is_factory(self):
+        return (isinstance(self.provider, type) and issubclass(self.provider, Injectable)) \
+            or asyncio.iscoroutinefunction(self.provider) \
+            or asyncio.isfuture(self.provider)
+
+    def record_instantiation(self, instance, k, satisfy_against):
+        dp = satisfy_against._providers.setdefault(k, DependencyProvider(instance, self.allow_multiple))
+        assert dp.is_factory or dp.provider is instance
+        dp.provider = instance
+        return dp
+        
+    
 
 class Injector(Injectable):
 
@@ -35,10 +61,11 @@ class Injector(Injectable):
         for p in providers:
             self.add_provider(p)
         self.add_provider(self) #Make sure we can inject an Injector
-        self.add_provider(InjectionKey(AsyncInjector, allow_multiple = True), AsyncInjector)
+        self.add_provider(InjectionKey(AsyncInjector ), AsyncInjector, allow_multiple = True)
 
 
-    def add_provider(self, k, p = None):
+    def add_provider(self, k, p = None, *,
+                     allow_multiple = False):
         '''Either called as add_provider(provider) or
         add_provider(injection_key, provider).  In the first form, a key is
         automatically constructed.
@@ -47,20 +74,44 @@ class Injector(Injectable):
             p,k = k,p #swap; we construct the key later
 
         if k is None:
+            if isinstance(p, DependencyProvider): raise NotImplementedError
             k = InjectionKey(p if isinstance(p,type) else p.__class__)
+        if not isinstance(p, DependencyProvider):
+            p = DependencyProvider(p, allow_multiple = allow_multiple)
         assert isinstance(k,InjectionKey)
-        if k in self._providers:
-            if p is self._providers[k]: return k
-            existing_provider = self._providers[k]
-            if isinstance(existing_provider, type) and issubclass(existing_provider, Injectable):
+        if k in self:
+            if p is self._get(k): return k
+            existing_provider = self._get(k)
+            if existing_provider.is_factory:
                 pass # provider permitted
             else: raise ExistingProvider(k)
         self._providers[k] = p
-        for k2 in k.supplimentary_injection_keys(p):
-            if k2 not in self._providers:
+        for k2 in k.supplimentary_injection_keys(p.provider):
+            if k2 not in self:
                 self._providers[k2] = p
         return k
 
+    def _get(self, k):
+        return self._providers[k]
+
+    def _get_parent(self, k):
+        #Returns  DependencyProvider, instantiation_target
+        injector = self
+        while injector is not None:
+            try:
+                # If the key allows multiple providers, then
+                # satisfy against ourself and store the result in
+                # ourself.  Otherwise if a single provider is
+                # required, then satisfy against the injector
+                # where the key is introduced and store there.
+                p = injector._providers[k]
+                return p, (self if p.allow_multiple else injector)
+            except KeyError:
+                injector = injector.parent_injector
+        raise KeyError("{} not found".format(k))
+    def __contains__(self, k):
+        return k in self._providers
+    
     def __call__(self, cls, *args, **kwargs):
         '''Construct an instance of cls using the providers in this injector.
         Instantiate providers as needed.  In general a sub-injector is not
@@ -98,7 +149,7 @@ class Injector(Injectable):
                      futures_instantiate = None):
         def resolve_future(injector,k):
             def done(future):
-                try: injector._providers[k] = future.result()
+                try: provider.record_instantiation(future.result(), k, injector)
                 except: pass #Will be handled in our caller who also attaches a done callback
             return done
                 
@@ -106,36 +157,27 @@ class Injector(Injectable):
         def no_futures_instantiate(injector, p):
             return injector(p)
 
+        if not isinstance(k, InjectionKey):
+            k = InjectionKey(k)
         if futures_instantiate: instantiate = futures_instantiate
         else: instantiate = no_futures_instantiate
-        injector = self
-        while injector is not None:
-            if k in injector._providers:
-                provider = injector._providers[k]
-                if self._should_instantiate(provider):
-                    # If the key allows multiple providers, then
-                    # satisfy against ourself and store the result in
-                    # ourself.  Otherwise if a single provider is
-                    # required, then satisfy against the injector
-                    # where the key is introduced and store there.
-                    satisfy_against = self if k.allow_multiple else injector
-                    provider = instantiate(satisfy_against,  provider)
-                    if self._is_async(provider):
-                        if not futures_instantiate:
-                            raise UnsatisfactoryDependency("{} has an asynchronous provider injected into a non-asynchronous context".format(k))
-                        future = self._handle_async(provider)
-                        future.add_done_callback(resolve_future( satisfy_against, k))
-                        return future
-                    else: # not async
-                        satisfy_against._providers[k] = provider
-                return provider
-            injector = injector.parent_injector
-        raise KeyError("No dependency for {} found".format(k))
+        try:
+            provider, satisfy_against = self._get_parent(k)
+        except KeyError:
+            raise KeyError("No dependency for {}".format(k)) from None
+        if provider.is_factory:
+            instance = instantiate(satisfy_against,  provider.provider)
+            if self._is_async(instance):
+                if not futures_instantiate:
+                    raise UnsatisfactoryDependency("{} has an asynchronous provider injected into a non-asynchronous context".format(k))
+                future = self._handle_async(instance)
+                future.add_done_callback(resolve_future( satisfy_against, k))
+                provider.record_instantiation(future, k, satisfy_against) 
+                return future
+            else:
+                provider = provider.record_instantiation(instance, k, satisfy_against)
+        return provider.provider
 
-    def _should_instantiate(self, provider):
-        if isinstance(provider, type) and issubclass(provider, Injectable): return True
-        if asyncio.iscoroutinefunction(provider): return True
-        return False
     
     def _is_async(self, p):
         if isinstance(p, (collections.abc.Coroutine, AsyncInjectable,
@@ -167,7 +209,6 @@ class InjectionKey:
             if  target_ in cls._target_injection_keys:
                 return cls._target_injection_keys[target_]
         self =super().__new__(cls)
-        self.__dict__['allow_multiple'] = constraints.pop('allow_multiple', False)
         self.__dict__['constraints'] = dict(constraints)
         self.__dict__['target'] = target_
         if len(constraints) == 0 and not isinstance(target_, (str, int, float)):
