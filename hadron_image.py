@@ -7,11 +7,12 @@
 # LICENSE for details.
 
 import asyncio
-import carthage. dependency_injection
-import carthage.config
-from .dependency_injection import AsyncInjector, Injector
-from .config import ConfigLayout
+from carthage.hadron import HadronImageVolume
+from carthage.dependency_injection import AsyncInjector
+from carthage import base_injector
 
-base_injector = carthage.dependency_injection.Injector()
-base_injector.add_provider(carthage.config.ConfigLayout)
-base_injector.add_provider(asyncio.get_event_loop())
+async def run():
+    ainjector = base_injector(AsyncInjector)
+    volume = await ainjector(HadronImageVolume)
+
+asyncio.get_event_loop().run_until_complete(run())
