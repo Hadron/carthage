@@ -18,6 +18,7 @@ class Injectable:
     @classmethod
     def satisfies_injection_key(cls, k):
         if k is InjectionKey(cls): return True
+        if isinstance(k.target, (str, tuple)): return True
         return  k in cls.supplimentary_injection_keys(k)
 
 class DependencyProvider:
