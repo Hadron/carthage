@@ -8,6 +8,7 @@
 
 import logging, time
 from carthage.image import ImageVolume
+from carthage.network import Network
 from carthage.container import Container, container_image
 from test_helpers import *
 import os.path, pytest, posix
@@ -21,6 +22,7 @@ async def injector(loop):
     ainjector = base_injector(AsyncInjector)
     vol = await ainjector(ImageVolume, name = "base")
     base_injector.add_provider(container_image, vol)
+    base_injector.add_provider(await ainjector(Network,'brint', delete_bridge = False))
     return base_injector
 
 @pytest.fixture()

@@ -10,6 +10,7 @@ import asyncio, logging, re, sys
 from .dependency_injection import inject, AsyncInjectable, InjectionKey, Injector, AsyncInjector
 from .image import BtrfsVolume, ImageVolume, SetupTaskMixin
 from . import sh, ConfigLayout
+import carthage.network
 
 logger = logging.getLogger('carthage.container')
 
@@ -61,6 +62,7 @@ class Container(AsyncInjectable, SetupTaskMixin):
         self._out_selectors = []
         self._done_waiters = []
         self.container_running = ContainerRunning(self)
+        self.network_interfaces = []
         
 
     async def async_ready(self):
@@ -73,6 +75,9 @@ class Container(AsyncInjectable, SetupTaskMixin):
             self.injector.add_provider(container_volume, vol)
         self.volume = vol
         await self.run_setup_tasks()
+        net = await ainjector.get_instance_async(carthage.network.Network)
+        self.network_interfaces.append(net.add_veth(self.name))
+        
         return self
 
     @property
@@ -84,17 +89,23 @@ class Container(AsyncInjectable, SetupTaskMixin):
     @property
     def full_name(self):
         return self.config_layout.container_prefix+self.name
+
+    def network_config(self):
+        return ['--network-interface={}'.format(i.ifname) for i in self.network_interfaces]
+    
     async def run_container(self, *args, raise_on_running = True):
         async with self._operation_lock:
             if self.running:
                 if raise_on_running:
                     raise RuntimeError('{} already running'.format(self))
                 return self.process
+            ns_args = self.network_config()
             logger.info("Starting container {}: {}".format(
                 self.name,
                 " ".join(args)))
             self.process = sh.systemd_nspawn("--directory="+self.volume.path,
                                              '--machine='+self.full_name,
+                                             *ns_args,
                                              *args,
                                              _bg = True,
                                              _bg_exc = False,
@@ -164,18 +175,27 @@ class Container(AsyncInjectable, SetupTaskMixin):
             try: self.process.terminate()
             except Exception: pass
             self.process = None
-        if hasattr(self, volume):
+        if hasattr(self, 'volume'):
             self.volume.close()
             del self.volume
 
     def __del__(self):
         self.close()
-        
+
+    async def network_online(self):
+        await self.shell('/bin/systemctl', "start", "network-online.target",
+                         _bg = True, _bg_exc = False)
+
         
     @property
     def shell(self):
         if not self.running:
             raise RuntimeError("Container not running")
-        return sh.machinectl.bake( "shell", self.full_name)
+        leader = str(sh.machinectl('-pLeader', '--value', 'show', self.full_name,
+                                   _in = "/dev/null",
+                                   _tty_out = False,
+                                   ).stdout,
+                     'utf-8').strip()
+        return sh.nsenter.bake( "-t"+leader, "-C", "-m", "-n", "-u", "-i", "-p")
 
 

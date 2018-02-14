@@ -71,9 +71,11 @@ class Network(AsyncInjectable):
         self.name = name
         self.injector = injector
         self.config_layout = config_layout
-        self.delete_bridge = True
+        self.delete_bridge = delete_bridge
         self.interfaces = weakref.WeakValueDictionary()
-        self.bridge_name = if_name('br', config_layout.container_prefix, name)
+        if delete_bridge is False:
+            self.bridge_name = name
+        else: self.bridge_name = if_name('br', config_layout.container_prefix, name)
         self.closed = False
 
     async def async_ready(self):
