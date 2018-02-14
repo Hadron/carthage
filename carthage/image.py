@@ -131,6 +131,9 @@ class ImageVolume(BtrfsVolume):
     def cleanup_image(self):
         try:         os.unlink(os.path.join(self.path, 'usr/sbin/policy-rc.d'))
         except FileNotFoundError: pass
+        try: os.rename(os.path.join(self.path, "sbin/init.dist"),
+                  os.path.join(self.path, "sbin/init"))
+        except FileNotFoundError: pass
         
 
 def create_stamp(path, stamp):
