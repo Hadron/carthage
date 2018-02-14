@@ -377,4 +377,10 @@ class AsyncInjector(Injectable):
             else: return res
         finally:
             pass # possibly clean up sub_injector some day
-            
+
+    async def get_instance_async(self, k):
+        res = self.get_instance(k, futures_instantiate = self._instantiate_future)
+        if self._is_async(res):
+            return await self._handle_async(res)
+        else: return res
+

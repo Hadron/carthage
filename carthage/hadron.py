@@ -23,6 +23,7 @@ class HadronImageVolume(ImageVolume):
         container = await ainjector(Container, name = self.name)
         try:
             await container.start_container( '--bind-ro='+self.config_layout.hadron_operations+":/hadron-operations")
+            await container.network_online()
             await container.shell("/usr/bin/apt",
                                   "install", "-y", "ansible",
                                   _bg = True,
