@@ -278,7 +278,7 @@ def inject(**dependencies):
                 yield k,v
             else: yield k, InjectionKey(v, require_type = True)
     def wrap(fn):
-        if not hasattr(fn, '_injection_dependencies'):
+        if (not hasattr(fn, '_injection_dependencies')) or (isinstance(fn, type) and '_injection_dependencies' not in fn.__dict__):
             fn._injection_dependencies = dict()
         fn._injection_dependencies.update(convert_to_key(dependencies))
         return fn
@@ -338,7 +338,10 @@ class AsyncInjector(Injectable):
                 loop = self.loop)
             return constructive_future
         else:
-            res =  provider(*args, **kwargs)
+            try:
+                res =  provider(*args, **kwargs)
+            except TypeError as e:
+                raise TypeError("Error constructing {}".format(provider)) from e
             if self._is_async(res):
                 res = self._handle_async(res)
             return res
