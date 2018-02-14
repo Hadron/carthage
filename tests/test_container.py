@@ -25,7 +25,8 @@ def ainjector(injector):
 def container(ainjector, loop):
     container = loop.run_until_complete(ainjector(Container, name = "container_1"))
     yield container
-    container.close()
+    if container.running:
+        loop.run_until_complete(container.stop_container())
 
 @async_test
 async def test_start_container(container, loop):

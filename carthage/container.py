@@ -117,17 +117,30 @@ class Container(AsyncInjectable, SetupTaskMixin):
             if not self.running:
                 raise RuntimeError("Container not running")
             self.process.terminate()
+            process = self.process
             self.process = None
+            await process
 
     def _done_cb(self, cmd, success, code):
+        def callback():
+            # Callback needed to run in IO loop thread because futures
+            # do not trigger their done callbacks in a threadsafe
+            # manner.
+            for f in self._done_waiters:
+                if not f.canceled:
+                    f.set_result(code)
+            self._done_waiters = []
+
         logger.info("Container {} exited with code {}".format(
             self.name, code))
         self.running = False
-        for f in self._done_waiters:
-            if not f.canceled:
-                f.set_result(code)
-        self._done_waiters = []
+        self.loop.call_soon_threadsafe(callback)
 
+    def done_future(self):
+        future = self.loop.create_future()
+        self._done_waiters.append(future)
+        return future
+    
     def _out_cb(self, data):
         logger.debug("Container {}: output {}".format(self. name,
                                                       data))
@@ -153,13 +166,20 @@ class Container(AsyncInjectable, SetupTaskMixin):
         self._out_selectors.append([regexp, cb, once])
 
     async def start_container(self, *args):
-        def callback(m, data):
-            future.set_result(True)
+        def started_callback(m, data):
+            started_future.set_result(True)
         if self.running: return
-        future = self.loop.create_future()
-        self.find_output(r'\] Reached target Basic System', callback, True)
+        started_future = self.loop.create_future()
+        self.find_output(r'\] Reached target Basic System', started_callback, True)
         await self.run_container("--boot", *args)
-        await future
+        done_future = self.done_future()
+        await asyncio.wait([done_future, started_future],
+                           loop = self.loop,
+                           return_when = "FIRST_COMPLETED")
+        if done_future.done():
+            logger.error("Container {} failed to start".format(self.name))
+            raise RuntimeError("Container failed to start")
+        assert started_future.result() is True
         logger.info("Container {} started".format(self.name))
 
     def close(self):
