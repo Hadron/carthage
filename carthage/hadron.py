@@ -1,9 +1,10 @@
-import asyncio, os, sys
+import asyncio, os, shutil, sys
 from .image import ImageVolume, setup_task
 from .container import Container, container_volume, container_image
 from .dependency_injection import inject, Injector, AsyncInjectable, AsyncInjector
 from .config import ConfigLayout
 from . import sh
+import carthage.ssh
 
 @inject(
     config_layout = ConfigLayout,
@@ -23,7 +24,7 @@ class HadronImageVolume(ImageVolume):
         container = await ainjector(Container, name = self.name)
         try:
             bind_mount = '--bind-ro='+self.config_layout.hadron_operations+":/hadron-operations"
-            process = container.run_container('/bin/systemctl', 'disable', 'sddm')
+            process = await container.run_container('/bin/systemctl', 'disable', 'sddm')
             await process
             process = await container.run_container(bind_mount, "/usr/bin/apt",
                                   "install", "-y", "ansible",
@@ -44,6 +45,14 @@ class HadronImageVolume(ImageVolume):
             await process
         finally: pass
 
+    @setup_task('ssh_authorized_keys')
+    @inject(authorized_keys = carthage.ssh.AuthorizedKeysFile)
+    def add_authorized_keys(self, authorized_keys):
+        os.makedirs(os.path.join(self.path, "root/.ssh"), exist_ok = True)
+        shutil.copy2(authorized_keys.path,
+                     os.path.join(self.path, 'root/.ssh/authorized_keys'))
+        
+        
 @inject(
     config_layout = ConfigLayout,
     injector = Injector,
@@ -82,3 +91,30 @@ class TestDatabase(Container):
         await process
         os.unlink(os.path.join(self.volume.path, 'hadron-operations.bundle'))
         
+    @setup_task('copy-database')
+    async def copy_database_from_master(self):
+        "Copy the master database.  Run automatically.  Could be run agains if hadroninventoryadmin is locally dropped and recreated"
+        async with self.container_running:
+            await self.network_online()
+            await self.shell('/usr/bin/python3',
+                         '-mhadron.inventory.config.update',
+                         '--copy=postgresql:///hadroninventoryadmin',
+                         '--copy-users',
+                         _bg = True,
+                         _bg_exc = False,
+                             _out = self._out_cb,
+                         _err_to_out = True)
+        
+
+    @setup_task('make-update')
+    async def make_update(self):
+        "Run make update in /hadron-operations; can be repeated as needed"
+        async with self.container_running:
+            await self.network_online()
+            await self.shell('/bin/sh', '-c',
+                             "cd /hadron-operations&&make update",
+                       _out = self._out_cb,
+                       _err_to_out = True,
+                       _bg = True,
+                       _bg_exc = False)
+            
