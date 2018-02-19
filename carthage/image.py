@@ -7,10 +7,13 @@
 # LICENSE for details.
 
 import os, os.path
-from .dependency_injection import Injector, AsyncInjectable, inject
+from .dependency_injection import Injector, AsyncInjectable, inject, AsyncInjector
 from .config import ConfigLayout
 from . import sh
 from .utils import possibly_async
+import carthage
+
+
 _task_order = 0
 def setup_task(stamp):
     '''Mark a method as a setup task.  Indicate a stamp file to be created
@@ -38,9 +41,13 @@ class SetupTaskMixin:
         self.setup_tasks.append((stamp, task))
 
     async def run_setup_tasks(self):
+        injector = getattr(self, 'injector', carthage.base_injector)
+        ainjector = getattr(self, 'ainjector', None)
+        if ainjector is None:
+            ainjector = injector(AsyncInjector)
         for stamp, task in self.setup_tasks:
             if not check_stamp(self.stamp_path, stamp):
-                await possibly_async(task())
+                await ainjector(task)
                 create_stamp(self.stamp_path, stamp)
 
     def _class_setup_tasks(self):
