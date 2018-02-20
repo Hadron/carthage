@@ -1,5 +1,6 @@
 from carthage import dependency_injection
 from carthage.dependency_injection import inject, InjectionKey
+from carthage.utils import when_needed
 from test_helpers import async_test
 
 import asyncio, pytest
@@ -156,4 +157,37 @@ def test_allow_multiple_false(injector):
     c1 = s1.get_instance(ConfigLayout)
     c2 = s2.get_instance(ConfigLayout)
     assert c1 is c2
+    
+@async_test
+async def test_when_needed(a_injector, loop):
+    class foo(dependency_injection.Injectable):
+
+        def __init__(self):
+            nonlocal called
+            assert called is False
+            called = True
+
+    wn = when_needed(foo)
+    i1 = InjectionKey('i1')
+    i2 = InjectionKey('i2')
+    called = False
+    a_injector.add_provider(i1, wn)
+    a_injector.add_provider(i2, wn)
+    i1r = await a_injector.get_instance_async(i1)
+    assert isinstance(i1r, foo)
+    i2r = await a_injector.get_instance_async(i2)
+    assert i2r is i1r
+    assert await a_injector(wn) is i1r
+
+
+@async_test
+async def test_when_needed_override(a_injector, loop):
+    k = dependency_injection.InjectionKey('foo')
+    a_injector.add_provider(k, 20)
+    @dependency_injection.inject(n = k)
+    def func(n):
+        assert n == 29
+        return "foo"
+    wn = when_needed(func, n = 29)
+    assert await a_injector(wn) == "foo"
     

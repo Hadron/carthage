@@ -37,10 +37,11 @@ container_volume = InjectionKey('container-volume')
 @inject(image = container_image,
         loop = asyncio.AbstractEventLoop,
         config_layout = ConfigLayout,
+        network_config = carthage.network.NetworkConfig,
         injector = Injector)
 class Container(AsyncInjectable, SetupTaskMixin):
 
-    def __init__(self, name, *, config_layout, image, injector, loop):
+    def __init__(self, name, *, config_layout, image, injector, loop, network_config):
         super().__init__(injector = injector)
         self.loop = loop
         self.process = None
@@ -55,18 +56,23 @@ class Container(AsyncInjectable, SetupTaskMixin):
         self._done_waiters = []
         self.container_running = ContainerRunning(self)
         self.network_interfaces = []
+        self.ainjector = injector(AsyncInjector)
+
+        
         
 
     async def async_ready(self):
-        ainjector = self.injector(AsyncInjector)
-        try: vol = self.injector.get_instance(container_volume)
+        try: vol = await self.ainjector.get_instance_async(container_volume)
         except KeyError:
-            vol = await ainjector(BtrfsVolume,
+            vol = await self.ainjector(BtrfsVolume,
                               clone_from = self.image,
                               name = "containers/"+self.name)
             self.injector.add_provider(container_volume, vol)
         self.volume = vol
         await self.run_setup_tasks()
+        network_config_unresolved = await self.ainjector(carthage.network.NetworkConfig)
+        self.network_config = await self.ainjector(network_config_unresolved.resolve)
+        
         return self
 
     @property

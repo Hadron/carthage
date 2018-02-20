@@ -1,4 +1,4 @@
-import io, os, shutil
+import io, os
 from .dependency_injection import inject, AsyncInjector, Injector, AsyncInjectable, Injectable
 from .config import ConfigLayout
 from .image import SetupTaskMixin, setup_task
