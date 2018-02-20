@@ -12,6 +12,7 @@ from .container import Container, container_volume, container_image
 from .dependency_injection import inject, Injector, AsyncInjectable, AsyncInjector
 from .config import ConfigLayout
 from . import sh
+from .utils import when_needed
 import carthage.ssh
 
 @inject(
@@ -126,3 +127,5 @@ class TestDatabase(Container):
                        _bg = True,
                        _bg_exc = False)
             
+
+hadron_image = when_needed(HadronImageVolume)

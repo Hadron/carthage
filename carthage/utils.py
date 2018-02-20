@@ -40,3 +40,82 @@ class memoproperty:
         setattr(instance, self.name, res)
         return res
     
+def when_needed(wraps, *args, injector = None,
+                addl_keys = [],
+                **kwargs):
+    '''Return an AsyncInjectable class that when resolved will instantiate
+    'wraps' giving it *args and **kwargs.  This is only done once; if this
+    class is instantiated more than once the same shared object is
+    returned.  By default, the injector used when we are instantiated will
+    be used, but if the injector keyword is passed in then that injector
+    will always be used for the instantiation.  Differences between this
+    and passing a type into add_provider are:
+
+    * If the return from this function is passed into add_provider for
+      different injection keys, then these objects will be the same
+      when instantiated.  Without when_needed, the keys associated
+      with each call to add_provider would instantiate different
+      objects of the same type.
+
+    * This may be used to instantiate objects that require
+      non-injected configuration to their constructors.
+
+    '''
+    from .dependency_injection import inject, AsyncInjectable, AsyncInjector, InjectionKey
+    # We do not copy the wrapped function's dependencies out.  We will
+    # submit the wrapped object to an injector as part of resolving it
+    # and we may need to control which injector is used for the
+    # dependencies.
+    @inject(ainjector = AsyncInjector)
+    @functools.wraps(wraps,
+                     assigned = functools.WRAPPER_ASSIGNMENTS ,
+                     updated = tuple())
+    class WhenNeeded(AsyncInjectable):
+
+        resolved_obj = None
+        def __init__(self, ainjector, **inside_kwargs):
+            if injector is not None:
+                #override ainjector
+                ainjector = injector(AsyncInjector)
+            self.ainjector = ainjector
+            self.inside_kwargs = inside_kwargs
+
+        @classmethod
+        def supplementary_injection_keys(self, k):
+            if isinstance(wraps, type) and issubclass(wraps, Injectable):
+                yield from wraps.supplimentary_injection_keys(k)
+            yield from addl_keys
+            
+        async def async_ready(self):
+            nonlocal kwargs
+            if self.resolved_obj:
+                return self.resolved_obj
+            kws = kwargs.copy()
+            kws.update(self.inside_kwargs)
+            res = await self.ainjector(wraps, *args, **kws)
+            self.__class__.resolved_obj = res
+            # We will never need them again so release the references
+            kwargs = None
+            del self.ainjector
+            del self.inside_kwargs
+            return res
+
+        def __repr__(self):
+            if isinstance(wraps, type):
+                wraps_repr = wraps.__name__
+            else: wraps_repr = repr(wraps)
+            s = "when_needed({}(".format(wraps_repr)
+            for a in args:
+                s +=", {}".format(a)
+            for k,v in kwargs.items():
+                s += ", {}={}".format(k, v)
+            s +=")"
+            if injector is not None:
+                s += ", injector ={}".format(repr(injector))
+            s += ")"
+            return s
+
+    addl_keys = list(map(
+        lambda k: k if isinstance(k, InjectionKey) else InjectionKey(k), addl_keys))
+    
+    return WhenNeeded

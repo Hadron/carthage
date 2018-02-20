@@ -8,7 +8,7 @@
 
 import logging, re, weakref
 from . import sh
-from .dependency_injection import inject, AsyncInjectable, Injector, AsyncInjector, InjectionKey
+from .dependency_injection import inject, AsyncInjectable, Injector, AsyncInjector, InjectionKey, Injectable
 from .config import ConfigLayout
 
 logger = logging.getLogger('carthage.network')
@@ -118,3 +118,65 @@ class Network(AsyncInjectable):
         self.interfaces[bridge_member] = ve
         return ve
     
+
+class NetworkConfig:
+
+    '''Represents a network configuration for a container or a VM.  A
+    network config maps interface names to a network and a MAC
+    address.  Eventually a MAC is represented as a string and a
+    network as a Network object.  However indirection is possible in
+    two ways.  First, an injection key can be passed in; this
+    dependency will be resolved in the context of an
+    environment-specific injector.  Secondly, a callable can be passed
+    in.  This callable will be called in the context of an injector
+    and is expected to return the appropriate object.
+
+    '''
+
+    def __init__(self):
+        self.nets = {}
+        self.macs = {}
+
+    def add(self, interface, net, mac):
+        assert isinstance(interface, str)
+        assert isinstance(mac, (str, InjectionKey, type(None))) or callable(mac)
+        assert isinstance(net, (Network, InjectionKey)) or callable(net)
+        self.nets[interface] = net
+        self.macs[interface] = mac
+
+    async def resolve(self, ainjector):
+        "Return a NetworkConfigInstance for a given environment"
+        async def resolve1(r):
+            if isinstance(r, InjectionKey):
+                r = await ainjector.get_instance_async(r)
+            elif  callable(r):
+                r = await ainjector(r)
+            return r
+        d = {}
+        for i in self.nets:
+            #Unpacking assignment to get parallel resolution of futures
+            res = {}
+            res['mac'], res['net'] = await asyncio.gather(
+                resolve1(self.macs[i]),
+                resolve1(self.nets[i]))
+            assert isinstance(res['mac'], (str, type(None))), "MAC Address for {} must resolve to string or None".format(i)
+            assert isinstance(res['net'], Network), "Network for {} must resolve to network object".format(i)
+            d[i] = res
+        return await ainjector(NetworkConfigInstance,d)
+
+@inject(config_layout = ConfigLayout)
+class NetworkConfigInstance(Injectable):
+
+    def __init__(self, entries, config_layout):
+        self.config_layout = config_layout
+        self.entries = entries
+
+    def __iter__(self):
+        '''Return net, interface, MAC tuples.  Note that the caller is
+        responsible for making the interface names line up correctly given the
+        technology in question.
+        '''
+
+        for i,v in self.entries.items():
+            yield v['net'], i, v['mac']
+            

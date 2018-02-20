@@ -17,7 +17,7 @@ class Injectable:
         super().__init__()
 
     @classmethod
-    def supplimentary_injection_keys(cls, k):
+    def supplementary_injection_keys(cls, k):
         for c in cls.__mro__:
             if c is Injectable: continue
             if issubclass(c,Injectable) and c != k.target:
@@ -27,7 +27,7 @@ class Injectable:
     def satisfies_injection_key(cls, k):
         if k is InjectionKey(cls): return True
         if isinstance(k.target, (str, tuple)): return True
-        return  k in cls.supplimentary_injection_keys(k)
+        return  k in cls.supplementary_injection_keys(k)
 
 class DependencyProvider:
     __slots__ = ('provider',
@@ -95,7 +95,7 @@ class Injector(Injectable):
                 pass # provider permitted
             else: raise ExistingProvider(k)
         self._providers[k] = p
-        for k2 in k.supplimentary_injection_keys(p.provider):
+        for k2 in k.supplementary_injection_keys(p.provider):
             if k2 not in self:
                 self._providers[k2] = p
         return k
@@ -242,7 +242,7 @@ class InjectionKey:
 
 
     def __hash__(self):
-        return hash(self.target)+sum(self.constraints.keys())+sum(self.constraints.values())
+        return hash(self.target)+sum([hash(k) for k in self.constraints.keys()])+sum([hash(v) for v in self.constraints.values()])
 
     def __eq__(self, other):
         if type(other) is not type(self): return False
@@ -252,9 +252,9 @@ class InjectionKey:
             return True
         return False
 
-    def supplimentary_injection_keys(self, p):
+    def supplementary_injection_keys(self, p):
         if isinstance(p, Injectable):
-            yield from p.supplimentary_injection_keys(self)
+            yield from p.supplementary_injection_keys(self)
         else:
             if p.__class__ in (int, float, str,list, tuple, types.FunctionType):
                 return
@@ -284,6 +284,17 @@ def inject(**dependencies):
         return fn
     return wrap
 
+def copy_and_inject(_wraps = None, **kwargs):
+    "Like inject but makes a copy of the dependencies first; typically used when wrapping an injector"
+    def wrap(fn):
+        if hasattr(fn, '_injection_dependencies'):
+            fn._injection_dependencies = fn._injection_dependencies.copy()
+        return inject(**kwargs)(fn)
+    if _wraps is not None:
+        return wrap(_wraps)
+    else: return wrap
+    
+    
    #########################################
    # Asynchronous support:
 
