@@ -259,7 +259,8 @@ class InjectionKey:
         return False
 
     def supplementary_injection_keys(self, p):
-        if isinstance(p,type) and issubclass(p, Injectable):
+        if (isinstance(p,type) and issubclass(p, Injectable)) or \
+           isinstance(p, Injectable):
             yield from p.supplementary_injection_keys(self)
         else:
             if p.__class__ in (int, float, str,list, tuple, types.FunctionType):
