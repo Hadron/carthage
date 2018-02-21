@@ -126,10 +126,18 @@ class Container(AsyncInjectable, SetupTaskMixin):
                 return self.process
             net_args = await self.do_network_config(networking)
             if as_pid2:
-                net_args.append('--as-pid2')
+                net_args.insert(0, '--as-pid2')
             logger.info("Starting container {}: {}".format(
                 self.name,
                 " ".join(args)))
+            #Move systemd options forward
+            to_delete = 0
+            for a in args:
+                if a.startswith('--'):
+                    to_delete += 1
+                    net_args.insert(0,a)
+                else: break
+            args = args[to_delete:]
             self.process = sh.systemd_nspawn("--directory="+self.volume.path,
                                              '--machine='+self.full_name,
                                              "--setenv=DEBIAN_FRONTEND=noninteractive",
@@ -212,7 +220,7 @@ class Container(AsyncInjectable, SetupTaskMixin):
         if self.running: return
         started_future = self.loop.create_future()
         self.find_output(r'\] Reached target Basic System', started_callback, True)
-        await self.run_container("/bin/systemd", *args,
+        await self.run_container("--kill-signal=SIGRTMIN+3", "/bin/systemd", *args,
                                  networking = True, as_pid2 = False)
         done_future = self.done_future()
         await asyncio.wait([done_future, started_future],
