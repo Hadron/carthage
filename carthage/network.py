@@ -95,6 +95,10 @@ class Network(AsyncInjectable):
             sh.ip('link', 'show', self.bridge_name)
         except sh.ErrorReturnCode_1:
             sh.ip('link', 'add', self.bridge_name, 'type', 'bridge')
+            sh.ip("link", "set", self.bridge_name, 
+                    "type", "bridge", "stp_state", "1",
+                    "forward_delay", "3")
+            sh.ip("link", self.bridge_name, "up")
         return self
 
     def close(self):

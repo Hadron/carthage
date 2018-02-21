@@ -45,6 +45,7 @@ class HadronImageVolume(ImageVolume):
                                   "-clocal",
                                   "-ehadron_os=ACES",
                                                                     "-ehadron_track=proposed",
+                                                    "-epackagedir=/hadron-operations/ansible/packages",
                                   "-ehadron_release=unstable",
                                   "-eaces_apt_server=apt-server.aces-aoe.net",
                                   "-i/hadron-operations/ansible/localhost-debian.txt",
@@ -77,6 +78,9 @@ class TestDatabase(Container):
 
     @setup_task("install-db")
     async def install_packages(self):
+        with open(self.volume.path+"/etc/network/interfaces", "wt+") as f:
+            #Convince NetworkManager to leave eth1 alone before internet-zone comes along
+            f.write("iface eth1 inet manual\n")
         async with self.container_running:
             await self.network_online()
             await self.shell("/usr/bin/apt",
@@ -128,6 +132,11 @@ class TestDatabase(Container):
                        _err_to_out = True,
                        _bg = True,
                        _bg_exc = False)
+            await self.shell("/bin/sh", "-c",
+                             "cd /hadron-operations/ansible&&ansible-playbook -c local commands/test-database.yml",
+                             _bg = True, _bg_exc = False,
+                             _out = self._out_cb,
+                             _err_to_out = True)
             
 
 hadron_image = when_needed(HadronImageVolume)
