@@ -1,35 +1,47 @@
-import logging, re, weakref
+import asyncio, logging, re, weakref
 from . import sh
 from .dependency_injection import inject, AsyncInjectable, Injector, AsyncInjector, InjectionKey, Injectable
 from .config import ConfigLayout
+from .utils import permute_identifier
 
 logger = logging.getLogger('carthage.network')
 
 _cleanup_substitutions = [
     (re.compile(r'[-_\.]'),''),
+    (re.compile( r'database'), 'db'),
     (re.compile(r'test'),'t'),
     (re.compile(r'router'), 'rtr'),
     (re.compile(r'\..+'), ''),
 ]
 
-def if_name(type_prefix, layout, intf):
+_allocated_interfaces = set()
+
+def if_name(type_prefix, layout, net, host = ""):
     "Produce 14 character interface names for networks and hosts"
-    def cleanup(str, maxlen):
-        first, sep, tail = str.partition('.')
+    global _allocated_interfaces
+    def cleanup(s, maxlen):
         for m, r in _cleanup_substitutions:
-            first = m.sub(r, first)
-        maxlen -= min(len(tail), 4)
-        first = first[0:maxlen]
-        if tail:
-            for m, r in _cleanup_substitutions:
-                tail = m.sub(r, tail)
-            return first+'-'+tail[0:3]
-        return first
+            s = m.sub(r, s)
+        return s[0:maxlen]
+
     assert len(type_prefix) <= 3
     layout = cleanup(layout, 2)
-    maxlen = 12-len(layout)-len(type_prefix)
-    intf = cleanup(intf, maxlen)
-    return "{}{}-{}".format(type_prefix, layout, intf)
+    maxlen = 13-len(layout)-len(type_prefix)
+    net = cleanup(net, max(3, maxlen-len(host)))
+    maxlen -= len(net)
+    host = cleanup(host, maxlen)
+    if host: host += "-"
+    id = "{t}{l}{h}{n}".format(
+        t = type_prefix,
+        l = layout,
+        n = net,
+        h = host)
+    for i in permute_identifier(id, 14):
+        if i not in _allocated_interfaces:
+            _allocated_interfaces.add(i)
+            return i
+    assert False # never should be reached
+    
 
 class NetworkInterface:
 
@@ -94,8 +106,8 @@ class Network(AsyncInjectable):
 
 
     def add_veth(self, container_name):
-        bridge_member = if_name('ci', self.config_layout.container_prefix, container_name)
-        veth_name = if_name('ve', self.config_layout.container_prefix, container_name)
+        bridge_member = if_name('ci', self.config_layout.container_prefix, self.name, container_name)
+        veth_name = if_name('ve', self.config_layout.container_prefix, self.name, container_name)
         logger.debug('Network {} creating virtual ethernet for {}'.format(self.name, container_name))
         try:
             sh.ip('link', 'add', 'dev', bridge_member,
@@ -136,6 +148,7 @@ class NetworkConfig:
         self.nets[interface] = net
         self.macs[interface] = mac
 
+    @inject(ainjector = AsyncInjector)
     async def resolve(self, ainjector):
         "Return a NetworkConfigInstance for a given environment"
         async def resolve1(r):

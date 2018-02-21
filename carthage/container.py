@@ -37,7 +37,7 @@ container_volume = InjectionKey('container-volume')
 @inject(image = container_image,
         loop = asyncio.AbstractEventLoop,
         config_layout = ConfigLayout,
-        network_config = carthage.network.NetworkConfig,
+        network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
         injector = Injector)
 class Container(AsyncInjectable, SetupTaskMixin):
 
@@ -69,10 +69,14 @@ class Container(AsyncInjectable, SetupTaskMixin):
                               name = "containers/"+self.name)
             self.injector.add_provider(container_volume, vol)
         self.volume = vol
+        try:
+            network_config_unresolved = await self.ainjector.get_instance_async(carthage.network.NetworkConfig)
+        except KeyError:
+            self.network_config = None
+        else:
+                self.network_config = await self.ainjector(network_config_unresolved.resolve)
         await self.run_setup_tasks()
-        network_config_unresolved = await self.ainjector(carthage.network.NetworkConfig)
-        self.network_config = await self.ainjector(network_config_unresolved.resolve)
-        
+            
         return self
 
     @property
@@ -85,13 +89,15 @@ class Container(AsyncInjectable, SetupTaskMixin):
     def full_name(self):
         return self.config_layout.container_prefix+self.name
 
-    async def network_config(self, networking):
-        if networking:
-            ainjector = self.injector(AsyncInjector)
-            net = await ainjector.get_instance_async(carthage.network.Network)
-            interface = net.add_veth(self.name)
-            self.network_interfaces.append(interface)
-            return ['--network-interface={}'.format(interface.ifname)]
+    async def do_network_config(self, networking):
+        if networking and self.network_config:
+            interfaces = []
+            for net, i, mac in self.network_config:
+                interface = net.add_veth(self.name)
+                interfaces.append("--network-interface={}".format(interface.ifname))
+                self.network_interfaces.append(interface)
+                
+            return interfaces
         else:
             try: os.unlink(os.path.join(self.volume.path, "etc/resolv.conf"))
             except FileNotFoundError: pass
@@ -107,16 +113,16 @@ class Container(AsyncInjectable, SetupTaskMixin):
                 if raise_on_running:
                     raise RuntimeError('{} already running'.format(self))
                 return self.process
-            ns_args = await self.network_config(networking)
+            net_args = await self.do_network_config(networking)
             if as_pid2:
-                ns_args.append('--as-pid2')
+                net_args.append('--as-pid2')
             logger.info("Starting container {}: {}".format(
                 self.name,
                 " ".join(args)))
             self.process = sh.systemd_nspawn("--directory="+self.volume.path,
                                              '--machine='+self.full_name,
                                              "--setenv=DEBIAN_FRONTEND=noninteractive",
-                                             *ns_args,
+                                             *net_args,
                                              *args,
                                              _bg = True,
                                              _bg_exc = False,
