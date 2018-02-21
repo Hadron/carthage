@@ -241,6 +241,7 @@ class Container(AsyncInjectable, SetupTaskMixin):
         
     @property
     def shell(self):
+        #You might think you want to use machinectl shell to create a shell.  That might be nice, except that you don't get exit values so you don't know if your shell commands succeed or not.
         if not self.running:
             raise RuntimeError("Container not running")
         leader = str(sh.machinectl('-pLeader', '--value', 'show', self.full_name,
