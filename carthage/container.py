@@ -100,11 +100,22 @@ class Container(AsyncInjectable, SetupTaskMixin):
     async def do_network_config(self, networking):
         if networking and self.network_config:
             interfaces = []
+            network_script = ""
             for net, i, mac in self.network_config:
                 interface = net.add_veth(self.name)
                 interfaces.append("--network-interface={}".format(interface.ifname))
+                network_script += "ip link set {i1} {mac} name {i2}\n".format(
+                    i1 = interface.ifname,
+                    mac = "address "+mac if mac else "",
+                    i2 = i)
                 self.network_interfaces.append(interface)
                 
+            interfaces.append("/network-script.sh")
+            with open(self.volume.path+"/network-script.sh", "wt") as f:
+                f.write("#!/bin/sh\n")
+                f.write(network_script)
+                f.write('exec "$@"\n')
+            os.chmod(self.volume.path+"/network-script.sh", 0o755)
             return interfaces
         else:
             try: os.unlink(os.path.join(self.volume.path, "etc/resolv.conf"))
@@ -209,7 +220,7 @@ class Container(AsyncInjectable, SetupTaskMixin):
         if self.running: return
         started_future = self.loop.create_future()
         self.find_output(r'\] Reached target Basic System', started_callback, True)
-        await self.run_container("--boot", *args,
+        await self.run_container("/bin/systemd", *args,
                                  networking = True, as_pid2 = False)
         done_future = self.done_future()
         await asyncio.wait([done_future, started_future],
