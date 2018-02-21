@@ -9,6 +9,9 @@ async def run():
 
     ainjector = base_injector(AsyncInjector)
     container = await ainjector.get_instance_async(database_key)
+    async with container.container_running:
+        container.shell("/bin/bash", _fg = True)
+        
 
 logging.getLogger('carthage.container').setLevel(10)
 #logging.getLogger('carthage.dependency_injection').setLevel(10)
