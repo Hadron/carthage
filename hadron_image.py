@@ -19,5 +19,6 @@ async def run():
     container = await ainjector.get_instance_async(database_key)
 
 logging.getLogger('carthage.container').setLevel(10)
+#logging.getLogger('carthage.dependency_injection').setLevel(10)
 logging.basicConfig()
 asyncio.get_event_loop().run_until_complete(run())

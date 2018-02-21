@@ -61,7 +61,7 @@ def when_needed(wraps, *args, injector = None,
       non-injected configuration to their constructors.
 
     '''
-    from .dependency_injection import inject, AsyncInjectable, AsyncInjector, InjectionKey
+    from .dependency_injection import inject, AsyncInjectable, AsyncInjector, InjectionKey, Injectable
     # We do not copy the wrapped function's dependencies out.  We will
     # submit the wrapped object to an injector as part of resolving it
     # and we may need to control which injector is used for the
@@ -83,7 +83,7 @@ def when_needed(wraps, *args, injector = None,
         @classmethod
         def supplementary_injection_keys(self, k):
             if isinstance(wraps, type) and issubclass(wraps, Injectable):
-                yield from wraps.supplimentary_injection_keys(k)
+                yield from wraps.supplementary_injection_keys(k)
             yield from addl_keys
             
         async def async_ready(self):
@@ -119,3 +119,19 @@ def when_needed(wraps, *args, injector = None,
         lambda k: k if isinstance(k, InjectionKey) else InjectionKey(k), addl_keys))
     
     return WhenNeeded
+
+def permute_identifier(id, maxlen):
+    "Add to or replace the last character of the identifier; use as generator and stop consuming when a unique one is found"
+    yield id
+    if len(id) < maxlen:
+        for i in range(10):
+            yield id+str(i)
+    else:
+        id = id[:-1]
+        for i in range(10):
+            yield id+str(i)
+    raise ValueError("No unique combination found")
+
+
+        
+__all__ = ['when_needed', 'possibly_async', 'permute_identifier']

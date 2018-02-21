@@ -14,6 +14,7 @@ from .config import ConfigLayout
 from . import sh
 from .utils import when_needed
 import carthage.ssh
+import carthage.network
 
 @inject(
     config_layout = ConfigLayout,
@@ -53,7 +54,7 @@ class HadronImageVolume(ImageVolume):
             process = await container.run_container("/usr/bin/apt", "update")
             await process
         finally: pass
-
+        
     @setup_task('ssh_authorized_keys')
     @inject(authorized_keys = carthage.ssh.AuthorizedKeysFile)
     def add_authorized_keys(self, authorized_keys):
@@ -66,7 +67,8 @@ class HadronImageVolume(ImageVolume):
     config_layout = ConfigLayout,
     injector = Injector,
     loop = asyncio.AbstractEventLoop,
-    image = container_image)
+    image = container_image,
+    network_config = carthage.network.NetworkConfig)
 class TestDatabase(Container):
 
     def __init__(self, name = "test-database", **kwargs):

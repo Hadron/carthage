@@ -35,5 +35,5 @@ def mac_from_database(machine, interface):
 
 
 router_network_config = NetworkConfig()
-router_network_config.add('eth0', InjectionKey('vpn-net'), mac_from_database)
+router_network_config.add('eth0', InjectionKey('vpn-network'), mac_from_database)
 router_network_config.add('eth1', InjectionKey('site-network'), mac_from_database)

@@ -9,8 +9,10 @@
 import weakref
 import collections.abc
 import asyncio
+import logging
 import types
 
+logger = logging.getLogger('carthage.dependency_injection')
 
 class Injectable:
     def __init__(self, *args, **kwargs):
@@ -118,6 +120,7 @@ class Injector(Injectable):
             except KeyError:
                 injector = injector.parent_injector
         raise KeyError("{} not found".format(k))
+
     def __contains__(self, k):
         return k in self._providers
     
@@ -156,6 +159,7 @@ class Injector(Injectable):
 
     def get_instance(self, k,
                      futures_instantiate = None):
+        logger.debug("Looking up provider for {}".format(k))
         def resolve_future(injector,k):
             def done(future):
                 try: provider.record_instantiation(future.result(), k, injector)
@@ -173,6 +177,7 @@ class Injector(Injectable):
         try:
             provider, satisfy_against = self._get_parent(k)
         except KeyError:
+            if k.optional: return None
             raise KeyError("No dependency for {}".format(k)) from None
         if provider.is_factory:
             instance = instantiate(satisfy_against,  provider.provider)
@@ -210,17 +215,18 @@ class InjectionKey:
 
     _target_injection_keys = weakref.WeakKeyDictionary()
 
-    def __new__(cls, target_, require_type = False, **constraints):
+    def __new__(cls, target_, require_type = False, optional = False, **constraints):
         assert (cls is InjectionKey) or constraints, "You cannot subclass InjectionKey with empty constraints"
         if require_type and not isinstance(target_, type):
             raise TypeError('Only types can be used as implicit injection keys; if this is intended then construct the injection key explicitly')
-        if not constraints:
+        if (not constraints) and (not optional):
             if  target_ in cls._target_injection_keys:
                 return cls._target_injection_keys[target_]
         self =super().__new__(cls)
         self.__dict__['constraints'] = dict(constraints)
         self.__dict__['target'] = target_
-        if len(constraints) == 0 and not isinstance(target_, (str, int, float)):
+        self.__dict__['optional'] = optional
+        if (not optional) and len(constraints) == 0 and not isinstance(target_, (str, int, float)):
             cls._target_injection_keys[target_] = self
         return self
 
@@ -253,7 +259,7 @@ class InjectionKey:
         return False
 
     def supplementary_injection_keys(self, p):
-        if isinstance(p, Injectable):
+        if isinstance(p,type) and issubclass(p, Injectable):
             yield from p.supplementary_injection_keys(self)
         else:
             if p.__class__ in (int, float, str,list, tuple, types.FunctionType):
@@ -394,7 +400,7 @@ class AsyncInjector(Injectable):
                         raise UnsatisfactoryDependency(dependency, provider)
                     sub_injector.add_provider(dependency, provider)
             res = self._instantiate_future(injector, cls, *args, **kwargs)
-            if self._is_async(res):
+            if isinstance(res, (asyncio.Future, collections.abc.Coroutine)):
                 return await self._handle_async(res)
             else: return res
         finally:
@@ -402,7 +408,7 @@ class AsyncInjector(Injectable):
 
     async def get_instance_async(self, k):
         res = self.get_instance(k, futures_instantiate = self._instantiate_future)
-        if self._is_async(res):
+        if isinstance(res, (asyncio.Future, collections.abc.Coroutine)):
             return await self._handle_async(res)
         else: return res
 
