@@ -30,6 +30,9 @@ def setup_task(stamp):
         return fn
     return wrap
 
+class SkipSetupTask(Exception): pass
+
+
 class SetupTaskMixin:
 
     def __init__(self, *args, **kwargs):
@@ -47,8 +50,10 @@ class SetupTaskMixin:
             ainjector = injector(AsyncInjector)
         for stamp, task in self.setup_tasks:
             if not check_stamp(self.stamp_path, stamp):
-                await ainjector(task)
-                create_stamp(self.stamp_path, stamp)
+                try:
+                    await ainjector(task)
+                    create_stamp(self.stamp_path, stamp)
+                except SkipSetupTask: pass
 
     def _class_setup_tasks(self):
         cls = self.__class__

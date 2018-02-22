@@ -31,7 +31,8 @@ class HadronImageVolume(ImageVolume):
         ainjector = self.injector(AsyncInjector)
         ainjector.add_provider(container_volume, self)
         ainjector.add_provider(container_image, self)
-        container = await ainjector(Container, name = self.name)
+        container = await ainjector(Container, name = self.name,
+                                    skip_ssh_keygen = True)
         try:
             bind_mount = '--bind-ro='+self.config_layout.hadron_operations+":/hadron-operations"
             process = await container.run_container('/bin/systemctl', 'disable', 'sddm')
@@ -137,6 +138,8 @@ class TestDatabase(Container):
                              _bg = True, _bg_exc = False,
                              _out = self._out_cb,
                              _err_to_out = True)
-            
+
+    ip_address = "192.168.101.1"
+    
 
 hadron_image = when_needed(HadronImageVolume)

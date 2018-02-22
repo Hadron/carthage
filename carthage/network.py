@@ -98,7 +98,7 @@ class Network(AsyncInjectable):
             sh.ip("link", "set", self.bridge_name, 
                     "type", "bridge", "stp_state", "1",
                     "forward_delay", "3")
-            sh.ip("link", self.bridge_name, "up")
+            sh.ip("link", "set", self.bridge_name, "up")
         return self
 
     def close(self):

@@ -8,9 +8,11 @@
 
 import asyncio, logging, os, re, shutil, sys
 from .dependency_injection import inject, AsyncInjectable, InjectionKey, Injector, AsyncInjector
-from .image import BtrfsVolume, ImageVolume, SetupTaskMixin
+from .image import BtrfsVolume, ImageVolume, SetupTaskMixin, setup_task, SkipSetupTask
 from . import sh, ConfigLayout
+from .utils import memoproperty
 import carthage.network
+import carthage.ssh
 
 logger = logging.getLogger('carthage.container')
 
@@ -39,17 +41,66 @@ class ContainerRunning:
     def __init__(self, container):
         self.container = container
 
+ssh_origin = InjectionKey('ssh-origin')
+class SshMixin:
+    '''An Item that can be sshed to.  Will look for the ssh_origin
+    injection key.  If found, this should be a container.  The ssh will be
+    launched from within the network namespace of that container in order
+    to reach the appropriate devices.  Requires ip_address to be made
+    available.  Requires an carthage.ssh.SshKey be injectable.
+    '''
+
+    @property
+    def ip_address(self):
+        raise NotImplementedError
+
+    ssh_options = ('-oStrictHostKeyChecking=no', )
+
+    @memoproperty
+    def ssh(self):
+        try:
+            ssh_origin_container = self.injector.get_instance(ssh_origin)
+        except KeyError:
+            ssh_origin_container = self if isinstance(self, Container) else None
+        ssh_key = self.injector.get_instance(carthage.ssh.SshKey)
+        options = self.ssh_options + ('-oUserKnownHostsFile='+os.path.join(self.config_layout.state_dir, 'ssh_known_hosts'),)
+        if ssh_origin_container is not None:
+            leader = ssh_origin_container.container_leader
+            ssh_origin_container.done_future().add_done_callback(self.ssh_recompute)
+            return sh.nsenter.bake('-t', str(leader), "-n",
+                                   "/usr/bin/ssh",
+                              "-i", ssh_key.key_path,
+                                   *options,
+                              self.ip_address)
+        else:
+            return sh.ssh.bake('-i', ssh_key.key_path,
+                               *options, self.ip_address)
+
+    def ssh_recompute(self):
+        try:
+            del self.__dict__['ssh']
+        except KeyError: pass
+
+    @classmethod
+    def clear_ssh_known_hosts(cls, config_layout):
+        try: os.unlink(
+                os.path.join(config_layout.state_dir, "ssh_known_hosts"))
+        except FileNotFoundError: pass
+        
+        
 container_image = InjectionKey('container-image')
 container_volume = InjectionKey('container-volume')
+
 
 @inject(image = container_image,
         loop = asyncio.AbstractEventLoop,
         config_layout = ConfigLayout,
         network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
         injector = Injector)
-class Container(AsyncInjectable, SetupTaskMixin):
+class Container(AsyncInjectable, SetupTaskMixin, SshMixin):
 
-    def __init__(self, name, *, config_layout, image, injector, loop, network_config):
+    def __init__(self, name, *, config_layout, image, injector, loop, network_config,
+                 skip_ssh_keygen = False):
         super().__init__(injector = injector)
         self.loop = loop
         self.process = None
@@ -57,6 +108,7 @@ class Container(AsyncInjectable, SetupTaskMixin):
         self.injector = Injector(injector)
         self.image = image
         self.config_layout = config_layout
+        self.skip_ssh_keygen = skip_ssh_keygen
         self.with_running_count = 0
         self.running = False
         self._operation_lock = asyncio.Lock()
@@ -74,7 +126,9 @@ class Container(AsyncInjectable, SetupTaskMixin):
         except KeyError:
             vol = await self.ainjector(BtrfsVolume,
                               clone_from = self.image,
-                              name = "containers/"+self.name)
+                              name
+
+    = "containers/"+self.name)
             self.injector.add_provider(container_volume, vol)
         self.volume = vol
         try:
@@ -189,6 +243,10 @@ class Container(AsyncInjectable, SetupTaskMixin):
 
         logger.info("Container {} exited with code {}".format(
             self.name, code))
+        for k in ('shell', 'container_leader'):
+            try:
+                del self.__dict__[k]
+            except KeyError: pass
         self.running = False
         self.loop.call_soon_threadsafe(callback)
 
@@ -240,6 +298,14 @@ class Container(AsyncInjectable, SetupTaskMixin):
         assert started_future.result() is True
         logger.info("Container {} started".format(self.name))
 
+
+    @setup_task('ssh-keygen')
+    async def generate_ssh_keys(self):
+        if self.skip_ssh_keygen:
+            raise SkipSetupTask
+        process = await self.run_container("/usr/bin/ssh-keygen", "-A")
+        await process
+
     def close(self):
         if self.process is not None:
             try: self.process.terminate()
@@ -257,18 +323,21 @@ class Container(AsyncInjectable, SetupTaskMixin):
                          _bg = True, _bg_exc = False
                          )
 
+    @memoproperty
+    def container_leader(self):
+        return         str(sh.machinectl('-pLeader', '--value', 'show', self.full_name,
+                          _in = "/dev/null",
+                          _tty_out = False,
+        ).stdout,
+            'utf-8').strip()
         
-    @property
+    @memoproperty
     def shell(self):
         #You might think you want to use machinectl shell to create a shell.  That might be nice, except that you don't get exit values so you don't know if your shell commands succeed or not.
         if not self.running:
             raise RuntimeError("Container not running")
-        leader = str(sh.machinectl('-pLeader', '--value', 'show', self.full_name,
-                                   _in = "/dev/null",
-                                   _tty_out = False,
-                                   ).stdout,
-                     'utf-8').strip()
-        return sh.nsenter.bake( "-t"+leader, "-C", "-m", "-n", "-u", "-i", "-p",
+
+        return sh.nsenter.bake( "-t"+self.container_leader, "-C", "-m", "-n", "-u", "-i", "-p",
                                 _env = self._environment())
 
     def _environment(self):
