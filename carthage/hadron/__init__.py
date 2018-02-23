@@ -1,10 +1,10 @@
 import asyncio, os, shutil, sys
-from .image import ImageVolume, setup_task
-from .container import Container, container_volume, container_image
-from .dependency_injection import inject, Injector, AsyncInjectable, AsyncInjector
-from .config import ConfigLayout
-from . import sh
-from .utils import when_needed
+from ..image import ImageVolume, setup_task
+from ..container import Container, container_volume, container_image
+from ..dependency_injection import inject, Injector, AsyncInjectable, AsyncInjector
+from ..config import ConfigLayout
+from .. import sh
+from ..utils import when_needed
 import carthage.ssh
 import carthage.network
 
@@ -79,6 +79,7 @@ class TestDatabase(Container):
             await self.shell("/usr/bin/apt",
                                                "-y", "install", "hadron-inventory-admin",
                                            "hadron-photon-admin",
+                             "socat",
                              "hadron-ansible",
                              _in = "/dev/null",
                              _out = self._out_cb,

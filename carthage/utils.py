@@ -1,4 +1,4 @@
-import asyncio, functools
+import asyncio, functools, weakref
 
 async def possibly_async(r):
     '''If r is a coroutine, await it.  Otherwise return it.  Used like the
@@ -123,6 +123,7 @@ def permute_identifier(id, maxlen):
         for i in range(10):
             yield id+str(i)
     raise ValueError("No unique combination found")
+
 
 
         
