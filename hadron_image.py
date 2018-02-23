@@ -12,15 +12,18 @@ from carthage.dependency_injection import AsyncInjector
 from carthage import base_injector, ssh
 from carthage.network import Network
 from carthage.container import container_image
+from carthage.hadron.database import RemotePostgres
+from sqlalchemy.orm import Session
 
 async def run():
 
     ainjector = base_injector(AsyncInjector)
     container = await ainjector.get_instance_async(database_key)
-    await ainjector.get_instance_async(ssh.SshKey)
     async with container.container_running:
         await container.network_online()
-        await asyncio.sleep(1)
+        pg  = await ainjector(RemotePostgres)
+        engine = pg.engine()
+        session = Session(engine)
         container.ssh(_fg = True)
         
 
