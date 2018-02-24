@@ -71,10 +71,12 @@ class SshMixin:
                                    "/usr/bin/ssh",
                               "-i", ssh_key.key_path,
                                    *options,
-                              self.ip_address)
+                                   self.ip_address,
+                                   _env = ssh_key.agent.agent_environ)
         else:
             return sh.ssh.bake('-i', ssh_key.key_path,
-                               *options, self.ip_address)
+                               *options, self.ip_address,
+                               _env = ssh_key.agent.agent_environ)
 
     def ssh_recompute(self):
         try:
@@ -117,12 +119,15 @@ class Container(AsyncInjectable, SetupTaskMixin, SshMixin):
         self.container_running = ContainerRunning(self)
         self.network_interfaces = []
         self.ainjector = injector(AsyncInjector)
+        self.close_volume = True
 
         
         
 
     async def async_ready(self):
-        try: vol = await self.ainjector.get_instance_async(container_volume)
+        try:
+            vol = await self.ainjector.get_instance_async(container_volume)
+            self.close_volume = False
         except KeyError:
             vol = await self.ainjector(BtrfsVolume,
                               clone_from = self.image,
@@ -312,7 +317,7 @@ class Container(AsyncInjectable, SetupTaskMixin, SshMixin):
             except Exception: pass
             self.process = None
         if hasattr(self, 'volume'):
-            self.volume.close()
+            if self.close_volume: self.volume.close()
             del self.volume
 
     def __del__(self):
