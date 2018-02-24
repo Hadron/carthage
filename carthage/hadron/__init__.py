@@ -94,8 +94,9 @@ class TestDatabase(Container):
                              _err_to_out = True,
                              _bg = True, _bg_exc = False)
 
+    @inject(ssh_key = carthage.ssh.SshKey)
     @setup_task('clone-hadron-ops')
-    async def clone_hadron_operations(self):
+    async def clone_hadron_operations(self, ssh_key):
         await sh.git('bundle',
                      'create', self.volume.path+"/hadron-operations.bundle",
                      "HEAD",
@@ -106,6 +107,14 @@ class TestDatabase(Container):
                                      'clone', '--branch=master',
                                      '/hadron-operations.bundle')
         await process
+        hadron_ops = os.path.join(self.volume.path, "hadron-operations")
+        authorized_keys = os.path.join(hadron_ops, "hadron/inventory/config/templates/authorized_keys.mako")
+        with open(authorized_keys + ".new", "wt") as f:
+            f.write("#Carthage Automation Key\n")
+            f.write(ssh_key.pubkey_contents)
+            with open(authorized_keys, "rt") as f_in:
+                f.write(f_in.read())
+        os.rename(authorized_keys+".new", authorized_keys)
         os.unlink(os.path.join(self.volume.path, 'hadron-operations.bundle'))
         
     @setup_task('copy-database')
