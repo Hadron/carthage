@@ -155,19 +155,19 @@ class NetworkConfig:
     @inject(ainjector = AsyncInjector)
     async def resolve(self, ainjector):
         "Return a NetworkConfigInstance for a given environment"
-        async def resolve1(r):
+        async def resolve1(r, i):
             if isinstance(r, InjectionKey):
                 r = await ainjector.get_instance_async(r)
             elif  callable(r):
-                r = await ainjector(r)
+                r = await ainjector(r, i)
             return r
         d = {}
         for i in self.nets:
             #Unpacking assignment to get parallel resolution of futures
             res = {}
             res['mac'], res['net'] = await asyncio.gather(
-                resolve1(self.macs[i]),
-                resolve1(self.nets[i]))
+                resolve1(self.macs[i], i),
+                resolve1(self.nets[i], i))
             assert isinstance(res['mac'], (str, type(None))), "MAC Address for {} must resolve to string or None".format(i)
             assert isinstance(res['net'], Network), "Network for {} must resolve to network object".format(i)
             d[i] = res

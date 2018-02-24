@@ -50,6 +50,10 @@ self.allow_multiple, repr(self.provider))
         
     
 
+
+# Note that after @inject is defined, this class is redecorated to take parent_injector as a dependency so that
+#    injector = sub_injector(Injector)
+# works
 class Injector(Injectable):
 
     def __init__(self, *providers,
@@ -66,6 +70,14 @@ class Injector(Injectable):
         self.add_provider(self) #Make sure we can inject an Injector
         self.add_provider(InjectionKey(AsyncInjector ), AsyncInjector, allow_multiple = True)
 
+    def copy_if_owned(self):
+        # currently always copies
+        return type(self)(self)
+
+    def claim(self):
+        "Take ownership of the injector"
+# Currently a stub
+        return self
 
     def add_provider(self, k, p = None, *,
                      allow_multiple = False):
@@ -201,7 +213,8 @@ class Injector(Injectable):
             return asyncio.ensure_future(p.async_ready(), loop = self.loop)
         if isinstance(p, asyncio.Future): return p
         raise RuntimeError('_is_async returned True when _handle_async cannot handle')
-        
+
+
 class InjectionKey:
 
 
@@ -293,6 +306,7 @@ def copy_and_inject(_wraps = None, **kwargs):
         return wrap(_wraps)
     else: return wrap
     
+Injector = inject(parent_injector = Injector)(Injector)
     
    #########################################
    # Asynchronous support:
