@@ -363,7 +363,9 @@ class AsyncInjector(Injectable):
             return constructive_future
         else:
             try:
-                res =  provider(*args, **kwargs)
+                if isinstance(provider, asyncio.Future):
+                    res = provider
+                else: res =  provider(*args, **kwargs)
             except TypeError as e:
                 raise TypeError("Error constructing {}".format(provider)) from e
             if self._is_async(res):
@@ -375,7 +377,9 @@ class AsyncInjector(Injectable):
         # That will raise if there are errors with any of the
         # constructions done callbacks on the futures have inserted
         # them into the kwargs dict we got as a parameter
-        res =  provider(*args, **kwargs)
+        if isinstance(provider, asyncio.Future):
+            res = provider
+        else: res =  provider(*args, **kwargs)
         if self._is_async(res):
             future = self._handle_async(res)
             res = await future

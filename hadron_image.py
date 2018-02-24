@@ -18,8 +18,9 @@ async def run():
         engine = pg.engine()
         session = Session(engine)
         await ainjector(build_database.provide_networks, session = session)
-        await ainjector.get_instance_async(InjectionKey(Container, host ='router.cambridge-test.aces-aoe.com'))
-        container.ssh(_fg = True)
+        container2 = await ainjector.get_instance_async(InjectionKey(Container, host ='router.cambridge-test.aces-aoe.com'))
+        async with container2.container_running:
+            container.ssh("-A", _fg = True)
         
 
 #logging.getLogger('carthage.container').setLevel(7)
