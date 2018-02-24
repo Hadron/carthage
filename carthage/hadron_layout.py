@@ -29,9 +29,9 @@ database_key = InjectionKey(Container, host = 'database.hadronindustries.com')
 
 
 @inject(
-    machine = InjectionKey('this_slot'))
-def mac_from_database(machine, interface):
-    return getattr(machine.machine, interface).mac
+    slot = InjectionKey('this_slot'))
+def mac_from_database(interface, slot):
+    return getattr(slot.item.machine, interface)
 
 
 router_network_config = NetworkConfig()
