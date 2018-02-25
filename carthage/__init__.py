@@ -26,5 +26,5 @@ base_injector.add_provider(carthage.hadron_layout.external_network)
 base_injector.add_provider(carthage.hadron_layout.database_key, carthage.hadron_layout.test_database_container)
 base_injector.add_provider(carthage.container.ssh_origin, carthage.hadron_layout.test_database_container)
 
-base_injector.add_provider(carthage.container.container_image, carthage.hadron.hadron_image)
+base_injector.add_provider(carthage.container.container_image, carthage.hadron.hadron_container_image)
 base_injector.add_provider(InjectionKey(carthage.ssh.SshAgent), carthage.ssh.ssh_agent)
