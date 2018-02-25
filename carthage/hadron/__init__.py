@@ -1,5 +1,5 @@
 import asyncio, os, shutil, sys
-from ..image import ImageVolume, setup_task
+from ..image import ContainerImage, setup_task, SetupTaskMixin
 from ..container import Container, container_volume, container_image
 from ..dependency_injection import inject, Injector, AsyncInjectable, AsyncInjector
 from ..config import ConfigLayout
@@ -8,16 +8,8 @@ from ..utils import when_needed
 import carthage.ssh
 import carthage.network
 
-@inject(
-    config_layout = ConfigLayout,
-    injector = Injector
-    )
-class HadronImageVolume(ImageVolume):
+class HadronImageMixin(SetupTaskMixin):
 
-    def __init__(self, injector, config_layout):
-        super().__init__(config_layout = config_layout, name = "base-hadron")
-        self.injector = injector
-        
     @setup_task('hadron_packages')
     async def setup_hadron_packages(self):
         ainjector = self.injector(AsyncInjector)
@@ -30,20 +22,20 @@ class HadronImageVolume(ImageVolume):
             process = await container.run_container('/bin/systemctl', 'disable', 'sddm')
             await process
             process = await container.run_container(bind_mount, "/usr/bin/apt",
-                                  "install", "-y", "ansible",
+                                                    "install", "-y", "ansible",
                                                     "git", "python3-pytest",
-                                  )
+            )
             await process
             process = await container.run_container(bind_mount, "/usr/bin/ansible-playbook",
-                                  "-clocal",
-                                  "-ehadron_os=ACES",
-                                                                    "-ehadron_track=proposed",
+                                                    "-clocal",
+                                                    "-ehadron_os=ACES",
+                                                    "-ehadron_track=proposed",
                                                     "-epackagedir=/hadron-operations/ansible/packages",
-                                  "-ehadron_release=unstable",
-                                  "-eaces_apt_server=apt-server.aces-aoe.net",
-                                  "-i/hadron-operations/ansible/localhost-debian.txt",
-                                  "/hadron-operations/ansible/commands/hadron-packages.yml"
-                                          )
+                                                    "-ehadron_release=unstable",
+                                                    "-eaces_apt_server=apt-server.aces-aoe.net",
+                                                    "-i/hadron-operations/ansible/localhost-debian.txt",
+                                                    "/hadron-operations/ansible/commands/hadron-packages.yml"
+            )
             await process
             process = await container.run_container("/usr/bin/apt", "update")
             await process
@@ -55,6 +47,17 @@ class HadronImageVolume(ImageVolume):
         os.makedirs(os.path.join(self.path, "root/.ssh"), exist_ok = True)
         shutil.copy2(authorized_keys.path,
                      os.path.join(self.path, 'root/.ssh/authorized_keys'))
+
+@inject(
+    config_layout = ConfigLayout,
+    injector = Injector
+    )
+class HadronContainerImage(ContainerImage, HadronImageMixin):
+
+    def __init__(self, injector, config_layout):
+        super().__init__(config_layout = config_layout, name = "base-hadron")
+        self.injector = injector
+        
         
         
 @inject(
@@ -144,4 +147,4 @@ class TestDatabase(Container):
     ip_address = "192.168.101.1"
     
 
-hadron_image = when_needed(HadronImageVolume)
+hadron_container_image = when_needed(HadronContainerImage)

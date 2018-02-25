@@ -1,6 +1,6 @@
 import asyncio, logging, os, re, shutil, sys
 from .dependency_injection import inject, AsyncInjectable, InjectionKey, Injector, AsyncInjector
-from .image import BtrfsVolume, ImageVolume, SetupTaskMixin, setup_task, SkipSetupTask
+from .image import  SetupTaskMixin, setup_task, SkipSetupTask, BtrfsVolume
 from . import sh, ConfigLayout
 from .utils import memoproperty
 import carthage.network

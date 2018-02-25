@@ -1,5 +1,5 @@
 import logging, time
-from carthage.image import ImageVolume
+from carthage.image import ContainerImage
 from carthage.network import Network
 from carthage.container import Container, container_image
 from test_helpers import *
@@ -12,7 +12,7 @@ async def injector(loop):
     if posix.geteuid() != 0:
         pytest.skip("Not running as root; volume tests skipped", )
     ainjector = base_injector(AsyncInjector)
-    vol = await ainjector(ImageVolume, name = "base")
+    vol = await ainjector(ContainerImage, name = "base")
     base_injector.add_provider(container_image, vol)
     base_injector.add_provider(await ainjector(Network,'brint', delete_bridge = False))
     return base_injector

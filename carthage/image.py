@@ -126,7 +126,7 @@ class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
 
 
 @inject(config_layout = ConfigLayout)
-class ImageVolume(BtrfsVolume):
+class ContainerImage(BtrfsVolume):
 
     def __init__(self, name, config_layout):
         super().__init__(config_layout = config_layout, name = name)
@@ -161,4 +161,5 @@ def check_stamp(path, stamp, raise_on_error = False):
     return True
     
 
-__all__ = ('BtrfsVolume', 'ImageVolume', 'SetupTaskMixin')
+__all__ = ('BtrfsVolume', 'ContainerImage', 'SetupTaskMixin',
+           'SkipSetupTask')
