@@ -1,4 +1,5 @@
-import os, os.path
+import contextlib, os, os.path, shutil
+from tempfile import TemporaryDirectory
 from .dependency_injection import Injector, AsyncInjectable, inject, AsyncInjector
 from .config import ConfigLayout
 from . import sh
@@ -58,9 +59,9 @@ class SetupTaskMixin:
                 meth_names[m] = True
                 if hasattr(meth, '_setup_task_info'):
                     yield meth._setup_task_info[1], getattr(self, m)
-                    
-            
-    
+
+
+
 @inject(config_layout = ConfigLayout)
 class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
 
@@ -91,7 +92,7 @@ class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
 
     def __del__(self):
         self.close()
-    
+
     async def async_ready(self):
         try:
             if os.path.exists(self.path):
@@ -121,7 +122,7 @@ class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
         "Populate a new volume; called both for cloned and non-cloned volumes"
         await self.run_setup_tasks()
     stamp_path = path
-    
+
 
 
 
@@ -146,12 +147,12 @@ class ContainerImage(BtrfsVolume):
         try: os.rename(os.path.join(self.path, "sbin/init.dist"),
                   os.path.join(self.path, "sbin/init"))
         except FileNotFoundError: pass
-        
+
 
 def create_stamp(path, stamp):
     with open(os.path.join(path, ".stamp-"+stamp), "w") as f:
         pass
-    
+
 
 def check_stamp(path, stamp, raise_on_error = False):
     if not os.path.exists(os.path.join(path,
@@ -159,7 +160,162 @@ def check_stamp(path, stamp, raise_on_error = False):
         if raise_on_error: raise RuntimeError("Stamp not available")
         return False
     return True
-    
+
 
 __all__ = ('BtrfsVolume', 'ContainerImage', 'SetupTaskMixin',
            'SkipSetupTask')
+
+@inject(
+    config_layout = ConfigLayout,
+ainjector = AsyncInjector)
+class ImageVolume(AsyncInjectable, SetupTaskMixin):
+
+    def __init__(self, name, path, create_size = None,
+                 *, config_layout, ainjector):
+        self.config_layout = config_layout
+        self.ainjector = ainjector
+        self.injector = ainjector.injector.claim()
+        super().__init__()
+        self.name = name
+        self.path = path
+        if not os.path.exists(path):
+            os.makedirs(os.path.dirname(path), exist_ok = True)
+            if create_size is None:
+                raise RuntimeError("{} not found and creation disabled".format(path))
+            with open(path, "w") as f:
+                try: sh.chattr("+C", path)
+                except sh.ErrorReturnCode_1: raise
+                os.truncate(f.fileno(), create_size)
+                os.makedirs(self.stamp_path)
+
+
+    async def async_ready(self):
+        await self.run_setup_tasks()
+        return self
+
+    def delete_volume(self):
+        try:
+            os.unlink(self.path)
+            shutil.rmtree(self.stamp_path)
+        except FileNotFoundError: pass
+
+    @property
+    def stamp_path(self):
+        return self.path+'.stamps'
+
+    def close(self):
+        if self.config_layout.delete_volumes:
+            self.delete_volume()
+
+    def __del__(self):
+        self.close()
+
+    @setup_task('unpack')
+    async def unpack_installed_system(self):
+        await sh.gzip('-d', '-c',
+                      self.config_layout.base_vm_image,
+                      _out = self.path,
+                      _no_pipe = True,
+                      _no_out = True,
+                      _out_bufsize = 1024*1024,
+                      _tty_out = False,
+                      _bg = True,
+                      _bg_exc = False)
+
+    @contextlib.contextmanager
+    def image_mounted(self):
+        from hadron.allspark.imagelib import image_mounted
+        with image_mounted(self.path, mount = False) as i:
+            with TemporaryDirectory() as d:
+                sh.mount('-osubvol=@',
+                         i.rootdev, d)
+                i.rootdir = d
+                yield i
+                sh.umount(d)
+                
+
+    def clone_for_vm(self, name):
+        self.injector(QcowCloneVolume, name, self)
+
+
+@inject(
+    config_layout = ConfigLayout,
+    ainjector = AsyncInjector)
+class QcowCloneVolume:
+
+    def __init__(self, name, volume,
+                 *, config_layout, ainjector):
+        self.ainjector = ainjector
+        self.injector = ainjector.injector
+        self.name = name
+        self.path = os.path.join(config_layout.vm_image_dir, name+".qcow")
+        if not os.path.exists(self.path):
+            sh.qemu_img(
+                'create', '-fqcow2',
+                '-obacking_file='+volume.path,
+self.path)
+        self.config_layout = config_layout
+
+
+    def delete_volume(self):
+        try:
+            os.unlink(self.path)
+        except FileNotFoundError: pass
+
+    def close(self):
+        if self.config_layout.delete_volumes:
+            self.delete_volume()
+
+@inject(config_layout = ConfigLayout,
+        ainjector = AsyncInjector)
+class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
+
+    '''Mount a disk image for use as a container_image or
+    container_volume.  Note that this works for LVM and raw images, but
+    not currently for qcow2 images.  If you use this as a
+    container_volume, you must call close yourself as the container will
+    not.
+    '''
+    
+    def __init__(self, image,
+                 *, config_layout, ainjector):
+        super().__init__()
+        self.image = image
+        self.config_layout = config_layout
+        self.injector = ainjector.injector.copy_if_owned().claim()
+        self.name = image.name
+        self.mount_context = image.image_mounted()
+        self.mount = self.mount_context.__enter__()
+        self.stamp_path = image.stamp_path
+
+    def close(self):
+        if hasattr(self, 'mount_context'):
+            self.mount_context.__exit__(None, None, None)
+            del self.mount
+            del self.mount_context
+            del self.image
+
+    async def async_ready(self):
+        await self.run_setup_tasks()
+        return self
+    
+    def __del__(self):
+        self.close()
+
+    @property
+    def path(self):
+        return self.mount.rootdir
+    
+        
+
+
+
+@inject(
+    ainjector = AsyncInjector,
+    config_layout = ConfigLayout)
+def image_factory(name, image_type = 'raw', *,
+                  config_layout, ainjector):
+    assert image_type == 'raw'
+    path = os.path.join(config_layout.vm_image_dir, name+'.raw')
+    return ainjector(ImageVolume, name = name, path = path,
+                     create_size = config_layout.vm_image_size)
