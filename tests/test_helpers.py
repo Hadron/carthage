@@ -16,7 +16,7 @@ def async_test(t):
     def wrapper(loop, *args, **kwargs):
         kwargs['loop'] = loop
         task = asyncio.ensure_future(t(*args, **kwargs), loop = loop)
-        done, pending = loop.run_until_complete(asyncio.wait([task], timeout = 30, loop = loop))
+        done, pending = loop.run_until_complete(asyncio.wait([task], timeout = 40, loop = loop))
         if pending: raise  TimeoutError
         return task.result()
     return wrapper

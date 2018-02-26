@@ -11,7 +11,7 @@ import os.path, pytest
 from carthage.dependency_injection import AsyncInjector, InjectionKey
 from carthage import base_injector
 from carthage.config import ConfigLayout
-from carthage.image import BtrfsVolume, ContainerImage
+from carthage.image import BtrfsVolume, ContainerImage, image_factory
 import posix, gc
 
     
@@ -49,7 +49,7 @@ async def test_btrfs_clone(a_injector, loop):
     
 
 @async_test
-async def test_image_unpack(a_injector, loop):
+async def test_container_unpack(a_injector, loop):
     try:
         iv = None
         iv = await a_injector(ContainerImage, "base")
@@ -58,3 +58,13 @@ async def test_image_unpack(a_injector, loop):
     finally: del iv
 
 
+
+@async_test
+async def test_image_unpack(loop, a_injector):
+    vol = await a_injector(image_factory, "base")
+    print(vol.path)
+    with vol.image_mounted() as mount:
+        assert os.path.exists(os.path.join(mount.rootdir, "bin/bash"))
+        
+    vol.close()
+    

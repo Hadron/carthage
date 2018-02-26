@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 import asyncio, os, shutil, sys
-from ..image import ContainerImage, setup_task, SetupTaskMixin
+from ..image import ContainerImage, setup_task, SetupTaskMixin, ImageVolume, ContainerImageMount
 from ..container import Container, container_volume, container_image
 from ..dependency_injection import inject, Injector, AsyncInjectable, AsyncInjector
 from ..config import ConfigLayout
@@ -156,3 +156,30 @@ class TestDatabase(Container):
     
 
 hadron_container_image = when_needed(HadronContainerImage)
+
+@inject(config_layout = ConfigLayout,
+        ainjector = AsyncInjector)
+class HadronContainerImageMount(ContainerImageMount, HadronImageMixin): pass
+
+
+@inject(
+    config_layout = ConfigLayout,
+    ainjector = AsyncInjector
+    )
+class HadronVmImage(ImageVolume):
+
+    def __init__(self, *, config_layout, ainjector):
+        super().__init__("base-hadron",
+                         path = config_layout.vm_image_dir+'/base-hadron.raw',
+                         create_size = config_layout.vm_image_size,
+                         config_layout = config_layout,
+                         ainjector = ainjector)
+    
+
+    
+    @setup_task('hadron-customizations')
+    async def customize_for_hadron(self):
+        mount = await self.ainjector(HadronContainerImageMount, self)
+#        mount.close()
+        
+        
