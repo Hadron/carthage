@@ -75,6 +75,14 @@ class SshMixin:
                                *options, self.ip_address,
                                _env = ssh_key.agent.agent_environ)
 
+    async def ssh_online(self):
+        for i in range(10):
+            try: await self.ssh('date',
+                                _bg = True, _bg_exc = False,
+                                _timeout = 5)
+            except (sh.TimeoutException, sh.ErrorReturnCode): continue
+            break
+
     def ssh_recompute(self):
         try:
             del self.__dict__['ssh']

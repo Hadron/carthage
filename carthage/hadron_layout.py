@@ -30,9 +30,13 @@ test_database_container = when_needed(TestDatabase, image = hadron_container_ima
 @inject(
     slot = InjectionKey('this_slot'))
 def mac_from_database(interface, slot):
+    if slot.item is None: return None
     return getattr(slot.item.machine, interface)
 
 
 router_network_config = NetworkConfig()
 router_network_config.add('eth0', InjectionKey('vpn-network'), mac_from_database)
 router_network_config.add('eth1', InjectionKey('site-network'), mac_from_database)
+
+site_network_config = NetworkConfig()
+site_network_config.add('eth0', InjectionKey('site-network'), mac_from_database)

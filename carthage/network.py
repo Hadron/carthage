@@ -66,7 +66,8 @@ class VethInterface(NetworkInterface):
 
     def close(self):
         if self.closed: return
-        sh.ip('link', 'del', self.bridge_member_name)
+        try: sh.ip('link', 'del', self.bridge_member_name)
+        except sh.ErrorReturnCode: pass
         del self.network.interfaces[self.bridge_member_name]
         self.closed = True
 
