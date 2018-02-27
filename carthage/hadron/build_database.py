@@ -4,6 +4,7 @@ from hadron.inventory.admin import models
 from ..dependency_injection import inject, Injector, InjectionKey
 from .database import *
 from ..utils import when_needed
+from ..vm import VM
 import carthage.hadron_layout
 from carthage import base_injector
 
@@ -33,7 +34,7 @@ def provide_networks(injector, session):
 def provide_slot(s, *, session, injector):
     injector = injector(Injector)
     injector.add_provider(InjectionKey('this_slot'), s)
-    container =  when_needed(Container,
+    container =  when_needed(VM,
                        name = s.fqdn(),
                              network_config = carthage.hadron_layout.router_network_config,
                              injector = injector)
