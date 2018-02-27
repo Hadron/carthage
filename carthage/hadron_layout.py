@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 from .network import Network, NetworkConfig
-from .hadron import hadron_container_image, TestDatabase
+from .hadron import hadron_container_image, TestDatabase, database_key
 from .dependency_injection import InjectionKey, inject
 from .utils import when_needed
 from .container import Container
@@ -25,7 +25,6 @@ database_network_config.add('eth1',  InjectionKey('fake-internet'), None)
 
 
 test_database_container = when_needed(TestDatabase, image = hadron_container_image, network_config = database_network_config)
-database_key = InjectionKey(Container, host = 'database.hadronindustries.com')
 
 
 @inject(

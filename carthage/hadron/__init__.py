@@ -9,12 +9,13 @@
 import asyncio, os, shutil, sys
 from ..image import ContainerImage, setup_task, SetupTaskMixin, ImageVolume, ContainerImageMount
 from ..container import Container, container_volume, container_image
-from ..dependency_injection import inject, Injector, AsyncInjectable, AsyncInjector
+from ..dependency_injection import inject, Injector, AsyncInjectable, AsyncInjector, InjectionKey
 from ..config import ConfigLayout
 from .. import sh
 from ..utils import when_needed
 import carthage.ssh
 import carthage.network
+from ..machine import Machine
 
 class HadronImageMixin(SetupTaskMixin):
 
@@ -67,6 +68,7 @@ class HadronContainerImage(ContainerImage, HadronImageMixin):
         self.injector = injector
         
         
+database_key = InjectionKey(Machine, host = 'database.hadronindustries.com')
         
 @inject(
     config_layout = ConfigLayout,
@@ -78,6 +80,7 @@ class TestDatabase(Container):
 
     def __init__(self, name = "test-database", **kwargs):
         super().__init__(name = name, **kwargs)
+        self.injector.add_provider(database_key, self)
         
 
     @setup_task("install-db")
@@ -125,14 +128,17 @@ class TestDatabase(Container):
         "Copy the master database.  Run automatically.  Could be run agains if hadroninventoryadmin is locally dropped and recreated"
         async with self.container_running:
             await self.network_online()
-            await self.shell('/usr/bin/python3',
+            env = os.environ
+            env['PYTHONPATH'] = "/hadron-operations"
+            await self.shell( '/usr/bin/python3',
                          '-mhadron.inventory.config.update',
                          '--copy=postgresql:///hadroninventoryadmin',
                          '--copy-users',
                          _bg = True,
                          _bg_exc = False,
                              _out = self._out_cb,
-                         _err_to_out = True)
+                              _err_to_out = True,
+                              _env = env)
         
 
     @setup_task('make-update')
@@ -140,8 +146,10 @@ class TestDatabase(Container):
         "Run make update in /hadron-operations; can be repeated as needed"
         async with self.container_running:
             await self.network_online()
+            from .database import fixup_database
+            await self.ainjector(fixup_database)
             await self.shell('/bin/sh', '-c',
-                             "cd /hadron-operations&&make update",
+                             "cd /hadron-operations&&PULL_OPTS='--database postgresql:///hadroninventoryadmin' make update",
                        _out = self._out_cb,
                        _err_to_out = True,
                        _bg = True,
