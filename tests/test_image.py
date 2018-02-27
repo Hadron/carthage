@@ -60,11 +60,8 @@ async def test_container_unpack(a_injector, loop):
 
 
 @async_test
-async def test_image_unpack(loop, a_injector):
-    vol = await a_injector(image_factory, "base")
-    print(vol.path)
-    with vol.image_mounted() as mount:
+async def test_image_unpack(loop, a_injector, vm_image):
+print(vm_image.path)    
+    with vm_image.image_mounted() as mount:
         assert os.path.exists(os.path.join(mount.rootdir, "bin/bash"))
         
-    vol.close()
-    

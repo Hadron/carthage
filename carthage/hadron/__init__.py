@@ -180,6 +180,8 @@ class HadronVmImage(ImageVolume):
     @setup_task('hadron-customizations')
     async def customize_for_hadron(self):
         mount = await self.ainjector(HadronContainerImageMount, self)
-#        mount.close()
+        mount.close()
         
         
+
+hadron_vm_image = when_needed(HadronVmImage)

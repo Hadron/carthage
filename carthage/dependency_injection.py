@@ -431,3 +431,8 @@ class AsyncInjector(Injectable):
             return await self._handle_async(res)
         else: return res
 
+
+__all__ = '''
+    inject Injector AsyncInjector
+    Injectable AsyncInjectable
+    InjectionKey'''.split()

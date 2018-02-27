@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import contextlib, os, os.path, shutil
+import contextlib, os, os.path, shutil, time
 from tempfile import TemporaryDirectory
 from .dependency_injection import Injector, AsyncInjectable, inject, AsyncInjector
 from .config import ConfigLayout
@@ -192,8 +192,8 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
                 raise RuntimeError("{} not found and creation disabled".format(path))
             with open(path, "w") as f:
                 try: sh.chattr("+C", path)
-                except sh.ErrorReturnCode_1: raise
-                os.truncate(f.fileno(), create_size)
+                except sh.ErrorReturnCode_1: pass
+                self.create_size = create_size
                 os.makedirs(self.stamp_path)
 
 
@@ -229,7 +229,9 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
                       _tty_out = False,
                       _bg = True,
                       _bg_exc = False)
-
+        if hasattr(self, 'create_size'):
+            os.truncate(self.path, self.create_size)
+        
     @contextlib.contextmanager
     def image_mounted(self):
         from hadron.allspark.imagelib import image_mounted
@@ -239,11 +241,19 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
                          i.rootdev, d)
                 i.rootdir = d
                 yield i
-                sh.umount(d)
-                
+                for i in range(5):
+                    try:
+                        sh.umount(d)
+                        break
+                    except sh.ErrorReturnCode as e:
+                        if 'busy' in e.stderr:
+                            time.sleep(0.5)
+                        else: raise
+                        
+                            
 
     def clone_for_vm(self, name):
-        self.injector(QcowCloneVolume, name, self)
+        return self.injector(QcowCloneVolume, name, self)
 
 
 @inject(
