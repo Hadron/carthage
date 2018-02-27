@@ -7,12 +7,16 @@ from carthage.container import container_image, Container
 from carthage.hadron.database import RemotePostgres
 from carthage.hadron import build_database, hadron_vm_image
 from sqlalchemy.orm import Session
+from carthage.machine import ssh_origin
+import carthage.ssh
 
 async def run():
 
     ainjector = base_injector(AsyncInjector)
     asyncio.ensure_future(ainjector(hadron_vm_image))
     container = await ainjector.get_instance_async(database_key)
+    await ainjector.get_instance_async(ssh_origin)
+    await ainjector.get_instance_async(carthage.ssh.SshKey)
     async with container.container_running:
         await container.network_online()
         pg  = await ainjector(RemotePostgres)

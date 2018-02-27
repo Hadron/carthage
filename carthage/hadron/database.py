@@ -1,10 +1,11 @@
 import weakref
 from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 import carthage.hadron_layout
 import carthage.config
 import carthage.ssh
 import carthage.container
-from ..dependency_injection import inject, InjectionKey, Injector
+from ..dependency_injection import inject, InjectionKey, Injector, AsyncInjector
 from ..ports import ExposedPort
 from ..container import Container
 from ..network import Network
@@ -14,21 +15,13 @@ from hadron.inventory.admin import models
 
 @inject(
     config_layout = carthage.config.ConfigLayout,
-    database = carthage.hadron_layout.database_key,
-    ssh_key = carthage.ssh.SshKey,
-    ssh_origin = carthage.container.ssh_origin)
+    database = carthage.hadron_layout.database_key)
 class RemotePostgres(ExposedPort):
 
-    def __init__(self, config_layout, database, ssh_key, ssh_origin):
-        # We don't actually need the ssh key ourselves, but we want it
-        # injected to make sure it has been constructed, because we
-        # plan to call ssh in a non-async context, and
-        # UnsatisfactoryDependency will be raised if the key has not
-        # previously been constructed.
+    def __init__(self, config_layout, database):
         super().__init__(config_layout = config_layout,
                          dest_addr = 'unix-connect:/var/run/postgresql/.s.PGSQL.5432',
-                         ssh_origin = ssh_origin
-        )
+                         ssh_origin = database)
         self.engines = weakref.WeakSet()
 
 
@@ -71,3 +64,13 @@ class HadronNetwork(Network):
 
 
 site_router_key = InjectionKey('site-router')
+@inject(ainjector = AsyncInjector)
+async def fixup_database(ainjector):
+    pg = await ainjector(RemotePostgres)
+    session = Session(pg.engine())
+    session.query(models.Network).update({
+        "extif": "eth0",
+        "intif": "eth1"})
+    session.commit()
+    pg.close()
+    

@@ -3,85 +3,14 @@ from .dependency_injection import inject, AsyncInjectable, InjectionKey, Injecto
 from .image import  SetupTaskMixin, setup_task, SkipSetupTask, BtrfsVolume
 from . import sh, ConfigLayout
 from .utils import memoproperty
+from .machine import MachineRunning, Machine, SshMixin, ssh_origin
 import carthage.network
 import carthage.ssh
 
 logger = logging.getLogger('carthage.container')
 
 
-class ContainerRunning:
 
-    async def __aenter__(self):
-        self.container.with_running_count +=1
-        if self.container.running:
-            return
-        try:
-            await self.container.start_container()
-            return
-
-        except:
-            self.container.with_running_count -= 1
-            raise
-
-    async def __aexit__(self, exc, val, tb):
-        self.container.with_running_count -= 1
-        if self.container.with_running_count <= 0:
-            self.container_with_running_count = 0
-            await self.container.stop_container()
-
-
-    def __init__(self, container):
-        self.container = container
-
-ssh_origin = InjectionKey('ssh-origin')
-class SshMixin:
-    '''An Item that can be sshed to.  Will look for the ssh_origin
-    injection key.  If found, this should be a container.  The ssh will be
-    launched from within the network namespace of that container in order
-    to reach the appropriate devices.  Requires ip_address to be made
-    available.  Requires an carthage.ssh.SshKey be injectable.
-    '''
-
-    @property
-    def ip_address(self):
-        raise NotImplementedError
-
-    ssh_options = ('-oStrictHostKeyChecking=no', )
-
-    @memoproperty
-    def ssh(self):
-        try:
-            ssh_origin_container = self.injector.get_instance(ssh_origin)
-        except KeyError:
-            ssh_origin_container = self if isinstance(self, Container) else None
-        ssh_key = self.injector.get_instance(carthage.ssh.SshKey)
-        options = self.ssh_options + ('-oUserKnownHostsFile='+os.path.join(self.config_layout.state_dir, 'ssh_known_hosts'),)
-        if ssh_origin_container is not None:
-            leader = ssh_origin_container.container_leader
-            ssh_origin_container.done_future().add_done_callback(self.ssh_recompute)
-            return sh.nsenter.bake('-t', str(leader), "-n",
-                                   "/usr/bin/ssh",
-                              "-i", ssh_key.key_path,
-                                   *options,
-                                   self.ip_address,
-                                   _env = ssh_key.agent.agent_environ)
-        else:
-            return sh.ssh.bake('-i', ssh_key.key_path,
-                               *options, self.ip_address,
-                               _env = ssh_key.agent.agent_environ)
-
-    def ssh_recompute(self):
-        try:
-            del self.__dict__['ssh']
-        except KeyError: pass
-
-    @classmethod
-    def clear_ssh_known_hosts(cls, config_layout):
-        try: os.unlink(
-                os.path.join(config_layout.state_dir, "ssh_known_hosts"))
-        except FileNotFoundError: pass
-        
-        
 container_image = InjectionKey('container-image')
 container_volume = InjectionKey('container-volume')
 
@@ -91,26 +20,23 @@ container_volume = InjectionKey('container-volume')
         config_layout = ConfigLayout,
         network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
         injector = Injector)
-class Container(AsyncInjectable, SetupTaskMixin, SshMixin):
+class Container(Machine, SetupTaskMixin):
 
     def __init__(self, name, *, config_layout, image, injector, loop, network_config,
                  skip_ssh_keygen = False):
-        super().__init__(injector = injector)
+        super().__init__(injector = injector, config_layout = config_layout,
+                         name = name)
         self.loop = loop
         self.process = None
-        self.name = name
-        self.injector = Injector(injector)
         self.image = image
         self.config_layout = config_layout
         self.skip_ssh_keygen = skip_ssh_keygen
-        self.with_running_count = 0
         self.running = False
         self._operation_lock = asyncio.Lock()
         self._out_selectors = []
         self._done_waiters = []
-        self.container_running = ContainerRunning(self)
+        self.container_running = self.machine_running
         self.network_interfaces = []
-        self.ainjector = injector(AsyncInjector)
         self.close_volume = True
 
         
@@ -144,9 +70,6 @@ class Container(AsyncInjectable, SetupTaskMixin, SshMixin):
             raise RuntimeError('Volume not yet created')
         return self.volume.path
 
-    @property
-    def full_name(self):
-        return self.config_layout.container_prefix+self.name
 
     async def do_network_config(self, networking):
         if networking and self.network_config:
@@ -225,6 +148,8 @@ class Container(AsyncInjectable, SetupTaskMixin, SshMixin):
             self.process = None
             await process
 
+    stop_machine = stop_container
+    
     def _done_cb(self, cmd, success, code):
         def callback():
             # Callback needed to run in IO loop thread because futures
@@ -295,6 +220,7 @@ class Container(AsyncInjectable, SetupTaskMixin, SshMixin):
         assert started_future.result() is True
         logger.info("Container {} started".format(self.name))
 
+    start_machine = start_container
 
     @setup_task('ssh-keygen')
     async def generate_ssh_keys(self):
@@ -302,6 +228,7 @@ class Container(AsyncInjectable, SetupTaskMixin, SshMixin):
             raise SkipSetupTask
         process = await self.run_container("/usr/bin/ssh-keygen", "-A")
         await process
+        self.ssh_rekeyed()
 
     def close(self):
         if self.process is not None:
