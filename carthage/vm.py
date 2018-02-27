@@ -108,8 +108,9 @@ class VM(Machine, SetupTaskMixin):
         self.volume.close()
         try: os.unlink(self.config_path)
         except FileNotFoundError: pass
-        try: shutil.rmtree(self.stamp_path)
-        except FileNotFoundError: pass
+        if self.config_layout.delete_volumes:
+            try: shutil.rmtree(self.stamp_path)
+            except FileNotFoundError: pass
 
     def __del__(self):
         self.close()
