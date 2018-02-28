@@ -10,6 +10,7 @@ from ..machine import Machine
 from ..container import Container
 import carthage.hadron_layout
 from carthage import base_injector
+import carthage.pki
 
 logger = logging.getLogger('carthage')
 
@@ -53,7 +54,18 @@ class RouterMixin(SetupTaskMixin):
                            '-eansible_host={}'.format(self.ip_address),
                            'commands/all.yml',
                            _bg = True, _bg_exc = False)
-        
+
+class PhotonServerMixin(SetupTaskMixin):
+
+    @setup_task('install-creds')
+    @inject(pki = carthage.pki.PkiManager)
+    async def install_photon_credentials(self, pki):
+        async with self.machine_running:
+            await self.ssh_online()
+            self.ssh('mkdir -p /etc/photon ||true')
+            self.ssh('cat' '>/etc/photon/photon-credentials.pem',
+                     _in = pki.credentials(self.name))
+            
 vm_roles = {'router',
             'desktop',
             'desktop-ingest',
@@ -62,7 +74,8 @@ vm_roles = {'router',
             'workstation'}
 
 mixin_map = {
-    'router': RouterMixin
+    'router': RouterMixin,
+    'photon-server': PhotonServerMixin
     }
 
 
