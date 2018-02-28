@@ -73,6 +73,8 @@ def when_needed(wraps, *args, injector = None,
     class WhenNeeded(AsyncInjectable):
 
         resolved_obj = None
+        resolving = None
+
         def __init__(self, ainjector, **inside_kwargs):
             if injector is not None:
                 #override ainjector
@@ -90,16 +92,27 @@ def when_needed(wraps, *args, injector = None,
             nonlocal kwargs
             if self.resolved_obj:
                 return self.resolved_obj
+            if self.resolving:
+                return await asyncio.shield(self.resolving)
+            loop = self.ainjector.get_instance(asyncio.AbstractEventLoop)
+            self.__class__.resolving = loop.create_future()
+            del loop
             kws = kwargs.copy()
             kws.update(self.inside_kwargs)
-            res = await self.ainjector(wraps, *args, **kws)
-            self.__class__.resolved_obj = res
-            # We will never need them again so release the references
-            kwargs = None
-            del self.ainjector
-            del self.inside_kwargs
-            return res
-
+            try:
+                res = await self.ainjector(wraps, *args, **kws)
+                self.__class__.resolved_obj = res
+                self.resolving.set_result(res)
+                del self.__class__.resolving
+                # We will never need them again so release the references
+                kwargs = None
+                del self.ainjector
+                del self.inside_kwargs
+                return res
+            except Exception as e:
+                self.resolving.set_exception(e)
+                self.__class__.resolving = None # try again next time
+                
         def __repr__(self):
             if isinstance(wraps, type):
                 wraps_repr = wraps.__name__
