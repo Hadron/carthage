@@ -15,6 +15,7 @@ from .. import sh
 from ..utils import when_needed
 import carthage.ssh
 import carthage.network
+import carthage.pki
 from ..machine import Machine
 
 class HadronImageMixin(SetupTaskMixin):
@@ -100,9 +101,10 @@ class TestDatabase(Container):
                              _err_to_out = True,
                              _bg = True, _bg_exc = False)
 
-    @inject(ssh_key = carthage.ssh.SshKey)
+    @inject(ssh_key = carthage.ssh.SshKey,
+            pki = carthage.pki.PkiManager)
     @setup_task('clone-hadron-ops')
-    async def clone_hadron_operations(self, ssh_key):
+    async def clone_hadron_operations(self, ssh_key, pki):
         await sh.git('bundle',
                      'create', self.volume.path+"/hadron-operations.bundle",
                      "HEAD",
@@ -122,6 +124,10 @@ class TestDatabase(Container):
                 f.write(f_in.read())
         os.rename(authorized_keys+".new", authorized_keys)
         os.unlink(os.path.join(self.volume.path, 'hadron-operations.bundle'))
+        with open(os.path.join(self.volume.path,
+                               "hadron-operations/ansible/resources/aces-hosts.pem"), "at") as f:
+            pki.credentials("foo") # to make sure it has a CA cert generated
+            f.write(pki.ca_cert)
         
     @setup_task('copy-database')
     async def copy_database_from_master(self):
@@ -177,7 +183,7 @@ class HadronContainerImageMount(ContainerImageMount, HadronImageMixin): pass
 class HadronVmImage(ImageVolume):
 
     def __init__(self, *, config_layout, ainjector):
-        super().__init__("base-hadron",
+        super().__init__("base-hadron-vm",
                          path = config_layout.vm_image_dir+'/base-hadron.raw',
                          create_size = config_layout.vm_image_size,
                          config_layout = config_layout,
