@@ -112,7 +112,8 @@ class VM(Machine, SetupTaskMixin):
             
     def close(self):
         if self.running:
-            asyncio.ensure_future(self.stop_vm())
+            sh.virsh("destroy", self.full_name)
+            self.running = False
         self.volume.close()
         try: os.unlink(self.config_path)
         except FileNotFoundError: pass

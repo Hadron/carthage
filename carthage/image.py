@@ -243,10 +243,13 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
                 yield i
                 for i in range(5):
                     try:
+                        sh.sync()
                         sh.umount(d)
+                        sh.sync()
+                        time.sleep(5)
                         break
                     except sh.ErrorReturnCode as e:
-                        if 'busy' in e.stderr:
+                        if 'busy' in e.stderr.lower():
                             time.sleep(0.5)
                         else: raise
                         

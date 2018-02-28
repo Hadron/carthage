@@ -53,6 +53,11 @@ async def run():
         await loop.run_in_executor(None, func = callback)
             
         global machines
+        futures = []
+        for m in machines:
+            if m.running:
+                futures.append(loop.create_task(m.stop_machine()))
+        await asyncio.wait(futures, timeout = 10)
         for m in machines:
             m.close()
     del machines
