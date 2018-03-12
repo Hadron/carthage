@@ -14,7 +14,7 @@ from .database import *
 from ..utils import when_needed
 from ..image import setup_task, SetupTaskMixin
 from ..vm import VM
-from ..machine import Machine
+from ..machine import Machine, SshMixin
 from ..container import Container
 import carthage.hadron_layout
 from carthage import base_injector
@@ -73,7 +73,16 @@ class PhotonServerMixin(SetupTaskMixin):
             self.ssh('mkdir -p /etc/photon ||true')
             self.ssh('cat' '>/etc/photon/photon-credentials.pem',
                      _in = pki.credentials(self.name))
-            
+
+class NonRouterMixin(SshMixin):
+
+    async def ssh_online(self):
+        router = await self.ainjector.get_instance_async(site_router_key)
+        if not router.running:
+            await router.start_machine()
+        await router.ssh_online()
+        return await super().ssh_online()
+    
 vm_roles = {'router',
             'desktop',
             'desktop-ingest',
@@ -101,7 +110,9 @@ def provide_slot(s, *, session, injector):
             mixins.append(mixin_map[r])
     if 'router' in role_names:
         network_config = carthage.hadron_layout.router_network_config
-    else: network_config = carthage.hadron_layout.site_network_config
+    else:
+        network_config = carthage.hadron_layout.site_network_config
+        mixins.append(NonRouterMixin)
     class HadronMachine(base, *mixins):
         if 'router' in role_names:
             ip_address = "192.168.101.{}".format(s.network.netid)
