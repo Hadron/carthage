@@ -11,6 +11,8 @@ setup(
     packages = ["carthage", "carthage.hadron"],
     install_requires = ['pytest', ],
     scripts = ['bin/carthage-runner'],
+    package_data = {'carthage': ['resources/templates/*'],
+    },
     version = "0.1",
 )
 
