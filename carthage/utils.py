@@ -104,6 +104,7 @@ def when_needed(wraps, *args, injector = None,
             except Exception as e:
                 self.resolving.set_exception(e)
                 self.__class__.resolving = None # try again next time
+                raise
                 
         def __repr__(self):
             if isinstance(wraps, type):
