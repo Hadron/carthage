@@ -17,6 +17,9 @@ def injector():
     injector = base_injector(Injector)
     cl = injector.get_instance(ConfigLayout)
     cl.state_dir = os.path.join(os.path.dirname(__file__), "test_state")
+    try: carthage.sh.entanglement_pki('--help')
+    except:
+        pytest.skip('entanglement_pki not installed')
     yield injector
     shutil.rmtree(cl.state_dir)
 
