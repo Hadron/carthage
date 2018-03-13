@@ -1,2 +1,5 @@
 .cache
 __pycache__
+.pybuild
+build
+carthage.egg-info
