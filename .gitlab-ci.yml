@@ -1,0 +1,49 @@
+stages:
+  - build
+  - test
+  - upload
+
+snapshot_package:
+  script:
+    - if [ x$CI_BUILD_TAG != x ]; then hadron-ci-update-changelog --tag $CI_BUILD_TAG; else hadron-ci-update-changelog --no-backport --snapshot-distribution=unstable-aces-snapshot; fi
+    - gbp buildpackage --git-ignore-new --git-ignore-branch --git-builder=sbuild  -n --build-dep-resolver=aptitude -c unstable -d sid-hadron-snapshot -A  .
+    - dpkg-buildpackage -S -sa -uc -us -d
+    - mkdir sbuild_out
+    - 'find .. \( ! -path ..  -type d -prune \) -o \( -name  \**.deb -o -name \*tar\* -o -name \*diff\* -o -name \*dsc -o -name \*changes -o -name \*buildinfo \) -print0 |xargs -0 mv --target=sbuild_out'
+  stage: build
+  tags:
+    - debian
+  artifacts:
+    expire_in: 3 weeks
+    paths:
+      - sbuild_out/*
+
+upload_snapshot:
+  stage: upload
+  script:
+    - 'find sbuild_out \( -name \*tar\* -o -name \*diff\* -o -name \*dsc -o -name \*_source.changes -o -name \*buildinfo \) -print0 |xargs -0 mv --target=/apt_cache/incoming' 
+  tags:
+    - debian
+  only:
+    - master
+    - /^debian/.*$/
+
+install_test:
+  dependencies:
+    - snapshot_package
+  stage: test
+  variables:
+    DEBIAN_FRONTEND: noninteractive
+  script:
+    - schroot -b -n install_test_${CI_BUILD_ID} -c install-test
+    - (cd /apt_cache && tar cf - var  ) | schroot -r --directory / -c install_test_${CI_BUILD_ID} tar xpf -
+    - tar -cf - sbuild_out |schroot -r -c install_test_${CI_BUILD_ID} --directory / tar xpf -
+    - schroot --directory / -r -c install_test_${CI_BUILD_ID} apt-get update
+    - schroot --directory / -r -c install_test_${CI_BUILD_ID} -- apt-get -y --allow-downgrades -o DPkg::Options::="--force-confold" install ./sbuild_out/*.deb
+    - mkdir -p /apt_cache
+    - schroot -r -c install_test_${CI_BUILD_ID} --directory / tar cf - var/cache/apt var/lib/apt/lists | (cd /apt_cache&& tar xpf - )
+  after_script:
+    - schroot -e -c install_test_${CI_BUILD_ID} || true
+  tags:
+    - debian
+    
