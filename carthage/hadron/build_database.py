@@ -52,7 +52,7 @@ class RouterMixin(SetupTaskMixin):
     @inject(database = carthage.hadron.database_key)
     async def run_ansible_all(self, database):
         async with self.machine_running:
-        await database.ssh_online()
+            await database.ssh_online()
             await self.ssh_online()
             self.ssh('modprobe nf_conntrack_ipv4')
             self.ssh('ls /proc/sys/net/netfilter')
