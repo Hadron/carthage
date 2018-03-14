@@ -1,4 +1,4 @@
-import contextlib, os, os.path, shutil, time
+import contextlib, os, os.path, shutil, sys, time
 from tempfile import TemporaryDirectory
 from .dependency_injection import Injector, AsyncInjectable, inject, AsyncInjector
 from .config import ConfigLayout
@@ -36,17 +36,32 @@ class SetupTaskMixin:
     def add_setup_task(self, stamp, task):
         self.setup_tasks.append((stamp, task))
 
-    async def run_setup_tasks(self):
+    async def run_setup_tasks(self, context = None):
+        '''Run the set of collected setup tasks.  If context is provided, it
+        is used as an asynchronous context manager that will be entered before the
+        first task and eventually exited.  The context is never
+        entered if no tasks are run.
+        '''
         injector = getattr(self, 'injector', carthage.base_injector)
         ainjector = getattr(self, 'ainjector', None)
         if ainjector is None:
             ainjector = injector(AsyncInjector)
+        context_entered = False
         for stamp, task in self.setup_tasks:
             if not check_stamp(self.stamp_path, stamp):
                 try:
+                    if (not context_entered) and context is not None:
+                        await context.__aenter__()
+                        context_entered = True
                     await ainjector(task)
                     create_stamp(self.stamp_path, stamp)
                 except SkipSetupTask: pass
+                except Exception:
+                    if context_entered:
+                        await context.__aexit(*sys.exc_info())
+                    raise
+        if context_entered:
+            await context.__aexit__(None, None, None)
 
     def _class_setup_tasks(self):
         cls = self.__class__
