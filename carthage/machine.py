@@ -69,7 +69,7 @@ class SshMixin:
 
     async def ssh_online(self):
         online = False
-        for i in range(10):
+        for i in range(15):
             try: await self.ssh('date',
                                 _bg = True, _bg_exc = False,
                                 _timeout = 5)
