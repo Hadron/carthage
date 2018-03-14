@@ -74,14 +74,14 @@ class PhotonServerMixin(SetupTaskMixin):
             self.ssh('cat' '>/etc/photon/photon-credentials.pem',
                      _in = pki.credentials(self.name))
 
-class NonRouterMixin(SshMixin):
+class NonRouterMixin(Machine):
 
-    async def ssh_online(self):
+    async def start_dependencies(self, *args, **kwargs):
         router = await self.ainjector.get_instance_async(site_router_key)
         if not router.running:
             await router.start_machine()
         await router.ssh_online()
-        return await super().ssh_online()
+        return await super().start_dependencies(*args, **kwargs)
     
 vm_roles = {'router',
             'desktop',

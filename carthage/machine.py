@@ -125,6 +125,9 @@ class Machine(AsyncInjectable, SshMixin):
     def full_name(self):
         return self.config_layout.container_prefix+self.name
 
+    async def start_dependencies(*args, **kwargs):
+        pass
+    
 
     def start_machine(self):
         raise NotImplementedError

@@ -117,6 +117,8 @@ class Container(Machine, SetupTaskMixin):
             net_args = await self.do_network_config(networking)
             if as_pid2:
                 net_args.insert(0, '--as-pid2')
+            if networking:
+                await self.start_dependencies()
             logger.info("Starting container {}: {}".format(
                 self.name,
                 " ".join(args)))

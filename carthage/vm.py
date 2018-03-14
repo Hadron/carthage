@@ -79,6 +79,7 @@ class VM(Machine, SetupTaskMixin):
     async def start_vm(self):
         async with self._operation_lock:
             if self.running is True: return
+            await self.start_dependencies()
             await self.write_config()
             await sh.virsh('create',
                       self.config_path,
@@ -127,8 +128,8 @@ class VM(Machine, SetupTaskMixin):
     
 
     async def async_ready(self):
-        async with self.machine_running:
-            await self.run_setup_tasks()
+        await self.write_config()
+        await self.run_setup_tasks(context = self.machine_running)
         return self
 
     @property
