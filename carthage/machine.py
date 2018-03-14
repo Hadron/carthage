@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import os, os.path
+import asyncio, os, os.path
 from .dependency_injection import *
 from .config import ConfigLayout
 from .ssh import SshKey, SshAgent
