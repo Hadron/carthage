@@ -1,4 +1,7 @@
 #!/usr/bin/make -f
+PYBUILD_TEST_ARGS=tests/test_dependency_injection.py tests/test_utils.py
+export PYBUILD_TEST_ARGS
+
 
 %:
 	dh $@ --with python3 --buildsystem=pybuild
