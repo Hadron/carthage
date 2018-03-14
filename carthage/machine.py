@@ -73,7 +73,7 @@ class SshMixin:
             try: await self.ssh('date',
                                 _bg = True, _bg_exc = False,
                                 _timeout = 5)
-            except (sh.TimeoutException, sh.ErrorReturnCode): continue
+            except (sh.TimeoutException, sh.ErrorReturnCode): await asyncio.sleep(1)
             online = True
             break
         if not online:
