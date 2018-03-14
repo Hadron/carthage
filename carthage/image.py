@@ -66,7 +66,7 @@ class SetupTaskMixin:
                 except SkipSetupTask: pass
                 except Exception:
                     if context_entered:
-                        await context.__aexit(*sys.exc_info())
+                        await context.__aexit__(*sys.exc_info())
                     raise
         if context_entered:
             await context.__aexit__(None, None, None)
