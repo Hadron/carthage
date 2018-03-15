@@ -1,4 +1,4 @@
-import asyncio, logging, os, os.path, shutil
+import asyncio, json, logging, os, os.path, shutil
 import mako, mako.lookup, mako.template
 from .dependency_injection import *
 from .utils import when_needed, memoproperty
@@ -6,6 +6,7 @@ from .image import SetupTaskMixin, setup_task, ImageVolume
 from .machine import Machine, SshMixin
 from . import sh
 from .config import ConfigLayout
+from .ports import PortReservation
 import carthage.network
 
 logger = logging.getLogger('carthage.vm')
@@ -34,13 +35,15 @@ class VM(Machine, SetupTaskMixin):
         self.network_config_unresolved = network_config
         self.image = image
         self.console_needed = console_needed
+        if self.console_needed:
+            self.console_port = injector(PortReservation)
         self.running = False
         self.volume = None
         self.network_config = None
         self.vm_running = self.machine_running
         self._operation_lock = asyncio.Lock()
 
-    
+
 
     def gen_volume(self):
         if self.volume is not None: return
@@ -57,17 +60,24 @@ class VM(Machine, SetupTaskMixin):
         with open(self.config_path, 'wt') as f:
             f.write(template.render(
                 console_needed = self.console_needed,
+                console_port = self.console_port.port if self.console_needed else None,
                 name =self.full_name,
                 network_config = self.network_config,
                 volume = self.volume))
+            if self.console_needed:
+                with open(self.console_json_path, "wt") as f:
+                    f.write(self._console_json())
 
-                    
 
     @memoproperty
     def config_path(self):
         return os.path.join(self.config_layout.vm_image_dir, self.name+'.xml')
 
-    
+    @memoproperty
+    def console_json_path(self):
+        return os.path.join(self.config_layout.vm_image_dir, self.name+'.console')
+
+
     async def start_vm(self):
         async with self._operation_lock:
             if self.running is True: return
@@ -79,7 +89,7 @@ class VM(Machine, SetupTaskMixin):
             self.running = True
 
     start_machine = start_vm
-    
+
     async def stop_vm(self):
         async with self._operation_lock:
             if not self.running:
@@ -101,8 +111,8 @@ class VM(Machine, SetupTaskMixin):
                 self.running = False
 
     stop_machine = stop_vm
-    
-            
+
+
     def close(self):
         if self.running:
             sh.virsh("destroy", self.full_name)
@@ -117,7 +127,7 @@ class VM(Machine, SetupTaskMixin):
     def __del__(self):
         self.close()
 
-    
+
 
     async def async_ready(self):
         await self.write_config()
@@ -127,3 +137,31 @@ class VM(Machine, SetupTaskMixin):
     @property
     def stamp_path(self):
         return self.volume.path+'.stamps'
+
+    def _console_json(self):
+
+        d = {
+            "password": "aces",
+            "user": "aces",
+            "port": self.console_port.port,
+            "host": sh.hostname('--fqdn', _encoding = 'utf-8').strip(),
+            "description": self.full_name,
+            "label": self.full_name,
+            "type": "spice",
+            "ca": self.vm_ca(),
+        }
+
+        return json.dumps(d)
+
+    @classmethod
+    def vm_ca(cls):
+        paths = ('/etc/pki/libvirt-spice', '/etc/pki/qemu')
+        for p in paths:
+            ca_file = os.path.join(p,'ca-cert.pem')
+            if os.path.exists(ca_file):
+                with open(ca_file, 'rt') as f:
+                    ca = f.read()
+                ca = ca.replace("\n", "\\n")
+                ca = ca.replace("\r", "")
+                return ca
+        raise FileNotFoundError

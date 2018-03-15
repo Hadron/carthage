@@ -65,7 +65,7 @@ import uuid
 
     <input type='mouse' bus='ps2'/>
     <input type='keyboard' bus='ps2'/>
-    <graphics type='spice' tlsPort='${vm.port}'>
+    <graphics type='spice' tlsPort='${console_port}'>
       <listen type='address' address='0.0.0.0' />
     </graphics>
     <sound model='ich6'>

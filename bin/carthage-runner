@@ -43,7 +43,11 @@ async def run():
         loop.create_task(queue_worker())
         def callback():
             container.ssh("-A", _fg = True)
-        await loop.run_in_executor(None, func = callback)
+        try:
+            await loop.run_in_executor(None, func = callback)
+        except Exception:
+            logger.exception('Command failed:')
+
             
         global machines
         futures = []

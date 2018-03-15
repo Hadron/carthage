@@ -106,6 +106,9 @@ def provide_slot(s, *, session, injector):
     else:
         network_config = carthage.hadron_layout.site_network_config
         mixins.append(NonRouterMixin)
+    kws = {}
+    if base is VM and 'router' not in role_names:
+        kws['console_needed'] = True
     class HadronMachine(base, *mixins):
         if 'router' in role_names:
             ip_address = "192.168.101.{}".format(s.network.netid)
@@ -116,6 +119,6 @@ def provide_slot(s, *, session, injector):
     machine =  when_needed(HadronMachine,
                        name = s.fqdn(),
                              network_config = network_config,
-                             injector = injector)
+                             injector = injector, **kws)
     base_injector.add_provider(InjectionKey(Machine, host = s.fqdn()), machine)
     return machine
