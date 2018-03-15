@@ -3,6 +3,7 @@ from carthage.pki import PkiManager
 from carthage.config import ConfigLayout
 from carthage import base_injector, Injector
 import os, os.path, pytest, shutil
+import carthage.sh
 
 @pytest.fixture(scope = 'module')
 def injector():
