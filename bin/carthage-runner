@@ -68,5 +68,5 @@ with open(sys.argv[1]) as f:
         machine_queue.put_nowait(m.strip())
 
 loop.run_until_complete(run())
-del base_injector._providers
+base_injector.close()
 gc.collect()
