@@ -77,6 +77,7 @@ class Injector(Injectable):
             self.add_provider(p)
         self.add_provider(self) #Make sure we can inject an Injector
         self.add_provider(InjectionKey(AsyncInjector ), AsyncInjector, allow_multiple = True)
+        self.closed = False
 
     def copy_if_owned(self):
         # currently always copies
@@ -135,7 +136,11 @@ class Injector(Injectable):
 
     def __contains__(self, k):
         return k in self._providers
-    
+
+    def _check_closed(self):
+        if self.closed:
+            raise RuntimeError("Injector is closed")
+        
     def __call__(self, cls, *args, **kwargs):
         '''Construct an instance of cls using the providers in this injector.
         Instantiate providers as needed.  In general a sub-injector is not
@@ -145,6 +150,7 @@ class Injector(Injectable):
         keyword arguments do specify a dep.dependency, they must satisfy the
         InjectionKey involved.
 '''
+        self._check_closed()
         try:
             dks = set(cls._injection_dependencies.keys())
         except AttributeError: dks = set()
@@ -222,6 +228,20 @@ class Injector(Injectable):
         if isinstance(p, asyncio.Future): return p
         raise RuntimeError('_is_async returned True when _handle_async cannot handle')
 
+    def close(self):
+        for p in self._providers.values():
+            if hasattr(p, 'close'):
+                try:
+                    p.close()
+                except Exception:
+                    logger.exception("Error closing {}".format(p))
+        self._providers.clear()
+        self.closed = True
+
+    def __del__(self):
+        if not self.closed:
+            self.close()
+            
 
 class InjectionKey:
 
