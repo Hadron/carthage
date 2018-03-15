@@ -21,11 +21,14 @@ class PortReservation:
 
     def __init__(self, config_layout):
         assert config_layout.max_port > config_layout.min_port
+        found = False
         for i in range(config_layout.min_port, config_layout.max_port+1):
-            if i not in  self._ports_used:
-                self.port = i
+            self.port = i
+            if self not in  self._ports_used:
                 self._ports_used.add(self)
+                found = True
                 break
+        if not found:
             raise NoPortsError("No free ports")
 
     def __hash__(self):
