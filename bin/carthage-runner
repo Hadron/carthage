@@ -11,6 +11,9 @@ from carthage.hadron import build_database, hadron_vm_image
 from sqlalchemy.orm import Session
 from carthage.machine import ssh_origin, Machine
 import carthage.ssh
+
+logger = logging.getLogger('carthage')
+
 machines = []
 
 async def queue_worker():
