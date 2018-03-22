@@ -2,6 +2,7 @@ import os, os.path
 from .dependency_injection import *
 from . import sh
 from .config import ConfigLayout
+from .utils import memoproperty
 
 @inject(config_layout = ConfigLayout)
 class PkiManager(Injectable):
@@ -20,15 +21,17 @@ class PkiManager(Injectable):
         return s
 
     def _certify(self, host):
+        self.ca_cert
         sh.entanglement_pki(host, d=self.pki_dir)
 
-    @property
+    @memoproperty
     def pki_dir(self):
         return os.path.join(self.config_layout.state_dir, "pki")
 
     @property
     def ca_cert(self):
-        "Only valid after credentials called"
+        sh.entanglement_pki('-d', self.pki_dir,
+                            '--ca-name', "Carthage Root CA")
         with open(self.pki_dir+'/ca.pem','rt') as f:
             return f.read()
         
