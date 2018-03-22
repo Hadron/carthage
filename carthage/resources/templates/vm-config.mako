@@ -72,7 +72,7 @@ import uuid
 
     </sound>
     <video>
-      <model type='qxl' ram='65536' vram='65536' vgamem='16384' heads='1' primary='yes'/>
+      <model type='qxl' ram='262144' vram='262144' vgamem='131072' heads='1' primary='yes'/>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
     </video>
 % endif
