@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import asyncio, os, shutil, sys
+import asyncio, os, os.path, shutil, sys
 from ..image import ContainerImage, setup_task, SetupTaskMixin, ImageVolume, ContainerImageMount
 from ..container import Container, container_volume, container_image
 from ..dependency_injection import inject, Injector, AsyncInjectable, AsyncInjector, InjectionKey
@@ -17,6 +17,7 @@ import carthage.ssh
 import carthage.network
 import carthage.pki
 from ..machine import Machine
+_resources_path = os.path.join(os.path.dirname(__file__), "../resources")
 
 class HadronImageMixin(SetupTaskMixin):
 
@@ -50,13 +51,20 @@ class HadronImageMixin(SetupTaskMixin):
             process = await container.run_container("/usr/bin/apt", "update")
             await process
         finally: pass
-        
+
     @setup_task('ssh_authorized_keys')
     @inject(authorized_keys = carthage.ssh.AuthorizedKeysFile)
     def add_authorized_keys(self, authorized_keys):
         os.makedirs(os.path.join(self.path, "root/.ssh"), exist_ok = True)
         shutil.copy2(authorized_keys.path,
                      os.path.join(self.path, 'root/.ssh/authorized_keys'))
+
+    @setup_task('hadron-xorg-modes')
+    def install_xorg_modes(self):
+        os.makedirs(os.path.join(self.path,
+                                 "etc/X11/xorg.conf.d"), exist_ok = True)
+        shutil.copy2(os.path.join(_resources_path, "hadron-xorg-modes"),
+                     os.path.join(self.path, "etc/X11/xorg.conf.d/10-hadron-modes.conf"))
 
 @inject(
     config_layout = ConfigLayout,
@@ -67,10 +75,10 @@ class HadronContainerImage(ContainerImage, HadronImageMixin):
     def __init__(self, injector, config_layout):
         super().__init__(config_layout = config_layout, name = "base-hadron")
         self.injector = injector
-        
-        
+
+
 database_key = InjectionKey(Machine, host = 'database.hadronindustries.com')
-        
+
 @inject(
     config_layout = ConfigLayout,
     injector = Injector,
@@ -82,7 +90,7 @@ class TestDatabase(Container):
     def __init__(self, name = "test-database", **kwargs):
         super().__init__(name = name, **kwargs)
         self.injector.add_provider(database_key, self)
-        
+
 
     @setup_task("install-db")
     async def install_packages(self):
@@ -126,9 +134,8 @@ class TestDatabase(Container):
         os.unlink(os.path.join(self.volume.path, 'hadron-operations.bundle'))
         with open(os.path.join(self.volume.path,
                                "hadron-operations/ansible/resources/aces-hosts.pem"), "at") as f:
-            pki.credentials("foo") # to make sure it has a CA cert generated
             f.write(pki.ca_cert)
-        
+
     @setup_task('copy-database')
     async def copy_database_from_master(self):
         "Copy the master database.  Run automatically.  Could be run agains if hadroninventoryadmin is locally dropped and recreated"
@@ -145,7 +152,7 @@ class TestDatabase(Container):
                              _out = self._out_cb,
                               _err_to_out = True,
                               _env = env)
-        
+
 
     @setup_task('make-update')
     async def make_update(self):
@@ -167,7 +174,7 @@ class TestDatabase(Container):
                              _err_to_out = True)
 
     ip_address = "192.168.101.1"
-    
+
 
 hadron_container_image = when_needed(HadronContainerImage)
 
@@ -188,14 +195,14 @@ class HadronVmImage(ImageVolume):
                          create_size = config_layout.vm_image_size,
                          config_layout = config_layout,
                          ainjector = ainjector)
-    
 
-    
+
+
     @setup_task('hadron-customizations')
     async def customize_for_hadron(self):
         mount = await self.ainjector(HadronContainerImageMount, self)
         mount.close()
-        
-        
+
+
 
 hadron_vm_image = when_needed(HadronVmImage)
