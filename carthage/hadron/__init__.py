@@ -124,16 +124,14 @@ class TestDatabase(Container):
                                      '/hadron-operations.bundle')
         await process
         hadron_ops = os.path.join(self.volume.path, "hadron-operations")
-        authorized_keys = os.path.join(hadron_ops, "hadron/inventory/config/templates/authorized_keys.mako")
-        with open(authorized_keys + ".new", "wt") as f:
+        carthage_vars = os.path.join(hadron_ops, "ansible/inventory/group_vars/all/carthage.yml")
+        os.makedirs(os.path.dirname(carthage_vars), exist_ok = True)
+        with open(carthage_vars, "wt") as f:
             f.write("#Carthage Automation Key\n")
-            f.write(ssh_key.pubkey_contents)
-            with open(authorized_keys, "rt") as f_in:
-                f.write(f_in.read())
-        os.rename(authorized_keys+".new", authorized_keys)
+            f.write("carthage_key: "+ssh_key.pubkey_contents)
         os.unlink(os.path.join(self.volume.path, 'hadron-operations.bundle'))
         with open(os.path.join(self.volume.path,
-                               "hadron-operations/ansible/resources/aces-hosts.pem"), "at") as f:
+                               "hadron-operations/ansible/resources/cacerts/carthage.pem"), "wt") as f:
             f.write(pki.ca_cert)
 
     @setup_task('copy-database')
