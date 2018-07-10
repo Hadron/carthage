@@ -53,7 +53,7 @@ class RouterMixin(SetupTaskMixin):
                            '-iinventory',
                            '-l{}'.format(self.name),
                            '-eansible_host={}'.format(self.ip_address),
-                           'commands/all.yml',
+                           'commands/initial-router.yml',
                            _bg = True, _bg_exc = False)
 
 class PhotonServerMixin(SetupTaskMixin):
