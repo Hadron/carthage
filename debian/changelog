@@ -1,5 +1,6 @@
-hadron-carthage (0.1) UNRELEASED; urgency=medium
+hadron-carthage (0.2) unstable-aces-proposed; urgency=medium
 
   * Initial version
+  * Add support for modern hadron operations
 
- -- Sam Hartman <hartmans@debian.org>  Tue, 13 Mar 2018 11:15:41 -0400
+ -- Sam Hartman <hartmans@hartmans-ingest.cambridge.aces-aoe.com>  Tue, 10 Jul 2018 14:51:47 -0400
