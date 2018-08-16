@@ -75,7 +75,19 @@ ainjector = base_injector(AsyncInjector)
 
 #logging.getLogger('carthage.container').setLevel(7)
 #logging.getLogger('carthage.dependency_injection').setLevel(10)
-logging.basicConfig(level = 'INFO')
+root_logger = logging.getLogger()
+console_handler = logging.StreamHandler()
+root_logger.addHandler(console_handler)
+root_logger.setLevel('INFO')
+
+container_logger = logging.getLogger('carthage.container')
+container_logger.addHandler(logging.FileHandler('container.log'))
+container_logger.setLevel(10)
+def container_debug_filter(record):
+    if record.name == 'carthage.container' and record.levelno == 10: return 0
+    return 1
+console_handler.addFilter(container_debug_filter)
+
 loop = asyncio.get_event_loop()
 machine_queue = asyncio.Queue()
 with open(sys.argv[1]) as f:
