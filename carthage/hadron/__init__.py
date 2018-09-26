@@ -30,7 +30,7 @@ class HadronImageMixin(SetupTaskMixin):
                                     skip_ssh_keygen = True)
         try:
             bind_mount = '--bind-ro='+self.config_layout.hadron_operations+":/hadron-operations"
-            process = await container.run_container('/bin/systemctl', 'disable', 'sddm')
+            process = await container.run_container('/bin/systemctl', 'disable', 'sddm', 'systemd-networkd', 'systemd-resolved', 'systemd-networkd.socket')
             await process
             process = await container.run_container(bind_mount, "/usr/bin/apt",
                                                     "install", "-y", "ansible",
