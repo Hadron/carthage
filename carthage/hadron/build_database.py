@@ -1,4 +1,4 @@
-import logging
+import logging, shutil, os, os.path
 from sqlalchemy.orm import Session
 from hadron.inventory.admin import models
 from ..dependency_injection import inject, Injector, InjectionKey
@@ -38,24 +38,59 @@ def provide_networks(injector, session):
         except Exception:
             logger.exception("Error adding network {}".format(n))
 
+container_host = InjectionKey('hadron/container-host')
+
+@inject(injector = Injector,
+        host = container_host)
+class ContainerWaiter(Machine):
+
+    def __init__(self, name, *, injector, host):
+        self.host = host
+        config_layout = injector(ConfigLayout)
+        super().__init__(name, injector = injector,
+                         config_layout = config_layout)
+
+        self.stamp_path = os.path.join(config_layout.image_dir, 'containers', self.name)
+        os.makedirs(self.stamp_path, exist_ok = True)
+        
+    async def start_machine(self):
+        await self.start_dependencies()
+        await self.host.ssh_online()
+        await self.host.ssh('machinectl', 'start', self.short_name,
+                            _bg = True, _bg_exc = False)
+    def close(self):
+        shutil.rmtree(self.stamp_path, ignore_errors = True)
+
+    def __del__(self):
+        self.close()
+        
+
+    async def stop_machine(self):
+        self.host.ssh('machinectl', 'stop', self.short_name)
+        
+
+async def run_ansible_initial_router(machine, database):
+    async with machine.machine_running:
+        await database.ssh_online()
+        await machine.ssh_online()
+        machine.ssh('modprobe nf_conntrack_ipv4')
+        machine.ssh('ls /proc/sys/net/netfilter')
+        await database.ssh('-A',
+                       'cd /hadron-operations/ansible && ansible-playbook',
+                       '-iinventory',
+                       '-l{}'.format(machine.name),
+                       '-eansible_host={}'.format(machine.ip_address),
+                       'commands/initial-router.yml',
+                       _bg = True, _bg_exc = False)
+
+
 class RouterMixin(SetupTaskMixin):
 
-    @setup_task('ansible_all')
+    @setup_task('ansible_initial_router')
     @inject(database = carthage.hadron.database_key)
-    async def run_ansible_all(self, database):
-        async with self.machine_running:
-            await database.ssh_online()
-            await self.ssh_online()
-            self.ssh('modprobe nf_conntrack_ipv4')
-            self.ssh('ls /proc/sys/net/netfilter')
-            await database.ssh('-A',
-                           'cd /hadron-operations/ansible && ansible-playbook',
-                           '-iinventory',
-                           '-l{}'.format(self.name),
-                           '-eansible_host={}'.format(self.ip_address),
-                           'commands/initial-router.yml',
-                           _bg = True, _bg_exc = False)
-
+    async def ansible_initial_router(self, database):
+        return await run_ansible_initial_router(self, database)
+    
 class PhotonServerMixin(SetupTaskMixin):
 
     @setup_task('install-creds')
@@ -81,6 +116,7 @@ vm_roles = {'router',
             'desktop-ingest',
             'ingest',
             'videowall',
+            'desktop-videowall',
             'workstation'}
 
 mixin_map = {
@@ -97,6 +133,11 @@ def provide_slot(s, *, session, injector):
     role_names = set(r.name for r in s.roles)
     if role_names & vm_roles:
         base = VM
+    if s.vm and s.vm.is_container and s.vm.host:
+        base = ContainerWaiter
+        @inject(host = InjectionKey(Machine, s.vm.host.fqdn()))
+        def host(host): return host
+        injector.add_provider(container_host, host)
     mixins = []
     for r in role_names:
         if r in mixin_map and mixin_map[r] not in mixins:
@@ -109,7 +150,9 @@ def provide_slot(s, *, session, injector):
     kws = {}
     if base is VM and 'router' not in role_names:
         kws['console_needed'] = True
+    injector.add_provider( network_config)
     class HadronMachine(base, *mixins):
+        short_name = s.hostname
         if 'router' in role_names:
             ip_address = "192.168.101.{}".format(s.network.netid)
         else: ip_address = s.full_ip
@@ -118,7 +161,6 @@ def provide_slot(s, *, session, injector):
         s.item.machine #lazy load
     machine =  when_needed(HadronMachine,
                        name = s.fqdn(),
-                             network_config = network_config,
-                             injector = injector, **kws)
+                           injector = injector, **kws)
     base_injector.add_provider(InjectionKey(Machine, host = s.fqdn()), machine)
     return machine
