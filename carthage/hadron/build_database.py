@@ -50,7 +50,7 @@ container_host = InjectionKey('hadron/container-host')
 
 @inject(injector = Injector,
         host = container_host)
-class ContainerWaiter(Machine):
+class ContainerWaiter(Machine, SetupTaskMixin):
 
     def __init__(self, name, *, injector, host):
         self.host = host
@@ -60,12 +60,19 @@ class ContainerWaiter(Machine):
 
         self.stamp_path = os.path.join(config_layout.image_dir, 'containers', self.name)
         os.makedirs(self.stamp_path, exist_ok = True)
-        
+
+    async def async_ready(self):
+        await super().async_ready()
+        await self.start_machine()
+        await self.run_setup_tasks()
+        return self
+    
     async def start_machine(self):
         await self.start_dependencies()
         await self.host.ssh_online()
         await self.host.ssh('machinectl', 'start', self.short_name,
                             _bg = True, _bg_exc = False)
+        self.running = True
     def close(self):
         shutil.rmtree(self.stamp_path, ignore_errors = True)
 
@@ -74,7 +81,10 @@ class ContainerWaiter(Machine):
         
 
     async def stop_machine(self):
-        self.host.ssh('machinectl', 'stop', self.short_name)
+        try:
+            self.host.ssh('machinectl', 'stop', self.short_name)
+            self.running = False
+        except Exception: pass
         
 
 async def run_ansible_initial_router(machine, database):
@@ -89,7 +99,9 @@ async def run_ansible_initial_router(machine, database):
                        '-l{}'.format(machine.name),
                        '-eansible_host={}'.format(machine.ip_address),
                        'commands/initial-router.yml',
-                       _bg = True, _bg_exc = False)
+                           _bg = True, _bg_exc = False,
+                           _out = os.path.join(machine.stamp_path, "ansible.log"),
+                           _err_to_out = True)
 
 
 class RouterMixin(SetupTaskMixin):
@@ -144,7 +156,7 @@ def provide_slot(s, *, session, injector):
     if s.vm and s.vm.is_container and s.vm.host:
         base = ContainerWaiter
         @inject(host = InjectionKey(Machine, s.vm.host.fqdn()))
-        def host(host): return host
+        async def host(host): return host
         injector.add_provider(container_host, host)
     mixins = []
     for r in role_names:
