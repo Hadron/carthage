@@ -246,7 +246,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
                       _bg_exc = False)
         if hasattr(self, 'create_size'):
             os.truncate(self.path, self.create_size)
-        
+
     @contextlib.contextmanager
     def image_mounted(self):
         from hadron.allspark.imagelib import image_mounted
@@ -267,8 +267,8 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
                         if 'busy' in e.stderr.lower():
                             time.sleep(0.5)
                         else: raise
-                        
-                            
+
+
 
     def clone_for_vm(self, name):
         return self.injector(QcowCloneVolume, name, self)
@@ -312,7 +312,7 @@ class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
     container_volume, you must call close yourself as the container will
     not.
     '''
-    
+
     def __init__(self, image,
                  *, config_layout, ainjector):
         super().__init__()
@@ -320,29 +320,42 @@ class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
         self.config_layout = config_layout
         self.injector = ainjector.injector.copy_if_owned().claim()
         self.name = image.name
-        self.mount_context = image.image_mounted()
-        self.mount = self.mount_context.__enter__()
+        self.mount_image()
         self.stamp_path = image.stamp_path
 
-    def close(self):
-        if hasattr(self, 'mount_context'):
+    def mount_image(self):
+        self.mount_context = self.image.image_mounted()
+        self.mount = self.mount_context.__enter__()
+
+    def unmount_image(self):
+        try:
             self.mount_context.__exit__(None, None, None)
             del self.mount
             del self.mount_context
+        except AttributeError: pass
+
+    def close(self):
+        self.unmount_image()
+        try:
             del self.image
+        except AttributeError: pass
 
     async def async_ready(self):
-        await self.run_setup_tasks()
-        return self
-    
+        try:
+            await self.run_setup_tasks()
+            return self
+        except:
+            self.close()
+            raise
+
     def __del__(self):
         self.close()
 
     @property
     def path(self):
         return self.mount.rootdir
-    
-        
+
+
 
 
 
