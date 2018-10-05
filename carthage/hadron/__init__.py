@@ -42,6 +42,12 @@ class HadronImageMixin(SetupTaskMixin):
             await process
             process = await container.run_container("/usr/bin/apt", "update")
             await process
+            process = await container.run_container('--bind-ro=/bin/true:/usr/sbin/update-grub',
+                                                    '/usr/bin/apt', '-y', 'dist-upgrade')
+            await process
+            process = await container.run_container('/usr/bin/apt', 'install', '-y',
+                                                    'hadron-container-image', 'python3-photon')
+            await process
         finally: pass
 
     @setup_task('ssh_authorized_keys')
@@ -187,6 +193,28 @@ class HadronVmImage(ImageVolume):
                          ainjector = ainjector)
 
 
+
+    @setup_task('resize-disk')
+    async def resize_disk(self):
+        ainjector = self.ainjector
+        try:
+            mount = await ainjector(ContainerImageMount, self)
+            ainjector.add_provider(container_volume, mount)
+            ainjector.add_provider(container_image, mount)
+            container = await ainjector(Container, name = self.name,
+                                    skip_ssh_keygen = True)
+            rootdev = mount.mount.rootdev
+            loopdev = mount.mount.loopdev
+            process = await container.run_container(
+                '--bind='+ loopdev, '--bind='+ rootdev,
+                '--bind=/bin/true:/usr/sbin/update-grub',
+                '/usr/sbin/hadron-firstboot', '--no-ssh', '--no-hostname')
+            await process
+            mount.unmount_image()
+            mount.mount_image()
+            sh.btrfs('filesystem', 'resize', 'max', mount.mount.rootdir)
+        finally:
+            mount.close()
 
     @setup_task('hadron-customizations')
     async def customize_for_hadron(self):
