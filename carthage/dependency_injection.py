@@ -248,7 +248,7 @@ class InjectionKey:
 
     _target_injection_keys = weakref.WeakKeyDictionary()
 
-    def __new__(cls, target_, require_type = False, optional = False, **constraints):
+    def __new__(cls, target_, *, require_type = False, optional = False, **constraints):
         assert (cls is InjectionKey) or constraints, "You cannot subclass InjectionKey with empty constraints"
         if require_type and not isinstance(target_, type):
             raise TypeError('Only types can be used as implicit injection keys; if this is intended then construct the injection key explicitly')
