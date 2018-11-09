@@ -12,7 +12,7 @@ from hadron.inventory.admin import models
 from ..dependency_injection import inject, Injector, InjectionKey
 from .database import *
 from ..utils import when_needed
-from ..image import setup_task, SetupTaskMixin
+from ..image import setup_task, SetupTaskMixin, create_stamp, check_stamp
 from ..vm import VM
 from ..machine import Machine, SshMixin
 from ..container import Container
@@ -66,23 +66,38 @@ class ContainerWaiter(Machine, SetupTaskMixin):
         await self.start_machine()
         await self.run_setup_tasks()
         return self
-    
+
+    async def start_dependencies(self):
+        await super().start_dependencies()
+        database = await self.ainjector.get_instance_async(carthage.hadron.database_key)
+        if not check_stamp(self.host.stamp_path, "ansible_initial_router"):
+            await run_ansible_initial_router(self.host, database)
+            create_stamp(self.host.stamp_path, 'ansible_initial_router')
+        if not self.host.running: await self.host.start_machine()
+
     async def start_machine(self):
         await self.start_dependencies()
         await self.host.ssh_online()
         await self.host.ssh('machinectl', 'start', self.short_name,
                             _bg = True, _bg_exc = False)
         self.running = True
+
     def close(self):
-        shutil.rmtree(self.stamp_path, ignore_errors = True)
+        if self.config_layout.delete_volumes:
+            try: shutil.rmtree(self.stamp_path)
+            except FileNotFoundError: pass
+
 
     def __del__(self):
         self.close()
         
 
     async def stop_machine(self):
+        if not self.host.running: return
+        if not self.running: return
         try:
-            self.host.ssh('machinectl', 'stop', self.short_name)
+            self.host.ssh('machinectl', 'stop', self.short_name,
+                          _timeout = 5)
             self.running = False
         except Exception: pass
         
@@ -91,7 +106,6 @@ async def run_ansible_initial_router(machine, database):
     async with machine.machine_running:
         await database.ssh_online()
         await machine.ssh_online()
-        machine.ssh('modprobe nf_conntrack_ipv4')
         machine.ssh('ls /proc/sys/net/netfilter')
         await database.ssh('-A',
                        'cd /hadron-operations/ansible && ansible-playbook',
@@ -155,7 +169,7 @@ def provide_slot(s, *, session, injector):
         base = VM
     if s.vm and s.vm.is_container and s.vm.host:
         base = ContainerWaiter
-        @inject(host = InjectionKey(Machine, s.vm.host.fqdn()))
+        @inject(host = InjectionKey(Machine, host = s.vm.host.fqdn()))
         async def host(host): return host
         injector.add_provider(container_host, host)
     mixins = []

@@ -110,7 +110,15 @@ class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
     def close(self):
         if self._path is None: return
         if self.config_layout.delete_volumes:
-            sh.btrfs('subvolume', 'delete', self.path, )
+            subvols = [self._path]
+            for root,dirs, files in os.walk(self._path, topdown = True):
+                device = os.stat(root).st_dev
+                for d in dirs:
+                    dir = os.path.join(root, d)
+                    if os.lstat(dir).st_dev != device: subvols.append(dir)
+
+            for vol in reversed(subvols):
+                sh.btrfs('subvolume', 'delete', vol, )
         self._path = None
 
     def __del__(self):
