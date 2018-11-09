@@ -115,8 +115,10 @@ class VM(Machine, SetupTaskMixin):
 
     def close(self):
         if self.running:
-            sh.virsh("destroy", self.full_name)
-            self.running = False
+            try:
+                sh.virsh("destroy", self.full_name)
+                self.running = False
+            except Exception: pass
         self.volume.close()
         try: os.unlink(self.config_path)
         except FileNotFoundError: pass
