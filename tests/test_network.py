@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-from test_helpers import *
+from carthage.pytest import *
 import pytest, posix
 from carthage import base_injector
 from carthage.network import Network

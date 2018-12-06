@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-from test_helpers import *
+from carthage.pytest import *
 import os.path, pytest
 from carthage.dependency_injection import AsyncInjector, InjectionKey
 from carthage import base_injector
