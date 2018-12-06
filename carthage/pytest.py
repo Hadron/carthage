@@ -54,7 +54,7 @@ def async_test(t):
     params = list(sig.parameters.values())
     try:
         params = list(filter( lambda p: p.name not in t._injection_dependencies, params))
-    except AttributeError: pass
+    except AttributeError: pass # no @inject call
     param_names = set(p.name for p in params)
     if 'loop' not in param_names:
         orig_loop = False
