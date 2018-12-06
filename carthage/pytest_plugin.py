@@ -1,4 +1,4 @@
-import asyncio, pytest
+import argparse, asyncio, json, pytest
 from. import base_injector
 from .dependency_injection import AsyncInjector
 
@@ -16,6 +16,9 @@ def pytest_collection_modifyitems(items):
     for i in items:
         if isinstance(i,pytest.Function):
             if hasattr(i.function, '__signature__'):
+                del i.keywords._markers['place_as']
+                del i.keywords._markers['usefixtures']
+                del i.keywords._markers['__signature__']
                 i._fixtureinfo.argnames = tuple(i.function.__signature__.parameters.keys())
 
 @pytest.fixture()
@@ -24,4 +27,39 @@ def ainjector():
     yield ainjector
     ainjector.close()
 
+    
+def pytest_addoption(parser):
+    group = parser.getgroup("Carthage", "Carthage Continuous Integration Options")
+    group.addoption('--carthage-config',
+                    type = argparse.FileType('rt'),
+                    help = "Specify yaml carthage config",
+                    metavar = "file")
+    group.addoption('--carthage-json',
+                    metavar = "file",
+                    type = argparse.FileType('wt'),
+                    help = "Write json results to this file")
+    
+    
+
+def pytest_configure(config):
+    global json_out
+    global json_log
+    json_log = config.getoption('carthage_json')
+    json_out = []
+    
+def pytest_runtest_logreport(report):
+    if json_log is None: return
+    d = {}
+    for k in ('nodeid', 'location', 'keywords', 'outcome', 'longrepr', 'when', 'sections', 'duration'):
+        d[k] = getattr(report, k)
+    d['longrepr'] = report.longreprtext
+    json_out.append(d)
+
+def pytest_sessionfinish():
+    global json_out, json_log
+    if json_log is None: return
+    json_log.write(json.dumps(json_out))
+    json_out = []
+    json_log.close()
+    json_log = None
     
