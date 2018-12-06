@@ -1,7 +1,7 @@
 from carthage import dependency_injection
 from carthage.dependency_injection import inject, InjectionKey
 from carthage.utils import when_needed
-from test_helpers import async_test
+from carthage.pytest import async_test
 
 import asyncio, pytest
 

@@ -1,4 +1,4 @@
-from test_helpers import *
+from carthage.pytest import *
 import os.path, pytest
 from carthage.dependency_injection import AsyncInjector, InjectionKey
 from carthage import base_injector
