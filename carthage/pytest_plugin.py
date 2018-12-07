@@ -1,5 +1,5 @@
-import argparse, asyncio, json, pytest
-from. import base_injector
+import argparse, asyncio, json, pytest, yaml
+from. import base_injector, ConfigLayout
 from .dependency_injection import AsyncInjector
 
 
@@ -9,6 +9,13 @@ def loop():
 '''
     return asyncio.get_event_loop()
 
+@pytest.fixture(scope = 'session')
+def test_parameters(pytestconfig):
+    try:
+        return pytestconfig.carthage_test_parameters
+    except AttributeError:
+        pytest.skip("Test parameters not specified")
+        
 def pytest_collection_modifyitems(items):
     # This hook modifies items wrapped by @async_test to add fixtures used by the wrapped function
     # See the comment in that code for details
@@ -32,13 +39,17 @@ def pytest_addoption(parser):
     group = parser.getgroup("Carthage", "Carthage Continuous Integration Options")
     group.addoption('--carthage-config',
                     type = argparse.FileType('rt'),
-                    help = "Specify yaml carthage config",
+                    help = "Specify yaml carthage config; this configuration file describes where to put VMs and where to find hadron-operations.  It is not the test configuration for individual tests.  This option is typically used on the controller and not alongside --carthage-json on the system under test.",
                     metavar = "file")
     group.addoption('--carthage-json',
                     metavar = "file",
                     type = argparse.FileType('wt'),
                     help = "Write json results to this file")
-    
+    group.addoption( '--test-parameters', '--test-params',
+                     metavar = 'file',
+                     type = argparse.FileType('rt'),
+                     help = "YAML test parameters.  This option is typically used on the system under test alongside --carthage-json and not typically used with --carthage-config."
+                     )
     
 
 def pytest_configure(config):
@@ -46,6 +57,13 @@ def pytest_configure(config):
     global json_log
     json_log = config.getoption('carthage_json')
     json_out = []
+    test_params_yaml = config.getoption('test_parameters')
+    if test_params_yaml:
+        config.carthage_test_parameters = yaml.load(test_params_yaml)
+        test_params_yaml.close()
+        
+    
+    
     
 def pytest_runtest_logreport(report):
     if json_log is None: return
@@ -63,3 +81,13 @@ def pytest_sessionfinish():
     json_log.close()
     json_log = None
     
+
+    
+def pytest_collection_finish(session):
+    carthage_config = session.config.getoption('carthage_config')
+    if carthage_config:
+        config_layout = base_injector(ConfigLayout)
+        try:
+            config_layout.load_yaml(carthage_config.read())
+        finally:
+            carthage_config.close()

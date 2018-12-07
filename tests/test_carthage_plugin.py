@@ -3,6 +3,9 @@ from carthage.pytest import *
 from carthage  import base_injector, AsyncInjector, inject
 from carthage import ConfigLayout
 
+def test_test_parameters(test_parameters):
+    return True
+
 @async_test
 async def test_async_test():
     return True
