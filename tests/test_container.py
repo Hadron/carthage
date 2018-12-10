@@ -14,23 +14,11 @@ from carthage.pytest import *
 import os.path, pytest, posix
 from carthage import base_injector, AsyncInjector
 
-@pytest.fixture(scope = 'module')
-@async_test
-async def injector(loop):
-    if posix.geteuid() != 0:
-        pytest.skip("Not running as root; volume tests skipped", )
-    ainjector = base_injector(AsyncInjector)
-    vol = await ainjector(ContainerImage, name = "base")
-    base_injector.add_provider(container_image, vol)
-    base_injector.add_provider(await ainjector(Network,'brint', delete_bridge = False))
-    return base_injector
 
-@pytest.fixture(scope ='module')
-def ainjector(injector):
-    return injector(AsyncInjector)
 
 @pytest.fixture()
-def container(ainjector, loop):
+def container(test_ainjector, loop):
+    ainjector = test_ainjector
     container = loop.run_until_complete(ainjector(Container, name = "container_1"))
     yield container
     if container.running:
@@ -50,6 +38,3 @@ async def test_container_running(container, loop):
     
     
 
-    
-logging.getLogger('carthage.container').setLevel(10)
-logging.basicConfig()
