@@ -5,6 +5,7 @@ import logging
 import types
 
 logger = logging.getLogger('carthage.dependency_injection')
+logger.setLevel('INFO')
 
 class Injectable:
     def __init__(self, *args, **kwargs):

@@ -49,6 +49,24 @@ class NetworkInterface:
         self.ifname = ifname
         self.network = network
 
+class VlanInterface(NetworkInterface):
+
+    def __init__(self, id, network):
+        super().__init__(ifname = "{}.{}".format(
+            network.bridge_name, id), network = network)
+        self.vlan_id = id
+        self.closed = False
+
+    def close(self):
+        if self.closed: return
+        sh.ip("link", "del", self.ifname)
+        self.closed = True
+
+    def __del__(self):
+        self.close()
+        
+
+        
 class VethInterface(NetworkInterface):
 
     def __init__(self, network, ifname, bridge_member_name):
@@ -82,6 +100,7 @@ class Network(AsyncInjectable):
             self.bridge_name = name
         else: self.bridge_name = if_name('br', config_layout.container_prefix, name)
         self.closed = False
+        self.members = []
 
     async def async_ready(self):
         try:
@@ -96,9 +115,12 @@ class Network(AsyncInjectable):
 
     def close(self):
         if self.closed: return
+        self.members.clear()
         # Copy the list because we will mutate
         for i in list(self.interfaces.values()):
-            i.close()
+            try: i.close()
+            except:
+                logger.debug("Error deleting interface {}".format(i))
         if self.delete_bridge:
             logger.info("Network {} bringing down {}".format(self.name, self.bridge_name))
             sh.ip('link', 'del', self.bridge_name)
@@ -110,6 +132,13 @@ class Network(AsyncInjectable):
         self.close()
 
 
+    def add_member(self, interface):
+        sh.ip("link", "set",
+              interface.ifname,
+              "master", self.bridge_name, "up")
+        # We also keep a reference so that if it is a weak interface off another object it is not GC'd
+        self.members.append(interface)
+        
     def add_veth(self, container_name):
         bridge_member = if_name('ci', self.config_layout.container_prefix, self.name, container_name)
         veth_name = if_name('ve', self.config_layout.container_prefix, self.name, container_name)
@@ -126,7 +155,20 @@ class Network(AsyncInjectable):
         ve = VethInterface(self, veth_name, bridge_member)
         self.interfaces[bridge_member] = ve
         return ve
-    
+
+    def expose_vlan(self, id):
+        iface =  VlanInterface(id, self)
+        ifname = iface.ifname
+        try:
+            sh.ip("link", "add",
+                  "link", self.bridge_name,
+                  "name", ifname,
+                  "type", "vlan",
+                  "id", id)
+        except sh.ErrorReturnCode_2:
+            logger.warn("{} appears to already exist".format(ifname))
+        self.interfaces[ifname] = iface
+        return iface
 
 class NetworkConfig:
 

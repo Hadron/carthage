@@ -1,11 +1,15 @@
 import asyncio, functools, inspect, pytest
 
+from .dependency_injection import inject, InjectionKey
+
 '''
 Decorators and functions for use with Carthage.
 
 This module is typically used alongside the :ref:`carthage.pytest_plugin` Pytest plugin.  This module contains decorators like :funcref:`async_test` and that plugin provides fixtures and hooks needed for these items to work.  Supported functionality includes:
 
 * *asyncio* tests that support :ref:`carthage.inject` style dependency injection
+
+* Running a subtest within an item implementing :ref:`SshMixin` and collecting the results.
 
 '''
 
@@ -62,4 +66,25 @@ def async_test(t):
     wrapper.place_as = t
     return wrapper
 
+_test_results_serial = 0
+
+async def subtest_controller(request, target, pytest_args):
+    '''Ssh into a given machine using a :classref:`carthage.SshMixin` and
+    run a series of pytests.  This is typically run by a :ref:`test
+    controller` from within a test on the test controller.  This
+    function arranges for the tests to be run and collects the
+    results.  The results are reported as inferior theto the test
+    context represented by *request*.
+
+    :param: request
+        A ``pytest`` request fixture representing the test that is the **test controller**
+
+    :param: target
+        A :classref:`carthage.SshMixin` with ``pytest`` installed and available and the ``carthage.pytest_plugin`` available.
+
+    :param: pytest_args
+        A list of arguments to passed into pytest on the target system.
+
+'''
+    
 __all__ = 'async_test'.split()
