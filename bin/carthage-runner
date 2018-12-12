@@ -30,7 +30,7 @@ async def load_layout(layout_file):
         machine_queue.put_nowait(m)
         ainjector = base_injector(AsyncInjector)
         brint = await ainjector(external_network)
-    for n in layout['expose_networks']:
+    for n in layout.get('expose_networks', []):
         n = int(n)
         net = await ainjector.get_instance_async(InjectionKey(HadronNetwork, netid=n))
         vlanid = 1000+n
