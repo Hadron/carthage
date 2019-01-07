@@ -70,7 +70,7 @@ class SshMixin:
                                    "/usr/bin/ssh",
                               "-i", ssh_key.key_path,
                                    *options,
-                                   self.ip_address,
+                                   ip_address,
                                    _env = ssh_key.agent.agent_environ)
         else:
             return sh.ssh.bake('-i', ssh_key.key_path,
