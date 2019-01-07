@@ -54,6 +54,8 @@ class SshMixin:
         ssh_key = self.injector.get_instance(carthage.ssh.SshKey)
         options = self.ssh_options + ('-oUserKnownHostsFile='+os.path.join(self.config_layout.state_dir, 'ssh_known_hosts'),)
         if ssh_origin_container is not None:
+            ip_address = self.ip_address
+            if self is ssh_origin_container: ip_address = "127.0.0.1"
             leader = ssh_origin_container.container_leader
             ssh_origin_container.done_future().add_done_callback(self.ssh_recompute)
             return sh.nsenter.bake('-t', str(leader), "-n",
@@ -69,7 +71,7 @@ class SshMixin:
 
     async def ssh_online(self):
         online = False
-        for i in range(15):
+        for i in range(30):
             try: await self.ssh('date',
                                 _bg = True, _bg_exc = False,
                                 _timeout = 5)
