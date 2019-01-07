@@ -71,6 +71,10 @@ async def fixup_database(ainjector):
     session.query(models.Network).update({
         "extif": "eth0",
         "intif": "eth1"})
+    machine_role = session.query(models.Role).filter_by(name = 'machine').one()
+    for s in session.query(models.Slot).join(models.Role).filter(models.Role.name == 'apt-server'):
+        s.role = machine_role
+
     session.commit()
     pg.close()
     

@@ -69,7 +69,7 @@ def async_test(t):
 _test_results_serial = 0
 
 async def subtest_controller(request, target, pytest_args):
-    '''Ssh into a given machine using a :classref:`carthage.SshMixin` and
+    '''Ssh into a given machine using a :class:`carthage.SshMixin` and
     run a series of pytests.  This is typically run by a :ref:`test
     controller` from within a test on the test controller.  This
     function arranges for the tests to be run and collects the
@@ -80,7 +80,7 @@ async def subtest_controller(request, target, pytest_args):
         A ``pytest`` request fixture representing the test that is the **test controller**
 
     :param: target
-        A :classref:`carthage.SshMixin` with ``pytest`` installed and available and the ``carthage.pytest_plugin`` available.
+        A :class:`carthage.SshMixin` with ``pytest`` installed and available and the ``carthage.pytest_plugin`` available.
 
     :param: pytest_args
         A list of arguments to passed into pytest on the target system.
