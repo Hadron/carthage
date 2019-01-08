@@ -1,4 +1,4 @@
-# Copyright (C) 2018, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -6,11 +6,12 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import weakref
+import inspect, weakref
 import collections.abc
 import asyncio
 import logging
 import types
+import sys
 
 logger = logging.getLogger('carthage.dependency_injection')
 logger.setLevel('INFO')
@@ -35,11 +36,13 @@ class Injectable:
 class DependencyProvider:
     __slots__ = ('provider',
                  'allow_multiple',
+                 'close',
                  )
 
-    def __init__(self, provider, allow_multiple = False):
+    def __init__(self, provider, allow_multiple = False, close = True):
         self.provider = provider
         self.allow_multiple = allow_multiple
+        self.close = close
 
     def __repr__(self):
         return "<DependencyProvider allow_multiple={}: {}>".format(
@@ -52,7 +55,7 @@ self.allow_multiple, repr(self.provider))
             or asyncio.isfuture(self.provider)
 
     def record_instantiation(self, instance, k, satisfy_against):
-        dp = satisfy_against._providers.setdefault(k, DependencyProvider(instance, self.allow_multiple))
+        dp = satisfy_against._providers.setdefault(k, DependencyProvider(instance, self.allow_multiple, close = self.close))
         assert dp.is_factory or dp.provider is instance
         dp.provider = instance
         return dp
@@ -68,6 +71,7 @@ class Injector(Injectable):
     def __init__(self, *providers,
                  parent_injector = None):
         self._providers = {}
+        self._frame = sys._getframe(1)
         if parent_injector is None and len(providers) > 0:
             if isinstance(providers[0], Injector):
                 parent_injector = providers[0]
@@ -90,10 +94,19 @@ class Injector(Injectable):
         return self
 
     def add_provider(self, k, p = None, *,
-                     allow_multiple = False):
-        '''Either called as add_provider(provider) or
-        add_provider(injection_key, provider).  In the first form, a key is
+                     allow_multiple = False,
+                     close = True):
+        '''Add a provider for a dependency
+
+        Either called as ``add_provider(provider)`` or
+        ``add_provider(injection_key, provider)``\ .  In the first form, a key is
         automatically constructed.
+        :param: allow_multiple
+            If true, then this provider may be instantiated multiple times in sub-injectors.  If false (the default) then the provider will be instantiated on the injector where it is added and used by all sub-injectors.
+
+        :param: close
+            If true (the default), then closing the injector will close or cancel this provider.  If false, then the provider will not be deallocated.  As an example, if the :class:`asyncio.AbstractEventLoop` is added as a provider, but closing this injector should not close the loop and end all async operations, then close can be set to false.
+
 '''
         if p is None:
             p,k = k,p #swap; we construct the key later
@@ -102,7 +115,7 @@ class Injector(Injectable):
             if isinstance(p, DependencyProvider): raise NotImplementedError
             k = InjectionKey(p if isinstance(p,type) else p.__class__)
         if not isinstance(p, DependencyProvider):
-            p = DependencyProvider(p, allow_multiple = allow_multiple)
+            p = DependencyProvider(p, allow_multiple = allow_multiple, close = close)
         assert isinstance(k,InjectionKey)
         if k in self:
             if p is self._get(k): return k
@@ -167,7 +180,7 @@ class Injector(Injectable):
                     dependency = cls._injection_dependencies[k]
                     if isinstance(provider,Injectable) and not provider.satisfies_injection_key(dependency):
                         raise UnsatisfactoryDependency(dependency, provider)
-                    sub_injector.add_provider(dependency, provider)
+                    sub_injector.add_provider(dependency, provider, close = False)
             for k, d in (cls._injection_dependencies.items()) if dks else []:
                 kwargs[k] = injector.get_instance(d)
             return cls(*args, **kwargs)
@@ -229,14 +242,29 @@ class Injector(Injectable):
         if isinstance(p, asyncio.Future): return p
         raise RuntimeError('_is_async returned True when _handle_async cannot handle')
 
-    def close(self):
-        for p in self._providers.values():
-            if hasattr(p, 'close'):
+    def close(self, cancelled_futures = None):
+        '''
+        Close all subinjectors or providers
+
+        For every provider registered with this injector, call :meth:`close` if it is exists.  Then clear out all providers.  Note that this will also close sub-injectors.
+
+        If using `AsyncInjector`, it is better to call :func:`shutdown_injector` to cancel any running asynchronous tasks.
+
+        If the provider's :meth:`close` method takes an argument called *cancelled_futures* then the *cancelled_futures* argument will be passed down.
+        '''
+
+        providers = list(self._providers.values())
+        self._providers.clear()
+        for p in providers:
+            if p.provider is self or not p.close: continue
+            if hasattr(p.provider, 'close'):
                 try:
-                    p.close()
+                    _call_close(p.provider, cancelled_futures)
                 except Exception:
                     logger.exception("Error closing {}".format(p))
-        self._providers.clear()
+            elif asyncio.isfuture(p.provider):
+                p.provider.cancel()
+                if cancelled_futures is not None: cancelled_futures.append(p.provider)
         self.closed = True
 
     def __del__(self):
@@ -420,7 +448,7 @@ class AsyncInjector(Injectable):
         constructed.  However if any keyword arguments pased in specify a
         dependency, then construct an injector for that.  Keyword arguments
         and arguments are passed to the class to construct the object.  If
-        keyword arguments do specify a dep.dependency, they must satisfy the
+        keyword arguments do specify a dependency, they must satisfy the
         InjectionKey involved.
 '''
         try:
@@ -438,7 +466,7 @@ class AsyncInjector(Injectable):
                     dependency = cls._injection_dependencies[k]
                     if isinstance(provider,Injectable) and not provider.satisfies_injection_key(dependency):
                         raise UnsatisfactoryDependency(dependency, provider)
-                    sub_injector.add_provider(dependency, provider)
+                    sub_injector.add_provider(dependency, provider, close = False)
             res = self._instantiate_future(injector, cls, *args, **kwargs)
             if isinstance(res, (asyncio.Future, collections.abc.Coroutine)):
                 return await self._handle_async(res)
@@ -451,6 +479,26 @@ class AsyncInjector(Injectable):
         if isinstance(res, (asyncio.Future, collections.abc.Coroutine)):
             return await self._handle_async(res)
         else: return res
+
+async def shutdown_injector(injector, timeout = 5):
+    '''
+    Close an injector and cancel running tasks
+        
+
+    This closes an injector, canceling any running tasks.  It waits up to *timeout* seconds for any canceled tasks to terminate.
+
+'''
+    cancelled_futures = []
+    injector.close(cancelled_futures = cancelled_futures)
+    if cancelled_futures:
+        await asyncio.wait(cancelled_futures, timeout = timeout)
+        
+def _call_close(obj, cancelled_futures):
+    if not hasattr(obj, 'close'): return
+    sig = inspect.signature(obj.close)
+    if 'cancelled_futures' in sig.parameters:
+        return obj.close(cancelled_futures = cancelled_futures)
+    else: return obj.close()
 
 
 __all__ = '''

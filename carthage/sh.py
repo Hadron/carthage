@@ -833,9 +833,13 @@ class RunningCommand(object):
 
     if asyncio is not None:
         def __await__(self):
-            yield from self.process.__await__()
-            if self.process._stdin_process:
-                yield from self.process._stdin_process.__await__()
+            try:
+                yield from self.process.__await__()
+                if self.process._stdin_process:
+                    yield from self.process._stdin_process.__await__()
+            except asyncio.CancelledError:
+                self.terminate()
+                raise
             self.wait()
             #That only raises the first time.  We want to raise on failure all the time
             if self.process.timed_out:

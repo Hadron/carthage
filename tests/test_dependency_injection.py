@@ -1,4 +1,4 @@
-# Copyright (C) 2018, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -15,11 +15,15 @@ import asyncio, pytest
 
 @pytest.fixture()
 def injector():
-    return dependency_injection.Injector()
+    injector =  dependency_injection.Injector()
+    injector.add_provider(asyncio.get_event_loop(), close = False)
+    return injector
 
 @pytest.fixture()
 def a_injector(injector, loop):
-    return injector(dependency_injection.AsyncInjector, loop = loop)
+    a_injector =  injector(dependency_injection.AsyncInjector, loop = loop)
+    yield a_injector
+    a_injector.close()
 
 def test_injector_provides_self(injector):
     @inject(i = dependency_injection.Injector)
@@ -78,7 +82,7 @@ def test_async_injector_construction(loop, injector):
     @inject(a = dependency_injection.AsyncInjector)
     def f(a):
         assert isinstance(a,dependency_injection.AsyncInjector)
-    injector.add_provider(loop)
+
     injector(f)
     
 
@@ -198,4 +202,23 @@ async def test_when_needed_override(a_injector, loop):
         return "foo"
     wn = when_needed(func, n = 29)
     assert await a_injector(wn) == "foo"
+    
+
+@async_test
+async def test_when_needed_cancels(loop, a_injector):
+    injector = await a_injector(dependency_injection.Injector)
+    ainjector = injector(dependency_injection.AsyncInjector)
+    cancelled = False
+    k = dependency_injection.InjectionKey("bar")
+    async def func():
+        nonlocal cancelled
+        try:
+            await asyncio.sleep(0.5)
+        except asyncio.CancelledError: cancelled = True
+        return 39
+    ainjector.add_provider(k, when_needed(func))
+    loop.create_task(ainjector.get_instance_async(k))
+    await asyncio.sleep(0.1)
+    await dependency_injection.shutdown_injector(ainjector)
+    assert cancelled is True
     
