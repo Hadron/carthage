@@ -6,10 +6,13 @@ from carthage.image import ContainerImage
 from carthage.network import Network
 from carthage.container import Container, container_image
 import os.path, pytest, posix
+from carthage.pytest import *
+
+pytest_plugins = ('carthage.pytest_plugin',)
 
 @pytest.fixture(scope = 'session')
 @async_test
-async def test_injector(loop):
+async def test_ainjector(loop):
     if posix.geteuid() != 0:
         pytest.skip("Not running as root; volume tests skipped", )
     ainjector = base_injector(AsyncInjector)
@@ -20,7 +23,7 @@ async def test_injector(loop):
     base_injector.add_provider(await ainjector(Network,'brint', delete_bridge = False))
     return ainjector
 
-pytest_plugins = ('carthage.pytest_plugin',)
+
 
 
 

@@ -25,8 +25,3 @@ async def test_container_running(container, loop):
     async with container.container_running:
         container.shell("/bin/ls")
         
-
-
-    
-    
-

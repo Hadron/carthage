@@ -35,7 +35,7 @@ class PortReservation:
             return other == self.port
         elif type(other)  is type(self): 
             return self.port == other.port
-        else: return super().__eq__(self)
+        else: return super().__eq__(other)
 
         
 
@@ -58,7 +58,7 @@ class ExposedPort(PortReservation):
 
     def close(self):
         if self.expose_process is not None:
-            self.expose_process.terminate()
+            self.expose_process.kill()
             self.expose_process = None
 
 

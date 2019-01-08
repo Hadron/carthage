@@ -53,7 +53,7 @@ def when_needed(wraps, *args, injector = None,
       non-injected configuration to their constructors.
 
     '''
-    from .dependency_injection import inject, AsyncInjectable, AsyncInjector, InjectionKey, Injectable
+    from .dependency_injection import inject, AsyncInjectable, AsyncInjector, InjectionKey, Injectable, _call_close
     # We do not copy the wrapped function's dependencies out.  We will
     # submit the wrapped object to an injector as part of resolving it
     # and we may need to control which injector is used for the
@@ -79,7 +79,16 @@ def when_needed(wraps, *args, injector = None,
             if isinstance(wraps, type) and issubclass(wraps, Injectable):
                 yield from wraps.supplementary_injection_keys(k)
             yield from addl_keys
-            
+
+        @classmethod
+        def close(self, cancelled_futures = None):
+            if self.resolved_obj:
+                return _call_close(self.resolved_obj, cancelled_futures)
+            if self.resolving:
+                self.resolving.cancel()
+                if cancelled_futures: cancelled_futures.append(self.resolving)
+                self.resolving = None
+                
         async def async_ready(self):
             nonlocal kwargs
             if self.resolved_obj:
