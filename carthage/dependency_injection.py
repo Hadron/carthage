@@ -63,7 +63,6 @@ class Injector(Injectable):
     def __init__(self, *providers,
                  parent_injector = None):
         self._providers = {}
-        self._frame = sys._getframe(1)
         if parent_injector is None and len(providers) > 0:
             if isinstance(providers[0], Injector):
                 parent_injector = providers[0]
