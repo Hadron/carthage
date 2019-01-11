@@ -1,4 +1,4 @@
-# Copyright (C) 2018, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -28,7 +28,7 @@ def provide_networks(injector, session):
     for n in session.query(models.Network):
         if len(n.locations) == 0: continue
         try:
-            site_injector = injector(Injector)
+            site_injector = injector(Injector).claim()
             hn = when_needed(HadronNetwork, n, injector = site_injector)
             site_injector.add_provider(site_network_key, hn)
             base_injector.add_provider(InjectionKey(HadronNetwork,

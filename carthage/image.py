@@ -1,4 +1,4 @@
-# Copyright (C) 2018, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -208,13 +208,16 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         self.injector = ainjector.injector.claim()
         super().__init__()
         self.name = name
-        self.path = path
-        if not os.path.exists(path):
-            os.makedirs(os.path.dirname(path), exist_ok = True)
+        if name.startswith('/'):
+            self.path = name
+        else: self.path = os.path.join(path, name+'.raw')
+
+        if not os.path.exists(self.path):
+            os.makedirs(os.path.dirname(self.path), exist_ok = True)
             if create_size is None:
                 raise RuntimeError("{} not found and creation disabled".format(path))
-            with open(path, "w") as f:
-                try: sh.chattr("+C", path)
+            with open(self.path, "w") as f:
+                try: sh.chattr("+C", self.path)
                 except sh.ErrorReturnCode_1: pass
                 self.create_size = create_size
                 os.makedirs(self.stamp_path)
@@ -278,8 +281,17 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
 
 
-    def clone_for_vm(self, name):
-        return self.injector(QcowCloneVolume, name, self)
+    def clone_for_vm(self, name, *,
+                     path = None, volume_type = 'qcow'):
+        kwargs = {}
+        if path is not None: kwargs['path'] = path
+        if volume_type == 'qcow':
+            return self.injector(QcowCloneVolume, name, self, **kwargs)
+        elif volume_type == 'raw':
+            return self.injector(ImageVolume, name = name, image_base = self.path, **kwargs)
+        else:
+            raise ValueError("Unknown volume type {}".format(volume_type))
+        
 
 
 @inject(
@@ -337,9 +349,10 @@ class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
 
     def unmount_image(self):
         try:
-            self.mount_context.__exit__(None, None, None)
-            del self.mount
+            mount_context = self.mount_context
             del self.mount_context
+            del self.mount
+            mount_context.__exit__(None, None, None)
         except AttributeError: pass
 
     def close(self):
