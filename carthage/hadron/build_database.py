@@ -20,7 +20,7 @@ def provide_networks(injector, session):
     for n in session.query(models.Network):
         if len(n.locations) == 0: continue
         try:
-            site_injector = injector(Injector)
+            site_injector = injector(Injector).claim()
             hn = when_needed(HadronNetwork, n, injector = site_injector)
             site_injector.add_provider(site_network_key, hn)
             base_injector.add_provider(InjectionKey(HadronNetwork,
