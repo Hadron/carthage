@@ -4,6 +4,7 @@ import asyncio, functools
 import logging
 import types
 import sys
+from . import tb_utils
 
 logger = logging.getLogger('carthage.dependency_injection')
 logger.setLevel('INFO')
@@ -55,6 +56,12 @@ self.allow_multiple, repr(self.provider))
         
     
 
+class InjectionFailed(RuntimeError):
+
+    def __init__(self, k):
+        super().__init__(f"Error resolving dependency for {k}")
+        self.failed_dependency = k
+        
 
 # Note that after @inject is defined, this class is redecorated to take parent_injector as a dependency so that
 #    injector = sub_injector(Injector)
@@ -197,10 +204,14 @@ class Injector(Injectable):
                 try: provider.record_instantiation(future.result(), k, injector)
                 except: pass #Will be handled in our caller who also attaches a done callback
             return done
-                
+        
 
-        def no_futures_instantiate(injector, p):
-            return injector(p)
+        def no_futures_instantiate(injector, k, p):
+            try:            return injector(p)
+            except Exception as e:
+                tb_utils.filter_before_here(e)
+                logger.exception(f'Error finding dependency for {k}:')
+                raise InjectionFailed(k) from e
 
         if not isinstance(k, InjectionKey):
             k = InjectionKey(k)
@@ -212,7 +223,7 @@ class Injector(Injectable):
             if k.optional: return None
             raise KeyError("No dependency for {}".format(k)) from None
         if provider.is_factory:
-            instance = instantiate(satisfy_against,  provider.provider)
+            instance = instantiate(satisfy_against,  k, provider.provider)
             if self._is_async(instance):
                 if not futures_instantiate:
                     raise UnsatisfactoryDependency("{} has an asynchronous provider injected into a non-asynchronous context".format(k))
@@ -422,7 +433,7 @@ class AsyncInjector(Injectable):
             if hasattr(self, k): continue
             setattr(self, k, getattr(self.injector, k))
 
-    def _instantiate_future(self, injector, provider, *args, **kwargs):
+    def _instantiate_future(self, injector, orig_k, provider, *args, **kwargs):
         #__call__ handles overrides and anything in there is already satisfactory.
         def handle_future(k):
             def callback(fut):
@@ -431,43 +442,61 @@ class AsyncInjector(Injectable):
         futures = []
         try: dependencies = provider._injection_dependencies
         except AttributeError: dependencies = {}
-        for k,d in dependencies.items():
-            if k in kwargs: continue
-            p = injector.get_instance(d,
-                                      futures_instantiate = self._instantiate_future)
-            if isinstance(p, asyncio.Future):
-                p.add_done_callback(handle_future(k))
-                futures.append(p)
-            else: kwargs[k] = p
-        if futures:
-            constructive_future = asyncio.ensure_future(
-                self._instantiate_coro(
-                    futures, provider, args, kwargs),
-                loop = self.loop)
-            return constructive_future
-        else:
-            try:
-                if isinstance(provider, asyncio.Future):
-                    res = provider
-                else: res =  provider(*args, **kwargs)
-            except TypeError as e:
-                raise TypeError("Error constructing {}".format(provider)) from e
-            if self._is_async(res):
-                res = self._handle_async(res)
-            return res
+        try:
+            for k,d in dependencies.items():
+                if k in kwargs: continue
+                p = injector.get_instance(d,
+                                          futures_instantiate = self._instantiate_future)
+                if isinstance(p, asyncio.Future):
+                    p.add_done_callback(handle_future(k))
+                    futures.append(p)
+                else: kwargs[k] = p
+            if futures:
+                constructive_future = asyncio.ensure_future(
+                    self._instantiate_coro(
+                        futures, orig_k, provider, args, kwargs),
+                    loop = self.loop)
+                return constructive_future
+            else:
+                try:
+                    if isinstance(provider, asyncio.Future):
+                        res = provider
+                    else: res =  provider(*args, **kwargs)
+                except TypeError as e:
+                    raise TypeError("Error constructing {}".format(provider)) from e
+                if self._is_async(res):
+                    res = self._handle_async(res)
+                return res
+        except Exception as e:
+            if orig_k:
+                tb_utils.filter_before_here(e)
+                logger.exception(f'Error resolving dependency for {orig_k}')
+                raise InjectionFailed(orig_k) from e
+            else:
+                raise
+            
 
-    async def _instantiate_coro(self, futures, provider, args, kwargs):
-        await asyncio.gather(*futures)
-        # That will raise if there are errors with any of the
-        # constructions done callbacks on the futures have inserted
-        # them into the kwargs dict we got as a parameter
-        if isinstance(provider, asyncio.Future):
-            res = provider
-        else: res =  provider(*args, **kwargs)
-        if self._is_async(res):
-            future = self._handle_async(res)
-            res = await future
-        return res
+    async def _instantiate_coro(self, futures, orig_k, provider, args, kwargs):
+        try:
+            await asyncio.gather(*futures)
+            # That will raise if there are errors with any of the
+            # constructions done callbacks on the futures have inserted
+            # them into the kwargs dict we got as a parameter
+            if isinstance(provider, asyncio.Future):
+                res = provider
+            else: res =  provider(*args, **kwargs)
+            if self._is_async(res):
+                future = self._handle_async(res)
+                res = await future
+            return res
+        except Exception as e:
+            if orig_k:
+                tb_utils.filter_before_here(e)
+                logger.exception(f'Error resolving dependency for {orig_k}')
+                raise InjectionFailed(k) from e
+            else:
+                raise
+            
 
     async def __call__(self, cls, *args, **kwargs):
         '''Coroutine to Construct an instance of cls using the providers in this injector.
@@ -494,7 +523,7 @@ class AsyncInjector(Injectable):
                     if isinstance(provider,Injectable) and not provider.satisfies_injection_key(dependency):
                         raise UnsatisfactoryDependency(dependency, provider)
                     sub_injector.add_provider(dependency, provider, close = False)
-            res = self._instantiate_future(injector, cls, *args, **kwargs)
+            res = self._instantiate_future(injector, None, cls, *args, **kwargs)
             if isinstance(res, (asyncio.Future, collections.abc.Coroutine)):
                 return await self._handle_async(res)
             else: return res
