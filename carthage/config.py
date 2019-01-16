@@ -1,5 +1,5 @@
-import functools, yaml
-from .dependency_injection import inject, Injectable, InjectionKey, Injector
+import yaml
+from .dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies
 
 class ConfigDefaults:
 
@@ -36,6 +36,7 @@ class ConfigDefaults:
 
 config_defaults = ConfigDefaults()
 
+@inject(injector = Injector)
 class ConfigIterator:
 
     def __init__(self, injector, prefix):
@@ -92,7 +93,7 @@ class ConfigLayout(ConfigIterator, Injectable):
         
 
     def load_yaml(self, y, *, injector = None):
-        if injector is None: injector = self.injector
+        if injector is None: injector = self._injector
         d = yaml.load(y)
         assert isinstance(d,dict)
         self._load(d, injector, config_defaults.defaults, "")
@@ -117,7 +118,7 @@ def config_key(k):
 
 def inject_config(injector):
     for k in config_defaults.sections():
-        injector.replace_provider(config_key(k), functools.partial(ConfigIterator, prefix = k), allow_multiple = True)
+        injector.replace_provider(config_key(k), partial_with_dependencies(ConfigIterator, prefix = k+"."), allow_multiple = True)
     injector.replace_provider(ConfigLayout, allow_multiple = True)
         
 
