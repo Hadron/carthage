@@ -8,7 +8,7 @@
 
 import inspect, weakref
 import collections.abc
-import asyncio
+import asyncio, functools
 import logging
 import types
 import sys
@@ -52,7 +52,8 @@ self.allow_multiple, repr(self.provider))
     def is_factory(self):
         return (isinstance(self.provider, type) and issubclass(self.provider, Injectable)) \
             or asyncio.iscoroutinefunction(self.provider) \
-            or asyncio.isfuture(self.provider)
+            or asyncio.isfuture(self.provider) \
+            or directly_has_dependencies(self.provider)
 
     def record_instantiation(self, instance, k, satisfy_against):
         dp = satisfy_against._providers.setdefault(k, DependencyProvider(instance, self.allow_multiple, close = self.close))
@@ -371,7 +372,34 @@ def copy_and_inject(_wraps = None, **kwargs):
     else: return wrap
     
 Injector = inject(parent_injector = Injector)(Injector)
-    
+
+def partial_with_dependencies(func, *args, **kwargs):
+    '''Partially aply arguments and keep injected dependencies
+
+    Like :class:`functools.partial` except also preserves dependencies.
+    Used typically when passing the result of *partial* to
+    :meth:`Injector.add_provider`
+
+    This implementation assumes that no dependencies are removed by
+    passing arguments into partial that specify one of the injected
+    dependencies.
+
+    '''
+    p = functools.partial(func, *args, **kwargs)
+    try:
+        p._injection_dependencies = func._injection_dependencies
+    except AttributeError: pass
+    return p
+
+def directly_has_dependencies(f):
+    '''
+
+    :returns: True if *f* directly has injection dependencies applied.  Not true for an object of a class even if that class has dependencies.
+
+    '''
+    if not hasattr(f, '__dict__'): return False
+    return '_injection_dependencies' in f.__dict__
+
    #########################################
    # Asynchronous support:
 
@@ -511,4 +539,6 @@ def _call_close(obj, cancelled_futures):
 __all__ = '''
     inject Injector AsyncInjector
     Injectable AsyncInjectable
-    InjectionKey'''.split()
+    InjectionKey
+    partial_with_dependencies
+'''.split()

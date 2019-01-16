@@ -196,12 +196,14 @@ class HadronContainerImageMount(ContainerImageMount, HadronImageMixin): pass
 class HadronVmImage(ImageVolume):
 
     def __init__(self, *, config_layout, ainjector, name = "base-hadron-vm",
-                 customize_mount = HadronContainerImageMount):
+                 customize_mount = HadronContainerImageMount, path = None):
+        kwargs = {}
+        if path is not None: kwargs['path'] = path
         super().__init__(name,
-                         path = config_layout.vm_image_dir+'/{}.raw'.format(name),
+                         
                          create_size = config_layout.vm_image_size,
                          config_layout = config_layout,
-                         ainjector = ainjector)
+                         ainjector = ainjector, **kwargs)
         self.customize_mount = customize_mount
 
 
