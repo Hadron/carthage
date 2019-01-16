@@ -86,7 +86,8 @@ class Injector(Injectable):
 
     def add_provider(self, k, p = None, *,
                      allow_multiple = False,
-                     close = True):
+                     close = True,
+                     replace = False):
         '''Add a provider for a dependency
 
         Either called as ``add_provider(provider)`` or
@@ -97,6 +98,9 @@ class Injector(Injectable):
 
         :param: close
             If true (the default), then closing the injector will close or cancel this provider.  If false, then the provider will not be deallocated.  As an example, if the :class:`asyncio.AbstractEventLoop` is added as a provider, but closing this injector should not close the loop and end all async operations, then close can be set to false.
+
+        :param: replace
+            If True, an existing provider is being updated.  :meth:`replace_provider` is a convenience function for calling :meth:`add_provider` with *replace* set to True.  Replacing providers may lead to inconsistent results if the provider has already been injected to fill a dependency in a constructed object.
 
 '''
         if p is None:
@@ -111,15 +115,19 @@ class Injector(Injectable):
         if k in self:
             if p is self._get(k): return k
             existing_provider = self._get(k)
-            if existing_provider.is_factory:
-                pass # provider permitted
+            if existing_provider.is_factory or replace:
+                existing_provider.provider = p.provider
             else: raise ExistingProvider(k)
-        self._providers[k] = p
+        else:
+            self._providers[k] = p
         for k2 in k.supplementary_injection_keys(p.provider):
             if k2 not in self:
                 self._providers[k2] = p
         return k
 
+    def replace_provider(self, *args, **kwargs):
+        return self.add_provider( *args, **kwargs, replace = True)
+    
     def _get(self, k):
         return self._providers[k]
 
