@@ -7,10 +7,11 @@
 # LICENSE for details.
 
 import asyncio
-import carthage. dependency_injection
+import carthage. dependency_injection, carthage.config
 import carthage.config
 from .dependency_injection import AsyncInjector, Injector, InjectionKey, inject, Injectable, AsyncInjectable
-from .config import ConfigLayout
+from .config import ConfigLayout, config_key
+
 import carthage.hadron_layout
 import carthage.hadron
 import carthage.container
@@ -19,7 +20,7 @@ import carthage.pki
 import carthage.vm
 
 base_injector = carthage.dependency_injection.Injector()
-base_injector.add_provider(carthage.config.ConfigLayout)
+carthage.config.inject_config(base_injector)
 base_injector.add_provider(ssh.SshKey)
 base_injector.add_provider(ssh.AuthorizedKeysFile)
 base_injector.add_provider(asyncio.get_event_loop(), close = False)
