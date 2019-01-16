@@ -112,6 +112,7 @@ class NfsDataStore(VmwareDataStore):
                          _bg_exc = False)
         else:
             os.makedirs(self.storage.local_path)
+
     async def copy_in(self, paths):
         '''
         Copy files into the datastore
