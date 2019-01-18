@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2018, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -88,41 +88,17 @@ async def run():
 
 ainjector = base_injector(AsyncInjector)
 
-#logging.getLogger('carthage.container').setLevel(7)
-#logging.getLogger('carthage.dependency_injection').setLevel(10)
-root_logger = logging.getLogger()
-console_handler = logging.StreamHandler()
-root_logger.addHandler(console_handler)
-root_logger.setLevel('INFO')
-
-container_logger = logging.getLogger('carthage.container')
-container_logger.addHandler(logging.FileHandler('container.log'))
-container_logger.setLevel(10)
-def container_debug_filter(record):
-    if record.name == 'carthage.container' and record.levelno == 10: return 0
-    return 1
-console_handler.addFilter(container_debug_filter)
-
 loop = asyncio.get_event_loop()
 machine_queue = asyncio.Queue()
 
-parser = argparse.ArgumentParser()
+parser = carthage.utils.carthage_main_argparser()
 parser.add_argument("layout",
-                    metavar = "layout_file",
-                    type = argparse.FileType('rt'),
-                    help = "Layout YAML configuration")
-parser.add_argument('--config',
-                    metavar = "file",
-                    type = argparse.FileType('rt'),
-                    )
-parser.add_argument('--command-verbose',
-                    help = "Verbose command logging",
-                    action ='store_true')
+                         metavar = "layout_file",
+                         type = argparse.FileType('rt'),
+                         help = "Layout YAML configuration")
 
-args = parser.parse_args()
-if args.config:
-    config = base_injector(ConfigLayout)
-    config.load(args.config)
+args = carthage.utils.carthage_main_setup(parser)
+
 
 
 
