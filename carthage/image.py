@@ -83,6 +83,13 @@ class SetupTaskMixin:
                 if hasattr(meth, '_setup_task_info'):
                     yield meth._setup_task_info[1], getattr(self, m)
 
+    async def async_ready(self):
+        '''
+This may need to be overridden, but is provided as a default
+'''
+        await self.run_setup_tasks()
+        return self
+    
 
 
 @inject(config_layout = ConfigLayout)
