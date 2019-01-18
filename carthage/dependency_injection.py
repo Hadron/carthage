@@ -569,5 +569,5 @@ __all__ = '''
     inject Injector AsyncInjector
     Injectable AsyncInjectable
     InjectionKey
-    partial_with_dependencies
+    partial_with_dependencies shutdown_injector
 '''.split()
