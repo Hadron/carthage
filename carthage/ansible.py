@@ -124,11 +124,19 @@ class AnsibleResult:
         return (self.unreachable == 0) and (self.failures == 0)
 
     def __repr__(self):
-        return f"<AnsibleResult: \
+        res = f"<AnsibleResult: \
 failures: {self.failures}; unreachable: {self.unreachable}; ok: {self.ok}; changed: {self.changed};\
 plays:[{[k for k in self.tasks.keys()]}]"
-    
-                
+
+        if self.failures:
+            for t in self.tasks.values():
+                try:
+                    if t.failed:
+                        res += f"\n\tFatal {t.name}: {t.msg}"
+                except AttributeError: pass
+        res +=">"
+        return res
+                    
 
 __all__ = ["localhost_machine", "run_play"]
 
