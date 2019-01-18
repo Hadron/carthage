@@ -1,4 +1,4 @@
-import asyncio, functools, weakref
+import argparse, asyncio, functools, logging, weakref
 
 async def possibly_async(r):
     '''If r is a coroutine, await it.  Otherwise return it.  Used like the
@@ -149,5 +149,51 @@ def permute_identifier(id, maxlen):
 
 
 
+def carthage_main_argparser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config',
+                         metavar = "file",
+                         type = argparse.FileType('rt'),
+     )
+    parser.add_argument('--command-verbose',
+                         help = "Verbose command logging",
+                         action ='store_true')
+    return parser
+
+def carthage_main_setup(parser):
+    from . import base_injector, ConfigLayout
+    args = parser.parse_args()
+    if args.config:
+        config = base_injector(ConfigLayout)
+        config.load_yaml(args.config)
+    root_logger = logging.getLogger()
+    console_handler = logging.StreamHandler()
+    root_logger.addHandler(console_handler)
+    root_logger.setLevel('INFO')
+    container_logger = logging.getLogger('carthage.container')
+    container_logger.addHandler(logging.FileHandler('container.log'))
+    container_logger.setLevel(10)
+    def container_debug_filter(record):
+        if record.name == 'carthage.container' and record.levelno == 10: return 0
+        return 1
+    console_handler.addFilter(container_debug_filter)
+    if not args.command_verbose:
+        logging.getLogger('sh').setLevel(logging.ERROR)
+    return args
+
+def carthage_main_run(func):
+    loop = asyncio.get_event_loop()
+    from . import base_injector, AsyncInjector, shutdown_injector
+    from .config import inject_config
+    inject_config(base_injector)
+    ainjector = base_injector(AsyncInjector)
+    try:
+        loop.run_until_complete(ainjector(func))
+    finally:
+        loop.run_until_complete(shutdown_injector(base_injector))
         
-__all__ = ['when_needed', 'possibly_async', 'permute_identifier']
+
+
+__all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
+           'carthage_main_argparser', 'carthage_main_setup',
+           'carthage_main_run']
