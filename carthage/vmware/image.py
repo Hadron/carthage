@@ -19,6 +19,7 @@ logger = logging.getLogger('carthage.vmware')
 
 @inject(injector = Injector,
         config_layout = ConfigLayout,
+        store = VmwareDataStore
         )
 class VmdkTemplate(AsyncInjectable, SetupTaskMixin):
 
@@ -31,10 +32,11 @@ class VmdkTemplate(AsyncInjectable, SetupTaskMixin):
 
 '''
 
-    def __init__(self, image, *, injector, config_layout):
+    def __init__(self, image, store, *, injector, config_layout):
         self.injector = injector.claim()
         self.ainjector = self.injector(AsyncInjector)
         self.image = image
+        self.store = store
         super().__init__()
         assert image.path.endswith('.raw')
         base_path = image.path[:-4]
@@ -43,8 +45,6 @@ class VmdkTemplate(AsyncInjectable, SetupTaskMixin):
         self.stamp_path = self.image.stamp_path
 
 
-    async def async_ready(self):
-        return await self.run_setup_tasks()
 
     @setup_task("generate-vmdk")
     async def generate_vmdk(self):
@@ -59,17 +59,28 @@ class VmdkTemplate(AsyncInjectable, SetupTaskMixin):
         return self
 
     @setup_task("copy-vmdk")
-    @inject(store = VmwareDataStore)
-    async def copy_vmdk(self, store):
+    async def copy_vmdk(self):
+        store = self.store
         return await store.copy_in(self.paths)
+
+    @memoproperty
+    def disk_path(self):
+        return f'[{self.store.name}]{self.store.path}/{self.image.name}.vmdk'
+
     
 config_defaults.add_config({'vmware': {
     'datastore': {
         'name': None,
-        'path': None,
+        'path': "",
         'local_path': None,
-        }
+        },
+"image_datastore": {
+"name": None,
+"path": None,
+"local_path": None},
+
     }})
+
 vm_storage_key = config_key("vmware.datastore")
 
 
@@ -90,7 +101,9 @@ class NfsDataStore(VmwareDataStore):
         self.storage = storage
         for k in ('name', 'path', 'local_path'):
             assert getattr(storage, k), \
-                "You must configure vmware.storage.{}".format(k)
+                "You must configure vmware.datastore.{}".format(k)
+        self.name = self.storage.name
+        self.path = self.storage.path
 
     #: List of ssh options to use when contacting a remote host
     ssh_opts = ('-oStrictHostKeyChecking=no', )
@@ -137,3 +150,12 @@ class NfsDataStore(VmwareDataStore):
                              _bg = True, _bg_exc = False)
         else:
             raise NotImplementedError()
+
+@inject(config = vm_storage_key)
+class VmfsDataStore(VmwareDataStore, Injectable):
+
+    def __init__(self, config):
+        self.name = config.name
+        self.path = config.path
+
+        

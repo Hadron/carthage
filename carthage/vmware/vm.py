@@ -13,19 +13,21 @@ from ..dependency_injection import *
 from ..config import ConfigLayout, config_defaults, config_key
 from ..image import SetupTaskMixin, setup_task
 from ..utils import memoproperty
-from .image import VmwareDataStore
+from .image import VmwareDataStore, VmdkTemplate
 
 
 config_defaults.add_config({
     'vmware': {
         'datacenter': None,
         'folder': 'carthage',
-        'vm_folder': None,
+        'cluster': None,
         'hardware': {
             'boot_firmware': 'efi',
             'version': 14,
             'memory': 4096,
             'disk': 25,
+            'cpus': 1,
+            'paravirt': True,
             },
         }})
 vmware_config = config_key('vmware')
@@ -101,11 +103,100 @@ class VmFolder(VmwareStampable):
     storage = VmwareDataStore,
     # We add a template VM to the dependencies later avoiding a forward reference
     )
-class Vm(Machine):
+class Vm(Machine, VmwareStampable):
 
+    stamp_type = "vm"
+    
     def __init__(self, name, template,
+                 guest_id = "ubuntu64Guest",
                  *, injector, config, storage):
         super().__init__(name, injector, config)
         self.storage = storage
-
+        vm_config = config.vmware
+        self.cpus = vm_config.hardware.cpus
+        self.memory = vm_config.hardware.memory
+        self.nested_virt = False
+        self.paravirt = vm_config.hardware.paravirt
+        self.disk_size = vm_config.hardware.disk
+        self.guest_id = guest_id
+        self.template_name = None
+        self.template_snapshot = None
+        if template:
+            self.template_name = template.full_name
+            if template.clone_from_snapshot:
+                self.template_snapshot = template.clone_from_snapshot
+                
         
+    @inject(folder = InjectionKey(VmFolder, optional = True))
+    async def _ansible_dict(self, folder, **kwargs):
+        config = self.config_layout.vmware
+        if self.paravirt:
+            scsi_type = "paravirtual"
+            network_type = "vmxnet3"
+        else:
+            raise NotImplementedError("Loop up what we want to use in non-paravirt mode")
+        if not folder:
+            folder = await self.ainjector(VmFolder, config.folder)
+        d = await self.ainjector(vmware_dict,
+                                 name = self.full_name,
+                                 folder = folder.name,
+                                 cluster = config.cluster,
+                                 datastore = self.storage.name,
+                                 guest_id = self.guest_id,
+                                 hardware = dict(
+                                     boot_firmware = config.hardware.boot_firmware,
+                                     num_cpus = self.cpus,
+                                     memory_mb = self.memory,
+                                     version = config.hardware.version,
+                                     scsi = scsi_type,
+                                     nested_virt = self.nested_virt),
+                                 disk = [dict(
+                                     size_gb = self.disk_size,
+                                     type = "thin")],
+                                 networks = [dict(
+                                     name = "VM Network",
+                                     device_type = network_type)],
+        )
+        if self.template_name:
+            d['template'] = self.template_name
+            if self.template_snapshot:
+                d['linked_clone'] = True
+                d['src_snapshot'] = self.template_snapshot
+        d.update(kwargs)
+        return d
+
+    async def _ansible_op(self, **kwargs):
+        d = await self.ainjector(self._ansible_dict, **kwargs)
+        return await self.ainjector(carthage.ansible.run_play,
+                                    [carthage.ansible.localhost_machine],
+                                    {'vmware_guest': d})
+
+    
+    @setup_task("provision_vm")
+    async def create_vm(self):
+        return await self.ainjector(self._ansible_op, state='present')
+
+    
+    async def delete_vm(self):
+        return await self.ainjector(self._ansible_op, state = 'absent', force = True)
+
+@inject(
+    config = ConfigLayout,
+    injector = Injector,
+    storage = VmwareDataStore,
+    disk = VmdkTemplate
+    )
+class VmTemplate(Vm):
+    clone_from_snapshot = None
+
+    def __init__(self, disk, **kwargs):
+        self.disk = disk
+        super().__init__(disk.image.name, template = None, **kwargs)
+
+    async def _ansible_dict(self, **kwargs):
+        d = await self.ainjector(super()._ansible_dict, **kwargs)
+        d.update(is_template = True,
+                 )
+        d['disk'][0]['filename'] = self.disk.disk_path
+        return d
+    
