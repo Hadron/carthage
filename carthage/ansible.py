@@ -26,6 +26,7 @@ async def run_play(hosts, play,
         injector(write_config, ansible_dir, ssh_key = ssh_key)
         with open(os.path.join(ansible_dir,
                                "playbook.yml"), "wt") as f:
+            if isinstance(play, dict): play = [play]
             pb = [{
                 'hosts': ":".join([h.name for h in hosts]),
                 'remote_user': 'root',
