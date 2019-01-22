@@ -12,84 +12,12 @@ from .dependency_injection import Injector, AsyncInjectable, inject, AsyncInject
 from .config import ConfigLayout
 from . import sh
 from .utils import possibly_async
+from .setup_tasks import setup_task, SkipSetupTask, SetupTaskMixin
 import carthage
 
 
-_task_order = 0
-def setup_task(stamp):
-    '''Mark a method as a setup task.  Indicate a stamp file to be created
-    when the operation succeeds.  Must be in a class that is a subclass of
-    SetupTaskMixin.  Usage:
-
-        @setup_task("unpack"
-        async def unpack(self): ...
-    '''
-    def wrap(fn):
-        global _task_order
-        fn._setup_task_info = (_task_order, stamp)
-        _task_order += 1
-        return fn
-    return wrap
-
-class SkipSetupTask(Exception): pass
 
 
-class SetupTaskMixin:
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.setup_tasks = sorted(self._class_setup_tasks(),
-                                  key = lambda t: t[1]._setup_task_info[0])
-
-    def add_setup_task(self, stamp, task):
-        self.setup_tasks.append((stamp, task))
-
-    async def run_setup_tasks(self, context = None):
-        '''Run the set of collected setup tasks.  If context is provided, it
-        is used as an asynchronous context manager that will be entered before the
-        first task and eventually exited.  The context is never
-        entered if no tasks are run.
-        '''
-        injector = getattr(self, 'injector', carthage.base_injector)
-        ainjector = getattr(self, 'ainjector', None)
-        if ainjector is None:
-            ainjector = injector(AsyncInjector)
-        context_entered = False
-        for stamp, task in self.setup_tasks:
-            if not check_stamp(self.stamp_path, stamp):
-                try:
-                    if (not context_entered) and context is not None:
-                        await context.__aenter__()
-                        context_entered = True
-                    await ainjector(task)
-                    create_stamp(self.stamp_path, stamp)
-                except SkipSetupTask: pass
-                except Exception:
-                    if context_entered:
-                        await context.__aexit__(*sys.exc_info())
-                    raise
-        if context_entered:
-            await context.__aexit__(None, None, None)
-
-    def _class_setup_tasks(self):
-        cls = self.__class__
-        meth_names = {}
-        for c in cls.__mro__:
-            if not issubclass(c, SetupTaskMixin): continue
-            for m in c.__dict__:
-                if m in meth_names: continue
-                meth = getattr(c, m)
-                meth_names[m] = True
-                if hasattr(meth, '_setup_task_info'):
-                    yield meth._setup_task_info[1], getattr(self, m)
-
-    async def async_ready(self):
-        '''
-This may need to be overridden, but is provided as a default
-'''
-        await self.run_setup_tasks()
-        return self
-    
 
 
 @inject(config_layout = ConfigLayout)
@@ -187,21 +115,8 @@ class ContainerImage(BtrfsVolume):
         except FileNotFoundError: pass
 
 
-def create_stamp(path, stamp):
-    with open(os.path.join(path, ".stamp-"+stamp), "w") as f:
-        pass
 
 
-def check_stamp(path, stamp, raise_on_error = False):
-    if not os.path.exists(os.path.join(path,
-                                       ".stamp-"+stamp)):
-        if raise_on_error: raise RuntimeError("Stamp not available")
-        return False
-    return True
-
-
-__all__ = ('BtrfsVolume', 'ContainerImage', 'SetupTaskMixin',
-           'SkipSetupTask')
 
 @inject(
     config_layout = ConfigLayout,
@@ -396,3 +311,6 @@ def image_factory(name, image_type = 'raw', *,
     path = os.path.join(config_layout.vm_image_dir, name+'.raw')
     return ainjector(ImageVolume, name = name, path = path,
                      create_size = config_layout.vm_image_size)
+__all__ = ('BtrfsVolume', 'ContainerImage', 'SetupTaskMixin',
+           'SkipSetupTask',
+           'ImageVolume')
