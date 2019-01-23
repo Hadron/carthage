@@ -16,6 +16,7 @@ from ..utils import memoproperty
 from .image import VmwareDataStore, VmdkTemplate
 
 
+
 config_defaults.add_config({
     'vmware': {
         'datacenter': None,
@@ -42,7 +43,7 @@ class VmwareStampable(SetupTaskMixin, AsyncInjectable):
         state_dir = self.config_layout.state_dir
         p = os.path.join(state_dir, "vmware_stamps", self.stamp_type)
         if self.folder:
-            p = os.path.join(p, self.folder)
+            p = os.path.join(p, self.folder.name)
         p = os.path.join(p, self.name)
         p += ".stamps"
         os.makedirs(p, exist_ok = True)
@@ -74,8 +75,10 @@ class VmFolder(VmwareStampable):
         self.injector = injector.claim()
         self.config_layout = config_layout
         self.ainjector = injector(AsyncInjector)
+        self.inventory_object = None
         super().__init__()
 
+    
     @setup_task("create_folder")
     async def create_folder(self):
         d = self.injector(vmware_dict)
@@ -90,7 +93,21 @@ class VmFolder(VmwareStampable):
         await self.ainjector(carthage.ansible.run_play,
             [carthage.ansible.localhost_machine],
             [{'vcenter_folder': d}])
+        await self.ainjector(self._find_inventory_object)
 
+    @create_folder.invalidator()
+    async def create_folder(self):
+        await self._find_inventory_object()
+        return self.inventory_object
+
+    async def _find_inventory_object(self):
+        self.inventory_object = self.injector(inventory.find_vm_folder, self.config_layout.vmware.datacenter, self.name)
+
+    @memoproperty
+    def inventory_view(self):
+        return self.injector(inventory.VmInventory, folder=self)
+    
+    
     def __repr__(self):
         return f"<VmFolder: {self.name}>"
     
@@ -101,6 +118,7 @@ class VmFolder(VmwareStampable):
     config = ConfigLayout,
     injector = Injector,
     storage = VmwareDataStore,
+    folder = InjectionKey(VmFolder, optional = True),
     # We add a template VM to the dependencies later avoiding a forward reference
     )
 class Vm(Machine, VmwareStampable):
@@ -109,9 +127,10 @@ class Vm(Machine, VmwareStampable):
     
     def __init__(self, name, template,
                  guest_id = "ubuntu64Guest",
-                 *, injector, config, storage):
+                 *, injector, config, storage, folder):
         super().__init__(name, injector, config)
         self.storage = storage
+        self.folder = folder
         vm_config = config.vmware
         self.cpus = vm_config.hardware.cpus
         self.memory = vm_config.hardware.memory
@@ -121,48 +140,51 @@ class Vm(Machine, VmwareStampable):
         self.guest_id = guest_id
         self.template_name = None
         self.template_snapshot = None
+        self.inventory_object = None
         if template:
             self.template_name = template.full_name
             if template.clone_from_snapshot:
                 self.template_snapshot = template.clone_from_snapshot
-                
+
+    async def async_ready(self):
+        if not self.folder:
+            self.folder = await self.ainjector(VmFolder, self.config_layout.vmware.folder)
+            return await super().async_ready()
+
         
-    @inject(folder = InjectionKey(VmFolder, optional = True))
-    async def _ansible_dict(self, folder, **kwargs):
+    async def _ansible_dict(self, **kwargs):
         config = self.config_layout.vmware
         if self.paravirt:
             scsi_type = "paravirtual"
             network_type = "vmxnet3"
         else:
             raise NotImplementedError("Loop up what we want to use in non-paravirt mode")
-        if not folder:
-            folder = await self.ainjector(VmFolder, config.folder)
         d = await self.ainjector(vmware_dict,
-                                 name = self.full_name,
-                                 folder = folder.name,
-                                 cluster = config.cluster,
-                                 datastore = self.storage.name,
-                                 guest_id = self.guest_id,
-                                 hardware = dict(
-                                     boot_firmware = config.hardware.boot_firmware,
-                                     num_cpus = self.cpus,
-                                     memory_mb = self.memory,
-                                     version = config.hardware.version,
-                                     scsi = scsi_type,
-                                     nested_virt = self.nested_virt),
-                                 disk = [dict(
-                                     size_gb = self.disk_size,
-                                     type = "thin")],
-                                 networks = [dict(
-                                     name = "VM Network",
-                                     device_type = network_type)],
-        )
+                                     name = self.full_name,
+                                     folder = self.folder.name,
+                                     cluster = config.cluster,
+                                     datastore = self.storage.name,
+                                     guest_id = self.guest_id,
+                                     hardware = dict(
+                                         boot_firmware = config.hardware.boot_firmware,
+                                         num_cpus = self.cpus,
+                                         memory_mb = self.memory,
+                                         version = config.hardware.version,
+                                         scsi = scsi_type,
+                                         nested_virt = self.nested_virt),
+                                     disk = [dict(
+                                         size_gb = self.disk_size,
+                                         type = "thin")],
+                                     networks = [dict(
+                                         name = "VM Network",
+                                         device_type = network_type)],
+            )
         if self.template_name:
             d['template'] = self.template_name
             if self.template_snapshot:
                 d['linked_clone'] = True
                 d['src_snapshot'] = self.template_snapshot
-        d.update(kwargs)
+                d.update(kwargs)
         return d
 
     async def _ansible_op(self, **kwargs):
@@ -174,7 +196,18 @@ class Vm(Machine, VmwareStampable):
     
     @setup_task("provision_vm")
     async def create_vm(self):
-        return await self.ainjector(self._ansible_op, state='present')
+        res =  await self.ainjector(self._ansible_op, state='present')
+        await self.ainjector(self._find_inventory_object)
+        return res
+
+    @create_vm.invalidator()
+    async def create_vm(self):
+        await self.ainjector(self._find_inventory_object)
+        return self.inventory_object
+
+    async def _find_inventory_object(self):
+        self.inventory_object = self.folder.inventory_view.find_by_name(self.full_name)
+        
 
     
     async def delete_vm(self):
@@ -183,9 +216,10 @@ class Vm(Machine, VmwareStampable):
 @inject(
     config = ConfigLayout,
     injector = Injector,
+    folder = InjectionKey(VmFolder, optional = True),
     storage = VmwareDataStore,
     disk = VmdkTemplate
-    )
+)
 class VmTemplate(Vm):
     clone_from_snapshot = None
 
@@ -196,7 +230,8 @@ class VmTemplate(Vm):
     async def _ansible_dict(self, **kwargs):
         d = await self.ainjector(super()._ansible_dict, **kwargs)
         d.update(is_template = True,
-                 )
+        )
         d['disk'][0]['filename'] = self.disk.disk_path
         return d
     
+from . import inventory
