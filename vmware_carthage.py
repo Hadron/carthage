@@ -2,7 +2,7 @@
 
 import asyncio, carthage, carthage.utils
 from carthage import base_injector, inject, AsyncInjector, ConfigLayout, Injector, partial_with_dependencies
-from carthage.vmware import VmFolder, Vm, VmfsDataStore, VmdkTemplate, NfsDataStore, VmTemplate
+from carthage.vmware import VmFolder, Vm, VmfsDataStore, VmdkTemplate, NfsDataStore, VmTemplate, inventory
 from carthage.vmware.image import vm_storage_key
 from carthage.hadron.vmware import HadronVmdkBase
 from carthage.config import ConfigIterator
@@ -12,6 +12,7 @@ async def run(ainjector):
     futures = []
     config = await ainjector(ConfigLayout)
     ainjector.add_provider(VmfsDataStore)
+    ainjector.add_provider(carthage.vmware.inventory.VmwareConnection)
     vmdk_template = await ainjector(create_template)
     template = await ainjector(VmTemplate, disk = vmdk_template)
     vm = await ainjector(Vm, "carthage-test.cambridge.aces-aoe.com", template = template)
