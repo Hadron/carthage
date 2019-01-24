@@ -1,3 +1,4 @@
+import time
 from ssl import create_default_context
 from pyVim.connect import SmartConnect, Disconnect
 from pyVmomi import vim
@@ -44,4 +45,10 @@ class VmInventory(Injectable):
         for v in self.view.view:
             if v.name == name: return v
         return None
+        
+def wait_for_task(task):
+    if task.info.state not in ('success', 'error'):
+        time.sleep(1)
+        if task.info.state == 'error':
+            raise task.info.error
         

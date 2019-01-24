@@ -1,11 +1,14 @@
+import asyncio, logging, time
 import carthage.ansible
 import os.path
 from ..machine import Machine
 from ..dependency_injection import *
 from ..config import ConfigLayout, config_defaults, config_key
-from ..image import SetupTaskMixin, setup_task
+from ..setup_tasks import SetupTaskMixin, setup_task, SkipSetupTask
 from ..utils import memoproperty
 from .image import VmwareDataStore, VmdkTemplate
+
+logger = logging.getLogger('carthage.vmware')
 
 
 
@@ -122,6 +125,7 @@ class Vm(Machine, VmwareStampable):
                  *, injector, config, storage, folder):
         super().__init__(name, injector, config)
         self.storage = storage
+        self.running = False
         self.folder = folder
         vm_config = config.vmware
         self.cpus = vm_config.hardware.cpus
@@ -137,6 +141,7 @@ class Vm(Machine, VmwareStampable):
             self.template_name = template.full_name
             if template.clone_from_snapshot:
                 self.template_snapshot = template.clone_from_snapshot
+        self._operation_lock = asyncio.Lock()
 
     async def async_ready(self):
         if not self.folder:
@@ -205,6 +210,38 @@ class Vm(Machine, VmwareStampable):
     async def delete_vm(self):
         return await self.ainjector(self._ansible_op, state = 'absent', force = True)
 
+    async def start_machine(self):
+        loop = self.injector.get_instance(asyncio.AbstractEventLoop)
+        async with self._operation_lock:
+            if not self.running:
+                logger.debug(f'Starting dependencies for {self.name}')
+                await self.start_dependencies()
+                logger.info(f'Starting {self.name} VM')
+                power = self.inventory_object.summary.runtime.powerState
+                if power != "poweredOn": 
+                    task = self.inventory_object.PowerOn()
+                    await loop.run_in_executor(None, inventory.wait_for_task, task)
+                    if task.info.state != 'success':
+                        raise RuntimeError(task.info.error)
+                self.running = True
+            if self.__class__.ip_address is Machine.ip_address:
+                await loop.run_in_executor(None, self._get_ip_address)
+            return True
+
+    def _get_ip_address(self):
+        for i in range(20):
+            try:
+                ip = self.inventory_object.guest.net[0].ipAddress[0]
+                self.ip_address = ip
+                return
+            except IndexError: pass
+            time.sleep(5)
+        raise TimeoutError(f'Unable to get IP address for {self.name}')
+    
+                
+            
+    
+
 @inject(
     config = ConfigLayout,
     injector = Injector,
@@ -225,5 +262,15 @@ class VmTemplate(Vm):
         )
         d['disk'][0]['filename'] = self.disk.disk_path
         return d
+
+    @setup_task("create_clone_snapshot")
+    @inject(loop = asyncio.AbstractEventLoop)
+    async def create_clone_snapshot(self, loop):
+        if self.clone_from_snapshot is None:  raise SkipSetupTask
+        def callback():
+            t = self.inventory_object.CreateSnapshot("template_clone", "Snapshot for template clones", False, True)
+            inventory.wait_for_task(t)
+        await loop.run_in_executor(None, callback)
+        
     
 from . import inventory

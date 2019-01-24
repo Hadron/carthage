@@ -13,7 +13,7 @@ logger = logging.getLogger('carthage.vmware')
         config_layout = ConfigLayout,
         store = VmwareDataStore
         )
-class VmdkTemplate(AsyncInjectable, SetupTaskMixin):
+class VmdkTemplate(SetupTaskMixin, AsyncInjectable):
 
     '''
     Produce a VMDK from an image that can be loaded as a template VM.
@@ -53,6 +53,7 @@ class VmdkTemplate(AsyncInjectable, SetupTaskMixin):
     @setup_task("copy-vmdk")
     async def copy_vmdk(self):
         store = self.store
+        breakpoint()
         return await store.copy_in(self.paths)
 
     @memoproperty
