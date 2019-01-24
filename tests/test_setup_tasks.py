@@ -74,3 +74,30 @@ async def test_invalidator(ainjector):
     await ainjector(c)
     assert called == 2
     
+
+@async_test
+async def test_failure_forces_rerun(ainjector):
+    "If a task is explicitly run and fails, does the stamp get reset?"
+    called = 0
+    should_fail = False
+    class c(Stampable):
+        @setup_task("test_error_explicit")
+        def setup_test_error_explicit(self):
+            nonlocal called
+            called += 1
+            if should_fail:
+                raise RuntimeError
+            
+    assert not check_stamp(c.stamp_path, "test_error_explicit")
+    await ainjector(c)
+    assert called == 1
+    should_fail = True
+    o = await ainjector(c)
+    assert called == 1
+    with pytest.raises(RuntimeError):
+        o.setup_test_error_explicit()
+    assert called == 2
+    should_fail = False
+    await ainjector(c)
+    assert called == 3
+    
