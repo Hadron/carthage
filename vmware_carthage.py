@@ -24,7 +24,7 @@ async def run(ainjector):
     vmdk_template = await ainjector(create_template)
     template = await ainjector(VmTemplate, disk = vmdk_template)
     vm = await ainjector(Vm, "carthage-test.cambridge.aces-aoe.com", template = template)
-    await ainjector(vm._ansible_op, state ='poweredon', force = True)
+    await vm.start_machine()
     breakpoint()
     if futures:
         await asyncio.wait(futures)

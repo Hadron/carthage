@@ -47,10 +47,12 @@ class SshMixin:
     available.  Requires an carthage.ssh.SshKey be injectable.
     '''
 
-    @property
-    def ip_address(self):
-        raise NotImplementedError
+    class ip_address:
 
+        def __get__(self, instance, owner):
+            if instance is None: return self
+            raise NotImplementedError
+    ip_address = ip_address()
     ssh_options = ('-oStrictHostKeyChecking=no', )
 
     @memoproperty
