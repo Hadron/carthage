@@ -7,12 +7,15 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import asyncio, dataclasses, os, os.path, typing
+import asyncio, dataclasses, logging, os, os.path, typing, weakref
 import carthage
 from carthage.dependency_injection import AsyncInjector
 from carthage.config import ConfigLayout
 
+logger = logging.getLogger('carthage')
+
 _task_order = 0
+
 def _inc_task_order():
     global _task_order
     t = _task_order
@@ -32,7 +35,7 @@ class TaskWrapper:
 
     def __get__(self, instance, owner):
         if instance is None: return self
-        return self.func.__get__(instance, owner)
+        return TaskMethod(self, instance)
     
     def __getattr__(self, a):
         if a == "func": raise AttributeError
@@ -45,9 +48,20 @@ class TaskWrapper:
         else:
             return setattr(self.func, a, v)
 
-    def __call__(self, *args, **kwargs):
-        return self.func( *args, **kwargs)
-
+    def __call__(self, instance, *args, **kwargs):
+        try:
+            res =  self.func( instance, *args, **kwargs)
+            if not self.check_completed_func:
+                create_stamp(instance.stamp_path, self.stamp)
+            return res
+        except SkipSetupTask:
+            raise
+        except Exception:
+            if not self.check_completed_func:
+                logger_for(instance).warning(f'Deleting {self.stamp} task stamp for {instance} because task failed')
+                delete_stamp(instance.stamp_path, self.stamp)
+            raise
+            
     @property
     def __wraps__(self):
         return self.func
@@ -127,6 +141,21 @@ class TaskWrapper:
             self.check_completed_func = f
             return self
         return wrap
+
+class TaskMethod:
+
+    def __init__(self, task, instance):
+        self.task = task
+        self.instance = weakref.proxy(instance)
+
+    def __call__(self, *args, **kwargs):
+        self.task(self.instance, *args, **kwargs)
+
+    def __getattr__(self, a):
+        return getattr(self.task.func, a)
+    
+    def __repr__(self):
+        return f"<TaskMethod {self.task.stamp} of {self.instance}>"
     
 
     
@@ -178,14 +207,16 @@ class SetupTaskMixin:
                     if (not context_entered) and context is not None:
                         await context.__aenter__()
                         context_entered = True
-                    await ainjector(t.func, self)
-                    if not t.check_completed_func:
-                        create_stamp(self.stamp_path, t.stamp)
+                    logger_for(self).info(f"Running {t.stamp} task for {self}")
+                    await ainjector(t, self)
                 except SkipSetupTask: pass
                 except Exception:
+                    logger_for(self).exception( f"Error running {t.stamp} for {self}:")
                     if context_entered:
                         await context.__aexit__(*sys.exc_info())
                     raise
+            else: #should_run_task
+                logger_for(self).debug(f"Task {t.stamp} already run for {self}")
         if context_entered:
             await context.__aexit__(None, None, None)
 
@@ -217,7 +248,12 @@ def create_stamp(path, stamp):
         os.makedirs(path, exist_ok = True)
         with open(os.path.join(path, ".stamp-"+stamp), "w") as f:
             pass
-        
+
+def delete_stamp(path, stamp):
+    try:
+        os.unlink(os.path.join(path, ".stamp-"+stamp))
+    except FileNotFoundError: pass
+    
 
 
 def check_stamp(path, stamp, raise_on_error = False):
@@ -226,3 +262,9 @@ def check_stamp(path, stamp, raise_on_error = False):
         if raise_on_error: raise RuntimeError("Stamp not available")
         return False
     return True
+
+def logger_for(instance):
+    try:
+        return instance.logger
+    except AttributeError: return logger
+    
