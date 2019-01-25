@@ -143,6 +143,9 @@ class Vm(Machine, VmwareStampable):
                 self.template_snapshot = template.clone_from_snapshot
         self._operation_lock = asyncio.Lock()
 
+    def __repr__(self):
+        return f"<{self.__class__.__name__} name={self.name}>"
+    
     async def async_ready(self):
         if not self.folder:
             self.folder = await self.ainjector(VmFolder, self.config_layout.vmware.folder)

@@ -136,6 +136,9 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
                 self.create_size = create_size
                 os.makedirs(self.stamp_path)
 
+    def __repr__(self):
+        return f"<ImageVolume path={self.path}>"
+    
 
     async def async_ready(self):
         await self.run_setup_tasks()
@@ -257,6 +260,9 @@ class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
         self.mount_image()
         self.stamp_path = image.stamp_path
 
+        def __repr__(self):
+            return f"<{self.__class__.__name__} for {repr(self.image)}>"
+        
     def mount_image(self):
         self.mount_context = self.image.image_mounted()
         self.mount = self.mount_context.__enter__()

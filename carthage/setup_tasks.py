@@ -3,8 +3,11 @@ import asyncio, dataclasses, datetime, logging, os, os.path, time, typing, weakr
 import carthage
 from carthage.dependency_injection import AsyncInjector
 from carthage.config import ConfigLayout
+import collections.abc
 
-logger = logging.getLogger('carthage')
+
+
+logger = logging.getLogger('carthage.setup_tasks')
 
 _task_order = 0
 
@@ -44,11 +47,27 @@ class TaskWrapper:
             return setattr(self.func, a, v)
 
     def __call__(self, instance, *args, **kwargs):
+        def callback(fut):
+            try:
+                res = fut.result()
+                if not self.check_completed_func:
+                    create_stamp(instance.stamp_path, self.stamp)
+            except SkipSetupTask: pass
+            except Exception:
+                if not self.check_completed_func:
+                    logger_for(instance).warning(f'Deleting {self.description} task stamp for {instance} because task failed')
+                    delete_stamp(instance.stamp_path, self.stamp)
+
         try:
             res =  self.func( instance, *args, **kwargs)
-            if not self.check_completed_func:
-                create_stamp(instance.stamp_path, self.stamp)
-            return res
+            if isinstance(res, collections.abc.Coroutine):
+                res = asyncio.ensure_future(res)
+                res.add_done_callback(callback)
+                return res
+            else:
+                if not self.check_completed_func:
+                    create_stamp(instance.stamp_path, self.stamp)
+                return res
         except SkipSetupTask:
             raise
         except Exception:
