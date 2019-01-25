@@ -44,6 +44,9 @@ class VmdkTemplate(SetupTaskMixin, AsyncInjectable):
                       base_path+"-flat.vmdk")
         self.stamp_path = self.image.stamp_path
 
+    def __repr__(self):
+        return f"<VMDK for \"{self.image.path}\" datastore={self.store.name}>"
+    
 
 
     @setup_task("generate-vmdk")
@@ -61,7 +64,6 @@ class VmdkTemplate(SetupTaskMixin, AsyncInjectable):
     @setup_task("copy-vmdk")
     async def copy_vmdk(self):
         store = self.store
-        breakpoint()
         return await store.copy_in(self.paths)
 
     @memoproperty

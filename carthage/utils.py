@@ -166,6 +166,9 @@ def carthage_main_argparser():
     parser.add_argument('--command-verbose',
                          help = "Verbose command logging",
                          action ='store_true')
+    parser.add_argument('--tasks-verbose',
+                        help = "Verbose logging for tasks",
+                        action = 'store_true')
     return parser
 
 def carthage_main_setup(parser):
@@ -186,7 +189,11 @@ def carthage_main_setup(parser):
         return 1
     console_handler.addFilter(container_debug_filter)
     if not args.command_verbose:
-        logging.getLogger('sh').setLevel(logging.ERROR)
+        logging.getLogger('carthage.sh').setLevel(logging.ERROR)
+        logging.getLogger('carthage.sh').propagate = False
+    if args.tasks_verbose:
+        logging.getLogger('carthage.setup_tasks').setLevel(10)
+        
     return args
 
 def carthage_main_run(func):
