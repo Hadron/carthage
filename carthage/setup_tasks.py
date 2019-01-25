@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import asyncio, dataclasses, logging, os, os.path, typing, weakref
+import asyncio, dataclasses, datetime, logging, os, os.path, time, typing, weakref
 import carthage
 from carthage.dependency_injection import AsyncInjector
 from carthage.config import ConfigLayout
@@ -27,11 +27,14 @@ class TaskWrapper:
 
     
     func: typing.Callable
-    stamp: str
+    description: str
     order: int = dataclasses.field(default_factory = _inc_task_order)
     invalidator_func = None
     check_completed_func = None
-    
+
+    @property
+    def stamp(self):
+        return self.func.__name__
 
     def __get__(self, instance, owner):
         if instance is None: return self
@@ -58,7 +61,7 @@ class TaskWrapper:
             raise
         except Exception:
             if not self.check_completed_func:
-                logger_for(instance).warning(f'Deleting {self.stamp} task stamp for {instance} because task failed')
+                logger_for(instance).warning(f'Deleting {self.description} task stamp for {instance} because task failed')
                 delete_stamp(instance.stamp_path, self.stamp)
             raise
             
@@ -66,10 +69,14 @@ class TaskWrapper:
     def __wraps__(self):
         return self.func
 
-    async def should_run_task(self, obj: SetupTaskMixin, ainjector:AsyncInjector):
+    async def should_run_task(self, obj: SetupTaskMixin, ainjector:AsyncInjector,
+                              dependency_last_run: float):
+
 
         ''' 
-        Return true if this task should be run.
+        Indicate whether this task should be run for *obj*.
+
+        :returns: Tuple of whether the task should be run and when the task was last run if ever.
 
         * If :meth:`check_completed` has been called, then the task should be run when either the check_completed function returns falsy or our dependencies have been run more recently.
 
@@ -85,15 +92,26 @@ class TaskWrapper:
             The instance on which setup_tasks are being run.
 
         '''
+        if dependency_last_run is None:
+            dependency_last_run = 0.0
         if self.check_completed_func:
-            return await ainjector(self.check_completed_func, obj)
-        stamp_time = check_stamp(obj.stamp_path, self.stamp)
-        if not stamp_time:
-            return True
+            last_run =  await ainjector(self.check_completed_func, obj)
+            if last_run is True:
+                logger.debug(f"Task {self.description} for {obj} run without providing timing information")
+                return (False, dependency_last_run)
+        else: last_run  = check_stamp(obj.stamp_path, self.stamp)
+        if last_run is False:
+            logger.debug(f"Task {self.description} never run for {obj}")
+            return (True, 0.0)
+        if last_run < dependency_last_run:
+            logger.debug(f"Task {self.description} last run {_iso_time(last_run)}, but dependency run more recently at {_iso_time(dependency_last_run)}")
+            return (True, dependency_last_run)
+        logger.debug(f"Task {self.description} last run for {obj} at {_iso_time(last_run)}")
         if self.invalidator_func:
             if not await ainjector(self.invalidator_func, obj):
-                return True
-        return False
+                logger.info(f"Task {self.description} invalidated for {obj}; last run {_iso_time(last_run)}")
+                return (True, time.time())
+        return (False, last_run)
     
 
     def invalidator(self, slow = False):
@@ -160,9 +178,8 @@ class TaskMethod:
 
     
     
-def setup_task(stamp):
-    '''Mark a method as a setup task.  Indicate a stamp file to be created
-    when the operation succeeds.  Must be in a class that is a subclass of
+def setup_task(description):
+    '''Mark a method as a setup task.  Describe the task for logging.  Must be in a class that is a subclass of
     SetupTaskMixin.  Usage:
 
         @setup_task("unpack"
@@ -170,7 +187,7 @@ def setup_task(stamp):
     '''
     def wrap(fn):
         global _task_order
-        t = TaskWrapper(func = fn, stamp = stamp, order = _task_order)
+        t = TaskWrapper(func = fn, description = description, order = _task_order)
         _task_order += 1
         return t
     return wrap
@@ -201,22 +218,22 @@ class SetupTaskMixin:
         if config is None:
             config = injector(ConfigLayout)
         context_entered = False
+        dependency_last_run = 0.0
         for t in self.setup_tasks:
-            if await t.should_run_task(self, ainjector):
+            should_run, dependency_last_run = await t.should_run_task(self, ainjector, dependency_last_run)
+            if should_run:
                 try:
                     if (not context_entered) and context is not None:
                         await context.__aenter__()
                         context_entered = True
-                    logger_for(self).info(f"Running {t.stamp} task for {self}")
+                    logger_for(self).info(f"Running {t.description} task for {self}")
                     await ainjector(t, self)
                 except SkipSetupTask: pass
                 except Exception:
-                    logger_for(self).exception( f"Error running {t.stamp} for {self}:")
+                    logger_for(self).exception( f"Error running {t.description} for {self}:")
                     if context_entered:
                         await context.__aexit__(*sys.exc_info())
                     raise
-            else: #should_run_task
-                logger_for(self).debug(f"Task {t.stamp} already run for {self}")
         if context_entered:
             await context.__aexit__(None, None, None)
 
@@ -257,14 +274,23 @@ def delete_stamp(path, stamp):
 
 
 def check_stamp(path, stamp, raise_on_error = False):
-    if not os.path.exists(os.path.join(path,
-                                       ".stamp-"+stamp)):
-        if raise_on_error: raise RuntimeError("Stamp not available")
+    '''
+    :returns: False if the stamp is not present and *raise_on_error* is False else the unix time of the stamp.
+    '''
+    try:
+        res = os.stat(os.path.join(path,
+                                       ".stamp-"+stamp))
+    except FileNotFoundError:
+        if raise_on_error: raise RuntimeError("Stamp not available") from None
         return False
-    return True
+    return res.st_mtime
+
 
 def logger_for(instance):
     try:
         return instance.logger
     except AttributeError: return logger
     
+
+def _iso_time(t):
+    return datetime.datetime.fromtimestamp(t).isoformat()

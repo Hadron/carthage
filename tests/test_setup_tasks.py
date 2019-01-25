@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import os, pytest, os.path, shutil
+import os, pytest, os.path, sys, shutil
 from carthage.dependency_injection import *
 import carthage, carthage.ansible
 from carthage.pytest import *
@@ -23,6 +23,14 @@ def ainjector(ainjector):
 
 class  Stampable(SetupTaskMixin, AsyncInjectable):
 
+    def __init__(self):
+        super().__init__()
+        f = sys._getframe(3)
+        self.name = f.f_code.co_name
+
+    def __repr__(self):
+        return f"<setup_test object for {self.name} test>"
+    
     def __init_subclass__(cls):
         super().__init_subclass__()
         cls.stamp_path = os.path.join(state_dir, str(id(cls)))
@@ -37,10 +45,10 @@ async def test_basic_setup(ainjector):
             nonlocal called
             called += 1
     assert called == 0
-    assert not check_stamp(c.stamp_path, "test_stamp")
+    assert not check_stamp(c.stamp_path, "test_stamp_task")
     c_obj = await ainjector(c)
     assert called == 1
-    assert check_stamp(c.stamp_path, "test_stamp")
+    assert check_stamp(c.stamp_path, "test_stamp_task")
     c_obj2 = await ainjector(c)
     assert c_obj is not c_obj2
     assert called == 1
@@ -56,7 +64,7 @@ async def test_check_completed(ainjector):
             called +=1
         @setup_check_completed.check_completed()
         def setup_check_completed(self):
-            return not is_completed
+            return is_completed
     c_1 = await ainjector(c)
     assert called == 0
     is_completed = False
@@ -75,10 +83,10 @@ async def test_invalidator(ainjector):
         @setup_invalidator.invalidator()
         def setup_invalidator(self):
             return False
-    assert not check_stamp(c.stamp_path, "test_invalidator")
+    assert not check_stamp(c.stamp_path, "setup_invalidator")
     await ainjector(c)
     assert called == 1
-    assert check_stamp(c.stamp_path, "test_invalidator")
+    assert check_stamp(c.stamp_path, "setup_invalidator")
     await ainjector(c)
     assert called == 2
     
@@ -96,7 +104,7 @@ async def test_failure_forces_rerun(ainjector):
             if should_fail:
                 raise RuntimeError
             
-    assert not check_stamp(c.stamp_path, "test_error_explicit")
+    assert not check_stamp(c.stamp_path, "setup_test_error_explicit")
     await ainjector(c)
     assert called == 1
     should_fail = True
