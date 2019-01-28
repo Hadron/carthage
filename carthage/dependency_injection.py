@@ -497,7 +497,7 @@ class AsyncInjector(Injectable):
             if orig_k:
                 tb_utils.filter_before_here(e)
                 logger.exception(f'Error resolving dependency for {orig_k}')
-                raise InjectionFailed(k) from e
+                raise InjectionFailed(orig_k) from e
             else:
                 raise
             

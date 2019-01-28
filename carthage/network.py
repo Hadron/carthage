@@ -107,7 +107,7 @@ class Network(AsyncInjectable):
     
 
     def __init__(self, name, vlan_id = None, *, injector):
-        self.injector = injector.claim()
+        self.injector = injector.copy_if_owned().claim()
         self.ainjector = self.injector(AsyncInjector)
         self.name = name
         self.vlan_id = vlan_id
@@ -121,10 +121,10 @@ class Network(AsyncInjectable):
         '''
         assert issubclass(cls, TechnologySpecificNetwork), \
             "Must request access by a subclass of TechnologySpecificNetwork"
-        if cls not in self.injector and self.vlan_id:
+        if (cls not in self.ainjector) and self.vlan_id is not None:
             try:
                 instance = await self.ainjector.get_instance_async(InjectionKey(cls, vlan_id = self.vlan_id))
-                assert cls in self.ainjector
+                self.ainjector.add_provider(instance)
                 return instance
             except KeyError: pass
         instance = await self.ainjector.get_instance_async(cls)

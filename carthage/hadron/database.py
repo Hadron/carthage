@@ -55,7 +55,7 @@ class HadronNetwork(Network):
         injector.claim()
         injector.add_provider(site_network_key, self)
         super().__init__(name = "n{}".format(model.netid),
-                         config_layout = config_layout,
+                         vlan_id = 1000+model.netid,
                          injector = injector)
         
     async def async_ready(self):
