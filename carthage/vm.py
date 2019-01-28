@@ -1,4 +1,4 @@
-# Copyright (C) 2018, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -63,7 +63,7 @@ class VM(Machine, SetupTaskMixin):
     async def write_config(self):
         template = _templates.get_template("vm-config.mako")
         if self.network_config is None:
-            self.network_config = await self.ainjector(self.network_config_unresolved.resolve)
+            self.network_config = await self.ainjector(self.network_config_unresolved.resolve, access_class = carthage.network.BridgeNetwork)
         self.gen_volume()
         with open(self.config_path, 'wt') as f:
             f.write(template.render(

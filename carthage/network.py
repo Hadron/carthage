@@ -1,4 +1,4 @@
-# Copyright (C) 2018, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -6,6 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+from __future__ import annotations
 import asyncio, logging, re, weakref
 from . import sh
 from .dependency_injection import inject, AsyncInjectable, Injector, AsyncInjector, InjectionKey, Injectable
@@ -15,7 +16,7 @@ from .utils import permute_identifier
 logger = logging.getLogger('carthage.network')
 
 _cleanup_substitutions = [
-    (re.compile(r'[-_\.]'),''),
+    (re.compile(r'[-_\. ]'),''),
     (re.compile( r'database'), 'db'),
     (re.compile(r'test'),'t'),
     (re.compile(r'router'), 'rtr'),
@@ -59,7 +60,7 @@ class NetworkInterface:
 
 class VlanInterface(NetworkInterface):
 
-    def __init__(self, id, network):
+    def __init__(self, id, network: BridgeNetwork):
         super().__init__(ifname = "{}.{}".format(
             network.bridge_name, id), network = network)
         self.vlan_id = id
@@ -77,7 +78,7 @@ class VlanInterface(NetworkInterface):
         
 class VethInterface(NetworkInterface):
 
-    def __init__(self, network, ifname, bridge_member_name):
+    def __init__(self, network:BridgeNetwork, ifname, bridge_member_name):
         super().__init__(network, ifname)
         self.bridge_member_name = bridge_member_name
         self.closed = False
@@ -91,22 +92,76 @@ class VethInterface(NetworkInterface):
 
     def __del__(self):
         self.close()
+
+class TechnologySpecificNetwork(AsyncInjectable): pass
+
+@inject(injector = Injector)
+class Network(AsyncInjectable):
+
+    '''
+    Represents a network that VMs and containers can connect to.  In Carthage, networks are identified by a name and a VLAN identifier.  
+
+    How networks are accessed depends on the underlying technology.  The base Network class maintains an `.Injector` so that only one instance of a technology-specific network is made for each logical network.
+
+    .. seealso:
+
+        BridgeNetwork
+            For `carthage.Container` and `carthage.Vm`
+
+        VmwareNetwork
+            for `carthage.vmware.Vm`
+
+    '''
+    
+
+    def __init__(self, name, vlan_id = None, *, injector):
+        self.injector = injector.claim()
+        self.ainjector = self.injector(AsyncInjector)
+        self.name = name
+        self.vlan_id = vlan_id
+        self.injector.add_provider(this_network, self)
         
+
+    async def access_by(self, cls: TechnologySpecificNetwork):
+        '''Request a view of *self* using *cls* as a technology-specific lens.
+        
+        :return: The instance of *cls* for accessing this network
+        '''
+        assert issubclass(cls, TechnologySpecificNetwork), \
+            "Must request access by a subclass of TechnologySpecificNetwork"
+        if cls not in self.injector and self.vlan_id:
+            try:
+                instance = await self.ainjector.get_instance_async(InjectionKey(cls, vlan_id = self.vlan_id))
+                assert cls in self.ainjector
+                return instance
+            except KeyError: pass
+        instance = await self.ainjector.get_instance_async(cls)
+        assert cls in self.ainjector, \
+            f"It looks like {cls} was not registered with add_provider with allow_multiple set to True"
+        return instance
+
+    def close(self, canceled_futures = None):
+        self.injector.close(canceled_futures = canceled_futures)
+
+this_network = InjectionKey(Network, role = "this_network")
+
         
 @inject(
     config_layout = ConfigLayout,
-    injector = Injector)
-class Network(AsyncInjectable):
+    injector = Injector,
+    net = this_network)
+class BridgeNetwork(TechnologySpecificNetwork):
 
-    def __init__(self, name, *, delete_bridge = True, injector, config_layout):
-        self.name = name
-        self.injector = injector
+    def __init__(self, net, *, bridge_name = None,
+                 delete_bridge = True, injector, config_layout):
+        self.name = net.name
+        self.injector = injector.claim()
         self.config_layout = config_layout
         self.delete_bridge = delete_bridge
         self.interfaces = weakref.WeakValueDictionary()
-        if delete_bridge is False:
-            self.bridge_name = name
-        else: self.bridge_name = if_name('br', config_layout.container_prefix, name)
+        if bridge_name is None:
+            self.bridge_name = if_name('br', config_layout.container_prefix, self.name)
+        else: self.bridge_name = bridge_name
         self.closed = False
         self.members = []
 
@@ -204,7 +259,7 @@ class NetworkConfig:
         self.macs[interface] = mac
 
     @inject(ainjector = AsyncInjector)
-    async def resolve(self, ainjector):
+    async def resolve(self, access_class, ainjector):
         "Return a NetworkConfigInstance for a given environment"
         async def resolve1(r, i):
             if isinstance(r, InjectionKey):
@@ -221,6 +276,7 @@ class NetworkConfig:
                 resolve1(self.nets[i], i))
             assert isinstance(res['mac'], (str, type(None))), "MAC Address for {} must resolve to string or None".format(i)
             assert isinstance(res['net'], Network), "Network for {} must resolve to network object".format(i)
+            res['net'] = await res['net'].access_by(access_class)
             d[i] = res
         return await ainjector(NetworkConfigInstance,d)
 

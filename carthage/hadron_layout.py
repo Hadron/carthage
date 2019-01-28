@@ -1,4 +1,4 @@
-# Copyright (C) 2018, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -6,18 +6,21 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-from .network import Network, NetworkConfig
+from .network import Network, NetworkConfig, BridgeNetwork
 from .hadron import hadron_container_image, TestDatabase, database_key
 from .dependency_injection import InjectionKey, inject
 from .utils import when_needed
 from .container import Container
 
 
-external_network =when_needed(Network, 'brint', delete_bridge = False,
-                              addl_keys = ['external-network'])
+external_network =when_needed(Network, 'external network', 
+                              vlan_id = 0, addl_keys = ['external-network'])
+external_bridge = when_needed(BridgeNetwork, bridge_name = "brint", delete_bridge = False)
+
 fake_internet = when_needed(Network, 'vpn',
                             addl_keys = ['fake-internet', 'vpn-network'])
 
+external_bridge_key = InjectionKey(BridgeNetwork, vlan_id = 0)
 database_network_config = NetworkConfig()
 database_network_config.add('eth0', InjectionKey('external-network'), None)
 database_network_config.add('eth1',  InjectionKey('fake-internet'), None)

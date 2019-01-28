@@ -1,4 +1,4 @@
-# Copyright (C) 2018, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -9,7 +9,7 @@
 from carthage.pytest import *
 import pytest, posix
 from carthage import base_injector
-from carthage.network import Network
+from carthage.network import Network, BridgeNetwork
 from carthage.dependency_injection import *
 
 @pytest.fixture()
@@ -30,6 +30,7 @@ async def test_network_create(injector, loop):
 async def test_network_veth(injector, loop):
     ainjector = injector(AsyncInjector)
     net = await ainjector(Network, name = "testnet")
+    net = await net.access_by(BridgeNetwork)
     ve = net.add_veth('database.hadronindustries.com')
     net.close()
     

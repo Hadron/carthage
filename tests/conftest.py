@@ -28,7 +28,7 @@ async def test_ainjector(loop):
     config.delete_volumes = True
     vol = await ainjector(ContainerImage, name = "base")
     base_injector.add_provider(container_image, vol)
-    base_injector.add_provider(await ainjector(Network,'brint', delete_bridge = False))
+    base_injector.add_provider(await ainjector(Network,'brint', vlan_id = 0))
     return ainjector
 
 

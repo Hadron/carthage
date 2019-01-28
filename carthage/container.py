@@ -1,4 +1,4 @@
-# Copyright (C) 2018, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -67,7 +67,7 @@ class Container(Machine, SetupTaskMixin):
         except KeyError:
             self.network_config = None
         else:
-                self.network_config = await self.ainjector(network_config_unresolved.resolve)
+                self.network_config = await self.ainjector(network_config_unresolved.resolve, access_class = carthage.network.BridgeNetwork)
         await self.run_setup_tasks()
             
         return self
