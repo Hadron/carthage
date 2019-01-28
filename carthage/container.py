@@ -59,7 +59,7 @@ class Container(Machine, SetupTaskMixin):
         except KeyError:
             self.network_config = None
         else:
-                self.network_config = await self.ainjector(network_config_unresolved.resolve)
+                self.network_config = await self.ainjector(network_config_unresolved.resolve, access_class = carthage.network.BridgeNetwork)
         await self.run_setup_tasks()
             
         return self

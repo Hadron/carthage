@@ -81,12 +81,12 @@ def when_needed(wraps, *args, injector = None,
             yield from addl_keys
 
         @classmethod
-        def close(self, cancelled_futures = None):
+        def close(self, canceled_futures = None):
             if self.resolved_obj:
-                return _call_close(self.resolved_obj, cancelled_futures)
+                return _call_close(self.resolved_obj, canceled_futures)
             if self.resolving:
                 self.resolving.cancel()
-                if cancelled_futures: cancelled_futures.append(self.resolving)
+                if canceled_futures: canceled_futures.append(self.resolving)
                 self.resolving = None
                 
         async def async_ready(self):

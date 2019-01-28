@@ -101,14 +101,12 @@ class Injector(Injectable):
         Either called as ``add_provider(provider)`` or
         ``add_provider(injection_key, provider)``\ .  In the first form, a key is
         automatically constructed.
-        :param: allow_multiple
-            If true, then this provider may be instantiated multiple times in sub-injectors.  If false (the default) then the provider will be instantiated on the injector where it is added and used by all sub-injectors.
 
-        :param: close
-            If true (the default), then closing the injector will close or cancel this provider.  If false, then the provider will not be deallocated.  As an example, if the :class:`asyncio.AbstractEventLoop` is added as a provider, but closing this injector should not close the loop and end all async operations, then close can be set to false.
+        :param allow_multiple: If true, then this provider may be instantiated multiple times in sub-injectors.  If false (the default) then the provider will be instantiated on the injector where it is added and used by all sub-injectors.
 
-        :param: replace
-            If True, an existing provider is being updated.  :meth:`replace_provider` is a convenience function for calling :meth:`add_provider` with *replace* set to True.  Replacing providers may lead to inconsistent results if the provider has already been injected to fill a dependency in a constructed object.
+        :param close: If true (the default), then closing the injector will close or cancel this provider.  If false, then the provider will not be deallocated.  As an example, if the :class:`asyncio.AbstractEventLoop` is added as a provider, but closing this injector should not close the loop and end all async operations, then close can be set to false.
+
+        :param replace: If True, an existing provider is being updated.  :meth:`replace_provider` is a convenience function for calling :meth:`add_provider` with *replace* set to True.  Replacing providers may lead to inconsistent results if the provider has already been injected to fill a dependency in a constructed object.
 
 '''
         if p is None:
@@ -156,6 +154,8 @@ class Injector(Injectable):
         raise KeyError("{} not found".format(k))
 
     def __contains__(self, k):
+        if not isinstance(k, InjectionKey):
+            k = InjectionKey(k)
         return k in self._providers
 
     def _check_closed(self):
@@ -253,7 +253,7 @@ class Injector(Injectable):
         if isinstance(p, asyncio.Future): return p
         raise RuntimeError('_is_async returned True when _handle_async cannot handle')
 
-    def close(self, cancelled_futures = None):
+    def close(self, canceled_futures = None):
         '''
         Close all subinjectors or providers
 
@@ -261,7 +261,7 @@ class Injector(Injectable):
 
         If using `AsyncInjector`, it is better to call :func:`shutdown_injector` to cancel any running asynchronous tasks.
 
-        If the provider's :meth:`close` method takes an argument called *cancelled_futures* then the *cancelled_futures* argument will be passed down.
+        If the provider's :meth:`close` method takes an argument called *canceled_futures* then the *canceled_futures* argument will be passed down.
         '''
 
         providers = list(self._providers.values())
@@ -270,12 +270,12 @@ class Injector(Injectable):
             if p.provider is self or not p.close: continue
             if hasattr(p.provider, 'close'):
                 try:
-                    _call_close(p.provider, cancelled_futures)
+                    _call_close(p.provider, canceled_futures)
                 except Exception:
                     logger.exception("Error closing {}".format(p))
             elif asyncio.isfuture(p.provider):
                 p.provider.cancel()
-                if cancelled_futures is not None: cancelled_futures.append(p.provider)
+                if canceled_futures is not None: canceled_futures.append(p.provider)
         self.closed = True
 
     def __del__(self):
@@ -346,9 +346,11 @@ class InjectionKey:
 def inject(**dependencies):
     '''A dhecorator to indicate that a function requires dependencies:
 
-    @inject(injector = Injector,
-        router = InjectionKey(SiteRouter, site ='cambridge'))
-    def testfn(injector, router): pass
+    Sample Usage::
+
+        @inject(injector = Injector,
+            router = InjectionKey(SiteRouter, site ='cambridge'))
+        def testfn(injector, router): pass
 
     Can be applied to classes or functions
     '''
@@ -397,7 +399,7 @@ def partial_with_dependencies(func, *args, **kwargs):
 def directly_has_dependencies(f):
     '''
 
-    :returns: True if *f* directly has injection dependencies applied.  Not true for an object of a class even if that class has dependencies.
+    :return: True if *f* directly has injection dependencies applied.  Not true for an object of a class even if that class has dependencies.
 
     '''
     if not hasattr(f, '__dict__'): return False
@@ -433,6 +435,8 @@ class AsyncInjector(Injectable):
             if hasattr(self, k): continue
             setattr(self, k, getattr(self.injector, k))
 
+    def __contains__(self, k):
+        return k in self.injector
     def _instantiate_future(self, injector, orig_k, provider, *args, **kwargs):
         #__call__ handles overrides and anything in there is already satisfactory.
         def handle_future(k):
@@ -544,16 +548,16 @@ async def shutdown_injector(injector, timeout = 5):
     This closes an injector, canceling any running tasks.  It waits up to *timeout* seconds for any canceled tasks to terminate.
 
 '''
-    cancelled_futures = []
-    injector.close(cancelled_futures = cancelled_futures)
-    if cancelled_futures:
-        await asyncio.wait(cancelled_futures, timeout = timeout)
+    canceled_futures = []
+    injector.close(canceled_futures = canceled_futures)
+    if canceled_futures:
+        await asyncio.wait(canceled_futures, timeout = timeout)
         
-def _call_close(obj, cancelled_futures):
+def _call_close(obj, canceled_futures):
     if not hasattr(obj, 'close'): return
     sig = inspect.signature(obj.close)
-    if 'cancelled_futures' in sig.parameters:
-        return obj.close(cancelled_futures = cancelled_futures)
+    if 'canceled_futures' in sig.parameters:
+        return obj.close(canceled_futures = canceled_futures)
     else: return obj.close()
 
 

@@ -3,6 +3,7 @@ import carthage. dependency_injection, carthage.config
 import carthage.config
 from .dependency_injection import *
 from .config import ConfigLayout, config_key
+from .network import Network, NetworkConfig
 
 import carthage.hadron_layout
 import carthage.hadron
@@ -18,6 +19,8 @@ base_injector.add_provider(ssh.AuthorizedKeysFile)
 base_injector.add_provider(asyncio.get_event_loop(), close = False)
 base_injector.add_provider(carthage.hadron_layout.fake_internet)
 base_injector.add_provider(carthage.hadron_layout.external_network)
+base_injector.add_provider(carthage.network.BridgeNetwork, allow_multiple = True)
+base_injector.add_provider(carthage.hadron_layout.external_bridge_key, carthage.hadron_layout.external_bridge, allow_multiple = True)
 base_injector.add_provider(carthage.hadron_layout.database_key, carthage.hadron_layout.test_database_container)
 base_injector.add_provider(carthage.container.ssh_origin, carthage.hadron_layout.test_database_container)
 
