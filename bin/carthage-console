@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import asyncio, argparse, code, collections.abc, os.path, readline, sys, traceback
+import asyncio, argparse, code, collections.abc, os.path, readline, rlcompleter, sys, traceback
 import carthage, carthage.utils
 from carthage import base_injector, AsyncInjector, ConfigLayout
 import carthage.vmware.vm
@@ -80,6 +80,9 @@ if args.rcfile:
     sys.displayhook = console.displayhook
 
 async def run():
+    completer = rlcompleter.Completer(carthage_locals)
+    readline.set_completer(completer.complete)
+    readline.parse_and_bind('tab: complete')
     await loop.run_in_executor(None, console.interact)
     
 carthage.utils.carthage_main_run(run)
