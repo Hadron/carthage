@@ -200,8 +200,7 @@ class HadronVmImage(ImageVolume):
         kwargs = {}
         if path is not None: kwargs['path'] = path
         super().__init__(name,
-                         
-                         create_size = config_layout.vm_image_size,
+                                         create_size = config_layout.vm_image_size,
                          config_layout = config_layout,
                          ainjector = ainjector, **kwargs)
         self.customize_mount = customize_mount

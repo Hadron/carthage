@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import asyncio, dataclasses, datetime, logging, os, os.path, time, typing, weakref
+import asyncio, dataclasses, datetime, logging, os, os.path, time, typing, sys, weakref
 import carthage
 from carthage.dependency_injection import AsyncInjector
 from carthage.config import ConfigLayout

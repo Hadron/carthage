@@ -12,7 +12,7 @@ from hadron.inventory.admin import models
 from ..dependency_injection import inject, Injector, InjectionKey
 from .database import *
 from ..utils import when_needed
-from ..image import setup_task, SetupTaskMixin, create_stamp, check_stamp
+from ..setup_tasks import setup_task, SetupTaskMixin, create_stamp, check_stamp
 from ..vm import VM
 from ..machine import Machine, SshMixin
 from ..container import Container

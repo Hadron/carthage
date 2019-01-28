@@ -123,9 +123,10 @@ class ContainerImage(BtrfsVolume):
 ainjector = AsyncInjector)
 class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
-    def __init__(self, name, path, create_size = None,
+    def __init__(self, name, path = None, create_size = None,
                  *, config_layout, ainjector):
         self.config_layout = config_layout
+        if path is None: path = config_layout.vm_image_dir
         self.ainjector = ainjector
         self.injector = ainjector.injector.claim()
         super().__init__()

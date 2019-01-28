@@ -33,7 +33,7 @@ class VmdkTemplate(SetupTaskMixin, AsyncInjectable):
 '''
 
     def __init__(self, image, store, *, injector, config_layout):
-        self.injector = injector.claim()
+        self.injector = injector.copy_if_owned().claim()
         self.ainjector = self.injector(AsyncInjector)
         self.image = image
         self.store = store
