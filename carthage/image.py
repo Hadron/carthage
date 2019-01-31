@@ -176,6 +176,26 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         if hasattr(self, 'create_size'):
             os.truncate(self.path, self.create_size)
 
+    async def apply_customization(self, cust_class, method = 'apply'):
+        from .container import container_image, container_volume, Container
+        injector = self.injector(Injector)
+        ainjector = injector(AsyncInjector)
+        try:
+            image_mount = await ainjector(ContainerImageMount, self)
+            injector.add_provider(container_image, image_mount)
+            injector.add_provider(container_volume, image_mount)
+            container = await ainjector(Container, name = self.name, skip_ssh_keygen = True)
+            customization = await ainjector(cust_class, apply_to = container)
+            meth = getattr(customization, method)
+            return await meth()
+        finally:
+            try:
+                if container.running:
+                    await container.stop_machine()
+            except Exception: pass
+            image_mount.close()
+            
+
     @contextlib.contextmanager
     def image_mounted(self):
         from hadron.allspark.imagelib import image_mounted

@@ -5,4 +5,5 @@ API Documentation
 
    dependency_injection
    networking
+   machines
    

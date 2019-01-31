@@ -5,32 +5,28 @@ from ..dependency_injection import inject, Injector, AsyncInjectable, AsyncInjec
 from ..config import ConfigLayout
 from .. import sh
 from ..utils import when_needed
+from ..machine import Machine, ContainerCustomization, customization_task
 import carthage.ssh
 import carthage.network
 import carthage.pki
-from ..machine import Machine
 _resources_path = os.path.join(os.path.dirname(__file__), "../resources")
 
-class HadronImageMixin(SetupTaskMixin):
+class HadronImageMixin(ContainerCustomization):
 
-    @setup_task('hadron_packages')
+    description = "Hadron Image Customizations"
+    
+    @setup_task('Enable ACES and set release')
     async def setup_hadron_packages(self):
         ainjector = self.injector(AsyncInjector)
-        ainjector.add_provider(container_volume, self)
-        ainjector.add_provider(container_image, self)
-        container = await ainjector(Container, name = self.name,
-                                    skip_ssh_keygen = True)
         try:
             bind_mount = '--bind-ro='+self.config_layout.hadron_operations+":/hadron-operations"
-            process = await container.run_container('/bin/systemctl', 'disable', 'sddm', 'systemd-networkd', 'systemd-resolved', 'systemd-networkd.socket')
-            await process
-            process = await container.run_container(bind_mount, "/usr/bin/apt",
+            await self.container_command('/bin/systemctl', 'disable', 'sddm', 'systemd-networkd', 'systemd-resolved', 'systemd-networkd.socket')
+            await self.container_command(bind_mount, "/usr/bin/apt",
                                                     "install", "-y", "ansible",
                                                     "git", "python3-pytest",
                                                     "python-apt",
             )
-            await process
-            process = await container.run_container(bind_mount, "/usr/bin/ansible-playbook",
+            await self.container_command(bind_mount, "/usr/bin/ansible-playbook",
                                                     "-clocal",
                                                     "-ehadron_os=ACES",
                                                     "-ehadron_track=proposed",
@@ -40,19 +36,15 @@ class HadronImageMixin(SetupTaskMixin):
                                                     "-i/hadron-operations/ansible/localhost-debian.txt",
                                                     "/hadron-operations/ansible/commands/hadron-packages.yml"
             )
-            await process
-            process = await container.run_container("/usr/bin/apt", "update")
-            await process
-            process = await container.run_container(
+            await self.container_command("/usr/bin/apt", "update")
+            await self.container_command(
                 #'--bind-ro=/bin/true:/usr/sbin/update-grub',
                                                     '/usr/bin/apt', '-y', '--allow-downgrades', 'dist-upgrade')
-            await process
-            process = await container.run_container('/usr/bin/apt', 'install', '-y',
+            await self.container_command('/usr/bin/apt', 'install', '-y',
                                                     'hadron-container-image', 'python3-photon')
-            await process
         finally: pass
 
-    @setup_task('ssh_authorized_keys')
+    @setup_task('Copy in hadron-operations ssh authorized_keys')
     @inject(authorized_keys = carthage.ssh.AuthorizedKeysFile)
     def add_authorized_keys(self, authorized_keys):
         os.makedirs(os.path.join(self.path, "root/.ssh"), exist_ok = True)
@@ -70,12 +62,13 @@ class HadronImageMixin(SetupTaskMixin):
     config_layout = ConfigLayout,
     injector = Injector
     )
-class HadronContainerImage(ContainerImage, HadronImageMixin):
+class HadronContainerImage(ContainerImage):
 
     def __init__(self, injector, config_layout):
         super().__init__(config_layout = config_layout, name = "base-hadron")
         self.injector = injector
 
+    hadron_customizations = customization_task(HadronImageMixin)
 
 database_key = InjectionKey(Machine, host = 'database.hadronindustries.com')
 
@@ -176,11 +169,6 @@ class TestDatabase(Container):
 
 hadron_container_image = when_needed(HadronContainerImage)
 
-@inject(config_layout = ConfigLayout,
-        ainjector = AsyncInjector)
-class HadronContainerImageMount(ContainerImageMount, HadronImageMixin): pass
-
-
 @inject(
     config_layout = ConfigLayout,
     ainjector = AsyncInjector
@@ -188,14 +176,14 @@ class HadronContainerImageMount(ContainerImageMount, HadronImageMixin): pass
 class HadronVmImage(ImageVolume):
 
     def __init__(self, *, config_layout, ainjector, name = "base-hadron-vm",
-                 customize_mount = HadronContainerImageMount, path = None):
+                 path = None):
         kwargs = {}
         if path is not None: kwargs['path'] = path
         super().__init__(name,
                                          create_size = config_layout.vm_image_size,
                          config_layout = config_layout,
                          ainjector = ainjector, **kwargs)
-        self.customize_mount = customize_mount
+
 
 
 
@@ -221,10 +209,8 @@ class HadronVmImage(ImageVolume):
         finally:
             mount.close()
 
-    @setup_task('hadron-customizations')
-    async def customize_for_hadron(self):
-        mount = await self.ainjector(self.customize_mount, self)
-        mount.close()
+    hadron_customizations = customization_task(HadronImageMixin)
+    
 
 
 
@@ -232,5 +218,5 @@ hadron_vm_image = when_needed(HadronVmImage)
 __all__ = r'''
     hadron_vm_image database_key hadron_container_image
     HadronImageMixin HadronContainerImage TestDatabase
-    HadronContainerImageMount HadronVmImage
+ HadronVmImage
 '''.split()

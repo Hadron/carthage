@@ -16,7 +16,10 @@ async def run(ainjector):
     vmdk_template = await ainjector(create_template)
     template = await ainjector(VmTemplate, disk = vmdk_template)
     vm = await ainjector(Vm, "carthage-test.cambridge.aces-aoe.com", template = template)
-    await vm.start_machine()
+    try: await vm.start_machine()
+    except TimeoutError:
+        import traceback
+        traceback.print_exc()
     breakpoint()
     if futures:
         await asyncio.wait(futures)

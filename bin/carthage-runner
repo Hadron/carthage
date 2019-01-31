@@ -2,7 +2,7 @@
 import argparse, sys, gc, traceback, yaml
 import asyncio, logging
 from carthage.hadron_layout import database_key, external_network
-from carthage.dependency_injection import AsyncInjector, InjectionKey
+from carthage.dependency_injection import AsyncInjector, InjectionKey, shutdown_injector
 from carthage import base_injector, ssh
 from carthage.network import Network
 from carthage.container import container_image, Container
@@ -57,8 +57,8 @@ async def run():
         await ainjector(build_database.provide_networks, session = session)
         session.close()
         await load_layout(args.layout)
-        loop.create_task(queue_worker())
-        loop.create_task(queue_worker())
+        queue_workers.append(loop.create_task(queue_worker()))
+        queue_workers.append(loop.create_task(queue_worker()))
         def callback():
             container.ssh("-A", _fg = True)
         try:
@@ -95,8 +95,10 @@ args = carthage.utils.carthage_main_setup(parser)
 
 
 try:
+    queue_workers = []
     loop.run_until_complete(run())
+    for q in queue_workers:
+        q.cancel()
 finally:
-    ainjector.close()
-    base_injector.close()
+    loop.run_until_complete(shutdown_injector(base_injector))
     gc.collect()

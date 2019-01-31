@@ -556,9 +556,12 @@ async def shutdown_injector(injector, timeout = 5):
 def _call_close(obj, canceled_futures):
     if not hasattr(obj, 'close'): return
     sig = inspect.signature(obj.close)
-    if 'canceled_futures' in sig.parameters:
-        return obj.close(canceled_futures = canceled_futures)
-    else: return obj.close()
+    try:
+        if 'canceled_futures' in sig.parameters:
+            return obj.close(canceled_futures = canceled_futures)
+        else: return obj.close()
+    except TypeError: pass #calling on not yet constructed class
+    
 
 
 __all__ = '''
