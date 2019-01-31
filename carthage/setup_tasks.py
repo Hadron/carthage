@@ -39,6 +39,8 @@ class TaskWrapper:
     def stamp(self):
         return self.func.__name__
 
+    def __set_name(self, owner, name):
+        self.stamp = name
     def __get__(self, instance, owner):
         if instance is None: return self
         return TaskMethod(self, instance)

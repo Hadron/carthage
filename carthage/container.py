@@ -241,6 +241,12 @@ class Container(Machine, SetupTaskMixin):
         await process
         self.ssh_rekeyed()
 
+    async def container_command(self, *args, **kwargs):
+        '''Call :meth:`run_container` and await the resulting process.
+        '''
+        process = await self.run_container(*args, **kwargs)
+        return await process
+    
     def close(self):
         if self.process is not None:
             try: self.process.terminate()

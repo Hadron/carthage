@@ -75,7 +75,7 @@ class VmFolder(VmwareStampable):
 
     def __init__(self, name, *, config_layout, injector):
         self.name = name
-        self.injector = injector.copy_if_unowned().claim()
+        self.injector = injector.copy_if_owned().claim()
         self.config_layout = config_layout
         self.ainjector = injector(AsyncInjector)
         self.inventory_object = None

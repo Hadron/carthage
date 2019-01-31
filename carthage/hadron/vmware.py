@@ -7,29 +7,26 @@
 # LICENSE for details.
 
 import sys
-from .images import HadronContainerImageMount, HadronVmImage
+from .images import  HadronVmImage
 from ..vmware.image import VmdkTemplate, VmwareDataStore
-from ..dependency_injection import AsyncInjector, inject
+from ..dependency_injection import AsyncInjector, inject, Injector
 from ..utils import when_needed
 from ..config import ConfigLayout
 from .. import sh
-from ..image import setup_task
+from ..machine import ContainerCustomization, customization_task
+from ..setup_tasks import setup_task
 from ..container import Container, container_image, container_volume
 
 
 @inject(config_layout = ConfigLayout,
-        ainjector = AsyncInjector)
-class HadronVmdkMount(HadronContainerImageMount):
+        injector = Injector)
+class HadronVmwareCustomization(ContainerCustomization):
+    description = "Customizations for ACES on Vmware"
 
     @setup_task("install-vm-tools")
     async def install_vm_tools(self):
-        ainjector = self.injector(AsyncInjector)
-        ainjector.add_provider(container_volume, self)
-        ainjector.add_provider(container_image, self)
-        container = await ainjector(Container, name = self.name,
-                                    skip_ssh_keygen = True)
-        process = await container.run_container("/usr/bin/apt", "-y", "install", "open-vm-tools")
-        await process
+        await self.container_command("/usr/bin/apt", "-y", "install", "open-vm-tools")
+
 
 @inject(config_layout = ConfigLayout,
         ainjector = AsyncInjector,
@@ -41,7 +38,9 @@ class HadronVmdkBase(HadronVmImage):
                  name = "aces-vmdk", **kwargs):
         super().__init__(**kwargs, name = name,
                          ainjector = ainjector, config_layout = config_layout,
-                         customize_mount = HadronVmdkMount, path = store.vmdk_path)
+                         path = store.vmdk_path)
+
+    vmware_customization = customization_task(HadronVmwareCustomization)
 
 if __name__ == '__main__':
     from carthage import base_injector
