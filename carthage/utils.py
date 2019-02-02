@@ -196,14 +196,14 @@ def carthage_main_setup(parser):
         
     return args
 
-def carthage_main_run(func):
+def carthage_main_run(func, *args, **kwargs):
     loop = asyncio.get_event_loop()
     from . import base_injector, AsyncInjector, shutdown_injector
     from .config import inject_config
     inject_config(base_injector)
     ainjector = base_injector(AsyncInjector)
     try:
-        loop.run_until_complete(ainjector(func))
+        loop.run_until_complete(ainjector(func, *args, **kwargs))
     finally:
         loop.run_until_complete(shutdown_injector(base_injector))
         
