@@ -170,7 +170,8 @@ def provide_slot(s, *, session, injector):
     if s.vm and s.vm.is_container and s.vm.host:
         base = ContainerWaiter
         @inject(host = InjectionKey(Machine, host = s.vm.host.fqdn()))
-        async def host(host): return host
+        async def host(host):
+            return host
         injector.add_provider(container_host, host)
     mixins = []
     for r in role_names:
