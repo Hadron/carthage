@@ -13,7 +13,7 @@ import logging
 import types
 import sys
 from . import tb_utils
-
+_chatty_modules = {asyncio.futures, asyncio.tasks, sys.modules[__name__]}
 logger = logging.getLogger('carthage.dependency_injection')
 logger.setLevel('INFO')
 
@@ -217,6 +217,7 @@ class Injector(Injectable):
         def no_futures_instantiate(injector, k, p):
             try:            return injector(p)
             except Exception as e:
+                tb_utils.filter_chatty_modules(e, _chatty_modules)
                 tb_utils.filter_before_here(e)
                 logger.exception(f'Error finding dependency for {k}:')
                 raise InjectionFailed(k) from e
@@ -445,6 +446,7 @@ class AsyncInjector(Injectable):
 
     def __contains__(self, k):
         return k in self.injector
+
     def _instantiate_future(self, injector, orig_k, provider, *args, **kwargs):
         #__call__ handles overrides and anything in there is already satisfactory.
         def handle_future(k):
@@ -480,6 +482,7 @@ class AsyncInjector(Injectable):
                     res = self._handle_async(res)
                 return res
         except Exception as e:
+            tb_utils.filter_chatty_modules(e, _chatty_modules)
             if orig_k:
                 tb_utils.filter_before_here(e)
                 logger.exception(f'Error resolving dependency for {orig_k}')
@@ -502,6 +505,7 @@ class AsyncInjector(Injectable):
                 res = await future
             return res
         except Exception as e:
+            tb_utils.filter_chatty_modules(e, _chatty_modules, 2)
             if orig_k:
                 tb_utils.filter_before_here(e)
                 logger.exception(f'Error resolving dependency for {orig_k}')
