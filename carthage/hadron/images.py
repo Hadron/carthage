@@ -5,7 +5,7 @@ from ..dependency_injection import inject, Injector, AsyncInjectable, AsyncInjec
 from ..config import ConfigLayout
 from .. import sh
 from ..utils import when_needed
-from ..machine import Machine, ContainerCustomization, customization_task
+from ..machine import Machine, ContainerCustomization, customization_task, ssh_origin
 import carthage.ssh
 import carthage.network
 import carthage.pki
@@ -131,7 +131,8 @@ class TestDatabase(Container):
     async def copy_database_from_master(self):
         "Copy the master database.  Run automatically.  Could be run agains if hadroninventoryadmin is locally dropped and recreated"
         async with self.container_running:
-            await self.network_online()
+            self.injector.add_provider(ssh_origin, self)
+            await self.ssh_online()
             env = os.environ
             env['PYTHONPATH'] = "/hadron-operations"
             await self.shell( '/usr/bin/python3',

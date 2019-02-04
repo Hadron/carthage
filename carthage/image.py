@@ -21,21 +21,23 @@ class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
         self._name = name
         self._path = os.path.join(config_layout.image_dir, name)
         self.clone_from = clone_from
+        self.closed = False
 
     @property
     def name(self): return self._name
 
     @property
     def path(self):
-        if self._path is None:
+        if self.closed:
             raise RuntimeError("This volume is closed")
         return self._path
 
     def __repr__(self):
-        return "<BtrfsVolume path={}>".format(self.path)
+        return "<BtrfsVolume path={}{}>".format(self._path,
+                                                 " closed" if self.closed else "")
 
     def close(self):
-        if self._path is None: return
+        if self.closed: return
         if self.config_layout.delete_volumes:
             subvols = [self._path]
             for root,dirs, files in os.walk(self._path, topdown = True):
@@ -46,7 +48,7 @@ class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
 
             for vol in reversed(subvols):
                 sh.btrfs('subvolume', 'delete', vol, )
-        self._path = None
+        self.closed = True
 
     def __del__(self):
         self.close()
@@ -89,6 +91,24 @@ class ContainerImage(BtrfsVolume):
 
     def __init__(self, name, config_layout):
         super().__init__(config_layout = config_layout, name = name)
+
+    async def apply_customization(self, cust_class, method = 'apply'):
+        from .container import container_image, container_volume, Container
+        injector = self.injector(Injector)
+        ainjector = injector(AsyncInjector)
+        try:
+            injector.add_provider(container_image, self, close = False)
+            injector.add_provider(container_volume, self, close = False)
+            container = await ainjector(Container, name = self.name, skip_ssh_keygen = True)
+            customization = await ainjector(cust_class, apply_to = container)
+            meth = getattr(customization, method)
+            return await meth()
+        finally:
+            try:
+                if container.running:
+                    await container.stop_machine()
+            except Exception: pass
+        container.close()
 
     @setup_task('unpack')
     async def unpack_container_image(self):

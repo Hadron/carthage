@@ -140,11 +140,11 @@ def permute_identifier(id, maxlen):
     yield id
     if len(id) < maxlen:
         for i in range(10):
-            yield id+str(i)
+            yield id+chr(97+i)
     else:
         id = id[:-1]
         for i in range(10):
-            yield id+str(i)
+            yield id+chr(97+i)
     raise ValueError("No unique combination found")
 
 

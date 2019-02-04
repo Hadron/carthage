@@ -38,6 +38,7 @@ class Container(Machine, SetupTaskMixin):
         self.container_running = self.machine_running
         self.network_interfaces = []
         self.close_volume = True
+        self.cleanup_future = None
 
         
         
@@ -49,9 +50,7 @@ class Container(Machine, SetupTaskMixin):
         except KeyError:
             vol = await self.ainjector(BtrfsVolume,
                               clone_from = self.image,
-                              name
-
-    = "containers/"+self.name)
+                              name = "containers/"+self.name)
             self.injector.add_provider(container_volume, vol)
         self.volume = vol
         try:
@@ -64,7 +63,7 @@ class Container(Machine, SetupTaskMixin):
             
         return self
 
-    @property
+    @memoproperty
     def stamp_path(self):
         if self.volume is None:
             raise RuntimeError('Volume not yet created')
@@ -75,6 +74,7 @@ class Container(Machine, SetupTaskMixin):
         if networking and self.network_config:
             interfaces = []
             network_script = ""
+            self.network_interfaces = []
             for net, i, mac in self.network_config:
                 interface = net.add_veth(self.name)
                 interfaces.append("--network-interface={}".format(interface.ifname))
@@ -106,11 +106,15 @@ class Container(Machine, SetupTaskMixin):
                 if raise_on_running:
                     raise RuntimeError('{} already running'.format(self))
                 return self.process
+            if self.cleanup_future:
+                try: await self.cleanup_future
+                except: pass
             net_args = await self.do_network_config(networking)
             if as_pid2:
                 net_args.insert(0, '--as-pid2')
             if networking:
                 await self.start_dependencies()
+            self.cleanup_future = self.done_future()
             logger.info("Starting container {}: {}".format(
                 self.name,
                 " ".join(args)))
