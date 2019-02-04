@@ -19,5 +19,39 @@ def filter_before_here(e):
                 e.__traceback__ = i
             return tb
     return tb
+def filter_chatty_modules(e,module_list, level = 1):
+    '''
+    Filter chatty modules from an exception or traceback
 
-__all__ = ('filter_before_here', )
+    :param e: a :class:`Traceback` or :class:`BaseException` to be filtered in place
+
+    :param module_list: A list of modules that are viewed as too chatty.
+
+    :param level: How many stack frames to look back for the caller.  Nothing before the caller will be filtered.
+
+    This function first looks and finds the caller *level* levels above this call.
+
+    #. The caller frame and all frames in the exception stack before the caller are left alone.
+
+    #. Any frames that come from files whose modules are in *module_list* are filtered
+
+    #. The filtering stops at the first frame not in *module_list*.
+
+    '''
+    tb = get_tb(e)
+    caller = sys._getframe(level)
+    caller_found = False
+    module_filenos = frozenset(x.__file__ for x in module_list)
+    while tb.tb_next is not None:
+        if not caller_found:
+            if caller is tb.tb_frame:
+                caller_found = True
+        else: # caller already found
+            break
+    if caller_found:
+        while (tb.tb_next is not None) and tb.tb_frame.f_code.co_filename in module_filenos:
+            tb.tb_next = tb.tb_next.tb_next
+    return tb
+
+
+__all__ = ('filter_before_here', 'filter_chatty_modules')
