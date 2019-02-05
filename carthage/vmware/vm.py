@@ -7,10 +7,9 @@ from ..config import ConfigLayout, config_defaults, config_key
 from ..setup_tasks import SetupTaskMixin, setup_task, SkipSetupTask
 from ..utils import memoproperty
 from .image import VmwareDataStore, VmdkTemplate
+from .inventory import VmwareStampable, VmwareConnection, VmwareFolder
 
 logger = logging.getLogger('carthage.vmware')
-
-
 
 config_defaults.add_config({
     'vmware': {
@@ -28,22 +27,11 @@ config_defaults.add_config({
         }})
 vmware_config = config_key('vmware')
 
-class VmwareStampable(SetupTaskMixin, AsyncInjectable):
-    stamp_type = None #: Override with type of object for which stamp is created
-    folder = None
-
-
-    @memoproperty
-    def stamp_path(self):
-        state_dir = self.config_layout.state_dir
-        p = os.path.join(state_dir, "vmware_stamps", self.stamp_type)
-        if self.folder:
-            p = os.path.join(p, self.folder.name)
-        p = os.path.join(p, self.name)
-        p += ".stamps"
-        os.makedirs(p, exist_ok = True)
-        return p
-
+@inject(config_layout = ConfigLayout,
+        injector = Injector,
+        connection = VmwareConnection)
+class VmFolder(VmwareFolder):
+    kind = 'vm'
 
 @inject(config = vmware_config)
 def vmware_dict(config, **kws):
@@ -106,9 +94,6 @@ class VmFolder(VmwareStampable):
     def __repr__(self):
         return f"<VmFolder: {self.name}>"
     
-
-        
-            
 @inject(
     config = ConfigLayout,
     injector = Injector,
@@ -274,6 +259,5 @@ class VmTemplate(Vm):
             t = self.inventory_object.CreateSnapshot("template_clone", "Snapshot for template clones", False, True)
             inventory.wait_for_task(t)
         await loop.run_in_executor(None, callback)
-        
-    
+
 from . import inventory
