@@ -208,7 +208,7 @@ class Vm(Machine, VmwareStampable):
                 power = self.inventory_object.summary.runtime.powerState
                 if power != "poweredOn": 
                     task = self.inventory_object.PowerOn()
-                    await loop.run_in_executor(None, inventory.wait_for_task, task)
+                    await inventory.wait_for_task(task)
                     if task.info.state != 'success':
                         raise RuntimeError(task.info.error)
                 self.running = True
@@ -255,9 +255,7 @@ class VmTemplate(Vm):
     @inject(loop = asyncio.AbstractEventLoop)
     async def create_clone_snapshot(self, loop):
         if self.clone_from_snapshot is None:  raise SkipSetupTask
-        def callback():
-            t = self.inventory_object.CreateSnapshot("template_clone", "Snapshot for template clones", False, True)
-            inventory.wait_for_task(t)
-        await loop.run_in_executor(None, callback)
+        t = self.inventory_object.CreateSnapshot("template_clone", "Snapshot for template clones", False, True)
+        await inventory.wait_for_task(t)
 
 from . import inventory
