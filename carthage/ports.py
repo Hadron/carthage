@@ -33,7 +33,7 @@ class PortReservation:
         #subclassing is the right approach.
         if isinstance(other, int):
             return other == self.port
-        elif type(other)  is type(self): 
+        elif isinstance(other,PortReservation):
             return self.port == other.port
         else: return super().__eq__(other)
 
