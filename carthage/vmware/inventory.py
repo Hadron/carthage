@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import time
+import asyncio, time
 import os
 
 from ssl import create_default_context
@@ -138,7 +138,10 @@ class VmInventory(Injectable):
         return None
 
 def wait_for_task(task):
-    if task.info.state not in ('success', 'error'):
-        time.sleep(1)
+    loop = asyncio.get_event_loop()
+    def callback():
+        while  task.info.state not in ('success', 'error'):
+            time.sleep(1)
         if task.info.state == 'error':
-            raise task.info.error
+                raise task.info.error
+    return loop.run_in_executor(None, callback)
