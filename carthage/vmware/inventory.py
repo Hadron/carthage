@@ -106,15 +106,15 @@ class VmwareFolder(VmwareStampable):
         return self.inventory_object
 
     async def _find_inventory_object(self):
-        return self.connection.content.searchIndex.FindByInventoryPath \
+        self.inventory_object = self.connection.content.searchIndex.FindByInventoryPath \
             (f"{self.config_layout.vmware.datacenter}/{self.kind}/{self.name}")
 
     @memoproperty
     def inventory_view(self):
-        return self.injector(inventory.VmInventory, folder=self)
+        return self.injector(VmInventory, folder=self)
 
     def __repr__(self):
-        return f"<VmwareFolder: {self.name}>"
+        return f"<{self.__class__.__name__}: {self.name}>"
 
 @inject(folder = VmwareFolder, connection = VmwareConnection)
 class VmInventory(Injectable):

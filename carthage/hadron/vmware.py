@@ -1,6 +1,6 @@
 import sys
 from .images import  HadronVmImage
-from ..vmware.image import VmdkTemplate, VmwareDataStore
+from ..vmware.image import VmdkTemplate, image_datastore_key
 from ..dependency_injection import AsyncInjector, inject, Injector
 from ..utils import when_needed
 from ..config import ConfigLayout
@@ -22,7 +22,7 @@ class HadronVmwareCustomization(ContainerCustomization):
 
 @inject(config_layout = ConfigLayout,
         ainjector = AsyncInjector,
-        store = VmwareDataStore)
+        store = image_datastore_key)
 class HadronVmdkBase(HadronVmImage):
 
     def __init__(self, *, ainjector, config_layout,

@@ -5,13 +5,17 @@ from ..dependency_injection import *
 from ..config import config_defaults, ConfigLayout, config_key
 from .. import sh
 from .credentials import vmware_credentials
+
 class VmwareDataStore(Injectable): pass
 
 logger = logging.getLogger('carthage.vmware')
+        
+#: Injection key used for looking up templates for VMs
+image_datastore_key = InjectionKey(VmwareDataStore, role = "images")
 
 @inject(injector = Injector,
         config_layout = ConfigLayout,
-        store = VmwareDataStore
+        store = image_datastore_key
         )
 class VmdkTemplate(SetupTaskMixin, AsyncInjectable):
 
@@ -153,4 +157,6 @@ class VmfsDataStore(VmwareDataStore, Injectable):
         self.name = config.name
         self.path = config.path
 
-        
+
+__all__ = ('VmfsDataStore', 'NfsDataStore', 'image_datastore_key', 'vm_storage_key',
+           'VmdkTemplate')

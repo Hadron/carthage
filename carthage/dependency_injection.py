@@ -24,7 +24,7 @@ class Injectable:
     def satisfies_injection_key(cls, k):
         if k is InjectionKey(cls): return True
         if isinstance(k.target, (str, tuple)): return True
-        return  k in cls.supplementary_injection_keys(k)
+        return  k in cls.supplementary_injection_keys(InjectionKey(cls))
 
 class DependencyProvider:
     __slots__ = ('provider',
@@ -474,7 +474,7 @@ class AsyncInjector(Injectable):
                     res = self._handle_async(res)
                 return res
         except Exception as e:
-            tb_utils.filter_chatty_modules(e, _chatty_modules, 3)
+            tb_utils.filter_chatty_modules(e, _chatty_modules, 4)
             if orig_k:
                 tb_utils.filter_before_here(e)
                 logger.exception(f'Error resolving dependency for {orig_k}')

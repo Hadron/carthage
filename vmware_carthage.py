@@ -12,12 +12,8 @@ from carthage.network import external_network_key
 async def run(ainjector):
     futures = []
     config = await ainjector(ConfigLayout)
-    base_injector.add_provider(DistributedPortgroup, allow_multiple = True)
-    base_injector.add_provider(carthage.vmware.inventory.VmwareConnection)
     net = await ainjector.get_instance_async(external_network_key)
     pg = await net.access_by(DistributedPortgroup)
-    breakpoint()
-    ainjector.add_provider(VmfsDataStore)
     vmdk_template = await ainjector(create_template)
     template = await ainjector(VmTemplate, disk = vmdk_template)
     vm = await ainjector(Vm, "carthage-test.cambridge.aces-aoe.com", template = template)
@@ -33,8 +29,6 @@ async def run(ainjector):
 async def create_template(parent):
     injector = parent(Injector).claim()
     ainjector = injector(AsyncInjector)
-    injector.add_provider(vm_storage_key, partial_with_dependencies(ConfigIterator, prefix="vmware.image_datastore."), allow_multiple = True)
-    injector.add_provider(NfsDataStore)
     image = await ainjector(HadronVmdkBase)
     vmdk_template = await ainjector(VmdkTemplate, image)
     return vmdk_template

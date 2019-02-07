@@ -47,52 +47,6 @@ def vmware_dict(config, **kws):
     d.update(kws)
     return d
 
-@inject(config_layout = ConfigLayout,
-        injector = Injector)
-class VmFolder(VmwareStampable):
-
-    stamp_type = "vm_folder"
-
-    def __init__(self, name, *, config_layout, injector):
-        self.name = name
-        self.injector = injector.copy_if_owned().claim()
-        self.config_layout = config_layout
-        self.ainjector = injector(AsyncInjector)
-        self.inventory_object = None
-        super().__init__()
-
-    
-    @setup_task("create_folder")
-    async def create_folder(self):
-        d = self.injector(vmware_dict)
-        d['folder_name'] = self.name
-        d['state'] = 'present'
-        parent, sep, tail = self.name.rpartition('/')
-        if sep != "":
-            d['parent_folder'] = parent
-            d['folder_name'] = tail
-            self.parent = await self.ainjector(self.__class__, parent)
-        else: d['folder_type'] = 'vm'
-        await self.ainjector(carthage.ansible.run_play,
-            [carthage.ansible.localhost_machine],
-            [{'vcenter_folder': d}])
-        await self.ainjector(self._find_inventory_object)
-
-    @create_folder.invalidator()
-    async def create_folder(self):
-        await self._find_inventory_object()
-        return self.inventory_object
-
-    async def _find_inventory_object(self):
-        self.inventory_object = self.injector(inventory.find_vm_folder, self.config_layout.vmware.datacenter, self.name)
-
-    @memoproperty
-    def inventory_view(self):
-        return self.injector(inventory.VmInventory, folder=self)
-    
-    
-    def __repr__(self):
-        return f"<VmFolder: {self.name}>"
     
 @inject(
     config = ConfigLayout,

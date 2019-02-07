@@ -1,4 +1,4 @@
-import yaml
+import importlib, yaml
 from .dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies
 
 class ConfigDefaults:
@@ -96,6 +96,10 @@ class ConfigLayout(ConfigIterator, Injectable):
         if injector is None: injector = self._injector
         d = yaml.load(y)
         assert isinstance(d,dict)
+        if 'plugins' in d:
+            for p in d['plugins']:
+                enable_plugin(p)
+            del d['plugins']
         self._load(d, injector, config_defaults.defaults, "")
 
 config_defaults.add_config(dict(
@@ -123,4 +127,17 @@ def inject_config(injector):
     injector.replace_provider(ConfigLayout, allow_multiple = True)
         
 
+def enable_plugin(plugin):
+    '''
+Load and enable a Carthage plugin.
+
+    :param plugin: String representing a module containing a :func:`carthage_plugin` entry point.
+
+'''
+    from . import base_injector
+    module = importlib.import_module(plugin)
+    plugin = getattr(module, 'carthage_plugin')
+    base_injector(plugin)
+    inject_config(base_injector)
+    
 __all__ = ("config_key", "config_defaults", "ConfigLayout", "inject_config")
