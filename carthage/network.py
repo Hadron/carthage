@@ -3,7 +3,7 @@ import asyncio, logging, re, weakref
 from . import sh
 from .dependency_injection import inject, AsyncInjectable, Injector, AsyncInjector, InjectionKey, Injectable
 from .config import ConfigLayout
-from .utils import permute_identifier
+from .utils import permute_identifier, when_needed
 
 logger = logging.getLogger('carthage.network')
 
@@ -287,4 +287,26 @@ class NetworkConfigInstance(Injectable):
 
         for i,v in self.entries.items():
             yield v['net'], i, v['mac']
-            
+
+external_network_key = InjectionKey(Network, role = "external")
+
+@inject(config_layout = ConfigLayout,
+        injector = Injector)
+class ExternalNetwork(Network):
+
+    def __init__(self, config_layout, injector):
+        vlan_id = config_layout.external_vlan_id
+        kwargs = {}
+        if vlan_id:
+            kwargs['vlan_id'] = vlan_id
+        super().__init__(name = "external network", injector = injector,
+                         **kwargs)
+        self.injector.add_provider(InjectionKey(BridgeNetwork),
+                                   when_needed(BridgeNetwork, bridge_name = "brint", delete_bridge = False))
+
+    @classmethod
+    def supplementary_injection_keys(cls, k):
+        yield external_network_key
+        yield from super().supplementary_injection_keys(k)
+        
+external_network = when_needed(ExternalNetwork)

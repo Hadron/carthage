@@ -110,6 +110,7 @@ config_defaults.add_config(dict(
     max_port = 9500,
     hadron_operations = "/home/hartmans/hadron-operations",
     delete_volumes = False,
+    external_vlan_id= 0,
 ))
 
 
