@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import asyncio
+import asyncio, collections.abc
 from ..dependency_injection import *
 from ..utils import memoproperty
 from ..config import config_defaults, ConfigLayout
@@ -78,13 +78,23 @@ class DistributedPortgroup(VmwareNetwork):
         cs.policy.macManagementOverrideAllowed = True
         default  = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
         default.macManagementPolicy = vim.dvs.VmwareDistributedVirtualSwitch.MacManagementPolicy()
+        default.macManagementPolicy.forgedTransmits = True
         learning = vim.dvs.VmwareDistributedVirtualSwitch.MacLearningPolicy()
         learning.enabled = True
         learning.allowUnicastFlooding = True
         default.macManagementPolicy.macLearningPolicy = learning
         if self.network.vlan_id:
-            vlan_spec = vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec()
-            vlan_spec.vlanId = self.network.vlan_id
+            vlan_id = self.network.vlan_id
+            if isinstance(vlan_id, collections.abc.Sequence):
+                min, max = vlan_id
+                nr = vim.NumericRange()
+                nr.start = min
+                nr.end = max
+                vlan_spec = vim.dvs.VmwareDistributedVirtualSwitch.TruncVlanSpec()
+                vlan_spec.vlanId = nr
+            else:
+                vlan_spec = vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec()
+                vlan_spec.vlanId = self.network.vlan_id
             default.vlan = vlan_spec
         cs.defaultPortConfig = default
         task = self.dvs_object.AddDVPortgroup_Task([cs])
