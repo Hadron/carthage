@@ -54,10 +54,11 @@ def filter_chatty_modules(e,module_list, level = 1):
         if not caller_found:
             if caller is tb.tb_frame:
                 caller_found = True
+            else: tb = tb.tb_next
         else: # caller already found
             break
     if caller_found:
-        while (tb.tb_next is not None) and tb.tb_frame.f_code.co_filename in module_filenos:
+        while (tb.tb_next is not None) and tb.tb_next.tb_frame.f_code.co_filename in module_filenos:
             tb.tb_next = tb.tb_next.tb_next
     return tb
 

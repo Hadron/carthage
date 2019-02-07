@@ -82,10 +82,23 @@ class DistributedPortgroup(VmwareNetwork):
         learning.enabled = True
         learning.allowUnicastFlooding = True
         default.macManagementPolicy.macLearningPolicy = learning
+        if self.network.vlan_id:
+            vlan_spec = vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec()
+            vlan_spec.vlanId = self.network.vlan_id
+            default.vlan = vlan_spec
         cs.defaultPortConfig = default
         task = self.dvs_object.AddDVPortgroup_Task([cs])
         await wait_for_task(task)
+        try:
+            del self.__dict__['inventory_object']
+        except KeyError: pass
 
+    @create_portgroup.invalidator()
+    def create_portgroup(self):
+        if not self.inventory_object:
+            return False
+        return True
+    
     @memoproperty
     def full_name(self):
         prefix = self.config_layout.container_prefix
@@ -112,3 +125,23 @@ class DistributedPortgroup(VmwareNetwork):
         loop = self.injector.get_instance(asyncio.AbstractEventLoop)
         await wait_for_task(task)
         
+@inject(config = ConfigLayout,
+        connection = VmwareConnection)
+def our_portgroups_for_switch(switch = None, *, config, connection):
+    '''
+    :return: Yield  pyVmOmi portgroup objects that match the Carthage prefix for the switch.  The main purpose is for deleting objects.
+
+    :param switch: Name of distributed virtual switch within the Datacenter; if None, uses the switch from the config.
+
+    '''
+    if switch is None: switch = config.vmware.distributed_switch
+    dvs = connection.content.searchIndex.FindByInventoryPath(f"{config.vmware.datacenter}/network/{switch}")
+    if dvs is None:
+        raise LookupError(f"{switch} DVS not found")
+    prefix = config.container_prefix
+    for p in dvs.portgroup:
+        if p.name.startswith(prefix):
+            yield p
+
+            __all__ = ('DistributedPortgroup', 'our_portgroups_for_switch', 'NetworkFolder')
+            

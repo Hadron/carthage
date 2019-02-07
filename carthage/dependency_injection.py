@@ -217,7 +217,7 @@ class Injector(Injectable):
         def no_futures_instantiate(injector, k, p):
             try:            return injector(p)
             except Exception as e:
-                tb_utils.filter_chatty_modules(e, _chatty_modules)
+                tb_utils.filter_chatty_modules(e, _chatty_modules, 2)
                 tb_utils.filter_before_here(e)
                 logger.exception(f'Error finding dependency for {k}:')
                 raise InjectionFailed(k) from e
@@ -482,7 +482,7 @@ class AsyncInjector(Injectable):
                     res = self._handle_async(res)
                 return res
         except Exception as e:
-            tb_utils.filter_chatty_modules(e, _chatty_modules)
+            tb_utils.filter_chatty_modules(e, _chatty_modules, 3)
             if orig_k:
                 tb_utils.filter_before_here(e)
                 logger.exception(f'Error resolving dependency for {orig_k}')
@@ -505,7 +505,7 @@ class AsyncInjector(Injectable):
                 res = await future
             return res
         except Exception as e:
-            tb_utils.filter_chatty_modules(e, _chatty_modules, 2)
+            tb_utils.filter_chatty_modules(e, _chatty_modules, 4)
             if orig_k:
                 tb_utils.filter_before_here(e)
                 logger.exception(f'Error resolving dependency for {orig_k}')
