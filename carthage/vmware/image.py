@@ -167,4 +167,5 @@ class VmfsDataStore(VmwareDataStore, Injectable):
 
 
 __all__ = ('VmfsDataStore', 'NfsDataStore', 'image_datastore_key', 'vm_storage_key',
-           'VmdkTemplate')
+           'VmdkTemplate',
+           'VmwareDataStore')

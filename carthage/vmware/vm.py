@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 import asyncio, logging, time
-import carthage.ansible
+import carthage.ansible, carthage.network
 import os.path
 from ..machine import Machine
 from ..dependency_injection import *
@@ -16,6 +16,7 @@ from ..setup_tasks import SetupTaskMixin, setup_task, SkipSetupTask
 from ..utils import memoproperty
 from .image import VmwareDataStore, VmdkTemplate
 from .inventory import VmwareStampable, VmwareConnection, VmwareFolder
+from . import network
 
 logger = logging.getLogger('carthage.vmware')
 
@@ -61,15 +62,17 @@ def vmware_dict(config, **kws):
     injector = Injector,
     storage = VmwareDataStore,
     folder = InjectionKey(VmFolder, optional = True),
+    network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
     # We add a template VM to the dependencies later avoiding a forward reference
     )
 class Vm(Machine, VmwareStampable):
 
     stamp_type = "vm"
-    
+
+    nested_virt = False #: Enable nested virtualization
     def __init__(self, name, template,
                  guest_id = "ubuntu64Guest",
-                 *, injector, config, storage, folder):
+                 *, injector, config, storage, folder, network_config = None):
         super().__init__(name, injector, config)
         self.storage = storage
         self.running = False
@@ -77,15 +80,15 @@ class Vm(Machine, VmwareStampable):
         vm_config = config.vmware
         self.cpus = vm_config.hardware.cpus
         self.memory = vm_config.hardware.memory
-        self.nested_virt = False
         self.paravirt = vm_config.hardware.paravirt
         self.disk_size = vm_config.hardware.disk
         self.guest_id = guest_id
+        self.network_config = network_config
         self.template_name = None
         self.template_snapshot = None
         self.inventory_object = None
         if template:
-            self.template_name = template.full_name
+            self.template_name = template.inventory_object.name
             if template.clone_from_snapshot:
                 self.template_snapshot = template.clone_from_snapshot
         self._operation_lock = asyncio.Lock()
@@ -98,6 +101,25 @@ class Vm(Machine, VmwareStampable):
             self.folder = await self.ainjector(VmFolder, self.config_layout.vmware.folder)
             return await super().async_ready()
 
+    async def _network_dict(self):
+        if not self.network_config: return []
+        network_config = await self.ainjector(self.network_config.resolve, access_class = network.DistributedPortgroup)
+        if self.paravirt:
+            net_type = "vmxnet3"
+        else: net_type = "e1000"
+        switch = self.config_layout.vmware.distributed_switch
+        res = []
+        for net, i, mac in network_config:
+            d = {'device_type': net_type,
+                 'name': net.full_name,
+                 "dvswitch_name": switch,}
+            if mac: d['mac'] = mac
+            res.append(d)
+        return res
+    
+                      
+                
+            
         
     async def _ansible_dict(self, **kwargs):
         config = self.config_layout.vmware
@@ -122,9 +144,7 @@ class Vm(Machine, VmwareStampable):
                                      disk = [dict(
                                          size_gb = self.disk_size,
                                          type = "thin")],
-                                     networks = [dict(
-                                         name = "VM Network",
-                                         device_type = network_type)],
+                                     networks = await self._network_dict(),
             )
         if self.template_name:
             d['template'] = self.template_name
@@ -196,6 +216,7 @@ class Vm(Machine, VmwareStampable):
     config = ConfigLayout,
     injector = Injector,
     folder = InjectionKey(VmFolder, optional = True),
+    network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
     storage = VmwareDataStore,
     disk = VmdkTemplate
 )
