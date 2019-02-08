@@ -75,7 +75,12 @@ def when_needed(wraps, *args, injector = None,
         resolved_obj = None
         resolving = None
 
-        def __init__(self, ainjector, **inside_kwargs):
+        def __init__(self, *inside_args,  ainjector, **inside_kwargs):
+            nonlocal args
+            if args and inside_args:
+                raise RuntimeError("It does not make sense to specify args both in the call to when_needed and when it is resolved.")
+            if inside_args:
+                args = inside_args
             if injector is not None:
                 #override ainjector
                 ainjector = injector(AsyncInjector)
