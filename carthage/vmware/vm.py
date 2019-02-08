@@ -82,6 +82,8 @@ class Vm(Machine, VmwareStampable):
         self.memory = vm_config.hardware.memory
         self.paravirt = vm_config.hardware.paravirt
         self.disk_size = vm_config.hardware.disk
+        if config.vm_image_size > self.disk_size*1000000000:
+            self.disk_size = int(config.vm_image_size/1000000000)
         self.guest_id = guest_id
         self.network_config = network_config
         self.template_name = None

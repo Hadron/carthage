@@ -24,7 +24,8 @@ class HadronImageMixin(ContainerCustomization):
     description = "Hadron Image Customizations"
     
     @setup_task('Enable ACES and set release')
-    async def setup_hadron_packages(self):
+    @inject(config = ConfigLayout)
+    async def setup_hadron_packages(self, config):
         ainjector = self.injector(AsyncInjector)
         try:
             bind_mount = '--bind-ro='+self.config_layout.hadron_operations+":/hadron-operations"
@@ -32,14 +33,14 @@ class HadronImageMixin(ContainerCustomization):
             await self.container_command(bind_mount, "/usr/bin/apt",
                                                     "install", "-y", "ansible",
                                                     "git", "python3-pytest",
-                                                    "python-apt",
+                                                    "python-apt", "haveged"
             )
             await self.container_command(bind_mount, "/usr/bin/ansible-playbook",
                                                     "-clocal",
                                                     "-ehadron_os=ACES",
                                                     "-ehadron_track=proposed",
                                                     "-epackagedir=/hadron-operations/ansible/packages",
-                                                    "-ehadron_release=18.12",
+                                                    f"-ehadron_release={config.hadron_release}",
                                                     "-eaces_apt_server=apt-server.aces-aoe.net",
                                                     "-i/hadron-operations/ansible/localhost-debian.txt",
                                                     "/hadron-operations/ansible/commands/hadron-packages.yml"
