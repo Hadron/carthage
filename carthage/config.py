@@ -115,6 +115,8 @@ config_defaults.add_config(dict(
     hadron_operations = "/home/hartmans/hadron-operations",
     delete_volumes = False,
     external_vlan_id= 0,
+    vlan_min = 1,
+    vlan_max = 4094,
 ))
 
 

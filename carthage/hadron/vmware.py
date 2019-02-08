@@ -1,13 +1,15 @@
 import sys
 from .images import  HadronVmImage
 from ..vmware.image import VmdkTemplate, image_datastore_key
-from ..dependency_injection import AsyncInjector, inject, Injector
+from ..vmware import VmTemplate, Vm, VmwareDataStore, VmFolder
+from ..dependency_injection import AsyncInjector, inject, Injector, InjectionKey
 from ..utils import when_needed
 from ..config import ConfigLayout
 from .. import sh
 from ..machine import ContainerCustomization, customization_task
 from ..setup_tasks import setup_task
 from ..container import Container, container_image, container_volume
+from ..network import Network, NetworkConfig, external_network_key
 
 
 @inject(config_layout = ConfigLayout,
@@ -34,19 +36,42 @@ class HadronVmdkBase(HadronVmImage):
 
     vmware_customization = customization_task(HadronVmwareCustomization)
 
-if __name__ == '__main__':
-    from carthage import base_injector
-    from asyncio import get_event_loop
-    loop = get_event_loop()
-    ainjector = base_injector(AsyncInjector)
-    from carthage.vmware.image import NfsDataStore
-    from carthage.config import inject_config
-    inject_config(base_injector)
-    base_injector.add_provider(NfsDataStore)
-    cl = base_injector(ConfigLayout)
-    cl.load_yaml(open(sys.argv[1]).read())
-    base = loop.run_until_complete(ainjector(HadronVmdkBase))
-    base.close()
-    template = loop.run_until_complete(ainjector(VmdkTemplate, image = base))
+@when_needed
+@inject(config = ConfigLayout,
+        injector = Injector)
+async def carthage_trunk_network(ignore, *, config, injector):
+    return injector(Network, "Carthage Trunk", vlan_id = (config.vlan_min, config.vlan_max))
 
-    
+carthage_vmware_netconfig = NetworkConfig()
+carthage_vmware_netconfig.add('eth0', external_network_key, None)
+carthage_vmware_netconfig.add('eth1', carthage_trunk_network, None)
+
+aces_vmdk_image = when_needed(HadronVmdkBase)
+
+@when_needed
+@inject(ainjector = AsyncInjector)
+async def aces_vm_template(ainjector):
+    image = await ainjector(aces_vmdk_image)
+    vmdk = await ainjector(VmdkTemplate, image)
+    return await ainjector(VmTemplate, disk = vmdk)
+
+@inject(
+    config_layout = ConfigLayout,
+    storage = VmwareDataStore,
+    folder = InjectionKey(VmFolder, optional = True),
+    injector = Injector
+    )
+class CarthageVm(Vm):
+
+    nested_virt = True
+
+    def __init__(self, name, template, *,
+                 config_layout, storage, injector, folder):
+        super().__init__(name, template, injector = injector,
+                         config = config_layout,
+                         network_config = carthage_vmware_netconfig, storage = storage, folder = folder)
+        self.cpus = 8
+        self.memory = 30000
+        self.disk_size = 60
+
+        

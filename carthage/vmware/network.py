@@ -82,8 +82,8 @@ class DistributedPortgroup(VmwareNetwork):
                 nr = vim.NumericRange()
                 nr.start = min
                 nr.end = max
-                vlan_spec = vim.dvs.VmwareDistributedVirtualSwitch.TruncVlanSpec()
-                vlan_spec.vlanId = nr
+                vlan_spec = vim.dvs.VmwareDistributedVirtualSwitch.TrunkVlanSpec()
+                vlan_spec.vlanId = [nr]
             else:
                 vlan_spec = vim.dvs.VmwareDistributedVirtualSwitch.VlanIdSpec()
                 vlan_spec.vlanId = self.network.vlan_id
