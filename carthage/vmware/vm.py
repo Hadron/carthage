@@ -201,7 +201,9 @@ class Vm(Machine, VmwareStampable):
     def _get_ip_address(self):
         for i in range(20):
             try:
-                ip = self.inventory_object.guest.net[0].ipAddress[0]
+                nets = self.inventory_object.guest.net
+                nets.sort(key = lambda x: x.deviceConfigId)
+                ip =nets[0].ipAddress[0]
                 self.ip_address = ip
                 return
             except IndexError: pass
