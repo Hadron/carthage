@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, logging, re, weakref
+import asyncio, logging, re, typing, weakref
 from . import sh
 from .dependency_injection import inject, AsyncInjectable, Injector, AsyncInjector, InjectionKey, Injectable
 from .config import ConfigLayout
@@ -85,7 +85,25 @@ class VethInterface(NetworkInterface):
     def __del__(self):
         self.close()
 
-class TechnologySpecificNetwork(AsyncInjectable): pass
+class TechnologySpecificNetwork(AsyncInjectable):
+
+    '''
+    Abstract base class  for accessing a network.
+
+    The :class:`.Network` class defines the interface to a virtual network.  However different backends require different ways of accessing a network.  For KVM we need a local bridge or macvlan interfaces.  Vmware needs some form of Portgroup on a VLAN.  This class is the abstract interface to that.
+
+'''
+
+    async def also_accessed_by(self, others: typing.List[TechnologySpecificNetwork]):
+        '''
+        Abstract method to notify a class of other technology specific networks.
+
+        After construction, if any other technologies are in use, this method is called listing all of those technologies.  Later, if other technologies are added, this method is called again.
+
+'''
+        pass
+    
+                               
 
 @inject(injector = Injector)
 class Network(AsyncInjectable):
@@ -112,6 +130,7 @@ class Network(AsyncInjectable):
         self.name = name
         self.vlan_id = vlan_id
         self.injector.add_provider(this_network, self)
+        self.technology_networks = []
         
 
     async def access_by(self, cls: TechnologySpecificNetwork):
@@ -121,19 +140,27 @@ class Network(AsyncInjectable):
         '''
         assert issubclass(cls, TechnologySpecificNetwork), \
             "Must request access by a subclass of TechnologySpecificNetwork"
+        instance = None
         if (cls not in self.ainjector) and self.vlan_id is not None:
             try:
                 instance = await self.ainjector.get_instance_async(InjectionKey(cls, vlan_id = self.vlan_id))
                 self.ainjector.add_provider(instance)
-                return instance
             except KeyError: pass
-        instance = await self.ainjector.get_instance_async(cls)
+        if not instance: 
+            instance = await self.ainjector.get_instance_async(cls)
         assert cls in self.ainjector, \
             f"It looks like {cls} was not registered with add_provider with allow_multiple set to True"
+        if instance not in self.technology_networks:
+            await instance.also_accessed_by(list(self.technology_networks))
+            l = [instance]
+            for elt in self.technology_networks:
+                await elt.also_accessed_by(l)
+            self.technology_networks.extend(l)
         return instance
 
     def close(self, canceled_futures = None):
         self.injector.close(canceled_futures = canceled_futures)
+        self.technology_networks = []
 
 this_network = InjectionKey(Network, role = "this_network")
 

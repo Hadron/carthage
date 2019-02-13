@@ -55,7 +55,16 @@ class VmdkTemplate(SetupTaskMixin, AsyncInjectable):
             self.paths[0],
             _bg = True, _bg_exc = False)
 
+        
         return self
+
+    @generate_vmdk.check_completed()
+    def generate_vmdk(self):
+        try:
+            st = os.stat(self.paths[0])
+            return st.st_mtime
+        except FileNotFoundError: return False
+        
 
     @setup_task("copy-vmdk")
     async def copy_vmdk(self):

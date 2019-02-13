@@ -12,5 +12,5 @@ __________
 VMs
 ___
 
-.. autoclass:: carthage.vm.Vm
+.. autoclass:: carthage.vm.VM
 	       

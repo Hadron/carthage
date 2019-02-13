@@ -276,4 +276,5 @@ def customization_task    (c: BaseCustomization):
 
             
 
-__all__ = ['Machine', 'MachineRunning', 'SshMixin', 'Customization']
+__all__ = ['Machine', 'MachineRunning', 'SshMixin', 'BaseCustomization', 'ContainerCustomization',
+           'MachineCustomization']

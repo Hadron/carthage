@@ -129,6 +129,12 @@ class VmInventory(Injectable):
             if v.name == name: return v
         return None
 
+    def close(self):
+        try:
+            self.view.Destroy()
+            del self.view
+        except: pass
+        
 def wait_for_task(task):
     loop = asyncio.get_event_loop()
     def callback():

@@ -1,8 +1,9 @@
 import carthage.dependency_injection
 from .vm import Vm, VmFolder, VmTemplate
 from .image import *
-from .network import DistributedPortgroup
+from .network import DistributedPortgroup, vmware_trunk_key
 from .inventory import VmwareConnection, wait_for_task
+from . import network
 
 
 @carthage.dependency_injection.inject(
@@ -12,6 +13,7 @@ def carthage_plugin(injector):
     from ..dependency_injection import partial_with_dependencies
     from ..utils import when_needed
     injector.add_provider(DistributedPortgroup, allow_multiple = True)
+    injector.add_provider(vmware_trunk_key, network._vmware_trunk)
     injector.add_provider(VmfsDataStore)
     injector.add_provider(Vm)
     injector.add_provider(VmwareConnection)

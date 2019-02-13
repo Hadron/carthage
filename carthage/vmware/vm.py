@@ -34,6 +34,30 @@ vmware_config = config_key('vmware')
 class VmFolder(VmwareFolder):
     kind = 'vm'
 
+    async def delete(self):
+        v = None
+        try:
+            v = self.injector(inventory.VmInventory, folder = self)
+            cluster_name = self.config_layout.vmware.cluster
+            datacenter_name = self.config_layout.vmware.datacenter
+            cluster = self.connection.content.searchIndex.FindByInventoryPath(f"{datacenter_name}/host/{cluster_name}")
+            if not cluster:
+                raise RuntimeError(f"Cluster {cluster_name} not found")
+            rp = cluster.resourcePool
+            for vm in v.view.view:
+                try: vm.MarkAsVirtualMachine(rp)
+                except:
+                    pass
+                try: vm.PowerOff()
+                except: pass
+        finally:
+            if v: v.close()
+        await asyncio.sleep(2)
+        return await inventory.wait_for_task(self.inventory_object.Destroy())
+        
+            
+
+    
 @inject(config = vmware_config)
 def vmware_dict(config, **kws):
     '''
@@ -126,30 +150,35 @@ class Vm(Machine, VmwareStampable):
                                      name = self.full_name,
                                      folder = self.folder.name,
                                      cluster = config.cluster,
-                                     datastore = self.storage.name,
-                                     guest_id = self.guest_id,
-                                     hardware = dict(
-                                         boot_firmware = config.hardware.boot_firmware,
-                                         num_cpus = self.cpus,
-                                         memory_mb = self.memory,
-                                         version = config.hardware.version,
-                                         scsi = scsi_type,
-                                         nested_virt = self.nested_virt),
-                                     disk = [dict(
-                                         size_gb = self.disk_size,
-                                         type = "thin")],
-                                     networks = await self._network_dict(),
+                                 datastore = self.storage.name,)
+        if not self.inventory_object:
+            d.update(
+                guest_id = self.guest_id,
+                hardware = dict(
+                    boot_firmware = config.hardware.boot_firmware,
+                    num_cpus = self.cpus,
+                    memory_mb = self.memory,
+                    version = config.hardware.version,
+                    scsi = scsi_type,
+                    nested_virt = self.nested_virt),
+                disk = [dict(
+                    size_gb = self.disk_size,
+                    type = "thin")],
+                networks = await self._network_dict(),
             )
-        if self.template_name:
-            d['template'] = self.template_name
-            if self.template_snapshot:
-                d['linked_clone'] = True
-                d['src_snapshot'] = self.template_snapshot
-                d.update(kwargs)
+            if self.template_name:
+                d['template'] = self.template_name
+                if self.template_snapshot:
+                    d['linked_clone'] = True
+                    d['snapshot_src'] = self.template_snapshot
+        d.update(kwargs)
         return d
 
     async def _ansible_op(self, **kwargs):
         d = await self.ainjector(self._ansible_dict, **kwargs)
+        try:
+            del self.__dict__['inventory_object']
+        except KeyError: pass
         return await self.ainjector(carthage.ansible.run_play,
                                     [carthage.ansible.localhost_machine],
                                     {'vmware_guest': d})
@@ -214,27 +243,35 @@ class Vm(Machine, VmwareStampable):
     folder = InjectionKey(VmFolder, optional = True),
     network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
     storage = VmwareDataStore,
-    disk = VmdkTemplate
 )
 class VmTemplate(Vm):
-    clone_from_snapshot = None
+    clone_from_snapshot = "template_snapshot"
 
     def __init__(self, disk, **kwargs):
         self.disk = disk
-        super().__init__(disk.image.name, template = None, **kwargs)
+        if disk:
+            kwargs['name'] = disk.image.name
+            kwargs['template'] = None
+            self.clone_from_snapshot = None #Doesn't tend to work with explicit disks
+        super().__init__( **kwargs)
 
     async def _ansible_dict(self, **kwargs):
         d = await self.ainjector(super()._ansible_dict, **kwargs)
-        d.update(is_template = True,
-        )
-        d['disk'][0]['filename'] = self.disk.disk_path
+        if self.disk:
+            d['disk'][0]['filename'] = self.disk.disk_path
         return d
 
     @setup_task("create_clone_snapshot")
     @inject(loop = asyncio.AbstractEventLoop)
     async def create_clone_snapshot(self, loop):
         if self.clone_from_snapshot is None:  raise SkipSetupTask
-        t = self.inventory_object.CreateSnapshot("template_clone", "Snapshot for template clones", False, True)
+        t = self.inventory_object.CreateSnapshot("template_snapshot", "Snapshot for template clones", False, True)
         await inventory.wait_for_task(t)
+
+    @setup_task("Mark as template")
+    async def mark_as_template(self):
+        try:
+            self.inventory_object.MarkAsTemplate()
+        except Exception: pass
 
 from . import inventory
