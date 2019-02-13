@@ -33,10 +33,7 @@ async def run(ainjector):
         if args.cleanup_images:
             config.delete_volumes = True
         folder = await ainjector(VmFolder, config.vmware.folder)
-        for v in folder.inventory_view.view.view:
-            v.PowerOff()
-        await asyncio.sleep(2)
-        await inventory.wait_for_task(folder.inventory_object.Destroy())
+        await folder.delete()
         for n in await ainjector(carthage.vmware.network.our_portgroups_for_switch):
             n.Destroy()
         

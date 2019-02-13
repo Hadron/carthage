@@ -22,7 +22,7 @@ _resources_path = os.path.join(os.path.dirname(__file__), "../resources")
 class HadronImageMixin(ContainerCustomization):
 
     description = "Hadron Image Customizations"
-    
+
     @setup_task('Enable ACES and set release')
     @inject(config = ConfigLayout)
     async def setup_hadron_packages(self, config):
@@ -66,6 +66,7 @@ class HadronImageMixin(ContainerCustomization):
                                  "etc/X11/xorg.conf.d"), exist_ok = True)
         shutil.copy2(os.path.join(_resources_path, "hadron-xorg-modes"),
                      os.path.join(self.path, "etc/X11/xorg.conf.d/10-hadron-modes.conf"))
+
 
 @inject(
     config_layout = ConfigLayout,
@@ -221,7 +222,25 @@ class HadronVmImage(ImageVolume):
             mount.close()
 
     hadron_customizations = customization_task(HadronImageMixin)
-    
+    @setup_task("Run update-grub")
+    async def run_update_grub(self):
+        from hadron.allspark.imagelib import image_mounted
+        with image_mounted(self.path) as i:
+            try:
+                with open(os.path.join(i.rootdir, "run.sh"), "wt") as f:
+                    f.write('''\
+#!/bin/sh
+set -e
+sed -i -e 's:GRUB_CMDLINE_LINUX=.*$:GRUB_CMDLINE_LINUX="random.trust_cpu=on net.ifnames=0 console=ttyS0,115200n81 console=tty1":' /etc/default/grub
+/usr/sbin/update-grub
+''')
+                    os.chmod(f.fileno(), 0o755)
+                i.chroot("/run.sh")
+            finally:
+                try: os.unlink(os.path.join(i.rootdir, "run.sh"))
+                except FileNotFoundError: pass
+
+
 
 
 

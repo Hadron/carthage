@@ -8,17 +8,18 @@
 
 import asyncio, collections.abc
 from ..dependency_injection import *
-from ..utils import memoproperty
+from ..utils import memoproperty, when_needed
 from ..config import config_defaults, ConfigLayout
 from ..setup_tasks import setup_task
 
 from pyVmomi import vim
 
-from ..network import Network, TechnologySpecificNetwork, this_network
+from ..network import Network, TechnologySpecificNetwork, this_network, BridgeNetwork
 from .inventory import VmwareStampable, VmwareFolder, VmwareConnection, wait_for_task
 
 config_defaults.add_config({'vmware': {
-    'distributed_switch': None
+    'distributed_switch': None,
+    'trunk_interface': None,
     }})
 
 @inject(config_layout = ConfigLayout,
@@ -57,6 +58,7 @@ class VmwareNetwork(VmwareStampable, TechnologySpecificNetwork):
         network = this_network)
 class DistributedPortgroup(VmwareNetwork):
     stamp_type = "portgroup"
+
     def __init__(self,  **kwargs):
         super().__init__(**kwargs)
         if not self.dvs_object:
@@ -66,7 +68,19 @@ class DistributedPortgroup(VmwareNetwork):
     @memoproperty
     def name(self):
         return self.network.name
+
+    async def also_accessed_by(self, others):
+        for n in others:
+            if isinstance(n, BridgeNetwork):
+                trunk = await self._get_trunk()
+                ni = trunk.expose_vlan(self.network.vlan_id)
+                n.add_interface(ni)
+
+    async def _get_trunk(self):
+        trunk_base = await self.ainjector.get_instance_async(vmware_trunk_key)
+        return await trunk.access_by(BridgeNetwork)
     
+                
     @setup_task("Creating Distributed Portgroup")
     @inject(loop = asyncio.AbstractEventLoop)
     async def create_portgroup(self, loop):
@@ -153,5 +167,23 @@ def our_portgroups_for_switch(switch = None, *, config, connection):
         if p.name.startswith(prefix):
             yield p
 
-            __all__ = ('DistributedPortgroup', 'our_portgroups_for_switch', 'NetworkFolder')
+@when_needed
+@inject(config = ConfigLayout,
+        injector = Injector)
+async def _vmware_trunk(config, injector):
+    trunk_interface = config.vmware.trunk_interface
+    if trunk_interface is None:
+        raise ValueError("You must configure config.vmware.trunk_interface")
+    # This is a bit hackish.  Our goal is to construct a BridgeNetwork
+    # with the right interface name to keep track of vlan interfaces
+    # so they can be deleted.
+    net = injector(Network, "Vmware Trunk")
+    bridge = net.injector(BridgeNetwork, bridge_name = trunk_interface, delete_bridge = False)
+    net.injector.add_provider(bridge)
+    return net
+
+vmware_trunk_key = InjectionKey(Network, vmware_role = "trunk")
+
+__all__ = ('DistributedPortgroup', 'our_portgroups_for_switch', 'NetworkFolder',
+                       'vmware_trunk_key')
             

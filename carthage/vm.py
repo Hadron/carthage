@@ -174,3 +174,6 @@ class VM(Machine, SetupTaskMixin):
                 ca = ca.replace("\r", "")
                 return ca
         raise FileNotFoundError
+
+Vm = VM
+    
