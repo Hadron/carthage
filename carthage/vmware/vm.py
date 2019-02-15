@@ -179,14 +179,14 @@ class Vm(Machine, VmwareStampable):
                 if self.template_snapshot:
                     d['linked_clone'] = True
                     d['snapshot_src'] = self.template_snapshot
+                    try: del d['disk']
+                    except KeyError: pass
         d.update(kwargs)
         return d
 
     async def _ansible_op(self, **kwargs):
+        await self.ainjector(self._find_inventory_object)
         d = await self.ainjector(self._ansible_dict, **kwargs)
-        try:
-            del self.__dict__['inventory_object']
-        except KeyError: pass
         return await self.ainjector(carthage.ansible.run_play,
                                     [carthage.ansible.localhost_machine],
                                     {'vmware_guest': d})
@@ -278,6 +278,8 @@ class VmTemplate(Vm):
 
     @setup_task("Mark as template")
     async def mark_as_template(self):
+        # ESXI 6.7 seems to have a bug  producing linked clones from templates rather than VMs
+        if self.clone_from_snapshot: raise SkipSetupTask
         try:
             self.inventory_object.MarkAsTemplate()
         except Exception: pass
