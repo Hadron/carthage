@@ -188,11 +188,11 @@ hadron_container_image = when_needed(HadronContainerImage)
 class HadronVmImage(ImageVolume):
 
     def __init__(self, *, config_layout, ainjector, name = "base-hadron-vm",
-                 path = None):
-        kwargs = {}
+                 path = None, **kwargs):
         if path is not None: kwargs['path'] = path
+        if 'create_size' not in kwargs:
+            kwargs['create_size'] = config_layout.vm_image_size
         super().__init__(name,
-                                         create_size = config_layout.vm_image_size,
                          config_layout = config_layout,
                          ainjector = ainjector, **kwargs)
 
