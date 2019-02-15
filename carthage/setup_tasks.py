@@ -123,7 +123,7 @@ class TaskWrapper:
         else: last_run  = check_stamp(obj.stamp_path, self.stamp)
         if last_run is False:
             logger.debug(f"Task {self.description} never run for {obj}")
-            return (True, 0.0)
+            return (True, dependency_last_run)
         if last_run < dependency_last_run:
             logger.debug(f"Task {self.description} last run {_iso_time(last_run)}, but dependency run more recently at {_iso_time(dependency_last_run)}")
             return (True, dependency_last_run)
@@ -249,6 +249,7 @@ class SetupTaskMixin:
                         context_entered = True
                     logger_for(self).info(f"Running {t.description} task for {self}")
                     await ainjector(t, self)
+                    dependency_last_run = time.time()
                 except SkipSetupTask: pass
                 except Exception:
                     logger_for(self).exception( f"Error running {t.description} for {self}:")
