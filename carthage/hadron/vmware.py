@@ -32,7 +32,10 @@ class HadronVmdkBase(HadronVmImage):
                  name = "aces-vmdk", **kwargs):
         super().__init__(**kwargs, name = name,
                          ainjector = ainjector, config_layout = config_layout,
-                         path = store.vmdk_path)
+                         path = store.vmdk_path,
+#                         create_size = 8000000000
+)
+
 
     vmware_customization = customization_task(HadronVmwareCustomization)
 
@@ -75,5 +78,6 @@ class CarthageVm(Vm):
         self.cpus = 8
         self.memory = 30000
         self.disk_size = 60
+        self.template_snapshot = None # You cannot increase size on a linked clone
 
         
