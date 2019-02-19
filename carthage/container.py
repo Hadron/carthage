@@ -213,7 +213,7 @@ class Container(Machine, SetupTaskMixin):
             started_future.set_result(True)
         if self.running: return
         started_future = self.loop.create_future()
-        self.find_output(r'\] Reached target Basic System', started_callback, True)
+        self.find_output(r'\].*Reached target.*Basic System', started_callback, True)
         await self.run_container("--kill-signal=SIGRTMIN+3", "/bin/systemd", *args,
                                  networking = True, as_pid2 = False,
                                  raise_on_running = False)
