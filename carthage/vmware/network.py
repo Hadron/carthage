@@ -74,11 +74,11 @@ class DistributedPortgroup(VmwareNetwork):
             if isinstance(n, BridgeNetwork):
                 trunk = await self._get_trunk()
                 ni = trunk.expose_vlan(self.network.vlan_id)
-                n.add_interface(ni)
+                n.add_member(ni)
 
     async def _get_trunk(self):
         trunk_base = await self.ainjector.get_instance_async(vmware_trunk_key)
-        return await trunk.access_by(BridgeNetwork)
+        return await trunk_base.access_by(BridgeNetwork)
     
                 
     @setup_task("Creating Distributed Portgroup")
@@ -96,6 +96,8 @@ class DistributedPortgroup(VmwareNetwork):
         learning = vim.dvs.VmwareDistributedVirtualSwitch.MacLearningPolicy()
         learning.enabled = True
         learning.allowUnicastFlooding = True
+        learning.limit = 64
+        learning.limitPolicy = "DROP"
         default.macManagementPolicy.macLearningPolicy = learning
         if self.network.vlan_id:
             vlan_id = self.network.vlan_id
@@ -111,7 +113,11 @@ class DistributedPortgroup(VmwareNetwork):
                 vlan_spec.vlanId = self.network.vlan_id
             default.vlan = vlan_spec
         cs.defaultPortConfig = default
-        task = self.dvs_object.AddDVPortgroup_Task([cs])
+        if not self.inventory_object:
+            task = self.dvs_object.AddDVPortgroup_Task([cs])
+        else:
+            cs.configVersion = self.inventory_object.config.configVersion
+            task = self.inventory_object.ReconfigureDVPortgroup_Task(cs)
         await wait_for_task(task)
         try:
             del self.__dict__['inventory_object']
@@ -178,8 +184,8 @@ async def _vmware_trunk(config, injector):
     # with the right interface name to keep track of vlan interfaces
     # so they can be deleted.
     net = injector(Network, "Vmware Trunk")
-    bridge = net.injector(BridgeNetwork, bridge_name = trunk_interface, delete_bridge = False)
-    net.injector.add_provider(bridge)
+    bridge = net.ainjector.injector(BridgeNetwork, bridge_name = trunk_interface, delete_bridge = False)
+    net.ainjector.add_provider(bridge)
     return net
 
 vmware_trunk_key = InjectionKey(Network, vmware_role = "trunk")
