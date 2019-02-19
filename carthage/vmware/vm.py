@@ -88,7 +88,8 @@ class Vm(Machine, VmwareStampable):
     nested_virt = False #: Enable nested virtualization
     def __init__(self, name, template,
                  guest_id = "ubuntu64Guest",
-                 *, injector, config, storage, folder, network_config = None):
+                 *, injector, config, storage, folder, network_config = None,
+                 console_needed = True):
         super().__init__(name, injector, config)
         self.storage = storage
         self.running = False
@@ -186,7 +187,15 @@ class Vm(Machine, VmwareStampable):
     
     @setup_task("provision_vm")
     async def create_vm(self):
-        res =  await self.ainjector(self._ansible_op, state='present')
+        try:
+            res =  await self.ainjector(self._ansible_op, state='present')
+        except carthage.ansible.AnsibleFailure as e:
+            if "is not supported" in e.ansible_result.tasks['vmware_guest'].msg:
+                #Everything but customization worked
+                res = e.ansible_result
+            else:
+                raise
+            
         await self.ainjector(self._find_inventory_object)
         return res
 
@@ -247,17 +256,19 @@ class Vm(Machine, VmwareStampable):
 class VmTemplate(Vm):
     clone_from_snapshot = "template_snapshot"
 
-    def __init__(self, disk, **kwargs):
+    def __init__(self, name, disk, **kwargs):
         self.disk = disk
         if disk:
-            kwargs['name'] = disk.image.name
             kwargs['template'] = None
             self.clone_from_snapshot = None #Doesn't tend to work with explicit disks
-        super().__init__( **kwargs)
+        super().__init__( name = name, **kwargs)
 
     async def _ansible_dict(self, **kwargs):
         d = await self.ainjector(super()._ansible_dict, **kwargs)
-        if self.disk:
+        if self.disk and not self.inventory_object:
+            if not isinstance(self.disk, VmdkTemplate):
+                logger.info(f"Building disk for {self}")
+                self.disk = await self.ainjector(self.disk)
             d['disk'][0]['filename'] = self.disk.disk_path
         return d
 
@@ -276,4 +287,6 @@ class VmTemplate(Vm):
             self.inventory_object.MarkAsTemplate()
         except Exception: pass
 
+#Now mark VM as taking a template
+inject(template = InjectionKey(VmTemplate, optional = True))(Vm)
 from . import inventory
