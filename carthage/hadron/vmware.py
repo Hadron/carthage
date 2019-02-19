@@ -61,10 +61,15 @@ aces_vmdk_image = when_needed(HadronVmdkBase)
 
 @when_needed
 @inject(ainjector = AsyncInjector)
-async def aces_vm_template(ainjector):
+async def aces_vmdk(ainjector):
     image = await ainjector(aces_vmdk_image)
-    vmdk = await ainjector(VmdkTemplate, image)
-    template = await ainjector(VmTemplate, disk = vmdk)
+    return await ainjector(VmdkTemplate, image)
+
+    
+@when_needed
+@inject(ainjector = AsyncInjector)
+async def aces_vm_template(ainjector):
+    template = await ainjector(VmTemplate, disk = aces_vmdk, name = "aces-vmdk")
     return await ainjector(VmTemplate, disk = None, template = template, name = f"Clonable {template.name}")
 
 
