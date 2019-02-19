@@ -336,7 +336,7 @@ class ExternalNetwork(Network):
             kwargs['vlan_id'] = vlan_id
         super().__init__(name = "external network", injector = injector,
                          **kwargs)
-        self.injector.add_provider(InjectionKey(BridgeNetwork),
+        self.ainjector.add_provider(InjectionKey(BridgeNetwork),
                                    when_needed(BridgeNetwork, bridge_name = "brint", delete_bridge = False))
 
     @classmethod
