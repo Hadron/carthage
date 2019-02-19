@@ -9,13 +9,13 @@
 
 import argparse, sys, gc, traceback, yaml
 import asyncio, logging
-from carthage.hadron_layout import database_key, external_network
+from carthage.hadron_layout import database_key
 from carthage.dependency_injection import AsyncInjector, InjectionKey, shutdown_injector
 from carthage import base_injector, ssh
-from carthage.network import Network
+from carthage.network import Network, BridgeNetwork, external_network_key
 from carthage.container import container_image, Container
 from carthage.hadron.database import RemotePostgres, HadronNetwork
-from carthage.hadron import build_database, hadron_vm_image
+from carthage.hadron import build_database
 from sqlalchemy.orm import Session
 from carthage.machine import ssh_origin, Machine
 import carthage.ssh
@@ -29,7 +29,8 @@ async def load_layout(layout_file):
     for m in layout['machines']:
         machine_queue.put_nowait(m)
         ainjector = base_injector(AsyncInjector)
-        brint = await ainjector(external_network)
+        external_network = await ainjector.get_instance_async(external_network_key)
+        brint = await external_network.access_by(BridgeNetwork)
     for n in layout.get('expose_networks', []):
         n = int(n)
         net = await ainjector.get_instance_async(InjectionKey(HadronNetwork, netid=n))
@@ -53,7 +54,6 @@ async def queue_worker():
         
 async def run():
 
-    asyncio.ensure_future(ainjector(hadron_vm_image))
     container = await ainjector.get_instance_async(database_key)
     await ainjector.get_instance_async(ssh_origin)
     await ainjector.get_instance_async(carthage.ssh.SshKey)
