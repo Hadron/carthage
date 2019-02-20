@@ -230,6 +230,17 @@ class Vm(Machine, VmwareStampable):
                 await loop.run_in_executor(None, self._get_ip_address)
             return True
 
+    async def stop_machine(self):
+        async with self._operation_lock:
+            if not self.running: return
+            logger.info(f'Stopping {self.name} VM')
+            power = self.inventory_object.summary.runtime.powerState
+            if power == "poweredOn": 
+                task = self.inventory_object.PowerOff()
+                await inventory.wait_for_task(task)
+            self.running = False
+            return True
+
     def _get_ip_address(self):
         for i in range(20):
             try:
@@ -262,6 +273,7 @@ class VmTemplate(Vm):
             kwargs['template'] = None
             self.clone_from_snapshot = None #Doesn't tend to work with explicit disks
         super().__init__( name = name, **kwargs)
+        self.network_config = None
 
     async def _ansible_dict(self, **kwargs):
         d = await self.ainjector(super()._ansible_dict, **kwargs)
