@@ -3,15 +3,20 @@
 import asyncio, carthage, carthage.utils
 from carthage import base_injector, inject, AsyncInjector, ConfigLayout, Injector, partial_with_dependencies
 from carthage.vmware import VmFolder, Vm, VmfsDataStore, VmdkTemplate, NfsDataStore, VmTemplate, inventory, DistributedPortgroup
+from carthage.machine import ssh_origin
+from carthage.ssh import SshKey
 from carthage.vmware.image import vm_storage_key
 from carthage.hadron.vmware import CarthageVm, aces_vm_template
 from carthage.config import ConfigIterator
 from carthage.network import external_network_key
 import carthage.vmware.network
+from carthage.dependency_injection import DependencyProvider
 
 @inject(ainjector = AsyncInjector)
 async def run(ainjector):
     futures = []
+    ainjector.replace_provider(ssh_origin, DependencyProvider(None))
+    await ainjector.get_instance_async(SshKey)
     config = await ainjector(ConfigLayout)
     template = await ainjector(aces_vm_template)
     if not args.cleanup:
