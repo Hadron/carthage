@@ -98,7 +98,7 @@ class VmwareFolder(VmwareStampable):
         d['folder_name'] = self.name
         d['state'] = 'present'
         parent, sep, tail = self.name.rpartition('/')
-        if sep != "":
+        if sep != "" and parent != "":
             d['parent_folder'] = parent
             d['folder_name'] = tail
             self.parent = await self.ainjector(self.__class__, parent)
