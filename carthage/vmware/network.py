@@ -15,7 +15,7 @@ from ..setup_tasks import setup_task
 from pyVmomi import vim
 
 from ..network import Network, TechnologySpecificNetwork, this_network, BridgeNetwork
-from .inventory import VmwareStampable, VmwareFolder, VmwareConnection, wait_for_task
+from .inventory import VmwareStampable, VmwareMarkable, VmwareFolder, VmwareConnection, wait_for_task
 
 config_defaults.add_config({'vmware': {
     'distributed_switch': None,
@@ -56,7 +56,7 @@ class VmwareNetwork(VmwareStampable, TechnologySpecificNetwork):
         connection = VmwareConnection,
         injector = Injector,
         network = this_network)
-class DistributedPortgroup(VmwareNetwork):
+class DistributedPortgroup(VmwareNetwork, VmwareMarkable):
     stamp_type = "portgroup"
 
     def __init__(self,  **kwargs):
@@ -122,6 +122,7 @@ class DistributedPortgroup(VmwareNetwork):
         try:
             del self.__dict__['inventory_object']
         except KeyError: pass
+        self.set_custom_fields(self.inventory_object)
 
     @create_portgroup.invalidator()
     def create_portgroup(self):

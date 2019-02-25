@@ -6,8 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import asyncio, time
-import os
+import asyncio, datetime, time, os
 
 from ssl import create_default_context
 from pyVim.connect import SmartConnect, Disconnect
@@ -74,10 +73,51 @@ class VmwareConnection(Injectable):
     def __del__(self):
         self.close()
 
+class VmwareMarkable(object):
+
+    created = 'com.hadronindustries.carthage.created'
+
+    def set_custom_fields(self, entity):
+        field = self.ensure_custom_field(VmwareMarkable.created, vim.ManagedEntity)
+        timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
+        self.set_custom_field(entity, field, timestamp)
+
+    def fetch_custom_field(self, fname):
+        content = self.connection.content
+        cfm = content.customFieldsManager
+        for f in cfm.field:
+            if f.name == fname:
+                return f
+        raise KeyError(fname)
+
+    def ensure_custom_field(self, fname, ftype):
+        try:
+            return self.fetch_custom_field(fname)
+        except KeyError:
+            content = self.connection.content
+            cfm = content.customFieldsManager
+            return cfm.AddFieldDefinition(name=fname, moType=ftype)
+
+    def set_custom_field(self, entity, field, value):
+        content = self.connection.content
+        cfm  = content.customFieldsManager
+        cfm.SetField(entity=entity, key=field.key, value=value)
+
+    def objects_with_field(self, field, root):
+        content = self.connection.content
+        container = content.viewManager.CreateContainerView(root, [vim.ManagedEntity], True)
+        ret = set()
+        for obj in container.view:
+            for val in obj.customValue:
+                if val.key == field.key:
+                    ret.add(obj)
+        container.Destroy()
+        return ret
+
 @inject(config_layout = ConfigLayout,
         injector = Injector,
         connection = VmwareConnection)
-class VmwareFolder(VmwareStampable):
+class VmwareFolder(VmwareStampable, VmwareMarkable):
 
     #: Override with folder Kind
     kind = NotImplemented
