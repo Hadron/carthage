@@ -34,16 +34,22 @@ class CarthageConsole(code.InteractiveConsole):
         #dummy function used to start loop when called from another thread
         pass
 
-    def __init__(self, locals=None):
+    @staticmethod
+    def default_locals():
+        return {
+            'injector': base_injector,
+            'ainjector': base_injector(AsyncInjector),
+            'loop': asyncio.get_event_loop(),
+            'config': base_injector(ConfigLayout)
+        }
+
+    def __init__(self, locals=None, extra_locals=None):
+        if locals is None:
+           locals = self.default_locals()
+        if extra_locals is not None:
+            locals = { **locals, **extra_locals }
+        super().__init__(locals=locals)
         self.locals = locals
-        if self.locals is None:
-            self.locals = {
-                'injector': base_injector,
-                'ainjector': base_injector(AsyncInjector),
-                'loop': asyncio.get_event_loop(),
-                'config': base_injector(ConfigLayout)
-            }
-        super().__init__(locals=self.locals)
         self.orig_completer = None
         self.orig_displayhook = None
         self.completed_keys = []
