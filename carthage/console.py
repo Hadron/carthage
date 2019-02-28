@@ -56,6 +56,8 @@ class CarthageConsole(code.InteractiveConsole):
         self.history = {}
         self.history_num = 0
         self.loop = asyncio.get_event_loop()
+        if 'h' in self.locals and self.locals['h'] is not self.history:
+            raise NotImplementedError("When replacing `h', it is unclear whether you want to link to the async history object or disable it.")
         self.locals['h'] = self.history
 
     def interact(self, *args, **kwargs):
