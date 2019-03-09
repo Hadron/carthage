@@ -57,7 +57,7 @@ i='inventory.txt',
         try:
             ansible_exc = None
             await res
-        except sh.ErrorReturnCode_2 as e:
+        except (sh.ErrorReturnCode_2, sh.ErrorReturnCode_4) as e:
             # Remember the exception, preferring it to other
             # exceptions if we get a parse error on the output
             ansible_exc = e
