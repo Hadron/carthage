@@ -258,10 +258,17 @@ class Injector(Injectable):
         if isinstance(p, collections.abc.Coroutine):
             return asyncio.ensure_future(p, loop = self.loop)
         if isinstance(p, AsyncInjectable):
-            return asyncio.ensure_future(p.async_ready(), loop = self.loop)
+            return asyncio.ensure_future(self._call_async_ready(p), loop = self.loop)
         if isinstance(p, asyncio.Future): return p
         raise RuntimeError('_is_async returned True when _handle_async cannot handle')
 
+    @staticmethod
+    async def _call_async_ready(obj):
+        res = await obj.async_ready()
+        if res is None:
+            raise TypeError("async_ready must return the object that satisfies the dependency; typically return self")
+        return res
+    
     def close(self, canceled_futures = None):
         '''
         Close all subinjectors or providers
