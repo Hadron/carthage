@@ -69,6 +69,9 @@ class VmwareMarkable(object):
 
     created = 'com.hadronindustries.carthage.created'
 
+    def __init__(self, *args, **kwargs):
+        return super().__init__(*args, **kwargs)
+
     def set_custom_fields(self, entity):
         field = self.ensure_custom_field(VmwareMarkable.created, vim.ManagedEntity)
         timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
