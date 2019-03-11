@@ -1,5 +1,5 @@
 from carthage import dependency_injection
-from carthage.dependency_injection import inject, InjectionKey
+from carthage.dependency_injection import inject, InjectionKey, AsyncInjectable
 from carthage.utils import when_needed
 from carthage.pytest import async_test
 
@@ -214,3 +214,14 @@ async def test_when_needed_cancels(loop, a_injector):
     await dependency_injection.shutdown_injector(ainjector)
     assert cancelled is True
     
+
+@async_test
+async def test_async_ready_requires_return(a_injector):
+    class AI(AsyncInjectable):
+
+        async def async_ready(self):
+            pass
+    a_injector.add_provider(AI)
+    with pytest.raises(TypeError):
+        res = await a_injector.get_instance_async(AI)
+        
