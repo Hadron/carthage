@@ -103,7 +103,8 @@ class VmwareMarkable(object):
         cfm  = content.customFieldsManager
         cfm.SetField(entity=entity, key=field.key, value=value)
 
-    def objects_with_field(self, field, root):
+
+    def objects_with_field(self, root, field):
         content = self.connection.content
         container = content.viewManager.CreateContainerView(root, [vim.ManagedEntity], True)
         ret = set()
@@ -130,31 +131,38 @@ class VmwareFolder(VmwareStampable, VmwareMarkable):
         self.ainjector = injector(AsyncInjector)
         self.inventory_object = None
         self.stamp_type = f"{self.kind}_folder"
-        super().__init__()
+        super().__init__(self)
 
     @setup_task("create_folder")
     async def create_folder(self):
-        d = self.injector(vmware_dict)
-        d['folder_name'] = self.name
-        d['state'] = 'present'
+
+        self.inventory_object = await self._find_inventory_object()
+        if self.inventory_object is not None: return
+
         parent, sep, tail = self.name.rpartition('/')
         if sep != "" and parent != "":
-            d['parent_folder'] = parent
-            d['folder_name'] = tail
             self.parent = await self.ainjector(self.__class__, parent)
-        else: d['folder_type'] = self.kind
-        await self.ainjector(carthage.ansible.run_play,
-            [carthage.ansible.localhost_machine],
-            [{'vcenter_folder': d}])
-        await self.ainjector(self._find_inventory_object)
+            pobj = self.parent.inventory_object
+        else:
+            dc = await self._find(self.config_layout.vmware.datacenter)
+            pobj = getattr(dc, self.kind + 'Folder')
+
+        ret = pobj.CreateFolder(tail)
+        self.set_custom_fields(ret)
+
+        self.inventory_object = await self._find_inventory_object()
+        assert self.inventory_object is not None
 
     @create_folder.invalidator()
     async def create_folder(self):
-        await self._find_inventory_object()
+        self.inventory_object = await self._find_inventory_object()
         return self.inventory_object
 
+    async def _find(self, s):
+        return self.connection.content.searchIndex.FindByInventoryPath(s)
+
     async def _find_inventory_object(self):
-        self.inventory_object = self.connection.content.searchIndex.FindByInventoryPath \
+        return await self._find \
             (f"{self.config_layout.vmware.datacenter}/{self.kind}/{self.name}")
 
     @memoproperty
