@@ -15,7 +15,7 @@ from ..dependency_injection import *
 from ..setup_tasks import SetupTaskMixin
 from ..config import ConfigLayout, config_defaults, config_key
 from ..setup_tasks import SetupTaskMixin, setup_task, SkipSetupTask
-from ..utils import memoproperty
+from ..utils import memoproperty, when_needed
 from .. import ConfigLayout
 from . import vm
 import carthage.ansible
@@ -133,15 +133,29 @@ class VmwareFolder(VmwareStampable, VmwareMarkable):
         self.stamp_type = f"{self.kind}_folder"
         super().__init__(self)
 
+    @staticmethod
+    def canonicalize(name):
+        parts = [x for x in name.split('/') if x != ""]
+        return "/".join(parts)
+
+
     @setup_task("create_folder")
     async def create_folder(self):
 
+    
         self.inventory_object = await self._find_inventory_object()
         if self.inventory_object is not None: return
 
         parent, sep, tail = self.name.rpartition('/')
         if sep != "" and parent != "":
-            self.parent = await self.ainjector(self.__class__, parent)
+            parent = self.canonicalize(parent)
+            parent_key = InjectionKey(self.__class__, name=parent)
+            try: self.parent = await self.ainjector.get_instance_async(parent_key)
+            except KeyError:
+                base_injector.add_provider(parent_key, when_needed(self.__class__,
+                                                                   parent, injector = self.injector))
+                self.parent = await self.ainjector.get_instance_async(parent_key)
+
             pobj = self.parent.inventory_object
         else:
             dc = await self._find(self.config_layout.vmware.datacenter)
