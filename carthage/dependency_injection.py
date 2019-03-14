@@ -153,6 +153,20 @@ class Injector(Injectable):
                 injector = injector.parent_injector
         raise KeyError("{} not found".format(k))
 
+    def injector_containing(self, k):
+        '''
+Return the first injector in our parent chain containing *k* or None if there is no such injector.
+
+        If *k* has not yet been instantiated, this injector would be the one against which the instantiation is recorded unless the provider was added with the *allow_multiple* argument to :meth:`add_provider()`.
+        '''
+        if not isinstance(k, InjectionKey):
+            k = InjectionKey(k)
+        injector = self
+        while injector and not k in injector:
+            injector = injector.parent_injector
+        if k in injector: return injector
+        return None
+        
     def __contains__(self, k):
         if not isinstance(k, InjectionKey):
             k = InjectionKey(k)

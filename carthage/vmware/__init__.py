@@ -1,10 +1,16 @@
 import carthage.dependency_injection
+
 from .vm import Vm, VmFolder, VmTemplate
 from .image import *
+from .inventory import VmwareStampable, VmwareManagedObject
+from .cluster import VmwareCluster
+from .utils import wait_for_task
+from .connection import VmwareConnection
 from .network import DistributedPortgroup, vmware_trunk_key
-from .inventory import VmwareConnection, wait_for_task
-from . import network
+from .host import *
+from .folder import *
 
+import carthage.vmware.network as network
 
 @carthage.dependency_injection.inject(
     injector = carthage.dependency_injection.Injector)
