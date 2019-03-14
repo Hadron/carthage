@@ -8,46 +8,20 @@
 
 import asyncio, logging, time
 from dataclasses import dataclass
+import carthage.ansible, carthage.network
 import os.path
+from ..machine import Machine
 from ..dependency_injection import *
 from ..config import ConfigLayout, config_defaults, config_key
 from ..setup_tasks import SetupTaskMixin, setup_task, SkipSetupTask
 from ..utils import memoproperty
-from .inventory import VmwareStampable, VmwareMarkable, VmwareConnection
-
+from .image import VmwareDataStore, VmdkTemplate
+from .inventory import VmwareStampable
+from .connection import VmwareConnection
+from .folder import VmwareFolder
+from . import network
 
 logger = logging.getLogger('carthage.vmware')
-
-@inject(config_layout = ConfigLayout,
-        injector = Injector,
-        connection = VmwareConnection)
-class VmwareAuthorizationRole(VmwareStampable, VmwareMarkable):
-
-    def __init__(self, name, privIds=[], *, config_layout, injector, connection):
-        self.name = name
-        self.privIds = privIds
-        self.injector = injector.copy_if_owned().claim()
-        self.config_layout = config_layout
-        self.connection = connection
-        self.ainjector = self.injector(AsyncInjector)
-        self.inventory_object = None
-        self.stamp_type = "authorization_role"
-        VmwareStampable.__init__(self)
-        
-    @setup_task("create role")
-    async def create_role(self):
-        am = self.connection.content.authorizationManager
-        found = None
-        for role in am.roleList:
-            if role.name == self.name:
-                found = role
-                break
-        print(found)
-        if found is None:
-            am.AddAuthorizationRole(name=self.name, privIds=self.privIds)
-        else:
-            am.UpdateAuthorizationRole(roleId=found.roleId, newName=found.name, privIds=self.privIds)
-
 
 class VmwarePrincipal(object):
     def __init__(self, principal):
@@ -61,42 +35,58 @@ class VmwareGroup(VmwarePrincipal):
     @property
     def group(self): return True
 
-@dataclass
-class VmwarePermission():
-    entity : VmwarePrincipal
-    role : VmwareAuthorizationRole
-    propagate : bool
+@inject(**VmwareStampable.injects)
+class VmwareAuthorizationRole(VmwareStampable, kind='authorization_role'):
 
-@inject(config_layout = ConfigLayout,
-        injector = Injector,
-        connection = VmwareConnection)
-class VmwareEntityPermission(VmwareStampable, VmwareMarkable):
-
-    def __init__(self,
-                 *, config_layout, injector, connection):
-        self.entity = entity
-        self.role = role
-        self.propagate = propagate
-
-        self.injector = injector.copy_if_owned().claim()
-        self.config_layout = config_layout
-        self.connection = connection
-        self.ainjector = self.injector(AsyncInjector)
-        self.inventory_object = None
-        self.stamp_type = "entity_permission"
-        VmwareStampable.__init__(self)
+    def __init__(self, name, privIds=None, *args, **kwargs):
+        self.name = name
+        self.privIds = privIds
+        VmwareStampable.__init__(self, *args, **kwargs)
         
-    @setup_task("create entity permission")
-    async def create_permission(self):
+    @memoproperty
+    def stamp_descriptor(self):
+        return self.name
+
+    def _find_role(self):
         am = self.connection.content.authorizationManager
-        found = None
         for role in am.roleList:
             if role.name == self.name:
-                found = role
-                break
-        print(found)
-        if found is None:
+                self.mob = role
+                return role
+
+    @setup_task("create role")
+    async def create(self):
+        am = self.connection.content.authorizationManager
+        role = self._find_role()
+        if role is None:
+            if self.privIds is None:
+                raise KeyError
             am.AddAuthorizationRole(name=self.name, privIds=self.privIds)
         else:
-            am.UpdateAuthorizationRole(roleId=found.roleId, newName=found.name, privIds=self.privIds)
+            if self.privIds is not None:
+                am.UpdateAuthorizationRole(roleId=role.roleId, newName=self.name, privIds=self.privIds)
 
+    @create.invalidator()
+    async def create(self):
+
+        def lists_equal(a, b):
+            return list_is_subset(a, b) and list_is_subset(b, a)
+
+        def list_is_subset(a, b):
+            for x in a:
+                if x not in b:
+                    print(x)
+                    return False
+            return True
+
+        role = self._find_role()
+        if role is not None and self.privIds is not None:
+            if not lists_equal(role.privilege, self.privIds):
+                return None
+        return role
+
+@dataclass
+class VmwarePermission():
+    principal : VmwarePrincipal
+    role : VmwareAuthorizationRole
+    propagate : bool

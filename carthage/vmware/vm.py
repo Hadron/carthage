@@ -6,19 +6,18 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import asyncio, logging, time
-import carthage.ansible, carthage.network
-import os.path
-from ..machine import Machine
-from ..dependency_injection import *
-from ..config import ConfigLayout, config_defaults, config_key
-from ..setup_tasks import SetupTaskMixin, setup_task, SkipSetupTask
-from ..utils import memoproperty
-from .image import VmwareDataStore, VmdkTemplate
-from .inventory import VmwareStampable, VmwareConnection, VmwareFolder
-from . import network
+from carthage import *
 
-logger = logging.getLogger('carthage.vmware')
+import asyncio, logging, time
+
+import carthage.ansible, carthage.network
+
+from .image import VmwareDataStore, VmdkTemplate
+from .inventory import VmwareStampable
+from .connection import VmwareConnection
+from .folder import VmwareFolder
+
+logger = logging.getLogger('carthage.vmware.vm')
 
 config_defaults.add_config({
     'vmware': {
@@ -36,13 +35,18 @@ config_defaults.add_config({
         }})
 vmware_config = config_key('vmware')
 
-@inject(config_layout = ConfigLayout,
-        injector = Injector,
-        connection = VmwareConnection)
-class VmFolder(VmwareFolder):
-    kind = 'vm'
+@inject(**VmwareFolder.injects)
+class VmFolder(VmwareFolder, kind='vm'):
+
+    @memoproperty
+    def inventory_view(self):
+        return self.injector(VmInventory, folder=self)
 
     async def delete(self):
+        task = self.mob.Destroy_Task()
+        # await carthage.vmware.utils.wait_for_task(task)
+
+    async def prevdelete(self):
         v = None
         try:
             v = self.injector(inventory.VmInventory, folder = self)
@@ -61,11 +65,9 @@ class VmFolder(VmwareFolder):
         finally:
             if v: v.close()
         await asyncio.sleep(2)
-        return await inventory.wait_for_task(self.inventory_object.Destroy())
-        
-            
-
+        return await utils.wait_for_task(self.inventory_object.Destroy())
     
+
 @inject(config = vmware_config)
 def vmware_dict(config, **kws):
     '''
@@ -260,10 +262,6 @@ class Vm(Machine, VmwareStampable):
             except IndexError: pass
             time.sleep(5)
         raise TimeoutError(f'Unable to get IP address for {self.name}')
-    
-                
-            
-    
 
 @inject(
     config = ConfigLayout,
@@ -306,6 +304,25 @@ class VmTemplate(Vm):
         try:
             self.inventory_object.MarkAsTemplate()
         except Exception: pass
+
+@inject(folder = VmwareFolder, connection = VmwareConnection)
+class VmInventory(Injectable):
+
+    def __init__(self, *, folder, connection):
+        self.view = connection.content.viewManager.CreateContainerView(
+            folder.inventory_object,
+            [vim.VirtualMachine], True)
+
+    def find_by_name(self, name):
+        for v in self.view.view:
+            if v.name == name: return v
+        return None
+
+    def close(self):
+        try:
+            self.view.Destroy()
+            del self.view
+        except: pass
 
 #Now mark VM as taking a template
 inject(template = InjectionKey(VmTemplate, optional = True))(Vm)
