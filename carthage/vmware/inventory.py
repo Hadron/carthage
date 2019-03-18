@@ -108,7 +108,10 @@ class VmwareManagedObject(VmwareStampable):
     #: False if this object should have a parent
     is_root = False
     
-    @setup_task("Constructing object")
+    async def async_ready(self):
+        await self.construct()
+        return await super().async_ready()
+
     async def construct(self):
         if not self.mob:
             self.mob = self._find_from_path()
