@@ -13,7 +13,7 @@ import asyncio, logging, time
 import carthage.ansible, carthage.network
 
 from .image import VmwareDataStore, VmdkTemplate
-from .inventory import VmwareStampable
+from .inventory import VmwareNamedObject
 from .connection import VmwareConnection
 from .folder import VmwareFolder
 
@@ -84,33 +84,34 @@ def vmware_dict(config, **kws):
 
     
 @inject(
-    config = ConfigLayout,
-    injector = Injector,
+    **VmwareNamedObject.injects,
     storage = VmwareDataStore,
     folder = InjectionKey(VmFolder, optional = True),
     network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
     # We add a template VM to the dependencies later avoiding a forward reference
     )
-class Vm(Machine, VmwareStampable):
+class Vm(Machine, VmwareNamedObject):
 
     stamp_type = "vm"
+    parent_type = VmFolder
 
     nested_virt = False #: Enable nested virtualization
     def __init__(self, name, template,
                  guest_id = "ubuntu64Guest",
-                 *, injector, config, storage, folder, network_config = None,
-                 console_needed = True):
-        super().__init__(name, injector, config)
+                 *args, storage, folder, network_config = None,
+                 console_needed = True, **kwargs):
+        VmwareNamedObject.__init__(self, name, **kwargs)
+        # super().__init__(name, injector, config)
         self.storage = storage
         self.running = False
         self.folder = folder
-        vm_config = config.vmware
+        vm_config = self.config_layout.vmware
         self.cpus = vm_config.hardware.cpus
         self.memory = vm_config.hardware.memory
         self.paravirt = vm_config.hardware.paravirt
         self.disk_size = vm_config.hardware.disk
-        if config.vm_image_size > self.disk_size*1000000000:
-            self.disk_size = int(config.vm_image_size/1000000000)
+        if self.config_layout.vm_image_size > self.disk_size*1000000000:
+            self.disk_size = int(self.config_layout.vm_image_size/1000000000)
         self.guest_id = guest_id
         self.network_config = network_config
         self.template_name = None
@@ -127,7 +128,8 @@ class Vm(Machine, VmwareStampable):
     
     async def async_ready(self):
         if not self.folder:
-            self.folder = await self.ainjector(VmFolder, self.config_layout.vmware.folder)
+            if False:
+                self.folder = await self.ainjector(VmFolder, self.config_layout.vmware.folder)
             return await super().async_ready()
 
     async def _network_dict(self):
@@ -194,9 +196,7 @@ class Vm(Machine, VmwareStampable):
                                     [carthage.ansible.localhost_machine],
                                     {'vmware_guest': d})
 
-    
-    @setup_task("provision_vm")
-    async def create_vm(self):
+    async def do_create(self):
         try:
             res =  await self.ainjector(self._ansible_op, state='present')
         except carthage.ansible.AnsibleFailure as e:
@@ -209,16 +209,6 @@ class Vm(Machine, VmwareStampable):
         await self.ainjector(self._find_inventory_object)
         return res
 
-    @create_vm.invalidator()
-    async def create_vm(self):
-        await self.ainjector(self._find_inventory_object)
-        return self.inventory_object
-
-    async def _find_inventory_object(self):
-        self.inventory_object = self.folder.inventory_view.find_by_name(self.full_name)
-        
-
-    
     async def delete_vm(self):
         return await self.ainjector(self._ansible_op, state = 'absent', force = True)
 
