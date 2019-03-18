@@ -130,6 +130,7 @@ class VmwareManagedObject(VmwareStampable):
 
 
     def children(self, objtypes, recursive=True):
+        assert self.mob is not None
         vm = self.connection.content.viewManager
         container = vm.CreateContainerView(self.mob, objtypes, recursive)
         for ref in container.view:
