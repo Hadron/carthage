@@ -15,7 +15,6 @@ __all__ = ['VmwareFolder', 'HostFolder']
 @inject(**VmwareNamedObject.injects)
 class VmwareFolder(VmwareNamedObject):
 
-            
     '''
 If a fully qualified name (in the form that ``searchIndex.FindByInventoryPath`` would recognize is passed in, then that is used directly as the :meth:`vmware_path`.  If a path is passed in without a leading slash, then we look up ``vmware.datacenter`` in the :class:`.ConfigLayout`  and start from the appropriate kind of folder for that data center.
     '''
@@ -28,6 +27,7 @@ If a fully qualified name (in the form that ``searchIndex.FindByInventoryPath`` 
         super().__init_subclass__(**kwargs)
 
     def __init__(self, name, *args, **kwargs):
+        from . import datacenter
         if name.startswith('/') or 'parent' in kwargs:
             kwargs['name'] = name
         else: #No initial slash, no explicit parent
