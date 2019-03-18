@@ -8,20 +8,12 @@
 
 from carthage import *
 
-from .folder import VmwareFolder
+from .folder import VmwareFolder, HostFolder
 from .inventory import VmwareSpecifiedObject
 
-__all__ = ['HostFolder', 'VmwareHost']
-
-@inject(**VmwareFolder.injects)
-class HostFolder(VmwareFolder, kind='host'):
-
-
-    pass
+__all__ = ['VmwareHost']
 
 @inject(**VmwareSpecifiedObject.injects)
 class VmwareHost(VmwareSpecifiedObject, kind='host'):
-    parent_type = HostFolder
-    
-    pass
-
+    from .cluster import VmwareCluster
+    parent_type = (VmwareCluster, HostFolder)

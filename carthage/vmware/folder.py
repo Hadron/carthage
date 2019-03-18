@@ -10,8 +10,7 @@ from carthage import *
 
 from .inventory import *
 
-
-__all__ = ['VmwareFolder']
+__all__ = ['VmwareFolder', 'HostFolder']
 
 @inject(**VmwareNamedObject.injects)
 class VmwareFolder(VmwareNamedObject):
@@ -49,4 +48,6 @@ If a fully qualified name (in the form that ``searchIndex.FindByInventoryPath`` 
         task = self.mob.Destroy_Task()
         await carthage.vmware.utils.wait_for_task(task)
 
-from . import datacenter
+@inject(**VmwareFolder.injects)
+class HostFolder(VmwareFolder, kind='host'):
+    pass

@@ -9,7 +9,7 @@
 from carthage import *
 
 from .inventory import VmwareSpecifiedObject
-from .host import HostFolder
+from .folder import HostFolder
 
 @inject(**VmwareSpecifiedObject.injects)
 class VmwareCluster(VmwareSpecifiedObject, kind='cluster'):
