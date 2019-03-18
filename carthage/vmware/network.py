@@ -28,33 +28,26 @@ config_defaults.add_config({'vmware': {
 @inject(**VmwareFolder.injects)
 class NetworkFolder(VmwareFolder, kind='network'):
 
-    def vmware_path_for(self, child):
-        if isinstance(child, (DistributedPortgroup, DvSwitch)):
-            return super().vmware_path_for(self)
-        return super().vmware_path_for(child)
 
     pass
 
-@inject(**VmwareSpecifiedObject.injects)
+@inject(**VmwareSpecifiedObject.injects,
+        )
 class DvSwitch(VmwareSpecifiedObject):
 
-    def vmware_path_for(self, child):
+    parent_type = NetworkFolder
+    stamp_type = "dvswitch"
 
-        # Without this, the DvSwitch itself will just be
-        # [Datacenter]/network.
-        if child is self:
-            return super().vmware_path_for(child)
-
-        # Otherwise, the child wants to go under the 'network' folder
-        # directly.  Which doesn't make much sense to me, but that's
-        # how VMware does it.
-        return self.provided_parent.vmware_path_for(child)
-
-    def __init__(self, *args, config_layout, **kwargs):
+    def __init__(self, *args, **kwargs):
         if 'name' not in kwargs:
-            kwargs['name'] = config_layout.vmware.distributed_switch
+            config = kwargs['config_layout']
+            name = config.vmware.distributed_switch
+            if not name.startswith('/'):
+                name = f'/{config.vmware.datacenter}/network/{name}'
+            kwargs['name'] = name
+                
             kwargs['readonly'] = kwargs.get('readonly', True)
-        super().__init__(*args, **kwargs, config_layout=config_layout)
+        super().__init__(*args, **kwargs)
 
 @inject(**VmwareNamedObject.injects, network=this_network)
 class VmwareNetwork(VmwareNamedObject, TechnologySpecificNetwork):
@@ -70,21 +63,22 @@ class VmwareNetwork(VmwareNamedObject, TechnologySpecificNetwork):
     def __repr__(self):
         return f"<{self.__class__.__name__} for {self.network.name}: {self.vmware_path}>"
 
-@inject(**VmwareNetwork.injects)
+@inject(**VmwareNetwork.injects,
+        dvswitch = DvSwitch)
 class DistributedPortgroup(VmwareNetwork):
 
     stamp_type = "portgroup"
 
-    def __init__(self, *args, config_layout, **kwargs):
+    parent_type = NetworkFolder
+    
+    def __init__(self, *args, config_layout, dvswitch, **kwargs):
+        self.dvswitch = dvswitch
         if 'name' not in kwargs:
             kwargs['name'] = kwargs['network'].name
-            kwargs['readonly'] = kwargs.get('readonly', True)
+            kwargs['readonly'] = kwargs.get('readonly', False)
+            kwargs['parent'] = dvswitch.parent
         super().__init__(*args, **kwargs, config_layout=config_layout)
 
-    async def find_parent(self):
-        if self.provided_parent is None:
-            return await self.ainjector(DvSwitch)
-        return await super().find_parent()
 
     @memoproperty
     def name(self):
@@ -122,13 +116,13 @@ class DistributedPortgroup(VmwareNetwork):
             default.vlan = vlan_spec
         cs.defaultPortConfig = default
         if not self.mob:
-            task = self.provided_parent.mob.AddDVPortgroup_Task([cs])
+            task = self.dvswitch.mob.AddDVPortgroup_Task([cs])
         else:
             cs.configVersion = self.mob.config.configVersion
             task = self.mob.ReconfigureDVPortgroup_Task(cs)
         await wait_for_task(task)
         try:
-            del self.__dict__['inventory_object']
+            del self.__dict__['mob']
         except KeyError: pass
 
     @memoproperty
@@ -140,7 +134,6 @@ class DistributedPortgroup(VmwareNetwork):
         if not self.mob:
             raise RuntimeError(f"{self} does not exist")
         task = self.mob.Destroy()
-        loop = self.injector.get_instance(asyncio.AbstractEventLoop)
         await wait_for_task(task)
         
     async def also_accessed_by(self, others):
