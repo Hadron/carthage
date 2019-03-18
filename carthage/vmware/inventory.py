@@ -184,9 +184,6 @@ class VmwareManagedObject(VmwareStampable):
         ret = find(self.vmware_path)
         return ret
 
-
-
-
     def set_custom_fields(self):
         entity = self.mob
         if not self.writable: return
@@ -195,8 +192,6 @@ class VmwareManagedObject(VmwareStampable):
             field = self._ensure_custom_field(name, vim.ManagedEntity)
             timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
             self.set_custom_field( field, value_func(self))
-
-
 
     def _fetch_custom_field(self, fname):
         content = self.connection.content
