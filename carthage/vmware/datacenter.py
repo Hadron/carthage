@@ -36,6 +36,6 @@ class VmwareDatacenter(VmwareNamedObject, kind='datacenter'):
             kwargs['readonly'] = kwargs.get('readonly', True)
         super().__init__(*args, **kwargs, config_layout=config_layout)
 
-    parent_type = None
+    parent_type = type(None)
 
     is_root = True
