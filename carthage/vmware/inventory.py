@@ -250,6 +250,16 @@ class VmwareManagedObject(VmwareStampable):
         container.Destroy()
         return ret
 
+    @staticmethod
+    def _parent_path_from_mob(mob):
+        parts = []
+        while mob:
+            parts.append(mob.name)
+            if isinstance(mob,vim.Datacenter):
+                mob = None
+            else: mob = mob.parent
+        return "/"+"/".join(reversed(parts))
+    
 @inject(**VmwareManagedObject.injects)
 class VmwareNamedObject(VmwareManagedObject):
 
