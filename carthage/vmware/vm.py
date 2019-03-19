@@ -16,6 +16,9 @@ from .image import VmwareDataStore, VmdkTemplate
 from .inventory import VmwareNamedObject
 from .connection import VmwareConnection
 from .folder import VmwareFolder
+from .cluster import VmwareCluster
+from .datacenter import VmwareDatacenter
+from .utils import wait_for_task
 
 from pyVmomi import vim
 
@@ -44,21 +47,17 @@ class VmFolder(VmwareFolder, kind='vm'):
     def inventory_view(self):
         return self.injector(VmInventory, folder=self)
 
-    async def delete(self):
-        task = self.mob.Destroy_Task()
-        # await carthage.vmware.utils.wait_for_task(task)
-
-    async def prevdelete(self):
+    async def delete(self, cluster = None):
         v = None
         try:
-            v = self.injector(inventory.VmInventory, folder = self)
+            v = self.children([vim.VirtualMachine])
             cluster_name = self.config_layout.vmware.cluster
-            datacenter_name = self.config_layout.vmware.datacenter
-            cluster = self.connection.content.searchIndex.FindByInventoryPath(f"{datacenter_name}/host/{cluster_name}")
             if not cluster:
-                raise RuntimeError(f"Cluster {cluster_name} not found")
-            rp = cluster.resourcePool
-            for vm in v.view.view:
+                datacenter = await self.ainjector(VmwareDatacenter)
+                cluster = await self.ainjector(VmwareCluster, name = cluster_name, parent = datacenter.host_folder)
+            
+                rp = cluster.mob.resourcePool
+            for vm in v:
                 try: vm.MarkAsVirtualMachine(rp)
                 except:
                     pass
@@ -67,7 +66,7 @@ class VmFolder(VmwareFolder, kind='vm'):
         finally:
             if v: v.close()
         await asyncio.sleep(2)
-        return await utils.wait_for_task(self.inventory_object.Destroy())
+        return await wait_for_task(self.mob.Destroy())
     
 
 @inject(config = vmware_config)
