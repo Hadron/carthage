@@ -30,6 +30,8 @@ def vmware_dict(config, **kws):
     d.update(kws)
     return d
 
+class NotFound(LookupError): pass
+
 class VmwareStampable(SetupTaskMixin, AsyncInjectable):
 
     def __init_subclass__(cls, *, kind=NotImplemented):
@@ -118,7 +120,7 @@ class VmwareManagedObject(VmwareStampable):
         await self._find_parent()
         if not self.mob:
             if not self.writable:
-                raise ValueError(f'{type(self)} with path {self.vmware_path} does not exist')
+                raise NotFound(f'{type(self)} with path {self.vmware_path} does not exist')
             await self.do_create()
             self.mob = self._find_from_path()
 
