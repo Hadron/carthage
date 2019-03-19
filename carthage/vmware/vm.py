@@ -17,6 +17,8 @@ from .inventory import VmwareNamedObject
 from .connection import VmwareConnection
 from .folder import VmwareFolder
 
+from pyVmomi import vim
+
 logger = logging.getLogger('carthage.vmware.vm')
 
 config_defaults.add_config({
@@ -211,6 +213,22 @@ class Vm(Machine, VmwareNamedObject):
 
     async def delete_vm(self):
         return await self.ainjector(self._ansible_op, state = 'absent', force = True)
+
+    async def reconfigure(self, spec):
+        task = self.mob.ReconfigVM_Task(spec=spec)
+        return await carthage.vmware.utils.wait_for_task(task)
+
+    async def remove_cdroms(self):
+        cs = vim.vm.ConfigSpec()
+        dc = cs.deviceChange = []
+        for dev in self.mob.config.hardware.device:
+            if not isinstance(dev, vim.vm.device.VirtualCdrom): continue
+            ds = vim.vm.device.VirtualDeviceSpec()
+            ds.operation = vim.vm.device.VirtualDeviceSpec.Operation.remove
+            ds.device = dev
+            dc.append(ds)
+        if len(dc) > 0:
+            return await self.reconfigure(cs)
 
     async def start_machine(self):
         loop = self.injector.get_instance(asyncio.AbstractEventLoop)
