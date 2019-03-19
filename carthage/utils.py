@@ -154,26 +154,31 @@ def permute_identifier(id, maxlen):
 
 
 
-def carthage_main_argparser():
-    parser = argparse.ArgumentParser()
+def add_carthage_arguments(parser):
     parser.add_argument('--config',
-                         metavar = "file",
-                         type = argparse.FileType('rt'),
-     )
+                        metavar = "file",
+                        type = argparse.FileType('rt'),
+                        action = 'append')
     parser.add_argument('--command-verbose',
-                         help = "Verbose command logging",
-                         action ='store_true')
+                        help = "Verbose command logging",
+                        action ='store_true')
     parser.add_argument('--tasks-verbose',
                         help = "Verbose logging for tasks",
                         action = 'store_true')
     return parser
 
+def carthage_main_argparser(*args, **kwargs):
+    parser = argparse.ArgumentParser(*args, **kwargs)
+    add_carthage_arguments(parser)
+    return parser
+
 def carthage_main_setup(parser):
     from . import base_injector, ConfigLayout
     args = parser.parse_args()
-    if args.config:
+    if len(args.config) > 0:
         config = base_injector(ConfigLayout)
-        config.load_yaml(args.config)
+        for f in args.config:
+            config.load_yaml(f)
     root_logger = logging.getLogger()
     console_handler = logging.StreamHandler()
     root_logger.addHandler(console_handler)
@@ -207,5 +212,5 @@ def carthage_main_run(func, *args, **kwargs):
 
 
 __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
-           'carthage_main_argparser', 'carthage_main_setup',
-           'carthage_main_run']
+           'add_carthage_arguments', 'carthage_main_argparser',
+           'carthage_main_setup', 'carthage_main_run']
