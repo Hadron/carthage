@@ -130,7 +130,7 @@ class Vm(Machine, VmwareNamedObject):
         if not self.folder:
             if False:
                 self.folder = await self.ainjector(VmFolder, self.config_layout.vmware.folder)
-            return await super().async_ready()
+        return await super().async_ready()
 
     async def _network_dict(self):
         if not self.network_config: return []
