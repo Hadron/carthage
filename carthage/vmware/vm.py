@@ -19,6 +19,7 @@ from .folder import VmwareFolder
 from .cluster import VmwareCluster
 from .datacenter import VmwareDatacenter
 from .utils import wait_for_task
+from . import network
 
 from pyVmomi import vim
 
@@ -43,6 +44,13 @@ vmware_config = config_key('vmware')
 @inject(**VmwareFolder.injects)
 class VmFolder(VmwareFolder, kind='vm'):
 
+    def __init__(self, name = None, **kwargs):
+        if name is None:
+            name = kwargs['config_layout'].vmware.folder
+        kwargs['name'] = name
+        kwargs.setdefault('readonly', False)
+        super().__init__(**kwargs)
+        
     @memoproperty
     def inventory_view(self):
         return self.injector(VmInventory, folder=self)
@@ -83,29 +91,41 @@ def vmware_dict(config, **kws):
     d.update(kws)
     return d
 
+
+class VmwareMachineObject(VmwareNamedObject):
+
+    # We need to disrupt the mro after Machine is done and before calling VmwareManagedObject.__init__ because they have different signatures.
+
+    def __init__(*args, **kwargs):
+        pass
     
 @inject(
     **VmwareNamedObject.injects,
     storage = VmwareDataStore,
-    folder = InjectionKey(VmFolder, optional = True),
+    parent = InjectionKey(VmFolder, optional = True),
     network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
     # We add a template VM to the dependencies later avoiding a forward reference
     )
-class Vm(Machine, VmwareNamedObject):
+class Vm(Machine, VmwareMachineObject):
 
     stamp_type = "vm"
     parent_type = VmFolder
 
     nested_virt = False #: Enable nested virtualization
+
     def __init__(self, name, template,
                  guest_id = "ubuntu64Guest",
-                 *args, storage, folder, network_config = None,
+                 *args, storage, network_config = None,
                  console_needed = True, **kwargs):
-        VmwareNamedObject.__init__(self, name, **kwargs)
-        # super().__init__(name, injector, config)
+        kwargs.setdefault('readonly', False)
+        VmwareNamedObject.__init__(self, name = name, **kwargs)
+        Machine.__init__(self, name = name, config_layout = kwargs['config_layout'],
+                         injector = kwargs['injector'])
+        
+
         self.storage = storage
         self.running = False
-        self.folder = folder
+        self.folder = self.parent
         vm_config = self.config_layout.vmware
         self.cpus = vm_config.hardware.cpus
         self.memory = vm_config.hardware.memory
@@ -119,7 +139,7 @@ class Vm(Machine, VmwareNamedObject):
         self.template_snapshot = None
         self.inventory_object = None
         if template:
-            self.template_name = template.inventory_object.name
+            self.template_name = template.mob.name
             if template.clone_from_snapshot:
                 self.template_snapshot = template.clone_from_snapshot
         self._operation_lock = asyncio.Lock()
@@ -165,7 +185,7 @@ class Vm(Machine, VmwareNamedObject):
                                      folder = self.folder.name,
                                      cluster = config.cluster,
                                  datastore = self.storage.name,)
-        if not self.inventory_object:
+        if not self.mob:
             d.update(
                 guest_id = self.guest_id,
                 hardware = dict(
@@ -191,7 +211,6 @@ class Vm(Machine, VmwareNamedObject):
         return d
 
     async def _ansible_op(self, **kwargs):
-        await self.ainjector(self._find_inventory_object)
         d = await self.ainjector(self._ansible_dict, **kwargs)
         return await self.ainjector(carthage.ansible.run_play,
                                     [carthage.ansible.localhost_machine],
@@ -207,7 +226,7 @@ class Vm(Machine, VmwareNamedObject):
             else:
                 raise
             
-        await self.ainjector(self._find_inventory_object)
+            self.mob =  self._find_from_path()
         return res
 
     async def delete_vm(self):
@@ -236,10 +255,10 @@ class Vm(Machine, VmwareNamedObject):
                 logger.debug(f'Starting dependencies for {self.name}')
                 await self.start_dependencies()
                 logger.info(f'Starting {self.name} VM')
-                power = self.inventory_object.summary.runtime.powerState
+                power = self.mob.summary.runtime.powerState
                 if power != "poweredOn": 
-                    task = self.inventory_object.PowerOn()
-                    await inventory.wait_for_task(task)
+                    task = self.mob.PowerOn()
+                    await wait_for_task(task)
                     if task.info.state != 'success':
                         raise RuntimeError(task.info.error)
                 self.running = True
@@ -251,17 +270,17 @@ class Vm(Machine, VmwareNamedObject):
         async with self._operation_lock:
             if not self.running: return
             logger.info(f'Stopping {self.name} VM')
-            power = self.inventory_object.summary.runtime.powerState
+            power = self.mob.summary.runtime.powerState
             if power == "poweredOn": 
-                task = self.inventory_object.PowerOff()
-                await inventory.wait_for_task(task)
+                task = self.mob.PowerOff()
+                await wait_for_task(task)
             self.running = False
             return True
 
     def _get_ip_address(self):
         for i in range(20):
             try:
-                nets = self.inventory_object.guest.net
+                nets = self.mob.guest.net
                 nets.sort(key = lambda x: x.deviceConfigId)
                 ip =nets[0].ipAddress[0]
                 self.ip_address = ip
@@ -271,11 +290,10 @@ class Vm(Machine, VmwareNamedObject):
         raise TimeoutError(f'Unable to get IP address for {self.name}')
 
 @inject(
-    config = ConfigLayout,
-    injector = Injector,
-    folder = InjectionKey(VmFolder, optional = True),
-    network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
+    **VmwareNamedObject.injects,
     storage = VmwareDataStore,
+    parent = InjectionKey(VmFolder, optional = True),
+    network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
 )
 class VmTemplate(Vm):
     clone_from_snapshot = "template_snapshot"
@@ -290,7 +308,7 @@ class VmTemplate(Vm):
 
     async def _ansible_dict(self, **kwargs):
         d = await self.ainjector(super()._ansible_dict, **kwargs)
-        if self.disk and not self.inventory_object:
+        if self.disk and not self.mob:
             if not isinstance(self.disk, VmdkTemplate):
                 logger.info(f"Building disk for {self}")
                 self.disk = await self.ainjector(self.disk)
@@ -301,15 +319,15 @@ class VmTemplate(Vm):
     @inject(loop = asyncio.AbstractEventLoop)
     async def create_clone_snapshot(self, loop):
         if self.clone_from_snapshot is None:  raise SkipSetupTask
-        t = self.inventory_object.CreateSnapshot("template_snapshot", "Snapshot for template clones", False, True)
-        await inventory.wait_for_task(t)
+        t = self.mob.CreateSnapshot("template_snapshot", "Snapshot for template clones", False, True)
+        await wait_for_task(t)
 
     @setup_task("Mark as template")
     async def mark_as_template(self):
         # ESXI 6.7 seems to have a bug  producing linked clones from templates rather than VMs
         if self.clone_from_snapshot: raise SkipSetupTask
         try:
-            self.inventory_object.MarkAsTemplate()
+            self.mob.MarkAsTemplate()
         except Exception: pass
 
 @inject(folder = VmwareFolder, connection = VmwareConnection)
@@ -317,7 +335,7 @@ class VmInventory(Injectable):
 
     def __init__(self, *, folder, connection):
         self.view = connection.content.viewManager.CreateContainerView(
-            folder.inventory_object,
+            folder.mob,
             [vim.VirtualMachine], True)
 
     def find_by_name(self, name):
