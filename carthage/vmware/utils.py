@@ -8,3 +8,9 @@ def wait_for_task(task):
         if task.info.state == 'error':
             raise task.info.error
     return loop.run_in_executor(None, callback)
+
+async def await_task(task):
+    while task.info.state not in ('success', 'error'):
+        await asyncio.sleep(0.2)
+    if task.info.state == 'error':
+        raise task.info.error
