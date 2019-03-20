@@ -1,7 +1,7 @@
 import sys
 from .images import  HadronVmImage
 from ..vmware.image import VmdkTemplate, image_datastore_key
-from ..vmware import VmTemplate, Vm, VmwareDataStore, VmFolder
+from ..vmware import VmTemplate, Vm, VmwareDataStore, VmFolder, VmwareConnection
 from ..dependency_injection import AsyncInjector, inject, Injector, InjectionKey
 from ..utils import when_needed
 from ..config import ConfigLayout
@@ -68,18 +68,20 @@ async def aces_vm_template(ainjector):
 @inject(
     config_layout = ConfigLayout,
     storage = VmwareDataStore,
-    folder = InjectionKey(VmFolder, optional = True),
-    injector = Injector
+    parent = InjectionKey(VmFolder, optional = True),
+    injector = Injector,
+    connection = VmwareConnection
     )
 class CarthageVm(Vm):
 
     nested_virt = True
 
     def __init__(self, name, template, *,
-                 config_layout, storage, injector, folder):
+                 config_layout, storage, injector, parent, connection):
         super().__init__(name, template, injector = injector,
-                         config = config_layout,
-                         network_config = carthage_vmware_netconfig, storage = storage, folder = folder)
+                         config_layout = config_layout,
+                         network_config = carthage_vmware_netconfig, storage = storage, parent = parent,
+                         connection = connection)
         self.cpus = 8
         self.memory = 30000
         self.disk_size = 60
