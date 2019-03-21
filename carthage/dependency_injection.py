@@ -12,6 +12,8 @@ import asyncio, functools
 import logging
 import types
 import sys
+from dataclasses import dataclass
+
 from . import tb_utils
 _chatty_modules = {asyncio.futures, asyncio.tasks, sys.modules[__name__]}
 logger = logging.getLogger('carthage.dependency_injection')
@@ -249,7 +251,7 @@ Return the first injector in our parent chain containing *k* or None if there is
             instance = instantiate(satisfy_against,  k, provider.provider)
             if self._is_async(instance):
                 if not futures_instantiate:
-                    raise UnsatisfactoryDependency("{} has an asynchronous provider injected into a non-asynchronous context".format(k))
+                    raise InjectionFailed("{} has an asynchronous provider injected into a non-asynchronous context".format(k))
                 future = self._handle_async(instance)
                 future.add_done_callback(resolve_future( satisfy_against, k))
                 provider.record_instantiation(future, k, satisfy_against) 
@@ -347,7 +349,7 @@ class InjectionKey:
         return r+")"
 
     def __setattr__(self, k, v):
-        raise TypeError('InjectionKeys are immutible')
+        raise TypeError('InjectionKeys are immutable')
 
 
     def __hash__(self):
@@ -372,6 +374,11 @@ class InjectionKey:
                 if c is p.__class__: continue
                 yield InjectionKey(c)
                 
+@dataclass
+class UnsatisfactoryDependency(RuntimeError):
+    dependency: InjectionKey
+    provider: DependencyProvider
+    reason: str = None
 
 def inject(**dependencies):
     '''A dhecorator to indicate that a function requires dependencies:
