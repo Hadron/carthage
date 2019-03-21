@@ -267,8 +267,13 @@ class VmwareNamedObject(VmwareManagedObject):
 
     def __init__(self, name=None, *args, **kwargs):
         parent = kwargs.get('parent', None)
-        if parent and '/' in name:
+        if parent and name.startswith('/'):
             raise TypeError("Cannot specify both a parent and a name containing a full path")
+        elif parent and '/' in name:
+            parent_add, sep, name = name.rpartition('/')
+            if not isinstance(parent, str):
+                parent = parent.parent_path
+            kwargs['parent'] = parent+'/'+parent_add
         elif parent is None and '/' in name:
             kwargs['parent'], sep, name = name.rpartition('/')
         if 'mob' in kwargs and name is None:
