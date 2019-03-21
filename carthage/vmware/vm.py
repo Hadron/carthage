@@ -62,7 +62,9 @@ class VmFolder(VmwareFolder, kind='vm'):
             cluster_name = self.config_layout.vmware.cluster
             if not cluster:
                 datacenter = await self.ainjector(VmwareDatacenter)
-                cluster = await self.ainjector(VmwareCluster, name = cluster_name, parent = datacenter.host_folder)
+                cluster = await self.ainjector(
+                    VmwareCluster, name = cluster_name,
+                    parent = datacenter.host_folder if not cluster_name.startswith('/') else None)
             
                 rp = cluster.mob.resourcePool
             for vm in v:
