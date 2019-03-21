@@ -30,9 +30,9 @@ class Injectable:
 
     @classmethod
     def satisfies_injection_key(cls, k):
-        if k is InjectionKey(cls): return True
+        if k == InjectionKey(cls): return True
         if isinstance(k.target, (str, tuple)): return True
-        return  k in cls.supplementary_injection_keys(InjectionKey(cls))
+        return k in cls.supplementary_injection_keys(InjectionKey(cls))
 
 class DependencyProvider:
     __slots__ = ('provider',
