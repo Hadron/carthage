@@ -152,11 +152,11 @@ class Vm(Machine, VmwareMachineObject):
     async def delete(self):
         try:
             task = self.mob.PowerOffVM_Task()
-            await carthage.vmware.utils.await_task(task)
+            await carthage.vmware.utils.wait_for_task(task)
         except vim.fault.InvalidPowerState:
             pass
         task = self.mob.Destroy_Task()
-        await carthage.vmware.utils.await_task(task)
+        await carthage.vmware.utils.wait_for_task(task)
 
     async def async_ready(self):
         if not self.folder:
