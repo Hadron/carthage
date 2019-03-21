@@ -26,6 +26,8 @@ def carthage_plugin(injector):
     from ..config import ConfigIterator
     from ..dependency_injection import partial_with_dependencies
     from ..utils import when_needed
+    from . import inventory
+    injector.add_provider(inventory.custom_fields_key, inventory.default_custom_fields)
     injector.add_provider(DistributedPortgroup, allow_multiple = True)
     injector.add_provider(VmFolder)
     injector.add_provider(vmware_trunk_key, network._vmware_trunk)

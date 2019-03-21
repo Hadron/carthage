@@ -14,6 +14,10 @@ from pyVmomi import vim, vmodl
 
 from .connection import VmwareConnection
 vmware_config = config_key('vmware')
+__all__ = "VmwareStampable VmwareManagedObject VmwareNamedObject VmwareSpecifiedObject custom_fields_key default_custom_fields all_objs".split()
+
+#: The provider for this key should be a dictionary mapping field names to functions.  The function takes a VmwareStampable and returns the field value.
+custom_fields_key = InjectionKey('vmware.custom_fields_key')
 
 
 @inject(config = vmware_config)
@@ -109,20 +113,24 @@ class VmwareManagedObject(VmwareStampable):
 
     #: False if this object should have a parent
     is_root = False
-    
-    async def async_ready(self):
-        await self.construct()
-        return await super().async_ready()
+    @setup_task("Construct object")
+    async def construct(self):
+        if not self.mob:
+            if not self.writable:
+                raise NotFound(f'{type(self)} with path {self.vmware_path} does not exist')
+        await self.do_create()
+        self.mob = self._find_from_path()
+        self.set_custom_fields()
 
+    @construct.check_completed()
     async def construct(self):
         if not self.mob:
             self.mob = self._find_from_path()
         await self._find_parent()
-        if not self.mob:
-            if not self.writable:
-                raise NotFound(f'{type(self)} with path {self.vmware_path} does not exist')
-            await self.do_create()
-            self.mob = self._find_from_path()
+        if not self.mob: return False
+        v = self.get_field_value(self.created)
+        if v is None: return True #We don't know the dependency
+        return datetime.datetime.fromisoformat(v).timestamp()
 
     async def _find_parent(self):
         if self.parent or self.is_root: return
@@ -202,8 +210,7 @@ class VmwareManagedObject(VmwareStampable):
         fields = self.injector.get_instance(custom_fields_key)
         for name, val_func in fields.items():
             field = self._ensure_custom_field(name, vim.ManagedEntity)
-            timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
-            self.set_custom_field( field, value_func(self))
+            self.set_custom_field( field, val_func(self))
 
     def _fetch_custom_field(self, fname):
         content = self.connection.content
@@ -237,7 +244,7 @@ class VmwareManagedObject(VmwareStampable):
             
         for val in self.mob.customValue:
             if (val.key == field.key) and (val.value != ''):
-                return val
+                return val.value
         return None
 
     def objects_with_field(self, field):
@@ -317,3 +324,9 @@ def all_objs(content, root, objtype):
     for ref in container.view:
         yield ref
     container.Destroy()
+
+def created_current_time(_):
+    return datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
+
+default_custom_fields = {
+    VmwareManagedObject.created: created_current_time}
