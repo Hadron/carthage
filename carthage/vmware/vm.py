@@ -5,13 +5,14 @@ import asyncio, logging, time
 import carthage.ansible, carthage.network
 
 from .image import VmwareDataStore, VmdkTemplate
-from .inventory import VmwareNamedObject
+from .inventory import VmwareNamedObject, VmwareSpecifiedObject
 from .connection import VmwareConnection
 from .folder import VmwareFolder
 from .cluster import VmwareCluster
 from .datacenter import VmwareDatacenter
 from .utils import wait_for_task
 from . import network
+from .config_spec import ConfigSpecStage
 
 from pyVmomi import vim
 
@@ -25,8 +26,8 @@ config_defaults.add_config({
         'hardware': {
             'boot_firmware': 'efi',
             'version': 14,
-            'memory': 4096,
-            'disk': 25,
+            'memory_mb': 4096,
+            'disk': 25000000000,
             'cpus': 1,
             'paravirt': True,
             },
@@ -86,7 +87,7 @@ def vmware_dict(config, **kws):
     return d
 
 
-class VmwareMachineObject(VmwareNamedObject):
+class VmwareMachineObject(VmwareSpecifiedObject):
 
     # We need to disrupt the mro after Machine is done and before calling VmwareManagedObject.__init__ because they have different signatures.
 
@@ -122,7 +123,7 @@ class Vm(Machine, VmwareMachineObject):
         self.folder = self.parent
         vm_config = self.config_layout.vmware
         self.cpus = vm_config.hardware.cpus
-        self.memory = vm_config.hardware.memory
+        self.memory = vm_config.hardware.memory_mb
         self.paravirt = vm_config.hardware.paravirt
         self.disk_size = vm_config.hardware.disk
         if self.config_layout.vm_image_size > self.disk_size*1000000000:
@@ -333,6 +334,22 @@ class VmTemplate(Vm):
             self.mob.MarkAsTemplate()
         except Exception: pass
 
+class BasicConfig(ConfigSpecStage, stage_for = Vm, order = 20,
+                  mode = ('create', 'reconfig')):
+
+    def apply_config(self, config):
+        obj = self.obj
+        vmc = self.obj.config_layout.vmware
+        if self.bag.mode == 'create':
+            config.name = obj.full_name
+        config.numCPUS = obj.cpus
+        config.memoryMB = obj.memory
+        config.nestedHVEnabled = obj.nested_virt
+        config.firmware = vmc.hardware.boot_firmware
+        
+            
+
+
 @inject(folder = VmwareFolder, connection = VmwareConnection)
 class VmInventory(Injectable):
 
@@ -354,4 +371,5 @@ class VmInventory(Injectable):
 
 #Now mark VM as taking a template
 inject(template = InjectionKey(VmTemplate, optional = True))(Vm)
+
 from . import inventory
