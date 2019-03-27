@@ -314,9 +314,27 @@ class VmwareNamedObject(VmwareManagedObject):
 @inject(**VmwareNamedObject.injects)
 class VmwareSpecifiedObject(VmwareNamedObject):
 
-    def __init__(self, *args, spec=None, **kwargs):
-        self.spec = spec
+    #: Class variable containing set of `ConfigSpecStages` for this type of object.  Copied on any subclass that has *ConfigSpecStages*
+    config_stages = []
+
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    async def build_config(self, mode):
+        ainjector = self.ainjector
+        bag = types.SimpleNamespace(mode = mode)
+        stages = []
+        for cs in self.__class__.config_stages:
+            stages.append( cs(obj = self, bag = bag))
+        config = self.config_spec_class()
+        if self.mob:
+            config.version = self.mob.config.version
+        for s in stages:
+            await ainjector(s.apply_config, config)
+        return config
+    
+            
+        
 
 def all_objs(content, root, objtype):
     vm = content.viewManager
