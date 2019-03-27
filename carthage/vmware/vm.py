@@ -12,7 +12,7 @@ from .cluster import VmwareCluster
 from .datacenter import VmwareDatacenter
 from .utils import wait_for_task
 from . import network
-from .config_spec import ConfigSpecStage
+from .config_spec import *
 
 from pyVmomi import vim
 
@@ -105,6 +105,7 @@ class Vm(Machine, VmwareMachineObject):
 
     stamp_type = "vm"
     parent_type = VmFolder
+    config_spec_class = vim.vm.ConfigSpec
 
     nested_virt = False #: Enable nested virtualization
 
@@ -126,8 +127,8 @@ class Vm(Machine, VmwareMachineObject):
         self.memory = vm_config.hardware.memory_mb
         self.paravirt = vm_config.hardware.paravirt
         self.disk_size = vm_config.hardware.disk
-        if self.config_layout.vm_image_size > self.disk_size*1000000000:
-            self.disk_size = int(self.config_layout.vm_image_size/1000000000)
+        if self.config_layout.vm_image_size > self.disk_size:
+            self.disk_size = int(self.config_layout.vm_image_size)
         self.guest_id = guest_id
         self.network_config = network_config
         self.template_name = None
@@ -151,11 +152,6 @@ class Vm(Machine, VmwareMachineObject):
         task = self.mob.Destroy_Task()
         await carthage.vmware.utils.wait_for_task(task)
 
-    async def async_ready(self):
-        if not self.folder:
-            if False:
-                self.folder = await self.ainjector(VmFolder, self.config_layout.vmware.folder)
-        return await super().async_ready()
 
     async def _network_dict(self):
         if not self.network_config: return []
@@ -177,52 +173,15 @@ class Vm(Machine, VmwareMachineObject):
                 
             
         
-    async def _ansible_dict(self, **kwargs):
-        config = self.config_layout.vmware
-        if self.paravirt:
-            scsi_type = "paravirtual"
-            network_type = "vmxnet3"
-        else:
-            raise NotImplementedError("Loop up what we want to use in non-paravirt mode")
-        d = await self.ainjector(vmware_dict,
-                                     name = self.full_name,
-                                     folder = self.folder.name,
-                                     cluster = config.cluster,
-                                 datastore = self.storage.name,)
-        if not self.mob:
-            d.update(
-                guest_id = self.guest_id,
-                hardware = dict(
-                    boot_firmware = config.hardware.boot_firmware,
-                    num_cpus = self.cpus,
-                    memory_mb = self.memory,
-                    version = config.hardware.version,
-                    scsi = scsi_type,
-                    nested_virt = self.nested_virt),
-                disk = [dict(
-                    size_gb = self.disk_size,
-                    type = "thin")],
-                networks = await self._network_dict(),
-            )
-            if self.template_name:
-                d['template'] = self.template_name
-                if self.template_snapshot:
-                    d['linked_clone'] = True
-                    d['snapshot_src'] = self.template_snapshot
-                    try: del d['disk']
-                    except KeyError: pass
-        d.update(kwargs)
-        return d
-
-    async def _ansible_op(self, **kwargs):
-        d = await self.ainjector(self._ansible_dict, **kwargs)
-        return await self.ainjector(carthage.ansible.run_play,
-                                    [carthage.ansible.localhost_machine],
-                                    {'vmware_guest': d})
 
     async def do_create(self):
         try:
-            res =  await self.ainjector(self._ansible_op, state='present')
+            config = await self.build_config('create')
+            cluster = await self.ainjector(VmwareCluster)
+
+            res = self.parent.mob.CreateVm(config, cluster.mob.resourcePool)
+            await carthage.vmware.utils.wait_for_task(res)
+            
         except carthage.ansible.AnsibleFailure as e:
             if "is not supported" in e.ansible_result.tasks['vmware_guest'].msg:
                 #Everything but customization worked
@@ -340,12 +299,69 @@ class BasicConfig(ConfigSpecStage, stage_for = Vm, order = 20,
     def apply_config(self, config):
         obj = self.obj
         vmc = self.obj.config_layout.vmware
+        if not obj.mob:
+            config.files = vim.vm.FileInfo(vmPathName = f'[{vmc.datastore.name}]')
+            
         if self.bag.mode == 'create':
             config.name = obj.full_name
-        config.numCPUS = obj.cpus
+        config.numCPUs = obj.cpus
         config.memoryMB = obj.memory
         config.nestedHVEnabled = obj.nested_virt
         config.firmware = vmc.hardware.boot_firmware
+        config.version = "vmx-"+str(vmc.hardware.version)
+
+class ScsiSpec(DeviceSpecStage, stage_for = Vm,
+               order = 30,
+               dev_classes = (vim.vm.device.ParaVirtualSCSIController,
+                              vim.vm.device.VirtualBusLogicController)):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.obj.paravirt:
+            self.expected_dev = self.dev_classes[0]
+        else: self.expected_dev = self.dev_classes[1]
+        
+    def filter_device(self, d):
+        if isinstance(d, self.expected_dev):
+            self.bag.scsi_key = d.key
+            return True
+        return False
+
+    def new_devices(self, config):
+        if getattr(self.bag, 'scsi_key', None) is None:
+            d = self.expected_dev(busNumber = 0,
+                                  sharedBus = "noSharing",
+                                  key = -100)
+            self.bag.scsi_key = -100
+            return [d]
+
+class DiskSpec(DeviceSpecStage,
+               stage_for = Vm,
+               order = 120,
+               dev_classes = vim.vm.device.VirtualDisk):
+
+    disk_found = False # Set in instances once a disk is found
+    
+    def filter_device(self, d):
+        if d.controlerKey != self.bag.scsi_key:
+            d.controlerKey = self.bag.scsi_key
+            return d
+        self.disk_found = True
+        return True
+
+    def new_devices(self, config):
+        if self.disk_found: return []
+        d = self.dev_classes[0]()
+        d.backing = vim.vm.device.VirtualDisk.FlatVer2BackingInfo()
+        d.controllerKey = self.bag.scsi_key
+        d.backing.thinProvisioned = True
+        d.backing.diskMode = 'persistent'
+        d.capacityInBytes = self.obj.disk_size
+        d.capacityInKB = int(d.capacityInBytes/1024)
+        d.unitNumber = 0
+        self.file_operation = 'create'
+        return [d]
+        
+        
         
             
 
