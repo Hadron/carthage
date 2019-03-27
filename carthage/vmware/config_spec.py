@@ -9,6 +9,7 @@
 import weakref
 from ..dependency_injection import *
 from . import inventory
+from pyVmomi import vim
 
 class ConfigSpecMeta(type):
 
@@ -103,6 +104,8 @@ class DeviceSpecStage(ConfigSpecStage, stage_for = None):
     def __init_subclass__(cls, stage_for, dev_classes,
                           **kwargs):
         kwargs.setdefault('mode', ('create', 'reconfig'))
+        if not isinstance(dev_classes, (tuple, list)):
+            dev_classes = (dev_classes,)
         cls.dev_classes = dev_classes
         super().__init_subclass__(stage_for = stage_for, **kwargs)
 
@@ -115,6 +118,7 @@ class DeviceSpecStage(ConfigSpecStage, stage_for = None):
                 if res is True: continue
                 if isinstance(res,vim.vm.device.VirtualDevice):
                     spec = vim.vm.device.VirtualDeviceSpec()
+                    spec.fileOperation = getattr(self, 'file_operation', None)
                     spec.device = res
                     spec.operation = 'edit'
                     config.deviceChange.append(spec)
@@ -129,6 +133,7 @@ class DeviceSpecStage(ConfigSpecStage, stage_for = None):
             spec = vim.vm.device.VirtualDeviceSpec()
             spec.device = d
             spec.operation = 'add'
+            spec.fileOperation = getattr(self, 'file_operation', None)
             config.deviceChange.append(spec)
 
     def filter_device(self, d):
@@ -145,3 +150,4 @@ Return *True* to keep the device.
     def new_devices(self, config):
         return []
     
+__all__ = ('ConfigSpecStage', 'DeviceSpecStage')

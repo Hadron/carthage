@@ -8,7 +8,7 @@
 
 from carthage import *
 
-import datetime, time, os
+import datetime, time, os, types
 
 from pyVmomi import vim, vmodl
 
