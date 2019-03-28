@@ -13,8 +13,8 @@ from ..dependency_injection import *
 from ..config import config_defaults, ConfigLayout, config_key
 from .. import sh
 from .credentials import vmware_credentials
+from .datastore import VmwareDataStore
 
-class VmwareDataStore(Injectable): pass
 
 logger = logging.getLogger('carthage.vmware')
         
@@ -101,9 +101,9 @@ vm_storage_key = config_key("vmware.datastore")
 
 
 @inject(
-    injector = Injector,
     storage = vm_storage_key,
-    credentials = vmware_credentials)
+    credentials = vmware_credentials,
+    **VmwareDataStore.injects)
 class NfsDataStore(VmwareDataStore):
 
     '''
@@ -111,15 +111,15 @@ class NfsDataStore(VmwareDataStore):
 
     '''
 
-    def __init__(self, injector, storage, credentials):
-        self.injector = injector
-        self.credentials = credentials
+    def __init__(self, storage, **kwargs):
         self.storage = storage
         for k in ('name', 'path', 'local_path'):
             assert getattr(storage, k), \
                 "You must configure vmware.datastore.{}".format(k)
-        self.name = self.storage.name
+        name = self.storage.name
         self.path = self.storage.path
+        super().__init__(name = name, **kwargs)
+        
 
     #: List of ssh options to use when contacting a remote host
     ssh_opts = ('-oStrictHostKeyChecking=no', )
@@ -167,12 +167,15 @@ class NfsDataStore(VmwareDataStore):
         else:
             raise NotImplementedError()
 
-@inject(config = vm_storage_key)
-class VmfsDataStore(VmwareDataStore, Injectable):
+@inject(storage = vm_storage_key,
+        **VmwareDataStore.injects)
+class VmfsDataStore(VmwareDataStore):
 
-    def __init__(self, config):
-        self.name = config.name
-        self.path = config.path
+    def __init__(self, storage, **kwargs):
+        name = storage.name
+        self.path = storage.path
+        super().__init__(name = name, **kwargs)
+        
 
 
 __all__ = ('VmfsDataStore', 'NfsDataStore', 'image_datastore_key', 'vm_storage_key',

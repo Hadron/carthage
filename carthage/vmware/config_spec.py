@@ -20,7 +20,7 @@ class ConfigSpecMeta(type):
         else:
             stage = "<abstract>"
             
-        return f'<{stage} config stage order={self.order} for {self.stage_for.__name__}>'
+        return f'<{self.__name__} config stage order={self.order} for {stage}>'
     
 class ConfigSpecStage(metaclass = ConfigSpecMeta):
 
@@ -103,7 +103,7 @@ class DeviceSpecStage(ConfigSpecStage, stage_for = None):
 
     def __init_subclass__(cls, stage_for, dev_classes,
                           **kwargs):
-        kwargs.setdefault('mode', ('create', 'reconfig'))
+        kwargs.setdefault('mode', ('create', 'reconfig', 'clone'))
         if not isinstance(dev_classes, (tuple, list)):
             dev_classes = (dev_classes,)
         cls.dev_classes = dev_classes
@@ -113,7 +113,7 @@ class DeviceSpecStage(ConfigSpecStage, stage_for = None):
     async def apply_config(self, config, *, ainjector):
         if self.oconfig:
             for d in self.oconfig.hardware.device:
-                if not isinstance(d, self.dev_class): continue
+                if not isinstance(d, self.dev_classes): continue
                 res = await ainjector(self.filter_device,d)
                 if res is True: continue
                 if isinstance(res,vim.vm.device.VirtualDevice):
