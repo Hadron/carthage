@@ -12,12 +12,12 @@ class VmwareDatacenter(VmwareNamedObject, kind='datacenter'):
         super().__init__(*args, **kwargs, config_layout=config_layout)
 
     async def async_ready(self):
-        from .datastore import DatastoreFolder
+        from .datastore import DataStoreFolder
         from .host import HostFolder
         from .network import NetworkFolder
         from .vm import VmFolder
         ret = await super().async_ready()
-        self.datastore_folder = await self.ainjector(DatastoreFolder, name='datastore', parent=self)
+        self.datastore_folder = await self.ainjector(DataStoreFolder, name='datastore', parent=self)
         self.host_folder = await self.ainjector(HostFolder, name='host', parent=self)
         self.network_folder = await self.ainjector(NetworkFolder, name='network', parent=self)
         self.vm_folder = await self.ainjector(VmFolder, name='vm', parent=self)

@@ -7,36 +7,28 @@ from .inventory import VmwareSpecifiedObject
 from .folder import VmwareFolder
 
 @inject(**VmwareFolder.injects)
-class DatastoreFolder(VmwareFolder, kind='datastore'):
-
-    def vmware_path_for(self, child):
-        if isinstance(child, (VmwareDatastore, VmwareDatastoreCluster)):
-            return super().vmware_path_for(self)
-        return super().vmware_path_for(child)
+class DataStoreFolder(VmwareFolder, kind='datastore'):
+    pass
 
 @inject(**VmwareSpecifiedObject.injects)
-class VmwareDatastoreCluster(VmwareSpecifiedObject, kind='datastore'):
+class VmwareDataStoreCluster(VmwareSpecifiedObject, kind='datastore'):
 
-    parent_type = DatastoreFolder
+    parent_type = DataStoreFolder
 
-    def vmware_path_for(self, child):
-        if isinstance(child, (VmwareDatastore,)):
-            return super().vmware_path_for(self)
-        return super().vmware_path_for(child)
 
     async def do_create(self):
         self.parent.mob.CreateStoragePod(name=self.name)
 
-    async def destroy(self):
+    async def delete(self):
         task = self.mob.Destroy_Task()
         await carthage.vmware.utils.wait_for_task(task)
 
 @inject(**VmwareSpecifiedObject.injects)
-class VmwareDatastore(VmwareSpecifiedObject, kind='datastore'):
+class VmwareDataStore(VmwareSpecifiedObject, kind='datastore'):
 
-    parent_type = (VmwareDatastoreCluster, DatastoreFolder)
+    parent_type = (VmwareDataStoreCluster, DataStoreFolder)
 
-    def __init__(self, *args, host=None, hosts=None, **kwargs):
+    def __init__(self, name, *args, host=None, hosts=None, **kwargs):
 
         if (hosts is not None) and (host is not None):
             raise ValueError('specify only one of host or hosts')
@@ -47,6 +39,11 @@ class VmwareDatastore(VmwareSpecifiedObject, kind='datastore'):
         else:
             # None here means that we should use what we find.
             self.hosts = hosts
+        if not name.startswith('/') and 'parent' not in kwargs:
+            vmc = kwargs['config_layout'].vmware
+            kwargs['parent'] = f'/{vmc.datacenter}/datastore'
+            self.parent_type = DataStoreFolder
+        kwargs['name'] = name
         super().__init__(*args, **kwargs)
 
     async def do_create(self):
@@ -68,6 +65,6 @@ class VmwareDatastore(VmwareSpecifiedObject, kind='datastore'):
             ds.DestroyDatastore()
             raise
 
-    async def destroy(self):
+    async def delete(self):
         task = self.mob.Destroy_Task()
         await carthage.vmware.utils.wait_for_task(task)

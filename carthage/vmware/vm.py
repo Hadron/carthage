@@ -131,13 +131,12 @@ class Vm(Machine, VmwareMachineObject):
             self.disk_size = int(self.config_layout.vm_image_size)
         self.guest_id = guest_id
         self.network_config = network_config
-        self.template_name = None
+        self.template = None
         self.template_snapshot = None
         self.inventory_object = None
         if template:
-            self.template_name = template.mob.name
-            if template.clone_from_snapshot:
-                self.template_snapshot = template.clone_from_snapshot
+            self.template = template
+            self.template_snapshot = template.clone_from_snapshot
         self._operation_lock = asyncio.Lock()
 
     def __repr__(self):
@@ -168,18 +167,34 @@ class Vm(Machine, VmwareMachineObject):
             if mac: d['mac'] = mac
             res.append(d)
         return res
-    
                       
                 
-            
         
-
     async def do_create(self):
         try:
-            config = await self.build_config('create')
             cluster = await self.ainjector(VmwareCluster)
-
-            res = self.parent.mob.CreateVm(config, cluster.mob.resourcePool)
+            if self.template:
+                spec = vim.vm.CloneSpec()
+                locspec = vim.vm.RelocateSpec()
+                spec.location = locspec
+                spec.config = await self.build_config('clone', oconfig = self.template.mob.config)
+                locspec.datastore = self.storage.mob
+                locspec.pool = cluster.mob.resourcePool
+                if self.template_snapshot:
+                    for s in self.template.all_snapshots():
+                        if s.name == self.template_snapshot:
+                            spec.snapshot = s.snapshot
+                            locspec.diskMoveType = "createNewChildDiskBacking"
+                            break
+                        
+                res = self.template.mob.Clone(
+                    self.parent.mob,
+                    self.full_name,
+                    spec,
+                    )
+            else:
+                config = await self.build_config('create')
+                res = self.parent.mob.CreateVm(config, cluster.mob.resourcePool)
             await carthage.vmware.utils.wait_for_task(res)
             
         except carthage.ansible.AnsibleFailure as e:
@@ -251,6 +266,17 @@ class Vm(Machine, VmwareMachineObject):
             except IndexError: pass
             time.sleep(5)
         raise TimeoutError(f'Unable to get IP address for {self.name}')
+
+    def all_snapshots(self):
+        sn = list()
+        def recurse(s):
+            sn.append(s)
+            for c in s.childSnapshotList:
+                recurse(c)
+        for s in self.mob.snapshot.rootSnapshotList:
+            recurse(s)
+        return sn
+    
 
 @inject(
     **VmwareNamedObject.injects,
@@ -333,6 +359,7 @@ class ScsiSpec(DeviceSpecStage, stage_for = Vm,
                                   key = -100)
             self.bag.scsi_key = -100
             return [d]
+        return []
 
 class DiskSpec(DeviceSpecStage,
                stage_for = Vm,
@@ -342,11 +369,19 @@ class DiskSpec(DeviceSpecStage,
     disk_found = False # Set in instances once a disk is found
     
     def filter_device(self, d):
-        if d.controlerKey != self.bag.scsi_key:
-            d.controlerKey = self.bag.scsi_key
-            return d
+        changed = False
+        if d.capacityInBytes < self.obj.disk_size:
+            if (self.bag.mode == "reconfig" and d.backing.parent) or ( self.bag.mode == "clone" and self.obj.template_snapshot):
+                raise ValueError("You cannot increase the capacity of a disk with a parent backing")
+            d.capacityInBytes = self.obj.disk_size
+            d.capacityInKB = int(d.capacityInBytes/1024)
+            changed = True
+
+        if d.controllerKey != self.bag.scsi_key:
+            d.controllerKey = self.bag.scsi_key
+            changed = True
         self.disk_found = True
-        return True
+        return d if changed else True
 
     def new_devices(self, config):
         if self.disk_found: return []
