@@ -295,14 +295,6 @@ class VmTemplate(Vm):
         super().__init__( name = name, **kwargs)
         self.network_config = None
 
-    async def _ansible_dict(self, **kwargs):
-        d = await self.ainjector(super()._ansible_dict, **kwargs)
-        if self.disk and not self.mob:
-            if not isinstance(self.disk, VmdkTemplate):
-                logger.info(f"Building disk for {self}")
-                self.disk = await self.ainjector(self.disk)
-            d['disk'][0]['filename'] = self.disk.disk_path
-        return d
 
     @setup_task("create_clone_snapshot")
     @inject(loop = asyncio.AbstractEventLoop)
@@ -370,6 +362,10 @@ class DiskSpec(DeviceSpecStage,
     
     def filter_device(self, d):
         changed = False
+        if self.bag.mode == 'clone' and d.thinProvisioned is False:
+            d.thinProvisioned = True
+            changed = True
+            
         if d.capacityInBytes < self.obj.disk_size:
             if (self.bag.mode == "reconfig" and d.backing.parent) or ( self.bag.mode == "clone" and self.obj.template_snapshot):
                 raise ValueError("You cannot increase the capacity of a disk with a parent backing")
@@ -390,10 +386,14 @@ class DiskSpec(DeviceSpecStage,
         d.controllerKey = self.bag.scsi_key
         d.backing.thinProvisioned = True
         d.backing.diskMode = 'persistent'
+        orig_disk = getattr(self.obj, 'dask', None)
+        if orig_disk:
+            d.backing.fileName = orig_disk.disk_path
         d.capacityInBytes = self.obj.disk_size
         d.capacityInKB = int(d.capacityInBytes/1024)
         d.unitNumber = 0
-        self.file_operation = 'create'
+        if not orig_disk:
+            self.file_operation = 'create'
         return [d]
         
 
