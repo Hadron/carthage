@@ -12,6 +12,7 @@ from carthage.pytest import *
 from carthage.vmware import *
 from carthage import ConfigLayout
 from pyVmomi import vim
+from carthage.network import NetworkConfig, external_network_key
 
 @pytest.fixture()
 @async_test
@@ -62,3 +63,11 @@ async def test_clone_increase_disk_size(ainjector, vm_folder):
 
     
 
+@async_test
+async def test_vm_with_network(ainjector, vm_folder):
+    net_config = await ainjector(NetworkConfig)
+    net_config.add('eth0', external_network_key, None)
+    v = await ainjector(VmTemplate, template = None, disk = None, name = "blah-net1", network_config = net_config)
+    v2 = await ainjector(Vm, template = v, name = "blah-net-clone", network_config = net_config)
+
+    

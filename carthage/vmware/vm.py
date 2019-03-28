@@ -404,7 +404,54 @@ class DiskSpec(DeviceSpecStage,
         self.file_operation = 'create'
         return [d]
         
+
+class NetSpecStage(DeviceSpecStage,
+                   stage_for = Vm,
+                   order = 110,
+                   dev_classes = (vim.vm.device.VirtualE1000, vim.vm.device.VirtualVmxnet3),
+                   ):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.obj.paravirt:
+            self.expected_dev = vim.vm.device.VirtualVmxnet3
+        else:
+            self.expected_dev = vim.vm.device.VirtualE1000
+
+        self.net_index = 0
+
+    async def apply_config(self,config):
+        if not self.obj.network_config: return []
+        network_config = await self.obj.ainjector(self.obj.network_config.resolve,
+                                              access_class=network.DistributedPortgroup)
+        self.net_config = list(network_config)
+        await self.obj.ainjector(super().apply_config, config)
         
+            
+    async def new_devices(self, config):
+        devs = []
+        network_config = self.net_config[self.net_index:]
+        for net, i, mac in network_config:
+            pc = vim.dvs.PortConnection()
+            pc.portgroupKey = net.mob.key
+            pc.switchUuid = net.mob.config.distributedVirtualSwitch.uuid
+
+            ds = self.expected_dev()
+            ds.backing = vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo()
+            ds.backing.port = pc
+            if mac:
+                ds.addressType = 'manual'
+                ds.macAddress = mac
+            devs.append(ds)
+        return devs
+
+    def filter_device(self, d):
+        if self.bag.mode == 'clone': return False
+        net, iface, mac = self.net_config[self.net_index]
+        if d.backing.port.portGroupKey != net.mob.key: return False
+        self.net_index += 1
+        return True
+    
         
             
 
