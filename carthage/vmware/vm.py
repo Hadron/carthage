@@ -370,8 +370,8 @@ class DiskSpec(DeviceSpecStage,
     
     def filter_device(self, d):
         changed = False
-        if self.bag.mode == 'clone' and d.thinProvisioned is False:
-            d.thinProvisioned = True
+        if self.bag.mode == 'clone' and d.backing.thinProvisioned is False:
+            d.backing.thinProvisioned = True
             changed = True
             
         if d.capacityInBytes < self.obj.disk_size:
