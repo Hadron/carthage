@@ -75,6 +75,21 @@ class ConfigIterator:
             raise ValueError("You cannot set a configuration key to a dictionary")
         self._injector.replace_provider(config_key(self._prefix+k), v)
 
+    def _dictify(self, include_defaults = False):
+        d = {}
+        for k, def_v in self._defaults.items():
+            if isinstance(def_v, dict):
+                v = getattr(self, k)._dictify(include_defaults)
+                if v or include_defaults: d[k] = v
+            else:
+                v =  getattr(self, k)
+                if (v != def_v) or include_defaults:
+                    d[k] = v
+        return d
+
+    def __repr__(self):
+        return f'<{self.__class__.__name__} overrides: {self._dictify()}>'
+    
 
                 
 @inject(injector = Injector)
