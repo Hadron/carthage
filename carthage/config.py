@@ -135,12 +135,15 @@ config_defaults.add_config(dict(
     state_dir ="/srv/images/test/state",
     min_port = 9000,
     max_port = 9500,
-    hadron_operations = "/home/hartmans/hadron-operations",
+    hadron_operations = None,
     hadron_release = "18.12",
     delete_volumes = False,
     external_vlan_id= 0,
     vlan_min = 1,
     vlan_max = 4094,
+    tasks = dict(
+        dry_run = False,
+        ),
 ))
 
 

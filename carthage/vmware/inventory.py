@@ -148,7 +148,7 @@ class VmwareManagedObject(VmwareStampable):
 
 
     def children(self, objtypes, recursive=True):
-        assert self.mob is not None
+        if self.mob is None: return [] #Typically dry_run on construct
         vm = self.connection.content.viewManager
         try:
             container = vm.CreateContainerView(self.mob, objtypes, recursive)

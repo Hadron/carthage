@@ -58,6 +58,7 @@ class VmFolder(VmwareFolder, kind='vm'):
 
     async def delete(self, cluster = None):
         v = None
+        if self.mob is None: return
         try:
             v = self.children([vim.VirtualMachine])
             cluster_name = self.config_layout.vmware.cluster
