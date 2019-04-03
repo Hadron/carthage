@@ -231,6 +231,7 @@ class SetupTaskMixin:
         if config is None:
             config = injector(ConfigLayout)
         context_entered = False
+        dry_run = config.tasks.dry_run
         dependency_last_run = 0.0
         for t in self.setup_tasks:
             should_run, dependency_last_run = await t.should_run_task(self, ainjector, dependency_last_run)
@@ -239,9 +240,12 @@ class SetupTaskMixin:
                     if (not context_entered) and context is not None:
                         await context.__aenter__()
                         context_entered = True
-                    logger_for(self).info(f"Running {t.description} task for {self}")
-                    await ainjector(t, self)
-                    dependency_last_run = time.time()
+                    if not dry_run:
+                        logger_for(self).info(f"Running {t.description} task for {self}")
+                        await ainjector(t, self)
+                        dependency_last_run = time.time()
+                    else:
+                        logger_for(self).info(f'Would run {t.description} task for {self}')
                 except SkipSetupTask: pass
                 except Exception:
                     logger_for(self).exception( f"Error running {t.description} for {self}:")

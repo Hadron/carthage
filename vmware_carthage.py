@@ -16,8 +16,10 @@ from carthage.dependency_injection import DependencyProvider
 async def run(ainjector):
     futures = []
     ainjector.replace_provider(ssh_origin, DependencyProvider(None))
+    config = base_injector(ConfigLayout)
+    if args.cleanup:
+        config.tasks.dry_run = True
     await ainjector.get_instance_async(SshKey)
-    config = await ainjector(ConfigLayout)
     template = await ainjector(aces_vm_template)
     if not args.cleanup:
         vm = await ainjector(CarthageVm, args.name, template = template)
