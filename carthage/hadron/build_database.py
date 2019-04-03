@@ -109,7 +109,7 @@ async def run_ansible_initial_router(machine, database):
         machine.ssh('ls /proc/sys/net/netfilter')
         await database.ssh('-A',
                        'cd /hadron-operations/ansible && ansible-playbook',
-                       '-iinventory',
+                       '-iinventory/hosts.txt',
                        '-l{}'.format(machine.name),
                        '-eansible_host={}'.format(machine.ip_address),
                        'commands/initial-router.yml',
