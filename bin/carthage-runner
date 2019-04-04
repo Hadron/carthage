@@ -21,9 +21,9 @@ async def load_layout(layout_file):
     layout = yaml.load(layout_file)
     for m in layout['machines']:
         machine_queue.put_nowait(m)
-        ainjector = base_injector(AsyncInjector)
-        external_network = await ainjector.get_instance_async(external_network_key)
-        brint = await external_network.access_by(BridgeNetwork)
+    ainjector = base_injector(AsyncInjector)
+    external_network = await ainjector.get_instance_async(external_network_key)
+    brint = await external_network.access_by(BridgeNetwork)
     for n in layout.get('expose_networks', []):
         n = int(n)
         net = await ainjector.get_instance_async(InjectionKey(HadronNetwork, netid=n))
