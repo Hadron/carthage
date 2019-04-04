@@ -81,7 +81,7 @@ async def subtest_controller(request, target, pytest_args):
     run a series of pytests.  This is typically run by a :ref:`test
     controller` from within a test on the test controller.  This
     function arranges for the tests to be run and collects the
-    results.  The results are reported as inferior theto the test
+    results.  The results are reported as inferior to the test
     context represented by *request*.
 
     :param: request
@@ -94,5 +94,9 @@ async def subtest_controller(request, target, pytest_args):
         A list of arguments to passed into pytest on the target system.
 
 '''
+    await target.ssh('pytest-3', *pytest_args',
+_bg = True, _bg_exc = False)
+
+
     
 __all__ = 'async_test'.split()

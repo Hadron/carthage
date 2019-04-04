@@ -15,6 +15,7 @@ from .container import Container
 
 
 fake_internet = when_needed(Network, 'vpn',
+                            vlan_id = 1000,
                             addl_keys = ['fake-internet', 'vpn-network'])
 
 database_network_config = NetworkConfig()
