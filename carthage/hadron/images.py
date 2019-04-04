@@ -92,6 +92,7 @@ class TestDatabase(Container):
         with open(self.volume.path+"/etc/network/interfaces", "wt+") as f:
             #Convince NetworkManager to leave eth1 alone before internet-zone comes along
             f.write("iface eth1 inet manual\n")
+            f.write("iface binternet inet manual\n")
         async with self.container_running:
             await self.network_online()
             await self.shell("/usr/bin/apt",
