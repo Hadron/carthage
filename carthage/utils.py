@@ -165,6 +165,7 @@ def permute_identifier(id, maxlen):
 def add_carthage_arguments(parser):
     parser.add_argument('--config',
                         metavar = "file",
+                        default = [],
                         type = argparse.FileType('rt'),
                         action = 'append')
     parser.add_argument('--command-verbose',
