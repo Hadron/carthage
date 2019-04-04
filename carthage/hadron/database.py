@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import weakref
+import asyncio, weakref, time
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 import carthage.hadron_layout
@@ -31,6 +31,7 @@ class RemotePostgres(ExposedPort):
                          dest_addr = 'unix-connect:/var/run/postgresql/.s.PGSQL.5432',
                          ssh_origin = database)
         self.engines = weakref.WeakSet()
+        time.sleep(0.1)
 
 
     def close(self):
