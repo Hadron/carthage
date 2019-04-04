@@ -279,7 +279,7 @@ class VmwareNamedObject(VmwareManagedObject):
         elif parent and '/' in name:
             parent_add, sep, name = name.rpartition('/')
             if not isinstance(parent, str):
-                parent = parent.parent_path
+                parent = parent.vmware_path
             kwargs['parent'] = parent+'/'+parent_add
         elif parent is None and '/' in name:
             kwargs['parent'], sep, name = name.rpartition('/')
