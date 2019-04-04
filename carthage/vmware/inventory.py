@@ -112,6 +112,8 @@ class VmwareManagedObject(VmwareStampable):
                 raise NotFound(f'{type(self)} with path {self.vmware_path} does not exist')
         await self.do_create()
         self.mob = self._find_from_path()
+        if self.mob is None:
+            raise RuntimeError(f'constructed object, but could not find it at {self.vmware_path}')
         self.set_custom_fields()
 
     @construct.check_completed()
@@ -221,12 +223,13 @@ class VmwareManagedObject(VmwareStampable):
             return cfm.AddFieldDefinition(name=fname, moType=ftype)
 
     def set_custom_field(self,  field, value):
-        entity = self.mob
+        if self.mob is None:
+            raise RuntimeError('unable to set fields on null object')
         if isinstance(field, str):
             field = self._fetch_custom_field(field)
         content = self.connection.content
         cfm  = content.customFieldsManager
-        cfm.SetField(entity=entity, key=field.key, value=value)
+        cfm.SetField(entity=self.mob, key=field.key, value=value)
 
     def get_field_value(self,  field):
         '''Return the vmware custom field value or None if not set
