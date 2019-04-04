@@ -286,9 +286,13 @@ class Vm(Machine, VmwareMachineObject):
     network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
 )
 class VmTemplate(Vm):
+
     clone_from_snapshot = "template_snapshot"
 
-    def __init__(self, name, disk, **kwargs):
+    def __init__(self, name, disk = "unspecified", **kwargs):
+        if disk == "unspecified" and not kwargs.get('template', None):
+            raise TypeError("If you want a VM Template with no disk and no parent explicitly request that by setting disk to None")
+        elif disk == "unspecified": disk = None
         self.disk = disk
         if disk:
             kwargs['template'] = None
