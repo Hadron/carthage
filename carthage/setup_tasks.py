@@ -188,7 +188,7 @@ class TaskMethod:
         self.instance = weakref.proxy(instance)
 
     def __call__(self, *args, **kwargs):
-        self.task(self.instance, *args, **kwargs)
+        return self.task(self.instance, *args, **kwargs)
 
     def __getattr__(self, a):
         return getattr(self.task.func, a)
