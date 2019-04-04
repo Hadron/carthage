@@ -79,3 +79,17 @@ async def fixup_database(ainjector):
     session.commit()
     pg.close()
     
+
+@inject(ainjector = AsyncInjector)
+async def only_permitted_vms(permitted_vms, *, ainjector):
+    permitted_vms = frozenset(permitted_vms)
+    pg = await ainjector(RemotePostgres)
+    await asyncio.sleep(0.2)
+    session = Session(pg.engine())
+    for v in session.query(models.VirtualMachine).filter(models.VirtualMachine.vm_type.in_(['8g-hvm-spice', '8g-hvm-headless'])):
+        if v.slot.fqdn() not in permitted_vms:
+            session.delete(v)
+            
+    session.commit()
+    pg.close()
+    
