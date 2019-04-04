@@ -1,12 +1,13 @@
 #!/usr/bin/python3
 import argparse, sys, gc, traceback, yaml
 import asyncio, logging
+import carthage.vmware
 from carthage.hadron_layout import database_key
 from carthage.dependency_injection import AsyncInjector, InjectionKey, shutdown_injector
 from carthage import base_injector, ssh
 from carthage.network import Network, BridgeNetwork, external_network_key
 from carthage.container import container_image, Container
-from carthage.hadron.database import RemotePostgres, HadronNetwork
+from carthage.hadron.database import RemotePostgres, HadronNetwork, only_permitted_vms
 from carthage.hadron import build_database
 from sqlalchemy.orm import Session
 from carthage.machine import ssh_origin, Machine
@@ -29,7 +30,10 @@ async def load_layout(layout_file):
         vlanid = 1000+n
         iface = brint.expose_vlan(vlanid)
         net.add_member(iface)
-        
+
+    permitted_vms = layout.get('permitted_vms', [])
+    await ainjector(only_permitted_vms, permitted_vms)
+    
         
 async def queue_worker():
     global machines
@@ -57,6 +61,8 @@ async def run():
         await ainjector(build_database.provide_networks, session = session)
         session.close()
         await load_layout(args.layout)
+        if args.make_update:
+            await container.make_update()
         queue_workers.append(loop.create_task(queue_worker()))
         queue_workers.append(loop.create_task(queue_worker()))
         def callback():
@@ -88,8 +94,19 @@ parser.add_argument("layout",
                          metavar = "layout_file",
                          type = argparse.FileType('rt'),
                          help = "Layout YAML configuration")
+parser.add_argument('--vmware', action='store_true',
+                    help = 'Use VmWare for virtualization')
+parser.add_argument('--make-update', '-m',
+                    help = "Run make update in /hadron-operations on test-database",
+                    action = 'store_true')
+
 
 args = carthage.utils.carthage_main_setup(parser)
+if args.vmware:
+    from carthage import vmware
+    import carthage.hadron.build_database, carthage.hadron.vmware
+    base_injector.add_provider(InjectionKey(vmware.VmTemplate), carthage.hadron.vmware.aces_vm_template)
+    carthage.hadron.build_database.vm_class = vmware.Vm
 
 
 

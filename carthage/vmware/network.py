@@ -1,7 +1,7 @@
 import asyncio, collections.abc
 
 from carthage import *
-from carthage.network import this_network, TechnologySpecificNetwork
+from carthage.network import this_network, TechnologySpecificNetwork, BridgeNetwork
 
 from .inventory import *
 from .utils import wait_for_task

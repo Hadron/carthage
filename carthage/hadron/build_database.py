@@ -11,6 +11,7 @@ from ..container import Container
 import carthage.hadron_layout
 from carthage import base_injector
 import carthage.pki
+vm_class = VM
 
 logger = logging.getLogger('carthage')
 
@@ -158,7 +159,7 @@ def provide_slot(s, *, session, injector):
     base = Container
     role_names = set(r.name for r in s.roles)
     if role_names & vm_roles:
-        base = VM
+        base = vm_class
     if s.vm and s.vm.is_container and s.vm.host:
         base = ContainerWaiter
         @inject(host = InjectionKey(Machine, host = s.vm.host.fqdn()))
