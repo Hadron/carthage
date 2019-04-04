@@ -173,8 +173,10 @@ def carthage_main_argparser(*args, **kwargs):
     add_carthage_arguments(parser)
     return parser
 
-def carthage_main_setup(parser):
+def carthage_main_setup(parser=None):
     from . import base_injector, ConfigLayout
+    if parser is None:
+        parser = carthage_main_argparser()
     args = parser.parse_args()
     if len(args.config) > 0:
         config = base_injector(ConfigLayout)
