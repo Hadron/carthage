@@ -41,7 +41,7 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
 
     @memoproperty
     def ssh(self):
-        return sh.ssh.bake(_env = self.agent.agent_env)
+        return sh.ssh.bake(_env = self.agent.agent_environ)
 
     @memoproperty
     def pubkey_contents(self):

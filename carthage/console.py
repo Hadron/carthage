@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
-import asyncio, argparse, code, collections.abc, os.path, readline, rlcompleter, sys, traceback
+import asyncio, argparse, code, collections.abc
+import pkg_resources, os.path, readline, rlcompleter, sys, traceback
 import carthage, carthage.utils
 from carthage import base_injector, AsyncInjector, ConfigLayout
 import carthage.vmware.vm
@@ -35,6 +36,10 @@ class CarthageConsole(code.InteractiveConsole):
             'config': base_injector(ConfigLayout)
         }
 
+    def exec_resource(self, pkg, resource):
+        res_str = pkg_resources.resource_string(pkg, resource)
+        exec(compile(res_str, resource, mode = "exec"),  self.locals)
+        
     def __init__(self, locals=None, extra_locals=None):
         if locals is None:
            locals = self.default_locals()
