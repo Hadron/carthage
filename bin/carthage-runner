@@ -7,12 +7,12 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import argparse, sys, gc, traceback, yaml
+import argparse, os, sys, gc, traceback, yaml
 import asyncio, logging
-import carthage.vmware
+import carthage.vmware, carthage.console
 from carthage.hadron_layout import database_key
 from carthage.dependency_injection import AsyncInjector, InjectionKey, shutdown_injector
-from carthage import base_injector, ssh
+from carthage import base_injector, sh, ssh
 from carthage.network import Network, BridgeNetwork, external_network_key
 from carthage.container import container_image, Container
 from carthage.hadron.database import RemotePostgres, HadronNetwork, only_permitted_vms
@@ -73,13 +73,17 @@ async def run():
             await container.make_update()
         queue_workers.append(loop.create_task(queue_worker()))
         queue_workers.append(loop.create_task(queue_worker()))
-        def callback():
-            container.ssh("-A", _fg = True)
         try:
-            await loop.run_in_executor(None, func = callback)
+            console.locals['db'] = container
+            console.locals['ainjector'] = ainjector
+            console.locals['pg'] = pg
+            console.locals['in_tmux'] = 'TMUX' in os.environ
+            console.exec_resource('carthage', 'resources/runner_console.py')
+            await loop.run_in_executor(None, console.interact)
         except Exception:
-            logger.exception('Command failed:')
+            logger.exception('console failed:')
 
+        
             
         global machines
         futures = []
@@ -92,6 +96,7 @@ async def run():
     del machines
             
 
+    
 ainjector = base_injector(AsyncInjector)
 
 loop = asyncio.get_event_loop()
@@ -107,9 +112,24 @@ parser.add_argument('--vmware', action='store_true',
 parser.add_argument('--make-update', '-m',
                     help = "Run make update in /hadron-operations on test-database",
                     action = 'store_true')
+parser.add_argument('--no-tmux', action = 'store_false',
+                    dest = 'tmux', default = True,
+                    help = "Do not start a tmux for the console")
 
+
+console = carthage.console.CarthageConsole()
+console.add_arguments(parser)
 
 args = carthage.utils.carthage_main_setup(parser)
+
+
+# First see if we need to rexec
+if 'TMUX' not in os.environ and  args.tmux:
+    os.execvp("tmux", ["tmux", "new-session", "-A", "-scarthage",
+                       ]+sys.argv)
+
+
+console.process_arguments(args)
 if args.vmware:
     from carthage import vmware
     import carthage.hadron.build_database, carthage.hadron.vmware
