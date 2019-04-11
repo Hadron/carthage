@@ -6,9 +6,12 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import asyncio, functools, inspect, pytest
+import asyncio, functools, inspect, json, pytest, sys
 
 from .dependency_injection import inject, InjectionKey
+
+from _pytest.reports import TestReport
+from _pytest.nodes import Node
 
 '''
 Decorators and functions for use with Carthage.
@@ -94,9 +97,23 @@ async def subtest_controller(request, target, pytest_args):
         A list of arguments to passed into pytest on the target system.
 
 '''
-    await target.ssh('pytest-3', *pytest_args',
-_bg = True, _bg_exc = False)
-
+    if isinstance(pytest_args, str):
+        pytest_args = [pytest_args]
+    json_frag = f'/tmp/{id(pytest_args)}.json'
+    pytest_args = ['--carthage-json', json_frag]+pytest_args
+    await target.ssh('pytest-3', *pytest_args,
+                     _bg = True, _bg_exc = False,
+                     _out = sys.stdout)
+    json_out = await target.ssh('cat', json_frag)
+    report_list = json.loads(json_out.stdout)
+    for i in report_list:
+        n = Node(i['nodeid'], parent = request.node)
+        i['nodeid'] = n.nodeid
+        report = TestReport(**i)
+        capmanager = request.config.pluginmanager.getplugin("capturemanager")
+        with capmanager.global_and_fixture_disabled():
+            n.ihook.pytest_runtest_logreport(report = report)
+        
 
     
-__all__ = 'async_test'.split()
+__all__ = 'async_test subtest_controller'.split()
