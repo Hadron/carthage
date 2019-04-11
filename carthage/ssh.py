@@ -44,6 +44,11 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
         return sh.ssh.bake(_env = self.agent.agent_environ)
 
     @memoproperty
+    def rsync(self):
+        return sh.rsync.bake('-e' 'ssh',
+                             _env = self.agent.agent_environ)
+    
+    @memoproperty
     def pubkey_contents(self):
         with open(self.key_path+".pub", "rt") as f:
             return f.read()
