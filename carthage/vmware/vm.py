@@ -392,15 +392,17 @@ class DiskSpec(DeviceSpecStage,
         self.disk_found = True
         return d if changed else True
 
-    def new_devices(self, config):
+    async def new_devices(self, config):
         if self.disk_found: return []
         d = self.dev_classes[0]()
         d.backing = vim.vm.device.VirtualDisk.FlatVer2BackingInfo()
         d.controllerKey = self.bag.scsi_key
         d.backing.thinProvisioned = True
         d.backing.diskMode = 'persistent'
-        orig_disk = getattr(self.obj, 'dask', None)
+        orig_disk = getattr(self.obj, 'disk', None)
         if orig_disk:
+            if not isinstance(orig_disk, VmdkTemplate):
+                orig_disk = await self.obj.ainjector(orig_disk)
             d.backing.fileName = orig_disk.disk_path
         d.capacityInBytes = self.obj.disk_size
         d.capacityInKB = int(d.capacityInBytes/1024)
