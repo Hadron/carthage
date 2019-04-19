@@ -92,7 +92,7 @@ class CarthageVm(Vm):
                          connection = connection)
         self.cpus = 8
         self.memory = 30000
-        self.disk_size = 60
+        self.disk_size = 60000000000
         self.template_snapshot = None # You cannot increase size on a linked clone
 
         

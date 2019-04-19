@@ -22,6 +22,7 @@ async def ssh_to(m: carthage.machine.Machine):
     if in_tmux:
         ssh_key = await ainjector.get_instance_async(carthage.ssh.SshKey)
         sh.tmux( "setenv", "-g", "SSH_AUTH_SOCK", ssh_key.agent.auth_sock)
+        sh.tmux( "setenv", "-u", "SSH_AUTH_SOCK")
         tmux(unbake(m.ssh), '-A')
     else:
         await loop.run_in_executor(None, m.ssh('-A', _fg = True))

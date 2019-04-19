@@ -340,6 +340,7 @@ class BasicConfig(ConfigSpecStage, stage_for = Vm, order = 20,
         config.nestedHVEnabled = obj.nested_virt
         config.firmware = vmc.hardware.boot_firmware
         config.version = "vmx-"+str(vmc.hardware.version)
+        config.guestId = obj.guest_id
 
 class ScsiSpec(DeviceSpecStage, stage_for = Vm,
                order = 30,
