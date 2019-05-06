@@ -37,6 +37,7 @@ async def load_layout(layout_file):
         net = await ainjector.get_instance_async(InjectionKey(HadronNetwork, netid=n))
         vlanid = 1000+n
         iface = brint.expose_vlan(vlanid)
+        net = await net.access_by(BridgeNetwork)
         net.add_member(iface)
 
     permitted_vms = layout.get('permitted_vms', [])
