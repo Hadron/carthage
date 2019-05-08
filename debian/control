@@ -2,7 +2,7 @@ Source: hadron-carthage
 Section: proprietary/devel
 Priority: optional
 Maintainer: Sam Hartman <sam.hartman@hadronindustries.com>
-Build-Depends: debhelper (>= 9), dh-python, python3-all (>= 3.5), python3-openssl, python3-sqlalchemy, python3-setuptools, python3-pytest, python3-mako
+Build-Depends: debhelper (>= 9), dh-python, python3-all (>= 3.5), python3-openssl, python3-sqlalchemy, python3-setuptools, python3-pytest, python3-mako, python3-yaml, python3-pyvmomi
 Standards-Version: 3.9.6
 X-Python3-Version: >= 3.5
 
@@ -10,7 +10,7 @@ X-Python3-Version: >= 3.5
 Package: python3-carthage
 Architecture: all
 Multi-Arch: foreign
-Depends: ${misc:Depends}, ${python3:Depends}, socat, systemd-container, hadron-container-image, hadron-installer-direct, qemu-kvm, ovmf, libvirt-daemon-system, python3-hadron-inventory-admin, socat, libvirt-clients, hadron-entanglement-cli (>= 0.10~), hadron-ansible, qemu-utils, python3-mako, bridge-utils
+Depends: ${misc:Depends}, ${python3:Depends}, socat, systemd-container, hadron-container-image, hadron-installer-direct, qemu-kvm, ovmf, libvirt-daemon-system, python3-hadron-inventory-admin, socat, libvirt-clients, hadron-entanglement-cli (>= 0.10~), hadron-ansible, qemu-utils, python3-mako, bridge-utils, python3-yaml, python3-pyvmomi
 Description: Burn it to the ground and Rebuild it Framework
 
 Package: hadron-carthage
