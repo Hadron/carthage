@@ -196,6 +196,7 @@ class HadronVmImage(ImageVolume):
     async def resize_disk(self):
         ainjector = await self.ainjector(AsyncInjector)
         try:
+            mount = None
             mount = await ainjector(ContainerImageMount, self)
             ainjector.add_provider(container_volume, mount)
             ainjector.add_provider(container_image, mount)
@@ -212,7 +213,7 @@ class HadronVmImage(ImageVolume):
             mount.mount_image()
             sh.btrfs('filesystem', 'resize', 'max', mount.mount.rootdir)
         finally:
-            mount.close()
+            if mount is not None:             mount.close()
 
     hadron_customizations = customization_task(HadronImageMixin)
     @setup_task("Run update-grub")
