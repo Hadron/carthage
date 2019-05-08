@@ -9,7 +9,7 @@
 import logging, shutil, os, os.path
 from sqlalchemy.orm import Session
 from hadron.inventory.admin import models
-from ..dependency_injection import inject, Injector, InjectionKey
+from ..dependency_injection import inject, Injector, InjectionKey, ExistingProvider
 from .database import *
 from ..utils import when_needed
 from ..setup_tasks import setup_task, SetupTaskMixin, create_stamp, check_stamp
@@ -198,5 +198,7 @@ def provide_slot(s, *, session, injector):
     machine =  when_needed(HadronMachine,
                        name = s.fqdn(),
                            injector = injector, **kws)
-    base_injector.add_provider(InjectionKey(Machine, host = s.fqdn()), machine)
+    try:
+        base_injector.add_provider(InjectionKey(Machine, host = s.fqdn()), machine)
+    except ExistingProvider: pass
     return machine

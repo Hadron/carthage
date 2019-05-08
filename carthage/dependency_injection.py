@@ -72,7 +72,12 @@ class InjectionFailed(RuntimeError):
         super().__init__(f"Error resolving dependency for {k}")
         self.failed_dependency = k
         
+class ExistingProvider(RuntimeError):
 
+    def __init__(self, k):
+        super().__init__(f'Provider for {k} already registered')
+        self.existing_key = k
+        
 # Note that after @inject is defined, this class is redecorated to take parent_injector as a dependency so that
 #    injector = sub_injector(Injector)
 # works
