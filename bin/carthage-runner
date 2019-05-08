@@ -56,15 +56,19 @@ async def run():
     await ainjector.get_instance_async(carthage.ssh.SshKey)
     async with container.container_running:
         await container.network_online()
-        pg  = await ainjector(RemotePostgres)
-        engine = pg.engine()
-        session = Session(engine)
-        await ainjector(build_database.provide_networks, session = session)
-        session.close()
-        await load_layout(args.layout)
-        if args.make_update:
-            await container.make_update()
-        queue_workers.append(loop.create_task(queue_worker()))
+        try:
+            pg  = await ainjector(RemotePostgres)
+            engine = pg.engine()
+            session = Session(engine)
+            await ainjector(build_database.provide_networks, session = session)
+            session.close()
+            await load_layout(args.layout)
+            if args.make_update:
+                await container.make_update()
+        finally:
+            pg.close()
+            del pg
+            queue_workers.append(loop.create_task(queue_worker()))
         queue_workers.append(loop.create_task(queue_worker()))
         try:
             console.locals['db'] = container
