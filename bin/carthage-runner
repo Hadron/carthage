@@ -65,22 +65,22 @@ async def run():
             await load_layout(args.layout)
             if args.make_update:
                 await container.make_update()
+
+            queue_workers.append(loop.create_task(queue_worker()))
+            queue_workers.append(loop.create_task(queue_worker()))
+            try:
+                console.locals['db'] = container
+                console.locals['ainjector'] = ainjector
+                console.locals['pg'] = pg
+                console.locals['in_tmux'] = 'TMUX' in os.environ
+                console.exec_resource('carthage', 'resources/runner_console.py')
+                await loop.run_in_executor(None, console.interact)
+            except Exception:
+                logger.exception('console failed:')
         finally:
             pg.close()
             del pg
-            queue_workers.append(loop.create_task(queue_worker()))
-        queue_workers.append(loop.create_task(queue_worker()))
-        try:
-            console.locals['db'] = container
-            console.locals['ainjector'] = ainjector
-            console.locals['pg'] = pg
-            console.locals['in_tmux'] = 'TMUX' in os.environ
-            console.exec_resource('carthage', 'resources/runner_console.py')
-            await loop.run_in_executor(None, console.interact)
-        except Exception:
-            logger.exception('console failed:')
-
-        
+                
             
         global machines
         futures = []
