@@ -251,7 +251,7 @@ class Container(Machine, SetupTaskMixin):
         process = await self.run_container(*args, **kwargs)
         return await process
     
-    def close(self):
+    def close(self, canceled_futures = None):
         if self.process is not None:
             try: self.process.terminate()
             except Exception: pass
@@ -259,6 +259,7 @@ class Container(Machine, SetupTaskMixin):
         if hasattr(self, 'volume'):
             if self.close_volume: self.volume.close()
             del self.volume
+            self.injector.close(canceled_futures = canceled_futures)
 
     def __del__(self):
         self.close()

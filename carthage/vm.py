@@ -121,7 +121,7 @@ class VM(Machine, SetupTaskMixin):
     stop_machine = stop_vm
 
 
-    def close(self):
+    def close(self, canceled_futures = None):
         if self.running:
             try:
                 sh.virsh("destroy", self.full_name)
@@ -133,6 +133,7 @@ class VM(Machine, SetupTaskMixin):
         if self.config_layout.delete_volumes:
             try: shutil.rmtree(self.stamp_path)
             except FileNotFoundError: pass
+        self.injector.close(canceled_futures = canceled_futures)
 
     def __del__(self):
         self.close()
