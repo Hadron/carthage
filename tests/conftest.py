@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 import asyncio, pytest
-from carthage.image import image_factory
+from carthage.image import image_factory, SshAuthorizedKeyCustomizations
 from carthage import base_injector, ConfigLayout
 from carthage.dependency_injection import AsyncInjector
 from carthage.image import ContainerImage
@@ -40,6 +40,7 @@ async def test_ainjector(loop):
 def vm_image( loop, test_ainjector):
     ainjector = test_ainjector
     image = loop.run_until_complete(ainjector(image_factory, name = "base"))
+    loop.run_until_complete(image.apply_customization(SshAuthorizedKeyCustomizations))
     yield image
     image.close()
     
