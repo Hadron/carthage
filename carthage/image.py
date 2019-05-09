@@ -6,7 +6,7 @@ from . import sh
 from .utils import possibly_async
 from .setup_tasks import setup_task, SkipSetupTask, SetupTaskMixin
 import carthage
-
+from .machine import ContainerCustomization
 
 
 
@@ -350,6 +350,19 @@ def image_factory(name, image_type = 'raw', *,
     path = os.path.join(config_layout.vm_image_dir, name+'.raw')
     return ainjector(ImageVolume, name = name, path = path,
                      create_size = config_layout.vm_image_size)
+
+class SshAuthorizedKeyCustomizations(ContainerCustomization):
+
+    description = "Set up authorized_keys file"
+
+    @setup_task('Copy in hadron-operations ssh authorized_keys')
+    @inject(authorized_keys = carthage.ssh.AuthorizedKeysFile)
+    def add_authorized_keys(self, authorized_keys):
+        os.makedirs(os.path.join(self.path, "root/.ssh"), exist_ok = True)
+        shutil.copy2(authorized_keys.path,
+                     os.path.join(self.path, 'root/.ssh/authorized_keys'))
+
 __all__ = ('BtrfsVolume', 'ContainerImage', 'SetupTaskMixin',
            'SkipSetupTask',
-           'ImageVolume')
+           'ImageVolume',
+           'SshAuthorizedKeyCustomizations')

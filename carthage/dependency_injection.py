@@ -603,7 +603,7 @@ def _call_close(obj, canceled_futures):
 
 __all__ = '''
     inject Injector AsyncInjector
-    Injectable AsyncInjectable
+    Injectable AsyncInjectable InjectionFailed ExistingProvider
     InjectionKey
     partial_with_dependencies shutdown_injector
 '''.split()

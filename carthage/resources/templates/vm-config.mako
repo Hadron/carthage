@@ -76,6 +76,9 @@ import uuid
       <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
     </video>
 % endif
+    <channel type='unix'>
+      <target type='virtio' name='org.qemu.guest_agent.0'/>
+    </channel>
     <memballoon model='virtio'>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x08' function='0x0'/>
     </memballoon>

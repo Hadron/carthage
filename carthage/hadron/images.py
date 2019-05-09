@@ -1,5 +1,5 @@
 import asyncio, os, os.path, shutil, sys
-from ..image import ContainerImage, setup_task, SetupTaskMixin, ImageVolume, ContainerImageMount
+from ..image import ContainerImage, setup_task, SetupTaskMixin, ImageVolume, ContainerImageMount, SshAuthorizedKeyCustomizations
 from ..container import Container, container_volume, container_image
 from ..dependency_injection import inject, Injector, AsyncInjectable, AsyncInjector, InjectionKey
 from ..config import ConfigLayout
@@ -44,13 +44,7 @@ class HadronImageMixin(ContainerCustomization):
             await self.container_command('/usr/bin/apt', 'install', '-y',
                                                     'hadron-container-image', 'python3-photon')
         finally: pass
-
-    @setup_task('Copy in hadron-operations ssh authorized_keys')
-    @inject(authorized_keys = carthage.ssh.AuthorizedKeysFile)
-    def add_authorized_keys(self, authorized_keys):
-        os.makedirs(os.path.join(self.path, "root/.ssh"), exist_ok = True)
-        shutil.copy2(authorized_keys.path,
-                     os.path.join(self.path, 'root/.ssh/authorized_keys'))
+    ssh_authorized_keys = customization_task(SshAuthorizedKeyCustomizations)
 
     @setup_task('hadron-xorg-modes')
     def install_xorg_modes(self):

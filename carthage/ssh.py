@@ -1,11 +1,30 @@
 import io, os
 from .dependency_injection import inject, AsyncInjector, Injector, AsyncInjectable, Injectable, InjectionKey
 from .config import ConfigLayout
-from .image import SetupTaskMixin, setup_task
+from .setup_tasks import SetupTaskMixin, setup_task
 from . import sh
 from .utils import memoproperty, when_needed
 
 
+class RsyncPath:
+
+    def __init__(self, machine, path):
+        self.machine = machine
+
+    def __repr__(self):
+        return f'<Rsync {self.machine}:{self.path}>'
+
+    def __str__(self):
+        return f'{self.machine}:{self.path}'
+
+    @memoproperty
+    def ssh_origin(self):
+        from .machine import ssh_origin
+        try:
+            return self.machine.injector.get_instance(ssh_origin)
+        except KeyError: return None
+
+        
 @inject(config_layout = ConfigLayout,
         ainjector = AsyncInjector)
 class SshKey(AsyncInjectable, SetupTaskMixin):
@@ -43,8 +62,29 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
     def ssh(self):
         return sh.ssh.bake(_env = self.agent.agent_environ)
 
-    @memoproperty
-    def rsync(self):
+    def rsync(self, *args, ssh_origin = None):
+        for i, a in enumerate(args):
+            if isinstance(a, RsyncPath):
+                sso = a.ssh_origin
+                if ssh_origin is None:
+                    ssh_origin = sso
+                elif ssh_origin is not sso:
+                    raise RuntimeError(f"Two different ssh_origins: {sso} and {ssh_origin}")
+                args[i] = str(a)
+        rsync_opts = ('-e', 'ssh')
+        if ssh_origin:
+            return sh.nsenter('-t', str(ssh_origin.container_leader),
+                              '-n',
+                              'rsync',
+                              *rsync_opts, *args,
+                              _bg = True, _bg_exc = False,
+            _env = self.agent.agent_environ)
+        else:
+            return sh.rsync(*rsync_opts, *args, _bg = True, _bg_exc = False,
+            _env = self.agent.agent_environ)
+        
+        
+
         return sh.rsync.bake('-e' 'ssh',
                              _env = self.agent.agent_environ)
     
