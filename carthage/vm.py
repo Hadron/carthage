@@ -11,7 +11,7 @@ import mako, mako.lookup, mako.template
 from .dependency_injection import *
 from .utils import when_needed, memoproperty
 from .image import SetupTaskMixin, setup_task, ImageVolume
-from .machine import Machine, SshMixin
+from .machine import Machine, SshMixin, ContainerCustomization
 from . import sh
 from .config import ConfigLayout
 from .ports import PortReservation
@@ -94,6 +94,13 @@ class VM(Machine, SetupTaskMixin):
             await sh.virsh('create',
                       self.config_path,
                       _bg = True, _bg_exc = False)
+            if self.__class__.ip_address is Machine.ip_address:
+                try:
+                    await self._find_ip_address()
+                except:
+                    sh.virsh("destroy", self.full_name,
+                             _bg = True, _bg_exc = False)
+                    raise
             self.running = True
 
     start_machine = start_vm
@@ -145,6 +152,30 @@ class VM(Machine, SetupTaskMixin):
         await self.run_setup_tasks(context = self.machine_running)
         return self
 
+    async def _find_ip_address(self):
+        await asyncio.sleep(15)
+        for i in range(30):
+            try:
+                res = await sh.virsh("qemu-agent-command",
+                                     self.full_name,
+                                     '{"execute":"guest-network-get-interfaces"}',
+                                     _bg = True, _bg_exc = False, _timeout = 5)
+            except sh.ErrorReturnCode_1 as e:
+                # We should retry in a bit if the message contains 'not connected' and fail for other errors
+                if b'connected' not in e.stderr: raise
+                await asyncio.sleep(3)
+                continue
+
+            js_res = json.loads(res.stdout)
+            for item in js_res['return']:
+                if item['name'] == 'lo': continue
+                if 'ip-addresses' not in item: continue
+                for addr in item['ip-addresses']:
+                    if addr['ip-address'].startswith('fe80'): continue
+                    self.ip_address = addr['ip-address']
+                    return
+                    
+
     @property
     def stamp_path(self):
         return self.volume.path+'.stamps'
@@ -178,3 +209,14 @@ class VM(Machine, SetupTaskMixin):
 
 Vm = VM
     
+
+class InstallQemuAgent(ContainerCustomization):
+
+    description = "Install qemu guest agent"
+
+    @setup_task("Install qemu guest agent")
+    async def install_guest_agent(self):
+        await self.container_command("/usr/bin/apt", "-y", "install", "qemu-guest-agent")
+
+        __all__ = ('VM', 'Vm', 'InstallQemuAgent')
+        

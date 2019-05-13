@@ -8,11 +8,12 @@
 
 from carthage.pytest import *
 import os.path, pytest
-from carthage.dependency_injection import AsyncInjector, InjectionKey
+from carthage.dependency_injection import AsyncInjector, InjectionKey, DependencyProvider
 from carthage import base_injector, network
 from carthage.config import ConfigLayout
 from carthage.vm import VM
 from carthage.network import NetworkConfig
+from carthage.machine import ssh_origin
 import gc, posix, os
 
 resource_dir = os.path.dirname(__file__)
@@ -30,6 +31,7 @@ def ainjector():
     nc = NetworkConfig()
     nc.add('eth0', network.external_network_key, None)
     injector.add_provider(nc)
+    injector.replace_provider(ssh_origin, DependencyProvider(None))
     yield injector
     gc.collect()
 
@@ -42,12 +44,13 @@ async def test_vm_config(loop, ainjector, vm_image):
 @async_test
 async def test_vm_test(request, ainjector, vm_image):
     vm = await ainjector(VM, name = "vm_2", image = vm_image)
-    breakpoint()
     async with vm.machine_running:
         await vm.ssh_online()
         await vm.rsync(os.path.join(resource_dir, "inner_plugin_test.py"),
                        vm.rsync_path('/'))
         await vm.rsync(os.path.join(resource_dir, "inner_conftest.py"),
                        vm.rsync_path("/conftest.py"))
+        await vm.ssh("apt-get update")
+        await vm.ssh("apt-get -y install python3-pytest")
         await subtest_controller(request, vm, "/inner_plugin_test.py")
         
