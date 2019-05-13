@@ -10,12 +10,13 @@ class RsyncPath:
 
     def __init__(self, machine, path):
         self.machine = machine
+        self.path = path
 
     def __repr__(self):
         return f'<Rsync {self.machine}:{self.path}>'
 
     def __str__(self):
-        return f'{self.machine}:{self.path}'
+        return f'{self.machine.ip_address}:{self.path}'
 
     @memoproperty
     def ssh_origin(self):
@@ -33,6 +34,11 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
         super().__init__()
         self.config_layout = config_layout
         self.ainjector = ainjector
+
+    @memoproperty
+    def known_hosts(self):
+        return self.config_layout.state_dir+"/ssh_known_hosts"
+    
         
     async def async_ready(self):
         await self.run_setup_tasks()
@@ -63,15 +69,25 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
         return sh.ssh.bake(_env = self.agent.agent_environ)
 
     def rsync(self, *args, ssh_origin = None):
+        ssh_options = None
+        args = list(args)
         for i, a in enumerate(args):
             if isinstance(a, RsyncPath):
                 sso = a.ssh_origin
                 if ssh_origin is None:
                     ssh_origin = sso
+                    ssh_options = a.machine.ssh_options
                 elif ssh_origin is not sso:
                     raise RuntimeError(f"Two different ssh_origins: {sso} and {ssh_origin}")
                 args[i] = str(a)
-        rsync_opts = ('-e', 'ssh')
+        if ssh_options:
+            ssh_options = list(ssh_options)
+
+        
+        ssh_options.extend(['-oUserKnownHostsFile='+self.known_hosts])
+        ssh_options = " ".join(ssh_options)
+        rsync_opts = ('-e', 'ssh '+ssh_options)
+        
         if ssh_origin:
             return sh.nsenter('-t', str(ssh_origin.container_leader),
                               '-n',
