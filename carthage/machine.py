@@ -188,7 +188,7 @@ class Machine(AsyncInjectable, SshMixin):
         '''
         Apply a :class:`BaseCustomization` to this machine..
         '''
-        customization = await self.ainjector(cust_class)
+        customization = await self.ainjector(cust_class, apply_to = self)
         meth = getattr(customization, method)
         return await meth()
     
