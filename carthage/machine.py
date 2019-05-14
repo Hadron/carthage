@@ -234,7 +234,8 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
     def __getattr__(self, a):
         if a in ('ssh', 'ip_address', 'start_machine', 'stop_machine',
-                 'name', 'full_name'):
+                 'name', 'full_name',
+                 'apply_customization'):
             return getattr(self.host, a)
         raise AttributeError
 
