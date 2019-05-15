@@ -29,7 +29,7 @@ Clone the ``HEAD`` of a Git working copy into a new temporary directory  This pr
     try:
         dir = TemporaryDirectory(dir = config.state_dir)
         await sh.git('clone',
-                     git_tree, dir,
+                     git_tree, dir.name,
                      _bg = True, _bg_exc = False)
         return await ssh_key.rsync('-a',
                                    dir.name+'/', target)
