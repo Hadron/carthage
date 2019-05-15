@@ -7,6 +7,7 @@ from .dependency_injection import *
 from .config import ConfigLayout, config_key, config_defaults
 from .network import Network, NetworkConfig
 from .machine import Machine
+from .files import rsync_git_tree
 
 import carthage.hadron_layout
 import carthage.hadron

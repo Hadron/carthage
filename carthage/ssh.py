@@ -1,16 +1,17 @@
-import io, os
+from __future__ import annotations
+import dataclasses, io, os
 from .dependency_injection import inject, AsyncInjector, Injector, AsyncInjectable, Injectable, InjectionKey
 from .config import ConfigLayout
 from .setup_tasks import SetupTaskMixin, setup_task
-from . import sh
+from . import sh, machine
 from .utils import memoproperty, when_needed
 
 
+@dataclasses.dataclass
 class RsyncPath:
 
-    def __init__(self, machine, path):
-        self.machine = machine
-        self.path = path
+    machine: machine.Machine
+    path: str
 
     def __repr__(self):
         return f'<Rsync {self.machine}:{self.path}>'
@@ -150,3 +151,6 @@ class SshAgent(Injectable):
         return env
 
 ssh_agent = when_needed(SshAgent)
+
+__all__ = ('SshKey', 'ssh_agent', 'SshAgent', 'RsyncPath')
+
