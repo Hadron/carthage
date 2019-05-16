@@ -352,11 +352,12 @@ class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
 @inject(
     ainjector = AsyncInjector,
     config_layout = ConfigLayout)
-def image_factory(name, image_type = 'raw', *,
+def image_factory(name, image_type = 'raw',
+                  image = ImageVolume, *,
                   config_layout, ainjector):
     assert image_type == 'raw'
     path = os.path.join(config_layout.vm_image_dir, name+'.raw')
-    return ainjector(ImageVolume, name = name, path = path,
+    return ainjector(image, name = name, path = path,
                      create_size = config_layout.vm_image_size)
 
 class SshAuthorizedKeyCustomizations(ContainerCustomization):

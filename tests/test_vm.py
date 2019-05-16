@@ -49,5 +49,6 @@ async def test_vm_test(request, ainjector, vm_image):
         await ainjector(rsync_git_tree, resource_dir, vm.rsync_path('/carthage'))
         await vm.ssh("apt-get update")
         await vm.ssh("apt-get -y install python3-pytest")
-        await subtest_controller(request, vm, "/inner_plugin_test.py")
+        await subtest_controller(request, vm, "/carthage/tests/inner_plugin_test.py",
+                                 python_path = "/carthage")
         
