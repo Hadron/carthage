@@ -19,6 +19,8 @@ from ..container import Container
 import carthage.hadron_layout
 from carthage import base_injector
 import carthage.pki
+from carthage.hadron_layout import database_key
+from carthage.machine import ssh_origin
 vm_class = VM
 
 logger = logging.getLogger('carthage')
@@ -202,3 +204,35 @@ def provide_slot(s, *, session, injector):
         base_injector.add_provider(InjectionKey(Machine, host = s.fqdn()), machine)
     except ExistingProvider: pass
     return machine
+
+
+@inject(ainjector = AsyncInjector)
+async def provide_world(ainjector):
+    '''
+    Build a hadron world and inject machines and networks into *base_injector*
+
+    :returns: database_container, remote_postgres
+'''
+
+    container = None
+    pg = None
+    container = await ainjector.get_instance_async(database_key)
+
+    await ainjector.get_instance_async(ssh_origin)
+    await ainjector.get_instance_async(carthage.ssh.SshKey)
+    try:
+        await container.start_machine()
+        await container.network_online()
+        pg  = await container.ainjector.get_instance_async(RemotePostgres)
+        engine = pg.engine()
+        session = Session(engine)
+        await ainjector(provide_networks, session = session)
+        session.close()
+        return container, pg
+    except:
+        if pg: pg.close()
+        if container:
+            container.stop_machine()
+        raise
+
+        

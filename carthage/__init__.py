@@ -18,6 +18,7 @@ from .machine import Machine
 
 import carthage.hadron_layout
 import carthage.hadron
+import carthage.hadron.database
 import carthage.container
 import carthage.ssh
 import carthage.pki
@@ -33,6 +34,7 @@ base_injector.add_provider(carthage.hadron_layout.fake_internet)
 base_injector.add_provider(carthage.network.external_network)
 base_injector.add_provider(carthage.network.BridgeNetwork, allow_multiple = True)
 base_injector.add_provider(carthage.hadron_layout.database_key, carthage.hadron_layout.test_database_container)
+base_injector.add_provider(hadron.database.RemotePostgres)
 base_injector.add_provider(carthage.container.ssh_origin, carthage.hadron_layout.test_database_container)
 
 base_injector.add_provider(carthage.container.container_image, carthage.hadron.hadron_container_image)
