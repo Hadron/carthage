@@ -71,7 +71,8 @@ def async_test(t):
 
 _test_results_serial = 0
 
-async def subtest_controller(request, target, pytest_args):
+async def subtest_controller(request, target, pytest_args,
+                             python_path = "", ssh_agent = False):
     '''Ssh into a given machine using a :class:`carthage.SshMixin` and
     run a series of pytests.  This is typically run by a :ref:`test
     controller` from within a test on the test controller.  This
@@ -88,12 +89,24 @@ async def subtest_controller(request, target, pytest_args):
     :param: pytest_args
         A list of arguments to passed into pytest on the target system.
 
+    :param python_path:
+        Set the remote *PYTHONPATH* environment variable to this value.  Typically used when a set of tests is copied to the system to point to directory containings tests.
+
+    :param ssh_agent:
+        If *True*, then forward agent credentials.
+
 '''
     if isinstance(pytest_args, str):
         pytest_args = [pytest_args]
     json_frag = f'/tmp/{id(pytest_args)}.json'
     pytest_args = ['--carthage-json', json_frag]+pytest_args
-    await target.ssh('pytest-3', *pytest_args,
+    ssh_args = []
+    if ssh_agent:
+        ssh_args.append('-A')
+    if python_path:
+        ssh_args.append('PYTHONPATH='+python_path)
+    await target.ssh(*ssh_args,
+                     'pytest-3', *pytest_args,
                      _bg = True, _bg_exc = False,
                      _out = sys.stdout)
     json_out = await target.ssh('cat', json_frag)
