@@ -7,10 +7,11 @@
 # LICENSE for details.
 
 import asyncio, pytest
-from carthage.image import image_factory, SshAuthorizedKeyCustomizations
+from carthage.image import image_factory, ImageVolume
+from carthage.hadron.images import HadronVmImage
 from carthage.vm import InstallQemuAgent
-from carthage import base_injector, ConfigLayout
-from carthage.dependency_injection import AsyncInjector, DependencyProvider
+from carthage import base_injector, ConfigLayout, ssh
+from carthage.dependency_injection import AsyncInjector, DependencyProvider, InjectionKey
 from carthage.image import ContainerImage
 from carthage.network import Network
 from carthage.machine import ssh_origin
@@ -42,9 +43,10 @@ async def test_ainjector(loop):
 @pytest.fixture(scope = 'session')
 def vm_image( loop, test_ainjector):
     ainjector = test_ainjector
-    image = loop.run_until_complete(ainjector(image_factory, name = "base"))
-    loop.run_until_complete(image.apply_customization(SshAuthorizedKeyCustomizations))
+    image = loop.run_until_complete(ainjector(image_factory, name = "base", image = HadronVmImage))
+    loop.run_until_complete(ainjector.get_instance_async(ssh.SshKey))
     loop.run_until_complete(image.apply_customization(InstallQemuAgent))
+    image.config_layout.delete_volumes = False
     yield image
     image.close()
     

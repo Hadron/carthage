@@ -153,7 +153,6 @@ class VM(Machine, SetupTaskMixin):
         return self
 
     async def _find_ip_address(self):
-        await asyncio.sleep(15)
         for i in range(30):
             try:
                 res = await sh.virsh("qemu-agent-command",
@@ -174,7 +173,7 @@ class VM(Machine, SetupTaskMixin):
                     if addr['ip-address'].startswith('fe80'): continue
                     self.ip_address = addr['ip-address']
                     return
-                    
+            await asyncio.sleep(3)
 
     @property
     def stamp_path(self):
