@@ -67,7 +67,6 @@ class VmwareAuthorizationRole(VmwareStampable, kind='authorization_role'):
         def list_is_subset(a, b):
             for x in a:
                 if x not in b:
-                    print(x)
                     return False
             return True
 
@@ -82,3 +81,155 @@ class VmwarePermission():
     principal : VmwarePrincipal
     role : VmwareAuthorizationRole
     propagate : bool
+
+@inject(ainjector = AsyncInjector, config = ConfigLayout)
+async def create_roles(*, ainjector, config):
+
+    cr = create_roles
+
+    await ainjector(VmwareAuthorizationRole,
+                    name='Carthage Content Creation',
+                    privIds=cr.view + cr.create + cr.vm + cr.datastore)
+
+    await ainjector(VmwareAuthorizationRole,
+                    name='Carthage Visibility',
+                    privIds=cr.view + cr.globals)
+
+    await ainjector(VmwareAuthorizationRole,
+                    name='Carthage Maintenance',
+                    privIds=cr.view + cr.maintain + cr.vm + cr.datastore)
+
+    await ainjector(VmwareAuthorizationRole,
+                    name='Carthage Content Owner',
+                    privIds=cr.view + cr.create + cr.manage +
+                    cr.maintain + cr.delete + cr.vm +
+                    cr.packer + cr.datastore)
+
+create_roles.globals = [
+    'Global.SetCustomField'
+]
+create_roles.view = [
+    'System.View',
+    'System.Anonymous',
+    'System.Read'
+]
+create_roles.create = [
+    'Datastore.Move',
+    'Host.Config.Storage',
+    'Host.Inventory.CreateCluster',
+    'Host.Inventory.EditCluster',
+    'Folder.Create',
+    'DVPortgroup.Create'
+]
+create_roles.manage = [
+    'Global.SetCustomField',
+    'Authorization.ModifyPermissions',
+    'VirtualMachine.Inventory.Move',
+    'Host.Inventory.MoveHost',
+    'Host.Inventory.EditCluster',
+    'Host.Config.Maintenance'
+]
+create_roles.maintain = [
+    'Resource.HotMigrate',
+    'Resource.ColdMigrate'
+]
+create_roles.delete = [
+    'Host.Inventory.DeleteCluster',
+    'Folder.Delete',
+    'DVPortgroup.Delete'
+]
+# Based on https://github.com/jetbrains-infra/packer-builder-vsphere/issues/97
+create_roles.packer = [
+    # Create VM:
+    'VirtualMachine.Inventory.Create',
+    'VirtualMachine.Inventory.Delete',
+    'VirtualMachine.Config.AddNewDisk',
+    # Customize hardware:
+    'VirtualMachine.Config.CPUCount',
+    'VirtualMachine.Config.Resource',
+    'VirtualMachine.Config.Memory',
+    'VirtualMachine.Config.Settings',
+    'VirtualMachine.Config.Annotation',
+    # configuration_parameters
+    'VirtualMachine.Config.AdvancedConfig',
+    # Boot
+    'VirtualMachine.Config.Settings',
+    'VirtualMachine.Interact.PowerOn',
+    'VirtualMachine.Interact.ConsoleInteract',
+    'VirtualMachine.Interact.PowerOff',
+    # CD-ROM
+    'VirtualMachine.Config.AddRemoveDevice',
+    'VirtualMachine.Interact.SetCDMedia',
+    'VirtualMachine.Interact.DeviceConnection',
+    # Upload floppy image
+    'VirtualMachine.Config.AddRemoveDevice',
+    'VirtualMachine.Interact.SetFloppyMedia',
+    # Snapshot:
+    'VirtualMachine.State.CreateSnapshot',
+    # Template:
+    'VirtualMachine.Provisioning.MarkAsTemplate'
+]
+create_roles.vm = [
+    'VirtualMachine.Config.Rename',
+    'VirtualMachine.Config.Rename',
+    'VirtualMachine.Config.Annotation',
+    'VirtualMachine.Config.Annotation',
+    'VirtualMachine.Config.AddNewDisk',
+    'VirtualMachine.Config.RemoveDisk',
+    'VirtualMachine.Config.RawDevice',
+    'VirtualMachine.Config.HostUSBDevice',
+    'VirtualMachine.Config.CPUCount',
+    'VirtualMachine.Config.Memory',
+    'VirtualMachine.Config.AddRemoveDevice',
+    'VirtualMachine.Config.EditDevice',
+    'VirtualMachine.Config.Settings',
+    'VirtualMachine.Config.Resource',
+    'VirtualMachine.Config.UpgradeVirtualHardware',
+    'VirtualMachine.Config.ResetGuestInfo',
+    'VirtualMachine.Config.ToggleForkParent',
+    'VirtualMachine.Config.AdvancedConfig',
+    'VirtualMachine.Config.DiskLease',
+    'VirtualMachine.Config.SwapPlacement',
+    'VirtualMachine.Config.DiskExtend',
+    'VirtualMachine.Config.ChangeTracking',
+    'VirtualMachine.Config.QueryUnownedFiles',
+    'VirtualMachine.Config.ReloadFromPath',
+    'VirtualMachine.Config.QueryFTCompatibility',
+    'VirtualMachine.Config.MksControl',
+    'VirtualMachine.Config.ManagedBy',
+    'VirtualMachine.Inventory.Create',
+    'VirtualMachine.Inventory.Delete',
+    'VirtualMachine.Interact.PutUsbScanCodes',
+    'VirtualMachine.Config.AddExistingDisk',
+    'VirtualMachine.Config.AddRemoveDevice',
+    'VirtualMachine.Config.AddNewDisk',
+    'VirtualMachine.Interact.PowerOn',
+    'VirtualMachine.Interact.PowerOff',
+    'VirtualMachine.Inventory.CreateFromExisting',
+    'VirtualMachine.Provisioning.CreateTemplateFromVM',
+    'VirtualMachine.Provisioning.DeployTemplate',
+    'VirtualMachine.Provisioning.CloneTemplate',
+    'VirtualMachine.Provisioning.Clone',
+    'Resource.AssignVMToPool',
+    'Network.Assign',
+    'VirtualMachine.State.CreateSnapshot',
+    'VirtualMachine.State.RevertToSnapshot',
+    'VirtualMachine.Interact.AnswerQuestion',
+    'VirtualMachine.Interact.ConsoleInteract',
+    'VirtualMachine.Interact.DeviceConnection',
+    'VirtualMachine.Interact.Reset',
+    'VirtualMachine.Interact.SetCDMedia',
+    'VirtualMachine.Interact.SetFloppyMedia',
+    'VirtualMachine.Interact.ToolsInstall',
+    'VApp.Import'
+]
+create_roles.datastore = [
+    'Datastore.AllocateSpace',
+    'Datastore.Browse',
+    'Datastore.DeleteFile',
+    'Datastore.FileManagement',
+    'Datastore.UpdateVirtualMachineFiles'
+]
+create_roles.datastore_view = [
+    'Datastore.Browse'
+]
