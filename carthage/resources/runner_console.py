@@ -1,5 +1,6 @@
 from carthage import *
-from carthage import sh
+import carthage
+from carthage import sh, ssh
 config = base_injector(ConfigLayout)
 from carthage.hadron_layout import database_key
 db = base_injector.get_instance(database_key)

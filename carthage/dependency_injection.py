@@ -605,5 +605,6 @@ __all__ = '''
     inject Injector AsyncInjector
     Injectable AsyncInjectable InjectionFailed ExistingProvider
     InjectionKey
+    DependencyProvider
     partial_with_dependencies shutdown_injector
 '''.split()

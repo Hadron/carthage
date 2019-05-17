@@ -1,19 +1,39 @@
 import asyncio
-import carthage. dependency_injection, carthage.config
+
 import carthage.config
+import carthage.dependency_injection
+import carthage.pki
+
+__all__ = []
+
 from .utils import memoproperty, when_needed
+__all__ += [ 'memoproperty', 'when_needed' ]
+
 from .setup_tasks import *
+__all__ += carthage.setup_tasks.__all__
+
 from .dependency_injection import *
+__all__ += carthage.dependency_injection.__all__
+
 from .config import ConfigLayout, config_key, config_defaults
+__all__ += [ 'ConfigLayout', 'config_key', 'config_defaults' ]
+
 from .network import Network, NetworkConfig
+__all__ += [ 'Network', 'NetworkConfig' ]
+
 from .machine import Machine
+import carthage.ssh # ssh import must come after machine
+
+
 from .files import rsync_git_tree
 
-import carthage.hadron_layout
-import carthage.hadron
+__all__ += [ 'Machine',  'rsync_git_tree']
+
 import carthage.container
-import carthage.ssh
+import carthage.hadron
+import carthage.hadron_layout
 import carthage.pki
+
 import carthage.vm
 
 base_injector = carthage.dependency_injection.Injector()
@@ -36,3 +56,5 @@ base_injector.add_provider(carthage.container.container_image, carthage.hadron.h
 base_injector.add_provider(carthage.vm.vm_image, carthage.hadron.hadron_vm_image)
 base_injector.add_provider(InjectionKey(carthage.ssh.SshAgent), carthage.ssh.ssh_agent)
 base_injector.add_provider(carthage.pki.PkiManager)
+
+__all__ += [ 'base_injector' ]
