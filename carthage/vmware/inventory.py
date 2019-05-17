@@ -140,17 +140,16 @@ class VmwareManagedObject(VmwareStampable):
     async def do_create(self):
         raise NotImplementedError
 
-
     def children(self, objtypes, recursive=True):
-        if self.mob is None: return [] #Typically dry_run on construct
+        if self.mob is None: return
         vm = self.connection.content.viewManager
+        container = None
         try:
             container = vm.CreateContainerView(self.mob, objtypes, recursive)
             for ref in container.view:
                 yield ref
         finally:
-            container.Destroy()
-
+            if container is not None: container.Destroy()
 
     @staticmethod
     def canonicalize_path(path):
