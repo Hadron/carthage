@@ -204,6 +204,8 @@ def carthage_main_setup(parser=None):
     if not args.command_verbose:
         logging.getLogger('carthage.sh').setLevel(logging.ERROR)
         logging.getLogger('carthage.sh').propagate = False
+        logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
+        logging.getLogger('urllib3.connectionpool').propagate = False
     if args.tasks_verbose:
         logging.getLogger('carthage.setup_tasks').setLevel(10)
         
