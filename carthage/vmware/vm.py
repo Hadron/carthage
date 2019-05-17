@@ -344,6 +344,8 @@ class BasicConfig(ConfigSpecStage, stage_for = Vm, order = 20,
 class ScsiSpec(DeviceSpecStage, stage_for = Vm,
                order = 30,
                dev_classes = (vim.vm.device.ParaVirtualSCSIController,
+                              vim.vm.device.VirtualLsiLogicSASController,
+                              vim.vm.device.VirtualLsiLogicController,
                               vim.vm.device.VirtualBusLogicController)):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
