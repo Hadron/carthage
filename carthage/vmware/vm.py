@@ -167,25 +167,6 @@ class Vm(Machine, VmwareMachineObject):
         task = self.mob.Destroy_Task()
         await carthage.vmware.utils.wait_for_task(task)
 
-
-    async def _network_dict(self):
-        if not self.network_config: return []
-        network_config = await self.ainjector(self.network_config.resolve, access_class = network.DistributedPortgroup)
-        if self.paravirt:
-            net_type = "vmxnet3"
-        else: net_type = "e1000"
-        switch = self.config_layout.vmware.distributed_switch
-        res = []
-        for net, i, mac in network_config:
-            d = {'device_type': net_type,
-                 'name': net.full_name,
-                 "dvswitch_name": switch,}
-            if mac: d['mac'] = mac
-            res.append(d)
-        return res
-                      
-                
-        
     async def do_create(self):
         try:
             cluster = await self.ainjector(VmwareCluster)
@@ -225,22 +206,6 @@ class Vm(Machine, VmwareMachineObject):
 
     async def delete_vm(self):
         return await self.ainjector(self._ansible_op, state = 'absent', force = True)
-
-    async def reconfigure(self, spec):
-        task = self.mob.ReconfigVM_Task(spec=spec)
-        return await carthage.vmware.utils.wait_for_task(task)
-
-    async def remove_cdroms(self):
-        cs = vim.vm.ConfigSpec()
-        dc = cs.deviceChange = []
-        for dev in self.mob.config.hardware.device:
-            if not isinstance(dev, vim.vm.device.VirtualCdrom): continue
-            ds = vim.vm.device.VirtualDeviceSpec()
-            ds.operation = vim.vm.device.VirtualDeviceSpec.Operation.remove
-            ds.device = dev
-            dc.append(ds)
-        if len(dc) > 0:
-            return await self.reconfigure(cs)
 
     async def start_machine(self):
         loop = self.injector.get_instance(asyncio.AbstractEventLoop)
