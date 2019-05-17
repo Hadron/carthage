@@ -5,7 +5,8 @@ from carthage.dependency_injection import AsyncInjector
 from carthage.config import ConfigLayout
 import collections.abc
 
-
+__all__ = [ 'logger', 'TaskWrapper', 'TaskMethod', 'setup_task', 'SkipSetupTask', 'SetupTaskMixin',
+            'create_stamp', 'delete_stamp', 'check_stamp', 'logger_for' ]
 
 logger = logging.getLogger('carthage.setup_tasks')
 
