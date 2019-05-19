@@ -82,7 +82,7 @@ class ConfigIterator:
                 v = getattr(self, k)._dictify(include_defaults)
                 if v or include_defaults: d[k] = v
             else:
-                v =  getattr(self, k)
+                v = getattr(self, k)
                 if (v != def_v) or include_defaults:
                     d[k] = v
         return d
