@@ -218,11 +218,9 @@ def carthage_main_run(func, *args, **kwargs):
     inject_config(base_injector)
     ainjector = base_injector(AsyncInjector)
     try:
-        loop.run_until_complete(ainjector(func, *args, **kwargs))
+        return loop.run_until_complete(ainjector(func, *args, **kwargs))
     finally:
         loop.run_until_complete(shutdown_injector(base_injector))
-        
-
 
 __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
            'add_carthage_arguments', 'carthage_main_argparser',
