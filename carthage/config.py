@@ -54,7 +54,9 @@ class ConfigIterator:
         except KeyError:
             try:
                 v = self._defaults[k]
-                assert not isinstance(v, dict) # There should be an InjectionKey for all sections
+                if isinstance(v, dict):
+                    # There should be an InjectionKey for all sections
+                    raise RuntimeError(f'no InjectionKey was present for {k}')
                 return v
             except KeyError:
                 raise AttributeError("{} is not a configuration key".format(self._prefix+k)) from None
