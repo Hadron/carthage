@@ -163,6 +163,20 @@ class TestDatabase(Container):
                              _out = self._out_cb,
                              _err_to_out = True)
 
+    async def ansible(self, host_pattern, play,
+                *, log_to = None):
+        if log_to is None: log_to = self
+        log_file = os.path.join(log_to.stamp_path, "ansible.log")
+        with open(log_file, "at") as log:
+            await self.ssh("cd /hadron-operations/ansible &&ansible-playbook",
+                           "-iinventory/hosts.txt",
+                           "-l"+host_pattern,
+                           play,
+                           _out = log,
+                           _bg = True,
+                           _bg_exc = False)
+            
+
     ip_address = "192.168.101.1"
 
 
