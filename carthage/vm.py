@@ -100,7 +100,7 @@ class VM(Machine, SetupTaskMixin):
     async def stop_vm(self):
         async with self._operation_lock:
             if not self.running:
-                raise RuntimeError("VM is not running")
+                return
             await sh.virsh("shutdown", self.full_name,
                        _bg = True,
                        _bg_exc = False)

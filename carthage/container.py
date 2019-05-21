@@ -148,7 +148,7 @@ class Container(Machine, SetupTaskMixin):
     async def stop_container(self):
         async with self._operation_lock:
             if not self.running:
-                raise RuntimeError("Container not running")
+                return
             self.process.terminate()
             process = self.process
             self.process = None
