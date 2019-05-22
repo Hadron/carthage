@@ -137,6 +137,7 @@ config_defaults.add_config(dict(
     max_port = 9500,
     hadron_operations = None,
     hadron_release = "18.12",
+    force_hadron_release = None,
     delete_volumes = False,
     external_vlan_id= 0,
     vlan_min = 1,
