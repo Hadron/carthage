@@ -1,4 +1,4 @@
-import argparse, asyncio, json, pytest, yaml
+import argparse, asyncio, json, logging, pytest, yaml
 from. import base_injector, ConfigLayout
 from .dependency_injection import AsyncInjector
 
@@ -50,6 +50,10 @@ def pytest_addoption(parser):
                      type = argparse.FileType('rt'),
                      help = "YAML test parameters.  This option is typically used on the system under test alongside --carthage-json and not typically used with --carthage-config."
                      )
+    group.addoption('--carthage-commands-verbose',
+                    action = 'store_true',
+                    help = 'Enable verbose logging of all carthage commands run')
+    
     
 
 def pytest_configure(config):
@@ -57,6 +61,9 @@ def pytest_configure(config):
     global json_log
     json_log = config.getoption('carthage_json')
     json_out = []
+    if not config.getoption('carthage_commands_verbose'):
+        logging.getLogger('carthage.sh').setLevel(logging.ERROR)
+        logging.getLogger('carthage.sh').propagate = False
     test_params_yaml = config.getoption('test_parameters')
     if test_params_yaml:
         config.carthage_test_parameters = yaml.load(test_params_yaml)

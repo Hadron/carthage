@@ -12,6 +12,7 @@ from ..network import Network
 from ..config import ConfigLayout
 
 from hadron.inventory.admin import models
+from .images import database_key
 
 @inject(
     config_layout = carthage.config.ConfigLayout,
@@ -65,8 +66,9 @@ class HadronNetwork(Network):
 
 
 site_router_key = InjectionKey('site-router')
-@inject(ainjector = AsyncInjector)
-async def fixup_database(ainjector):
+
+@inject(ainjector = AsyncInjector, config = carthage.config.ConfigLayout)
+async def fixup_database(ainjector, config):
     pg = await ainjector(RemotePostgres)
     session = Session(pg.engine())
     session.query(models.Network).update({
@@ -75,21 +77,29 @@ async def fixup_database(ainjector):
     machine_role = session.query(models.Role).filter_by(name = 'machine').one()
     for s in session.query(models.Slot).join(models.Role).filter(models.Role.name == 'apt-server'):
         s.role = machine_role
+    if config.force_hadron_release:
+        release = config.force_hadron_release
+        session.query(models.Slot).update(dict(release = release,
+                                          track = "snapshot" if release == "unstable" else "proposed"))
 
     session.commit()
     pg.close()
     
 
-@inject(ainjector = AsyncInjector)
-async def only_permitted_vms(permitted_vms, *, ainjector):
+@inject(ainjector = AsyncInjector, db = database_key)
+async def only_permitted_vms(permitted_vms, *, ainjector, db):
     permitted_vms = frozenset(permitted_vms)
+    changed = False
     pg = await ainjector(RemotePostgres)
     await asyncio.sleep(0.2)
     session = Session(pg.engine())
     for v in session.query(models.VirtualMachine).filter(models.VirtualMachine.vm_type.in_(['8g-hvm-spice', '8g-hvm-headless'])):
         if v.slot.fqdn() not in permitted_vms:
             session.delete(v)
+            changed = True
             
     session.commit()
     pg.close()
+    if changed:
+        await db.make_update()
     
