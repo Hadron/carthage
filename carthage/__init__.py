@@ -19,7 +19,6 @@ from .files import rsync_git_tree
 
 import carthage.hadron_layout
 import carthage.hadron
-import carthage.hadron.database
 import carthage.container
 import carthage.ssh
 import carthage.pki
