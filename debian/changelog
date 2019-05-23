@@ -1,3 +1,10 @@
+hadron-carthage (0.3) unstable; urgency=medium
+
+  * Snapshot changes; this version can be used by photon-test and probably
+    directly
+
+ -- Sam Hartman <hartmans@debian.org>  Thu, 23 May 2019 11:23:12 -0400
+
 hadron-carthage (0.2) unstable-aces-proposed; urgency=medium
 
   * Initial version
