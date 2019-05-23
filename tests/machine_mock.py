@@ -12,6 +12,7 @@ from carthage import sh
 
 class Machine:
 
+    ssh_options = []
     def __init__(self, name):
         self.name = name
         self.dir = TemporaryDirectory()

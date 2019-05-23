@@ -78,7 +78,7 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
         return sh.ssh.bake(_env = self.agent.agent_environ)
 
     def rsync(self, *args, ssh_origin = None):
-        ssh_options = None
+        ssh_options = []
         args = list(args)
         for i, a in enumerate(args):
             if isinstance(a, RsyncPath):
