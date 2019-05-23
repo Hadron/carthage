@@ -1,4 +1,4 @@
-hadron-carthage (0.3) unstable; urgency=medium
+hadron-carthage (0.3) unstable-aces-proposed; urgency=medium
 
   * Snapshot changes; this version can be used by photon-test and probably
     directly
