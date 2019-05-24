@@ -218,6 +218,7 @@ create_roles.vm = [
     'VirtualMachine.Provisioning.DeployTemplate',
     'VirtualMachine.Provisioning.CloneTemplate',
     'VirtualMachine.Provisioning.Clone',
+    'VirtualMachine.Provisioning.MarkAsVM',
     'Resource.AssignVMToPool',
     'Network.Assign',
     'VirtualMachine.State.CreateSnapshot',
