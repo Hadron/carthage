@@ -38,7 +38,7 @@ def test_carthage_injection(config, ainjector):
 @inject(ssh_key = carthage.ssh.SshKey)
 async def test_mock_machine(ssh_key):
     m = Machine("Test machine")
-    ssh_key.rsync(os.path.join(resource_dir, 'test_carthage_plugin.py'),
+    await ssh_key.rsync(os.path.join(resource_dir, 'test_carthage_plugin.py'),
                   m.rsync_path('/'))
     assert os.path.exists(os.path.join(
         m.path, "test_carthage_plugin.py"))
