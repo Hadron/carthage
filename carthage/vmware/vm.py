@@ -145,11 +145,18 @@ class Vm(Machine, VmwareMachineObject):
         self.inventory_object = None
         if template:
             self.template = template
-            self.template_snapshot = template.clone_from_snapshot
+            self.template_snapshot = getattr(template, 'clone_from_snapshot', None)
         self._operation_lock = asyncio.Lock()
 
     def __repr__(self):
         return f"<{self.__class__.__name__} name={self.name}>"
+
+    @classmethod
+    def satisfies_injection_key(cls, k):
+        if issubclass(k.target, Vm):
+            if set(k.constraints) - {'role'} == set():
+                return True
+        return super().satisfies_injection_key(k)
     
     async def delete(self):
         try:
@@ -483,7 +490,8 @@ class VmInventory(Injectable):
             del self.view
         except: pass
 
-#Now mark VM as taking a template
-inject(template = InjectionKey(VmTemplate, optional = True))(Vm)
+#Now mark VM as taking a template A vm can be a template for a vm, but
+# we want to look up with a role for finding in the injector
+inject(template = InjectionKey(Vm, role = 'template', optional = True))(Vm)
 
 from . import inventory
