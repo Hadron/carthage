@@ -19,7 +19,7 @@ from carthage import base_injector, AsyncInjector
 @pytest.fixture()
 def container(test_ainjector, loop):
     ainjector = test_ainjector
-    container = loop.run_until_complete(ainjector(Container, name = "container_1"))
+    container = loop.run_until_complete(ainjector(Container, name = "container-1"))
     yield container
     if container.running:
         loop.run_until_complete(container.stop_container())
