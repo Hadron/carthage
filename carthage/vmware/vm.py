@@ -302,8 +302,8 @@ class BasicConfig(ConfigSpecStage, stage_for = Vm, order = 20,
         obj = self.obj
         vmc = self.obj.config_layout.vmware
         if not obj.mob:
-            config.files = vim.vm.FileInfo(vmPathName = f'[{vmc.datastore.name}]')
-            
+            dsname = vmc.datastore.name.rpartition('/')[2]
+            config.files = vim.vm.FileInfo(vmPathName = f'[{dsname}]')
         if self.bag.mode == 'create':
             config.name = obj.full_name
         config.numCPUs = obj.cpus
