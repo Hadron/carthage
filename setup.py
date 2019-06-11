@@ -17,6 +17,7 @@ setup(
     maintainer_email = "sam.hartman@hadronindustries.com",
     url = "http://www.hadronindustries.com/",
     packages = ["carthage", "carthage.hadron",
+                'carthage.config',
                 "carthage.vmware"],
     install_requires = ['pytest', ],
     scripts = ['bin/carthage-runner',

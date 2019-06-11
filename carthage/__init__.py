@@ -23,8 +23,8 @@ __all__ += carthage.setup_tasks.__all__
 from .dependency_injection import *
 __all__ += carthage.dependency_injection.__all__
 
-from .config import ConfigLayout, config_key, config_defaults
-__all__ += [ 'ConfigLayout', 'config_key', 'config_defaults' ]
+from .config import ConfigLayout, config_key, ConfigSchema
+__all__ += [ 'ConfigLayout', 'config_key', 'ConfigSchema' ]
 
 from .network import Network, NetworkConfig
 __all__ += [ 'Network', 'NetworkConfig' ]

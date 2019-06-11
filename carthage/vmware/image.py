@@ -10,7 +10,8 @@ import logging, os
 from ..image import ImageVolume, SetupTaskMixin, setup_task
 from ..utils import memoproperty
 from ..dependency_injection import *
-from ..config import config_defaults, ConfigLayout, config_key
+from ..config import ConfigSchema, ConfigLayout, config_key
+from ..config.types import ConfigPath
 from .. import sh
 from .credentials import vmware_credentials
 from .datastore import VmwareDataStore
@@ -84,18 +85,18 @@ class VmdkTemplate(SetupTaskMixin, AsyncInjectable):
         return f'[{self.store.name}]{self.store.path}/{self.image.name}.vmdk'
 
     
-config_defaults.add_config({'vmware': {
-    'datastore': {
-        'name': None,
-        'path': "",
-        'local_path': None,
-        },
-"image_datastore": {
-"name": None,
-"path": None,
-"local_path": None},
+class VmwareDatastoreConfig(ConfigSchema, prefix = "vmware.datastore"):
+    name: str
+    path: str = ""
+local_path: ConfigPath
 
-    }})
+class ImageDatastoreConfig(ConfigSchema, prefix = "vmware.image_datastore"):
+    name: str
+    path: str = ""
+    local_path: ConfigPath
+    
+
+
 
 vm_storage_key = config_key("vmware.datastore")
 
