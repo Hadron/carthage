@@ -18,20 +18,19 @@ from pyVmomi import vim
 
 logger = logging.getLogger('carthage.vmware.vm')
 
-config_defaults.add_config({
-    'vmware': {
-        'datacenter': None,
-        'folder': 'carthage',
-        'cluster': None,
-        'hardware': {
-            'boot_firmware': 'efi',
-            'version': 14,
-            'memory_mb': 4096,
-            'disk': 25000000000,
-            'cpus': 1,
-            'paravirt': True,
-            },
-        }})
+class VmwareVmConfig(ConfigSchema, prefix = "vmware"):
+    datacenter: str
+    folder: str = "carthage"
+    cluster: str
+
+class HardwareConfig(ConfigSchema, prefix = "vmware.hardware"):
+    boot_firmware:str = "efi"
+    version: int = 14
+    memory_mb:int = 4096
+    disk:int = 25000000000
+    cpus: int = 1
+    paravirt: bool = True
+    
 vmware_config = config_key('vmware')
 
 @inject(**VmwareFolder.injects)

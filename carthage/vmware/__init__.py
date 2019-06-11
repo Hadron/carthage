@@ -15,7 +15,7 @@ import carthage.vmware.network as network
 @carthage.dependency_injection.inject(
     injector = carthage.dependency_injection.Injector)
 def carthage_plugin(injector):
-    from ..config import ConfigIterator
+    from ..config import ConfigAccessor
     from ..dependency_injection import partial_with_dependencies
     from ..utils import when_needed
     from . import inventory
@@ -27,6 +27,6 @@ def carthage_plugin(injector):
     injector.add_provider(DvSwitch)
     injector.add_provider(VmwareConnection)
     image_injector = injector(carthage.dependency_injection.Injector)
-    image_injector.add_provider(vm_storage_key, partial_with_dependencies(ConfigIterator, prefix="vmware.image_datastore."), allow_multiple = True)
+    image_injector.add_provider(vm_storage_key, partial_with_dependencies(ConfigAccessor, prefix="vmware.image_datastore."), allow_multiple = True)
     injector.add_provider(image_datastore_key, when_needed(NfsDataStore, injector = image_injector))
     

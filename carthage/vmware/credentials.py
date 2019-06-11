@@ -1,12 +1,10 @@
-from ..config import config_defaults, config_key
+from ..config import ConfigSchema, config_key
 
-config_defaults.add_config({
-    'vmware': {
-        'hostname': None,
-        'username': None,
-        'password': None,
-        'validate_certs': False
-        }})
+class CredentialsSchema(ConfigSchema, prefix = "vmware"):
+    hostname: str
+    username: str
+    password: str
+    validate_certs: bool = False
 
 #: Injection key to get Vmware credential configuration.  Only assume that username, hostname, password and verify_certs are set with this key as a dependency.
 vmware_credentials = config_key('vmware')

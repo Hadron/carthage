@@ -4,7 +4,8 @@ from carthage.dependency_injection import Injector, inject
 
 def test_add_config(ainjector):
     injector = ainjector.injector
-    config_defaults.add_config({"foo": 33})
+    class Defaults(ConfigSchema, prefix = ""):
+        foo:int = 33
     cl = injector(ConfigLayout)
     assert cl.foo == 33
     

@@ -7,7 +7,7 @@ import carthage, carthage.utils
 from pyVmomi import vim, vmodl
 
 from carthage import base_injector, inject, AsyncInjector, ConfigLayout, ansible
-from carthage.config import config_defaults
+from carthage.config import ConfigSchema
 from carthage.dependency_injection import *
 from carthage.ssh import SshKey
 from carthage.console import *

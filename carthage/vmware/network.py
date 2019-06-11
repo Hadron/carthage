@@ -12,10 +12,9 @@ from pyVmomi import vim
 
 __all__ = ('VmwareNetwork', 'DvSwitch', 'DistributedPortgroup', 'our_portgroups_for_switch', 'NetworkFolder', 'vmware_trunk_key')
             
-config_defaults.add_config({'vmware': {
-    'distributed_switch': None,
-    'trunk_interface': None,
-    }})
+class VmwareNetworkConfig(ConfigSchema, prefix = "vmware"):
+    distributed_switch: str
+    trunk_interface: str
 
 @inject(**VmwareFolder.injects)
 class NetworkFolder(VmwareFolder, kind='network'):
