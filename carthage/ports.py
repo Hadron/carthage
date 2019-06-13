@@ -12,9 +12,8 @@ class PortReservation:
     __slots__ = ('port', '__weakref__')
 
     def __init__(self, config_layout):
-        assert config_layout.max_port > config_layout.min_port
         found = False
-        for i in range(config_layout.min_port, config_layout.max_port+1):
+        for i in range(config_layout.min_port, config_layout.min_port+config_layout.num_ports+1):
             self.port = i
             if self not in  self._ports_used:
                 self._ports_used.add(self)
