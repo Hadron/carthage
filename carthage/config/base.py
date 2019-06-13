@@ -19,7 +19,7 @@ class BaseSchema(ConfigSchema, prefix = ""):
     base_vm_image:str = "/usr/share/hadron-installer/direct-install-efi.raw.gz"
     container_prefix:str = 'carthage-'
     min_port:int = 9000 #: Minimum port for displays and databases
-    ports_to_reserve: int = 500
+    num_ports: int = 500
 
     #: Path to  a checkout of hadron_operations
     hadron_operations: ConfigPath
