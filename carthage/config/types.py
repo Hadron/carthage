@@ -9,9 +9,9 @@ def getattr_path(o, attrs):
     try:
         while attrs_iter:
             left, sep, attrs_iter = attrs_iter.partition('.')
-            if attrs_iter:
-                o = getattr(o, left)
-            return getattr(o, left)
+            o = getattr(o, left)
+            if not attrs_iter:
+                return o
     except AttributeError:
         raise AttributeError(f'Unable to find {attrs}') from None
 

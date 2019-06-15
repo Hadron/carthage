@@ -1,6 +1,7 @@
 import importlib, yaml
 from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies
 
+
 from .schema import config_key, ConfigAccessor, ConfigSchema
 
 
@@ -25,8 +26,13 @@ class ConfigLayout(ConfigAccessor, Injectable):
                 self._load(v, injector, ConfigSchema._schemas[prefix+k], prefix+k+".")
             else:
                 try:
-                    orig_v = into[k]
-                    injector.replace_provider(config_key(full_key), v)
+                    schema_item = into[k]
+                    class value(schema_item.type, Injectable):
+                        new_value = v
+                        def __new__(self, **kwargs):
+                            return super().__new__(self, self.new_value, **kwargs)
+                            
+                    injector.replace_provider(config_key(full_key), value)
                 except AttributeError:
                     raise AttributeError("{} is not a config attribute".format(full_key)) from None
 
