@@ -107,6 +107,7 @@ class ConfigSchema(metaclass = ConfigSchemaMeta, prefix = ""):
         __slots__ = ('name', 'type', 'default', 'key')
         
         def __init__(self, name, type, default):
+            assert issubclass(type, type)
             self.name = name
             self.type = type
             self.default = default
