@@ -41,7 +41,7 @@ class ConfigSchemaMeta(type):
                 raise TypeError("A dict as a default for a configuration value is probably too confusing; discuss whether this is really what you want.")
             if k in schema:
                 raise TypeError(f'{prefix}{k} is already defined')
-            schema[k] = cls.Item(prefix+k, type = annotations[k],
+            schema[k] = cls.Item(prefix+k, type_ = annotations[k],
                                  default = default)
         return cls
 
@@ -114,10 +114,10 @@ class ConfigSchema(metaclass = ConfigSchemaMeta, prefix = ""):
 
         __slots__ = ('name', 'type', 'default', 'key')
         
-        def __init__(self, name, type, default):
-            assert issubclass(type, type)
+        def __init__(self, name, type_, default):
+            assert isinstance(type_, type), f'{name} config key must be declared with a type not {type_}'
             self.name = name
-            self.type = type
+            self.type = type_
             self.default = default
             self.key = config_key(name)
 
