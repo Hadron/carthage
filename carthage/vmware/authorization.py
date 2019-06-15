@@ -4,7 +4,7 @@ import carthage.ansible, carthage.network
 import os.path
 from ..machine import Machine
 from ..dependency_injection import *
-from ..config import ConfigLayout, config_defaults, config_key
+from ..config import ConfigLayout, config_key
 from ..setup_tasks import SetupTaskMixin, setup_task, SkipSetupTask
 from ..utils import memoproperty
 from .image import VmwareDataStore, VmdkTemplate
