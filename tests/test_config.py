@@ -20,6 +20,7 @@ def test_add_config(ainjector):
     
 def test_override_config(ainjector):
     injector = ainjector.injector
+    injector.replace_provider(ConfigLayout)
 
     @inject(cl = ConfigLayout)
     def fn(cl):
