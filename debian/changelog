@@ -1,3 +1,10 @@
+hadron-carthage (0.4) unstable-aces-proposed; urgency=medium
+
+  * New release
+  * This should be close to stable for using from a package.
+
+ --
+
 hadron-carthage (0.3) unstable-aces-proposed; urgency=medium
 
   * Snapshot changes; this version can be used by photon-test and probably
