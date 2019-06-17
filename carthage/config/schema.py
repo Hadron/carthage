@@ -108,6 +108,9 @@ class ConfigSchema(metaclass = ConfigSchemaMeta, prefix = ""):
         
         def __init__(self, name, type_, default):
             assert isinstance(type_, type), f'{name} config key must be declared with a type not {type_}'
+            if type_ is bool:
+                from .types import ConfigBool
+                type_ = ConfigBool
             self.name = name
             self.type = type_
             self.default = default
@@ -186,3 +189,4 @@ class ConfigAccessor:
         return f'<{self.__class__.__name__} overrides: {self._dictify()}>'
 
     
+
