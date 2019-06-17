@@ -42,3 +42,11 @@ class ConfigPath(ConfigString):
 
     def __new__(cls, s, *, config):
         return super().__new__(ConfigString, os.path.expanduser(os.path.expandvars(s)), config = config)
+
+class ConfigBool:
+
+    "A type that can be subtyped to be injectable used instead of bool"
+    
+    def __new__(cls, val):
+        return bool(val)
+    

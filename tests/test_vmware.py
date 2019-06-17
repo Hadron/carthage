@@ -52,7 +52,6 @@ async def test_clone_increase_disk_size(ainjector, vm_folder):
             self.template_snapshot = None
             
     v = await ainjector(VmTemplate, disk = None, parent = vm_folder, name = "blah3", template = None)
-    breakpoint()
     v2 = await ainjector(VmBigDisk, template = v, parent = vm_folder, name = "clone1big")
     d = 0
     for dev in v2.mob.config.hardware.device:
@@ -61,7 +60,7 @@ async def test_clone_increase_disk_size(ainjector, vm_folder):
             break
     assert d == v2.disk_size
     v3 = await ainjector(Vm, template = v2, name = "clone of clone", parent = vm_folder)
-    breakpoint()
+
     
     
 
