@@ -1,16 +1,17 @@
+hadron-carthage (0.4.1) unstable-aces-proposed; urgency=medium
+
+  [ Klee Dienes ]
+  * Remove config_defaults
+  * Support datastores not at the root of the ds folder
+
+ -- Sam Hartman <hartmans@debian.org>  Wed, 19 Jun 2019 11:11:51 -0400
+
 hadron-carthage (0.4) unstable-aces-proposed; urgency=medium
 
   * New release
   * This should be close to stable for using from a package.
 
- --
-
-hadron-carthage (0.3) unstable-aces-proposed; urgency=medium
-
-  * Snapshot changes; this version can be used by photon-test and probably
-    directly
-
- -- Sam Hartman <hartmans@debian.org>  Thu, 23 May 2019 11:23:12 -0400
+ -- Sam Hartman <hartmans@debian.org>  Wed, 19 Jun 2019 11:10:04 -0400
 
 hadron-carthage (0.2) unstable-aces-proposed; urgency=medium
 
