@@ -11,6 +11,8 @@ from carthage import *
 from pyVim.connect import Connect, SmartConnect, Disconnect
 from ssl import create_default_context
 
+import logging
+
 @inject(config = ConfigLayout)
 class VmwareConnection(Injectable):
 

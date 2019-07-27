@@ -10,7 +10,7 @@ import carthage.dependency_injection
 
 from .vm import Vm, VmFolder, VmTemplate
 from .image import *
-from .inventory import VmwareStampable, VmwareManagedObject
+from .inventory import *
 from .cluster import VmwareCluster
 from .utils import wait_for_task
 from .connection import VmwareConnection
