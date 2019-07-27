@@ -14,7 +14,7 @@ from .utils import wait_for_task
 from . import network
 from .config_spec import *
 
-from pyVmomi import vim
+from pyVmomi import vim, vmodl
 
 logger = logging.getLogger('carthage.vmware.vm')
 
@@ -153,7 +153,7 @@ class Vm(Machine, VmwareMachineObject):
         try:
             task = self.mob.PowerOffVM_Task()
             await carthage.vmware.utils.wait_for_task(task)
-        except vim.fault.InvalidPowerState:
+        except (vim.fault.InvalidPowerState, vmodl.fault.NotSupported):
             pass
         task = self.mob.Destroy_Task()
         await carthage.vmware.utils.wait_for_task(task)
