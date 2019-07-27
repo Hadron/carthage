@@ -5,8 +5,7 @@ from carthage.dependency_injection import AsyncInjector
 from carthage.config import ConfigLayout
 import collections.abc
 
-__all__ = [ 'logger', 'TaskWrapper', 'TaskMethod', 'setup_task', 'SkipSetupTask', 'SetupTaskMixin',
-            'create_stamp', 'delete_stamp', 'check_stamp', 'logger_for' ]
+__all__ = [ 'logger', 'TaskWrapper', 'TaskMethod', 'setup_task', 'SkipSetupTask', 'SetupTaskMixin' ]
 
 logger = logging.getLogger('carthage.setup_tasks')
 
@@ -54,29 +53,29 @@ class TaskWrapper:
             try:
                 res = fut.result()
                 if not self.check_completed_func:
-                    create_stamp(instance.stamp_path, self.stamp)
+                    instance.create_stamp(self.stamp)
             except SkipSetupTask: pass
             except Exception:
                 if not self.check_completed_func:
-                    logger_for(instance).warning(f'Deleting {self.description} task stamp for {instance} because task failed')
-                    delete_stamp(instance.stamp_path, self.stamp)
+                    instance.logger_for().warning(f'Deleting {self.description} task stamp for {instance} because task failed')
+                    instance.delete_stamp(self.stamp)
 
         try:
-            res =  self.func( instance, *args, **kwargs)
+            res = self.func(instance, *args, **kwargs)
             if isinstance(res, collections.abc.Coroutine):
                 res = asyncio.ensure_future(res)
                 res.add_done_callback(callback)
+                res.purpose = f'setup task: {self.stamp} for {instance.name}'
                 return res
             else:
                 if not self.check_completed_func:
-                    create_stamp(instance.stamp_path, self.stamp)
-                return res
+                    instance.create_stamp(self.stamp)
         except SkipSetupTask:
             raise
         except Exception:
             if not self.check_completed_func:
-                logger_for(instance).warning(f'Deleting {self.description} task stamp for {instance} because task failed')
-                delete_stamp(instance.stamp_path, self.stamp)
+                instance.logger_for().warning(f'Deleting {self.description} task stamp for {instance} because task failed')
+                instance.delete_stamp(self.stamp)
             raise
             
     @property
@@ -113,7 +112,7 @@ class TaskWrapper:
             if last_run is True:
                 logger.debug(f"Task {self.description} for {obj} run without providing timing information")
                 return (False, dependency_last_run)
-        else: last_run  = check_stamp(obj.stamp_path, self.stamp)
+        else: last_run  = obj.check_stamp(self.stamp)
         if last_run is False:
             logger.debug(f"Task {self.description} never run for {obj}")
             return (True, dependency_last_run)
@@ -242,14 +241,14 @@ class SetupTaskMixin:
                         await context.__aenter__()
                         context_entered = True
                     if not dry_run:
-                        logger_for(self).info(f"Running {t.description} task for {self}")
+                        self.logger_for().info(f"Running {t.description} task for {self}")
                         await ainjector(t, self)
                         dependency_last_run = time.time()
                     else:
-                        logger_for(self).info(f'Would run {t.description} task for {self}')
+                        self.logger_for().info(f'Would run {t.description} task for {self}')
                 except SkipSetupTask: pass
                 except Exception:
-                    logger_for(self).exception( f"Error running {t.description} for {self}:")
+                    self.logger_for().exception( f"Error running {t.description} for {self}:")
                     if context_entered:
                         await context.__aexit__(*sys.exc_info())
                     raise
@@ -274,41 +273,36 @@ This may need to be overridden, but is provided as a default
 '''
         await self.run_setup_tasks()
         return self
-    
 
-def create_stamp(path, stamp):
-    try:
-        with open(os.path.join(path, ".stamp-"+stamp), "w") as f:
-            pass
-    except FileNotFoundError:
-        os.makedirs(path, exist_ok = True)
-        with open(os.path.join(path, ".stamp-"+stamp), "w") as f:
-            pass
+    def create_stamp(self, stamp):
+        try:
+            with open(os.path.join(self.stamp_path, ".stamp-"+stamp), "w") as f:
+                pass
+        except FileNotFoundError:
+            os.makedirs(self.stamp_path, exist_ok = True)
+            with open(os.path.join(self.stamp_path, ".stamp-"+stamp), "w") as f:
+                pass
 
-def delete_stamp(path, stamp):
-    try:
-        os.unlink(os.path.join(path, ".stamp-"+stamp))
-    except FileNotFoundError: pass
-    
+    def delete_stamp(self, stamp):
+        try:
+            os.unlink(os.path.join(self.stamp_path, ".stamp-"+stamp))
+        except FileNotFoundError: pass
 
+    def check_stamp(self, stamp, raise_on_error = False):
+        '''
+        :returns: False if the stamp is not present and *raise_on_error* is False else the unix time of the stamp.
+        '''
+        try:
+            res = os.stat(os.path.join(self.stamp_path, ".stamp-"+stamp))
+        except FileNotFoundError:
+            if raise_on_error: raise RuntimeError(f"stamp directory '{self.stamp_path}' did not exist") from None
+            return False
+        return res.st_mtime
 
-def check_stamp(path, stamp, raise_on_error = False):
-    '''
-    :returns: False if the stamp is not present and *raise_on_error* is False else the unix time of the stamp.
-    '''
-    try:
-        res = os.stat(os.path.join(path,
-                                       ".stamp-"+stamp))
-    except FileNotFoundError:
-        if raise_on_error: raise RuntimeError("Stamp not available") from None
-        return False
-    return res.st_mtime
-
-
-def logger_for(instance):
-    try:
-        return instance.logger
-    except AttributeError: return logger
+    def logger_for(self):
+        try:
+            return self.logger
+        except AttributeError: return logger
     
 
 def _iso_time(t):
