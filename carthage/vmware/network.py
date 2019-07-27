@@ -7,6 +7,7 @@
 # LICENSE for details.
 
 import asyncio, collections.abc
+import logging
 
 from carthage import *
 from carthage.network import this_network, TechnologySpecificNetwork, BridgeNetwork
@@ -78,13 +79,12 @@ class DistributedPortgroup(VmwareNetwork):
             kwargs['parent'] = dvswitch.parent
         super().__init__(*args, **kwargs, config_layout=config_layout)
 
-
     @memoproperty
     def name(self):
         return self.network.name
 
     async def do_create(self):
-        # print(f'creating distributed portgroup {self.network.name} on VLAN {self.network.vlan_id}')
+        logging.debug(f'creating distributed portgroup {self.network.name} on VLAN {self.network.vlan_id}')
         cs = vim.dvs.DistributedVirtualPortgroup.ConfigSpec()
         cs.name = self.full_name
         cs.autoExpand = True
