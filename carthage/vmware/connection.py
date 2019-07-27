@@ -23,11 +23,13 @@ class VmwareConnection(Injectable):
             ssl_context.check_hostname = False
             ssl_context.verify_mode = 0
         self.connection = None
+        logging.debug(f'connecting to {self.config.hostname} as {self.config.username}')
         self.connection = SmartConnect(host=self.config.hostname,
                                   user=self.config.username,
                                   pwd=self.config.password,
                                   sslContext=ssl_context)
         self.content = self.connection.content
+        logging.debug(f'connected to {self.config.hostname}')
 
     def close(self):
         if self.connection:
