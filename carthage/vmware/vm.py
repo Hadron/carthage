@@ -157,6 +157,8 @@ class Vm(Machine, VmwareMachineObject):
             pass
         task = self.mob.Destroy_Task()
         await carthage.vmware.utils.wait_for_task(task)
+        self.mob = None
+        self.vmware_uuid = None
 
     async def do_create(self):
         try:
