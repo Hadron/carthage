@@ -23,6 +23,10 @@ class VmwareDatacenter(VmwareNamedObject, kind='datacenter'):
         self.vm_folder = await self.ainjector(VmFolder, name='vm', parent=self)
         return ret
 
+    async def do_create(self):
+        content = self.connection.content
+        content.rootFolder.CreateDatacenter(name=self.name)
+
     parent_type = type(None)
 
     is_root = True

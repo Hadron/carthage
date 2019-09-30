@@ -120,8 +120,8 @@ class VmwareManagedObject(VmwareStampable):
     async def construct(self):
         if not self.mob:
             self.mob = self._find_from_path()
-        await self._find_parent()
         if not self.mob: return False
+        await self._find_parent()
         v = self.get_field_value(self.created)
         if v is None: return True #We don't know the dependency
         return datetime.datetime.fromisoformat(v).timestamp()
@@ -329,9 +329,6 @@ class VmwareSpecifiedObject(VmwareNamedObject):
             await ainjector(s.apply_config, config)
         return config
     
-            
-        
-
 def all_objs(content, root, objtype):
     vm = content.viewManager
     container = vm.CreateContainerView(root, objtype, True)

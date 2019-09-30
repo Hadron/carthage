@@ -89,7 +89,7 @@ async def create_roles(*, ainjector, config):
 
     await ainjector(VmwareAuthorizationRole,
                     name='Carthage Content Creation',
-                    privIds=cr.view + cr.create + cr.vm + cr.datastore)
+                    privIds=cr.view + cr.create + cr.vm + cr.datastore + cr.globals)
 
     await ainjector(VmwareAuthorizationRole,
                     name='Carthage Visibility',
@@ -97,13 +97,13 @@ async def create_roles(*, ainjector, config):
 
     await ainjector(VmwareAuthorizationRole,
                     name='Carthage Maintenance',
-                    privIds=cr.view + cr.maintain + cr.vm + cr.datastore)
+                    privIds=cr.view + cr.maintain + cr.vm + cr.datastore + cr.globals)
 
     await ainjector(VmwareAuthorizationRole,
                     name='Carthage Content Owner',
                     privIds=cr.view + cr.create + cr.manage +
                     cr.maintain + cr.delete + cr.vm +
-                    cr.packer + cr.datastore)
+                    cr.packer + cr.datastore + cr.globals)
 
 create_roles.globals = [
     'Global.SetCustomField'

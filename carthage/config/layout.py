@@ -40,7 +40,7 @@ class ConfigLayout(ConfigAccessor, Injectable):
 
     def load_yaml(self, y, *, injector = None):
         if injector is None: injector = self._injector
-        d = yaml.load(y)
+        d = yaml.safe_load(y)
         assert isinstance(d,dict)
         if 'plugins' in d:
             for p in d['plugins']:
