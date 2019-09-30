@@ -42,6 +42,8 @@ If a fully qualified name (in the form that ``searchIndex.FindByInventoryPath`` 
             else: self.parent_type = datacenter.VmwareDatacenter
 
     async def do_create(self):
+        if not self.parent:
+            raise ValueError(f"unable to create folder '{self.name}' as no parent was specified")
         return self.parent.mob.CreateFolder(self.name)
 
     async def delete(self):
