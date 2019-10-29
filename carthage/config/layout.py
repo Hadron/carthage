@@ -35,10 +35,24 @@ class ConfigLayout(ConfigAccessor, Injectable):
             else:
                 try:
                     schema_item = into[k]
+                    # We cannot simply use the yaml provided value
+                    # because the type class in the schema item may
+                    # process the value in construction.  For example
+                    # ConfigString does substitutions in construction
+                    # but ultimately returns a real string.  We cannot
+                    # simply construct the value here, because there
+                    # may be forward reference substitutions.  So we
+                    # need to defer actually constructing the value
+                    # until it is used.  We do this by creating an
+                    # injectible class that acts as a dependency
+                    # provider for the configuration key.
                     class value(schema_item.type, Injectable):
                         new_value = v
                         def __new__(self, **kwargs):
                             return super().__new__(self, self.new_value, **kwargs)
+
+                        def __init__(self, **kwargs):
+                            super().__init__(self.new_value, **kwargs)
                             
                     injector.replace_provider(config_key(full_key), value)
                 except AttributeError:
