@@ -293,6 +293,8 @@ This may need to be overridden, but is provided as a default
         '''
         :returns: False if the stamp is not present and *raise_on_error* is False else the unix time of the stamp.
         '''
+        if raise_on_error not in (True,False):
+            raise SyntaxError(f'raise_on_error must be a boolean. current value: {raise_on_error}')
         try:
             res = os.stat(os.path.join(self.stamp_path, ".stamp-"+stamp))
         except FileNotFoundError:

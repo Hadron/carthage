@@ -65,9 +65,9 @@ class ContainerWaiter(Machine, SetupTaskMixin):
     async def start_dependencies(self):
         await super().start_dependencies()
         database = await self.ainjector.get_instance_async(carthage.hadron.database_key)
-        if not self.check_stamp(self.host.stamp_path, "ansible_initial_router"):
+        if not self.host.check_stamp("ansible_initial_router"):
             await run_ansible_initial_router(self.host, database)
-            self.create_stamp(self.host.stamp_path, 'ansible_initial_router')
+            self.host.create_stamp('ansible_initial_router')
         if not self.host.running: await self.host.start_machine()
 
     async def start_machine(self):
