@@ -4,7 +4,7 @@ from hadron.inventory.admin import models
 from ..dependency_injection import inject, Injector, InjectionKey, ExistingProvider
 from .database import *
 from ..utils import when_needed
-from ..setup_tasks import setup_task, SetupTaskMixin, create_stamp, check_stamp
+from ..setup_tasks import setup_task, SetupTaskMixin
 from ..vm import VM
 from ..machine import Machine, SshMixin
 from ..container import Container
@@ -65,9 +65,9 @@ class ContainerWaiter(Machine, SetupTaskMixin):
     async def start_dependencies(self):
         await super().start_dependencies()
         database = await self.ainjector.get_instance_async(carthage.hadron.database_key)
-        if not check_stamp(self.host.stamp_path, "ansible_initial_router"):
+        if not self.check_stamp(self.host.stamp_path, "ansible_initial_router"):
             await run_ansible_initial_router(self.host, database)
-            create_stamp(self.host.stamp_path, 'ansible_initial_router')
+            self.create_stamp(self.host.stamp_path, 'ansible_initial_router')
         if not self.host.running: await self.host.start_machine()
 
     async def start_machine(self):
