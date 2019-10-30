@@ -123,7 +123,8 @@ class TestDatabase(Container):
         with open(os.path.join(self.volume.path,
                                "hadron-operations/ansible/resources/cacerts/carthage.pem"), "wt") as f:
             f.write(pki.ca_cert)
-
+        os.truncate(os.path.join(hadron_ops, "config/ipsec_mesh.yaml"), 0)
+            
     @setup_task('copy-database')
     async def copy_database_from_master(self):
         "Copy the master database.  Run automatically.  Could be run agains if hadroninventoryadmin is locally dropped and recreated"
