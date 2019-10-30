@@ -73,7 +73,8 @@ class TaskWrapper:
             if isinstance(res, collections.abc.Coroutine):
                 res = asyncio.ensure_future(res)
                 res.add_done_callback(callback)
-                res.purpose = f'setup task: {self.stamp} for {instance.name}'
+                if hasattr(instance,'name'):
+                    res.purpose = f'setup task: {self.stamp} for {instance.name}'
                 return res
             else:
                 if not self.check_completed_func:
