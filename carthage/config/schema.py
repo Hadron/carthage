@@ -125,7 +125,7 @@ class ConfigSchema(metaclass = ConfigSchemaMeta, prefix = ""):
             self.key = config_key(name)
 
         def __repr__(self):
-            return f'ConfigSchema.Item("{self.name}", {self.type.__name__}, {repr(self.default)}'
+            return f'ConfigSchema.Item("{self.name}", {self.type.__name__}, {repr(self.default)})'
 
         def resolve(self, injector):
 
