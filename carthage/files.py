@@ -31,7 +31,7 @@ Clone the ``HEAD`` of a Git working copy into a new temporary directory  This pr
         await sh.git('clone',
                      git_tree, dir.name,
                      _bg = True, _bg_exc = False)
-        return await ssh_key.rsync('-a',
+        return await ssh_key.rsync('-a','--delete',
                                    dir.name+'/', target)
     finally:
         dir.cleanup()
