@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -30,6 +30,7 @@ class HadronImageMixin(ContainerCustomization):
         try:
             bind_mount = '--bind-ro='+self.config_layout.hadron_operations+":/hadron-operations"
             await self.container_command('/bin/systemctl', 'disable', 'sddm', 'systemd-networkd', 'systemd-resolved', 'systemd-networkd.socket')
+            await self.container_command(bind_mount, "/usr/bin/apt", "update")
             await self.container_command(bind_mount, "/usr/bin/apt",
                                                     "install", "-y", "ansible",
                                                     "git", "python3-pytest",

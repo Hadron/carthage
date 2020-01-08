@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -31,7 +31,7 @@ class BaseSchema(ConfigSchema, prefix = ""):
 
     external_vlan_id: int = 0
     vlan_min:int = 1
-    vlan_max:int = 4095
+    vlan_max:int = 4094
 
 class TasksConfig(ConfigSchema, prefix = "tasks"):
 
