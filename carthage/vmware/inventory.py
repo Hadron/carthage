@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -128,8 +128,8 @@ class VmwareManagedObject(VmwareStampable):
     async def construct(self):
         if not self.mob:
             self.mob = self._find_from_path()
-        if not self.mob: return False
         await self._find_parent()
+        if not self.mob: return False
         v = self.get_field_value(self.created)
         if v is None: return True #We don't know the dependency
         return datetime.datetime.fromisoformat(v).timestamp()
