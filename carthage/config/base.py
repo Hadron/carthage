@@ -23,7 +23,7 @@ class BaseSchema(ConfigSchema, prefix = ""):
 
     external_vlan_id: int = 0
     vlan_min:int = 1
-    vlan_max:int = 4095
+    vlan_max:int = 4094
 
 class TasksConfig(ConfigSchema, prefix = "tasks"):
 
