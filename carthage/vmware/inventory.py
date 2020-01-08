@@ -120,8 +120,8 @@ class VmwareManagedObject(VmwareStampable):
     async def construct(self):
         if not self.mob:
             self.mob = self._find_from_path()
-        if not self.mob: return False
         await self._find_parent()
+        if not self.mob: return False
         v = self.get_field_value(self.created)
         if v is None: return True #We don't know the dependency
         return datetime.datetime.fromisoformat(v).timestamp()
