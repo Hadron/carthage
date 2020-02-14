@@ -8,7 +8,8 @@
 # LICENSE for details.
 
 
-
+import argparse
+import yaml
 
 import carthage.vault
 from carthage.dependency_injection import *
@@ -23,6 +24,9 @@ def main():
         '--output-directory',
         '--output-dir',
         help ="Output directory for vault initialization")
+    parser.add_argument('--vault-config',
+                        help = "YAML configuration specifying policies and authentication methods",
+                        type =argparse.FileType("rt"))
     args = carthage.utils.carthage_main_setup(parser)
     carthage.utils.carthage_main_run(run, args)
 
@@ -32,11 +36,13 @@ async def run(args, config, ainjector):
     if args.ca:
         config.vault.ca_bundle = args.ca
     vault = await ainjector(carthage.vault.Vault)
-    if not vault.client.is_initialized():
+    if not vault.client.sys.is_initialized():
         if not args.output_directory:
             raise ValueError("To initialize a vault you must specify an output directory")
         vault.initialize(args.output_directory)
-    breakpoint()
+    if args.vault_config:
+        vault.apply_config(yaml.safe_load(args.vault_config))
+
                          
 
         
