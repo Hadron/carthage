@@ -6,6 +6,7 @@ from .config import ConfigSchema, ConfigLayout
 from .dependency_injection import *
 from .config.types import ConfigString, ConfigPath
 
+class VaultError(RuntimeError): pass
 class VaultConfig(ConfigSchema, prefix = "vault"):
 
     #: The address of the vault to contact
@@ -84,3 +85,41 @@ Writes unseal keys and root token to the given output directory, which hopefully
         self.setup_client(result['root_token'])
         return result
     
+    def apply_config(self, config):
+        '''
+        Apply configuration such as policies or  authentication methods to vault.
+        
+        :param dict config: A configuration dictionary; see :ref:`vault:config` for details.
+        '''
+        _apply_config_to_vault(self.client, config)
+        return
+
+def _apply_config_to_vault(client, config):
+    config = dict(config) #copy so we can mutate
+    _apply_policy(client, config.pop('policy', {}))
+    _apply_auth(client, config.pop('auth', {}))
+    for k in config:
+        try:
+            client.write(k, **config[k])
+        except Exception as e:
+            raise VaultError(f"failed to write {k}") from e
+
+def _apply_policy(client, policy):
+    for p in policy:
+        try:
+            client.sys.create_or_update_policy(p, policy[p])
+        except Exception as e:
+            raise VaultError(f"Unable to create Policy {p}")
+
+def _apply_auth(client, auth):
+    auth_methods = set(client.sys.list_auth_methods()['data'].keys())
+    for a, info in auth.items():
+        if a+"/" in auth_methods: continue
+        try:
+            desc = info.pop('description', '')
+            method_type = info.pop('type', a)
+            client.sys.enable_auth_method(method_type = method_type, path = a, config = info)
+        except Exception as e:
+            raise VaultError(f"Unable to enable auth method at path {a}")
+        
+            
