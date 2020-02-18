@@ -98,6 +98,7 @@ def _apply_config_to_vault(client, config):
     config = dict(config) #copy so we can mutate
     _apply_policy(client, config.pop('policy', {}))
     _apply_auth(client, config.pop('auth', {}))
+    _apply_secrets(client, config.pop('secrets', {}))
     for k in config:
         try:
             client.write(k, **config[k])
@@ -118,8 +119,22 @@ def _apply_auth(client, auth):
         try:
             desc = info.pop('description', '')
             method_type = info.pop('type', a)
-            client.sys.enable_auth_method(method_type = method_type, path = a, config = info)
+            client.sys.enable_auth_method(method_type = method_type, path = a, description = desc,
+                                          config = info)
         except Exception as e:
             raise VaultError(f"Unable to enable auth method at path {a}")
+
+def _apply_secrets(client, secrets):
+    secrets_engines = set(client.sys.list_mounted_secrets_engines()['data'].keys())
+    for s, info in secrets.items():
+        if s+"/" in secrets_engines: continue
+        try:
+            desc = info.pop('description', '')
+            backend_type = info.pop('type', s)
+            client.sys.enable_secrets_engine(backend_type = backend_type, path = s, description = desc,
+                                          config = info)
+        except Exception as e:
+            raise VaultError(f"Unable to enable secrets engine at path {s}")
+
         
             
