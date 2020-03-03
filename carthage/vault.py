@@ -107,6 +107,7 @@ def _apply_config_to_vault(client, config):
     _apply_policy(client, config.pop('policy', {}))
     _apply_auth(client, config.pop('auth', {}))
     _apply_secrets(client, config.pop('secrets', {}))
+    _apply_audit(client, config.pop('audit', {}))
     for k in config:
         try:
             client.write(k, **config[k])
@@ -123,11 +124,13 @@ def _apply_policy(client, policy):
 def _apply_auth(client, auth):
     auth_methods = set(client.sys.list_auth_methods()['data'].keys())
     for a, info in auth.items():
-        if a+"/" in auth_methods: continue
         try:
             desc = info.pop('description', '')
             method_type = info.pop('type', a)
-            client.sys.enable_auth_method(method_type = method_type, path = a, description = desc,
+            if a+"/" in auth_methods:
+                client.sys.tune_auth_method(a, **info)
+            else:
+                client.sys.enable_auth_method(method_type = method_type, path = a, description = desc,
                                           config = info)
         except Exception as e:
             raise VaultError(f"Unable to enable auth method at path {a}")
@@ -135,14 +138,26 @@ def _apply_auth(client, auth):
 def _apply_secrets(client, secrets):
     secrets_engines = set(client.sys.list_mounted_secrets_engines()['data'].keys())
     for s, info in secrets.items():
-        if s+"/" in secrets_engines: continue
         try:
             desc = info.pop('description', '')
             backend_type = info.pop('type', s)
-            client.sys.enable_secrets_engine(backend_type = backend_type, path = s, description = desc,
+            if s+"/" in secrets_engines:
+                client.sys.tune_mount_configuration(s, **info)
+            else:
+                client.sys.enable_secrets_engine(backend_type = backend_type, path = s, description = desc,
                                           config = info)
         except Exception as e:
             raise VaultError(f"Unable to enable secrets engine at path {s}")
 
         
             
+def _apply_audit(client, audit):
+    audit_devices= set(client.sys.list_enabled_audit_devices()['data'].keys())
+    for a, info in audit.items():
+        try:
+            device_type = info.pop('type', a)
+            if a+"/" in audit_devices: continue
+            client.sys.enable_audit_device(
+                device_type = device_type, path = a,                                           options = info)
+        except Exception as e:
+            raise VaultError(f"Unable to enable auth method at path {a}")
