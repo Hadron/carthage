@@ -1,4 +1,3 @@
-
 import os
 import os.path
 import hvac
@@ -114,6 +113,7 @@ def _apply_policy(client, policy):
             raise VaultError(f"Unable to create Policy {p}")
 
 def _apply_auth(client, auth):
+    if not auth: return
     auth_methods = set(client.sys.list_auth_methods()['data'].keys())
     for a, info in auth.items():
         try:
@@ -128,6 +128,7 @@ def _apply_auth(client, auth):
             raise VaultError(f"Unable to enable auth method at path {a}")
 
 def _apply_secrets(client, secrets):
+    if not secrets: return
     secrets_engines = set(client.sys.list_mounted_secrets_engines()['data'].keys())
     for s, info in secrets.items():
         try:
@@ -144,6 +145,7 @@ def _apply_secrets(client, secrets):
         
             
 def _apply_audit(client, audit):
+    if not audit: return
     audit_devices= set(client.sys.list_enabled_audit_devices()['data'].keys())
     for a, info in audit.items():
         try:

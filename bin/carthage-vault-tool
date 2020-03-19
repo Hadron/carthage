@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
+import os
 import yaml
 
 import carthage.vault
@@ -32,6 +33,10 @@ def main():
 async def run(args, config, ainjector):
     if args.ca:
         config.vault.ca_bundle = args.ca
+    else:
+        ca = os.getenv("VAULT_CACERT")
+        if ca is not None: config.vault.ca_bundle = ca
+        
     vault = await ainjector(carthage.vault.Vault)
     if not vault.client.sys.is_initialized():
         if not args.output_directory:
