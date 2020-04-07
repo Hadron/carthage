@@ -3,6 +3,7 @@
 import argparse
 import os
 import yaml
+import mako.template
 
 import carthage.vault
 from carthage.dependency_injection import *
@@ -44,7 +45,9 @@ async def run(args, config, ainjector):
         vault.initialize(args.output_directory, secret_threshold = args.threshold,
                          secret_shares = args.shares)
     if args.vault_config:
-        vault.apply_config(yaml.safe_load(args.vault_config))
+        vault.apply_config(
+            yaml.safe_load(
+                mako.template.Template(args.vault_config.read()).render()))
 
 
                          
