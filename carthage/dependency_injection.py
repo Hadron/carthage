@@ -469,6 +469,13 @@ class AsyncInjector(Injectable):
             if hasattr(self, k): continue
             setattr(self, k, getattr(self.injector, k))
 
+    def claim(self):
+        # currently a stub as for main injectors
+        return self
+
+    def copy_if_owned(self):
+        # For now we can always return self because we copy in the constructor
+        return self
     def __contains__(self, k):
         return k in self.injector
 

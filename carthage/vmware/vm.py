@@ -423,7 +423,7 @@ class NetSpecStage(DeviceSpecStage,
     def filter_device(self, d):
         if self.bag.mode == 'clone': return False
         net, iface, mac = self.net_config[self.net_index]
-        if d.backing.port.portGroupKey != net.mob.key: return False
+        if d.backing.port.portgroupKey != net.mob.key: return False
         self.net_index += 1
         return True
     
