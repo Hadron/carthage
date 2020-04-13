@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -45,10 +45,10 @@ async def test_basic_setup(ainjector):
             nonlocal called
             called += 1
     assert called == 0
-    assert not check_stamp(c.stamp_path, "test_stamp_task")
+    assert not c.check_stamp( c, "test_stamp_task")
     c_obj = await ainjector(c)
     assert called == 1
-    assert check_stamp(c.stamp_path, "test_stamp_task")
+    assert c_obj.check_stamp( "test_stamp_task")
     c_obj2 = await ainjector(c)
     assert c_obj is not c_obj2
     assert called == 1
@@ -70,7 +70,7 @@ async def test_check_completed(ainjector):
     is_completed = False
     c_2 = await ainjector(c)
     assert called == 1
-    assert not check_stamp(c.stamp_path, "check_completed")
+    assert not c_1.check_stamp("check_completed")
     
 @async_test
 async def test_invalidator(ainjector):
@@ -83,10 +83,10 @@ async def test_invalidator(ainjector):
         @setup_invalidator.invalidator()
         def setup_invalidator(self):
             return False
-    assert not check_stamp(c.stamp_path, "setup_invalidator")
+    assert not c.check_stamp(c, "setup_invalidator")
     await ainjector(c)
     assert called == 1
-    assert check_stamp(c.stamp_path, "setup_invalidator")
+    assert c.check_stamp( c, "setup_invalidator")
     await ainjector(c)
     assert called == 2
     
@@ -104,7 +104,7 @@ async def test_failure_forces_rerun(ainjector):
             if should_fail:
                 raise RuntimeError
             
-    assert not check_stamp(c.stamp_path, "setup_test_error_explicit")
+    assert not c.check_stamp( c, "setup_test_error_explicit")
     await ainjector(c)
     assert called == 1
     should_fail = True
