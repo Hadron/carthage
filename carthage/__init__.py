@@ -1,4 +1,5 @@
 import asyncio
+import atexit
 
 import carthage.config
 import carthage.dependency_injection
@@ -58,3 +59,5 @@ base_injector.add_provider(InjectionKey(carthage.ssh.SshAgent), carthage.ssh.ssh
 base_injector.add_provider(carthage.pki.PkiManager)
 
 __all__ += [ 'base_injector' ]
+
+atexit.register(base_injector.close)
