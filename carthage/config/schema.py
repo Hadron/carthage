@@ -1,5 +1,5 @@
 import sys
-from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies
+from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies, InjectorClosed
 
 def config_key(k):
     return InjectionKey("config/"+k)
@@ -121,10 +121,11 @@ class ConfigSchema(metaclass = ConfigSchemaMeta, prefix = ""):
 
         def resolve(self, injector):
 
-            "Return the value of this item resoled against the given injector"
+            "Return the value of this item resolved against the given injector"
             try:
                 res = injector.get_instance(self.key)
                 return res
+            except InjectorClosed: return self.default
             except  KeyError:
                 if self.default is None: return None
                 try:
