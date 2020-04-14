@@ -8,7 +8,7 @@ from ..setup_tasks import setup_task, SetupTaskMixin
 from ..vm import VM
 from ..machine import Machine, SshMixin
 from ..container import Container
-import carthage.hadron_layout
+import carthage.hadron_layout, carthage.ssh
 from carthage import base_injector
 import carthage.pki
 from carthage.hadron_layout import database_key
@@ -198,14 +198,17 @@ def provide_slot(s, *, session, injector):
     return machine
 
 
-@inject(ainjector = AsyncInjector)
-async def provide_world(ainjector):
+@inject(ainjector = AsyncInjector, ssh_key = carthage.ssh.SshKey)
+async def provide_world(ainjector, ssh_key):
     '''
     Build a hadron world and inject machines and networks into *base_injector*
 
     :returns: database_container, remote_postgres
 '''
 
+    # We don't need the ssh_key, but we need to make sure it is
+    # constructed in an async context prior to the first use in a sync
+    # context.
     container = None
     pg = None
     container = await ainjector.get_instance_async(database_key)
