@@ -159,7 +159,7 @@ class Network(AsyncInjectable):
         return instance
 
     def close(self, canceled_futures = None):
-        self.injector.close(canceled_futures = canceled_futures)
+        self.ainjector.close(canceled_futures = canceled_futures)
         self.technology_networks = []
 
 this_network = InjectionKey(Network, role = "this_network")

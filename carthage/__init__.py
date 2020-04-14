@@ -60,4 +60,13 @@ base_injector.add_provider(carthage.pki.PkiManager)
 
 __all__ += [ 'base_injector' ]
 
-atexit.register(base_injector.close)
+@atexit.register
+def __done():
+    asyncio.run(dependency_injection.shutdown_injector(base_injector))
+    import sys
+    sys.last_traceback = None
+    sys.last_value = None
+    import gc
+    gc.collect()
+    
+    
