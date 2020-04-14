@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 import sys
-from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies
+from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies, InjectorClosed
 
 def config_key(k):
     return InjectionKey("config/"+k)
@@ -129,10 +129,11 @@ class ConfigSchema(metaclass = ConfigSchemaMeta, prefix = ""):
 
         def resolve(self, injector):
 
-            "Return the value of this item resoled against the given injector"
+            "Return the value of this item resolved against the given injector"
             try:
                 res = injector.get_instance(self.key)
                 return res
+            except InjectorClosed: return self.default
             except  KeyError:
                 if self.default is None: return None
                 try:

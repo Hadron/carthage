@@ -77,7 +77,9 @@ class ExistingProvider(RuntimeError):
     def __init__(self, k):
         super().__init__(f'Provider for {k} already registered')
         self.existing_key = k
-        
+
+class  InjectorClosed(RuntimeError): pass
+
 # Note that after @inject is defined, this class is redecorated to take parent_injector as a dependency so that
 #    injector = sub_injector(Injector)
 # works
@@ -189,7 +191,7 @@ Return the first injector in our parent chain containing *k* or None if there is
 
     def _check_closed(self):
         if self.closed:
-            raise RuntimeError("Injector is closed")
+            raise InjectorClosed("Injector is closed")
         
     def __call__(self, cls, *args, **kwargs):
         '''Construct an instance of cls using the providers in this injector.
@@ -250,6 +252,7 @@ Return the first injector in our parent chain containing *k* or None if there is
         try:
             provider, satisfy_against = self._get_parent(k)
         except KeyError:
+            self._check_closed()
             if k.optional: return None
             raise KeyError("No dependency for {}".format(k)) from None
         if provider.is_factory:
