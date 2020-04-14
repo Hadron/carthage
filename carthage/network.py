@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -167,7 +167,7 @@ class Network(AsyncInjectable):
         return instance
 
     def close(self, canceled_futures = None):
-        self.injector.close(canceled_futures = canceled_futures)
+        self.ainjector.close(canceled_futures = canceled_futures)
         self.technology_networks = []
 
 this_network = InjectionKey(Network, role = "this_network")

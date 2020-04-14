@@ -259,6 +259,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                     raise InjectionFailed("{} has an asynchronous provider injected into a non-asynchronous context".format(k))
                 future = self._handle_async(instance)
                 future.add_done_callback(resolve_future( satisfy_against, k))
+                del instance
                 provider.record_instantiation(future, k, satisfy_against) 
                 return future
             else:
@@ -314,6 +315,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                 p.provider.cancel()
                 if canceled_futures is not None: canceled_futures.append(p.provider)
         self.closed = True
+        del providers
 
     def __del__(self):
         if not self.closed:

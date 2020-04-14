@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -85,6 +85,7 @@ def when_needed(wraps, *args, injector = None,
                 #override ainjector
                 ainjector = injector(AsyncInjector)
             self.ainjector = ainjector
+            self.ainjector_set.add(ainjector)
             self.inside_kwargs = inside_kwargs
 
         @classmethod
@@ -96,11 +97,17 @@ def when_needed(wraps, *args, injector = None,
         @classmethod
         def close(self, canceled_futures = None):
             if self.resolved_obj:
-                return _call_close(self.resolved_obj, canceled_futures)
-            if self.resolving:
+                _call_close(self.resolved_obj, canceled_futures)
+            for ainjector in self.ainjector_set:
+                ainjector.close(canceled_futures = canceled_futures)
+            self.ainjector_set.clear()
+            if hasattr(self, 'resolving') and self.resolving:
                 self.resolving.cancel()
                 if canceled_futures: canceled_futures.append(self.resolving)
                 self.resolving = None
+
+        # class level property to track all the injectors in use.
+        ainjector_set = weakref.WeakSet()
                 
         async def async_ready(self):
             nonlocal kwargs
