@@ -36,8 +36,9 @@ class VmwareDataStore(VmwareSpecifiedObject, kind='datastore'):
 
     parent_type = (VmwareDataStoreCluster, DataStoreFolder)
 
-    def __init__(self, name, *args, host=None, hosts=None, **kwargs):
+    def __init__(self, name, *args, host=None, hosts=None, spec=None, **kwargs):
 
+        self.spec = spec
         if (hosts is not None) and (host is not None):
             raise ValueError('specify only one of host or hosts')
         elif (hosts is None) and (host is not None):
