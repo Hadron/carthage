@@ -247,26 +247,6 @@ class VmwareManagedObject(VmwareStampable):
                 return val.value
         return None
 
-    def objects_with_field(self, field):
-        # xxx this is broken
-        # It's an instance method, but doesn't operate on the instance
-        # It does an unconstrained search
-        # The api has changed out from under it; I didn't fix because of the more serious problems
-        # It's not really clear what this should be doing; why would we return a vmware ManagedEntity not a carthage object
-        # Clarify after we understand what this is for.
-        raise NotImplementedError
-        content = self.connection.content
-        container = content.viewManager.CreateContainerView(content.rootFolder, [vim.ManagedEntity], True)
-        ret = set()
-        for obj in container.view:
-            try:
-                if self._has_field(obj, field):
-                    ret.add(obj)
-            except vmodl.fault.ManagedObjectNotFound:
-                pass
-        container.Destroy()
-        return ret
-
     @staticmethod
     def _parent_path_from_mob(mob):
         parts = []
