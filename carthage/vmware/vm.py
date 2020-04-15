@@ -103,7 +103,7 @@ class VmwareMachineObject(VmwareSpecifiedObject):
         pass
     
 @inject(
-    **VmwareNamedObject.injects,
+    **VmwareSpecifiedObject.injects,
     storage = VmwareDataStore,
     parent = InjectionKey(VmFolder, optional = True),
     network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
