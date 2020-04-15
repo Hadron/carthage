@@ -168,6 +168,15 @@ class Vm(Machine, VmwareMachineObject):
         self.mob = None
         self.vmware_uuid = None
 
+    async def build_config(self, mode, oconfig = None):
+        config = await super().build_config(mode, oconfig=oconfig)
+        cur = -1
+        for c in config.deviceChange:
+            if c.device.key == 0:
+                assert cur > -100
+                c.device.key = cur
+                cur = cur - 1
+
     async def do_create(self):
         try:
             cluster = await self.ainjector(VmwareCluster)
