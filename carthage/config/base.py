@@ -29,6 +29,12 @@ class BaseSchema(ConfigSchema, prefix = ""):
     force_hadron_release: str = None
     delete_volumes: bool = False
 
+    #: If set, override all hadron systems to use this mirror.  Add a route so that this mirror is assumed to be external to the virtual environment.
+    aces_mirror: str = "apt-server.aces-aoe.net"
+
+
+    #: Set of IP addresses for which we will route to the outside world rather than internally.
+    expose_routes: list = []
     external_vlan_id: int = 0
     vlan_min:int = 1
     vlan_max:int = 4094

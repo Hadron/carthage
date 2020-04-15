@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import contextlib, os, os.path, shutil, sys, time
+import contextlib, os, os.path, pkg_resources, shutil, sys, time
 from tempfile import TemporaryDirectory
 from .dependency_injection import Injector, AsyncInjectable, inject, AsyncInjector
 from .config import ConfigLayout
@@ -133,6 +133,11 @@ class ContainerImage(BtrfsVolume):
         try: os.rename(os.path.join(self.path, "sbin/init.dist"),
                   os.path.join(self.path, "sbin/init"))
         except FileNotFoundError: pass
+        with open(os.path.join(self.path,
+                               "etc/udev/rules.d/80-net-setup-link.rules"), "wb") as f:
+            f.write(
+                pkg_resources.resource_stream("carthage", "resources/80-net-setup-link.rules").read())
+
 
 
 
@@ -167,7 +172,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
     def __repr__(self):
         return f"<ImageVolume path={self.path}>"
-    
+
 
     async def async_ready(self):
         await self.run_setup_tasks()
@@ -222,7 +227,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
                     await container.stop_machine()
             except Exception: pass
             image_mount.close()
-            
+
 
     @contextlib.contextmanager
     def image_mounted(self):
@@ -257,7 +262,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
             return self.injector(ImageVolume, name = name, image_base = self.path, **kwargs)
         else:
             raise ValueError("Unknown volume type {}".format(volume_type))
-        
+
 
 
 @inject(
@@ -311,7 +316,7 @@ class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
 
         def __repr__(self):
             return f"<{self.__class__.__name__} for {repr(self.image)}>"
-        
+
     def mount_image(self):
         self.mount_context = self.image.image_mounted()
         self.mount = self.mount_context.__enter__()
