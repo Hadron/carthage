@@ -227,7 +227,7 @@ class VmwareManagedObject(VmwareStampable):
             cfm = content.customFieldsManager
             return cfm.AddFieldDefinition(name=fname, moType=ftype)
 
-    def set_custom_field(self,  field, value):
+    def set_custom_field(self, field, value):
         if self.mob is None:
             raise RuntimeError('unable to set fields on null object')
         if isinstance(field, str):
@@ -236,7 +236,7 @@ class VmwareManagedObject(VmwareStampable):
         cfm  = content.customFieldsManager
         cfm.SetField(entity=self.mob, key=field.key, value=value)
 
-    def get_field_value(self,  field):
+    def get_field_value(self, field):
         '''Return the vmware custom field value or None if not set
         '''
         if isinstance(field, str):
