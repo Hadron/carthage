@@ -1,4 +1,4 @@
-import asyncio, os, os.path, shutil, sys
+import asyncio, os, os.path, shutil, sys, yaml
 from ..image import ContainerImage, setup_task, SetupTaskMixin, ImageVolume, ContainerImageMount, SshAuthorizedKeyCustomizations
 from ..container import Container, container_volume, container_image
 from ..dependency_injection import inject, Injector, AsyncInjectable, AsyncInjector, InjectionKey
@@ -34,7 +34,7 @@ class HadronImageMixin(ContainerCustomization):
                                                     "-ehadron_track=proposed",
                                                     "-epackagedir=/hadron-operations/ansible/packages",
                                                     f"-ehadron_release={config.hadron_release}",
-                                                    "-eaces_apt_server=apt-server.aces-aoe.net",
+                                                    f"-eaces_apt_server={config.aces_mirror}",
                                                     "-i/hadron-operations/ansible/localhost-debian.txt",
                                                     "/hadron-operations/ansible/commands/hadron-packages.yml"
             )
@@ -90,6 +90,10 @@ class TestDatabase(Container):
             f.write("iface binternet inet manual\n")
         async with self.container_running:
             await self.network_online()
+            await self.shell("/usr/bin/apt-get", "update",
+                             _bg = True, _bg_exc = False,
+                             _out = self._out_cb,
+                             _err_to_out = True)
             await self.shell("/usr/bin/apt",
                                                "-y", "install", "hadron-inventory-admin",
                                            "hadron-photon-admin",
@@ -104,6 +108,9 @@ class TestDatabase(Container):
             pki = carthage.pki.PkiManager)
     @setup_task('clone-hadron-ops')
     async def clone_hadron_operations(self, ssh_key, pki):
+        config = self.config_layout
+        mirror_addr_result = await self.loop.getaddrinfo(config.aces_mirror, None, proto=6)
+        aces_mirror_address = mirror_addr_result[0][4][0]
         await sh.git('bundle',
                      'create', self.volume.path+"/hadron-operations.bundle",
                      "HEAD",
@@ -120,6 +127,14 @@ class TestDatabase(Container):
         with open(carthage_vars, "wt") as f:
             f.write("#Carthage Automation Key\n")
             f.write("carthage_key: "+ssh_key.pubkey_contents)
+        with open(os.path.join(
+                hadron_ops,
+                "config/test.yml"), "wt") as f:
+            f.write(yaml.dump({
+                "aces_apt_server": str(config.aces_mirror),
+                "expose_routes": config.expose_routes + [aces_mirror_address]},
+                              default_flow_style = False))
+            
         os.unlink(os.path.join(self.volume.path, 'hadron-operations.bundle'))
         with open(os.path.join(self.volume.path,
                                "hadron-operations/ansible/resources/cacerts/carthage.pem"), "wt") as f:
@@ -134,6 +149,8 @@ class TestDatabase(Container):
             await self.ssh_online()
             await asyncio.sleep(5)
             env = os.environ
+            await self.shell("/bin/touch", "/hadron-operations/config/no_vault",
+                             _bg = True, _bg_exc = False)
             env['PYTHONPATH'] = "/hadron-operations"
             await self.shell( '/usr/bin/python3',
                          '-mhadron.inventory.config.update',
