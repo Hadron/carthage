@@ -16,23 +16,21 @@ from .inventory import *
 from .utils import wait_for_task
 from .connection import VmwareConnection
 from .folder import VmwareFolder
+from .cluster import VmwareCluster
 
 from pyVmomi import vim
 
 __all__ = ('VmwareNetwork', 'DvSwitch', 'DistributedPortgroup', 'our_portgroups_for_switch', 'NetworkFolder', 'vmware_trunk_key')
-            
+
 class VmwareNetworkConfig(ConfigSchema, prefix = "vmware"):
     distributed_switch: str
     trunk_interface: str
 
 @inject(**VmwareFolder.injects)
 class NetworkFolder(VmwareFolder, kind='network'):
-
-
     pass
 
-@inject(**VmwareSpecifiedObject.injects,
-        )
+@inject(**VmwareSpecifiedObject.injects)
 class DvSwitch(VmwareSpecifiedObject):
 
     parent_type = NetworkFolder
@@ -42,12 +40,66 @@ class DvSwitch(VmwareSpecifiedObject):
         if 'name' not in kwargs:
             config = kwargs['config_layout']
             name = config.vmware.distributed_switch
+            if name is None: raise ValueError(f'unable to create DvSwitch without name')
             if not name.startswith('/'):
                 name = f'/{config.vmware.datacenter}/network/{name}'
             kwargs['name'] = name
                 
             kwargs['readonly'] = kwargs.get('readonly', True)
         super().__init__(*args, **kwargs)
+
+    def _config_for(self, host, pnics):
+
+        pspecs = []
+        for pnic in pnics:
+            pspecs.append(vim.dvs.HostMember.PnicSpec(pnicDevice = pnic.device))
+
+        cs = vim.dvs.HostMember.ConfigSpec()
+        cs.operation = vim.ConfigSpecOperation.add
+        cs.host = host.mob
+        cs.backing = vim.dvs.HostMember.PnicBacking()
+        cs.backing.pnicSpec = pspecs
+        return cs
+
+    async def update_hosts(self, hostmap):
+
+        hostconfigs = []
+        for host, pnics in hostmap.items():
+            cs = self._config_for(host, pnics)
+            cs.operation = vim.ConfigSpecOperation.add
+            for h in self.mob.config.host:
+                if host.mob == h.config.host:
+                    cs.operation = vim.ConfigSpecOperation.edit
+            hostconfigs.append(cs)
+
+        dvspec = vim.DistributedVirtualSwitch.ConfigSpec()
+        dvspec.configVersion = self.mob.config.configVersion
+        dvspec.host = hostconfigs
+
+        task = self.mob.ReconfigureDvs_Task(dvspec)
+        await wait_for_task(task)
+
+    async def do_create(self):
+
+        logging.debug(f'creating distributed portgroup {self.name}')
+
+        cluster = await self.ainjector(VmwareCluster)
+
+        hostconfigs = []
+
+        config = vim.DistributedVirtualSwitch.ConfigSpec()
+        config.name = self.name
+        config.uplinkPortPolicy = vim.DistributedVirtualSwitch.NameArrayUplinkPortPolicy()
+        config.uplinkPortPolicy.uplinkPortName = [ 'uplink0', 'uplink1' ]
+        config.maxPorts = 2000
+        config.host = hostconfigs
+
+        create = vim.DistributedVirtualSwitch.CreateSpec()
+        create.configSpec = config
+        create.productInfo = vim.dvs.ProductSpec(version='6.6.0')
+
+        task = self.parent.mob.CreateDVS_Task(create)
+        await wait_for_task(task)
 
 @inject(**VmwareNamedObject.injects, network=this_network)
 class VmwareNetwork(VmwareNamedObject, TechnologySpecificNetwork):
