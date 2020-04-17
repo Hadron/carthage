@@ -18,8 +18,8 @@ class VaultConfig(ConfigSchema, prefix = "vault"):
 vault_token_key = InjectionKey('vault.token')
 
 @inject( config = ConfigLayout,
-         injector = Injector),
-token = InjectionKey("vault.token", optional = True),
+         injector = Injector,
+         token = InjectionKey("vault.token", optional = True),
 )
 class Vault(Injectable):
 
@@ -176,7 +176,8 @@ class VaultConfigPlugin(ConfigLookupPlugin):
         result = client.read(secret)
         return result['data'][field]
 
+@inject( injector = Injector)
 def carthage_plugin(injector):
     injector.add_provider(Vault)
-VaultConfigPlugin.register(injector, "vault")
+    VaultConfigPlugin.register(injector, "vault")
 

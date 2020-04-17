@@ -113,8 +113,8 @@ class ConfigSchema(metaclass = ConfigSchemaMeta, prefix = ""):
                 type_ = ConfigBool
             elif type_ is str:
                 from .types import ConfigString
-                Type_ = ConfigString
-                self.name = name
+                type_ = ConfigString
+            self.name = name
             self.type = type_
             self.default = default
             self.key = config_key(name)
@@ -128,8 +128,7 @@ class ConfigSchema(metaclass = ConfigSchemaMeta, prefix = ""):
             try:
                 res = injector.get_instance(self.key)
                 return res
-            except InjectorClosed: return self.default
-            except  KeyError:
+            except  (KeyError, InjectorClosed):
                 if self.default is None: return None
                 try:
                     res = injector(self.type, self.default)
