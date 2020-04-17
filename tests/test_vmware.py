@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -19,7 +19,7 @@ from carthage.network import NetworkConfig, external_network_key
 @inject(config = ConfigLayout)
 async def config(config):
     vmc = config.vmware
-    for k in ('username', 'hostname', 'password', 'folder', 'cluster'):
+    for k in ('hostname', 'password', 'username', 'folder', 'cluster'):
         if getattr(vmc, k, None) is None:
             pytest.skip("Vmware Carthage is inadequately configured")
     return config
