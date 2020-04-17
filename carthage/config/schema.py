@@ -119,7 +119,10 @@ class ConfigSchema(metaclass = ConfigSchemaMeta, prefix = ""):
             if type_ is bool:
                 from .types import ConfigBool
                 type_ = ConfigBool
-            self.name = name
+            elif type_ is str:
+                from .types import ConfigString
+                Type_ = ConfigString
+                self.name = name
             self.type = type_
             self.default = default
             self.key = config_key(name)
