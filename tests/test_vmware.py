@@ -11,7 +11,7 @@ from carthage.network import NetworkConfig, external_network_key
 @inject(config = ConfigLayout)
 async def config(config):
     vmc = config.vmware
-    for k in ('username', 'hostname', 'password', 'folder', 'cluster'):
+    for k in ('hostname', 'password', 'username', 'folder', 'cluster'):
         if getattr(vmc, k, None) is None:
             pytest.skip("Vmware Carthage is inadequately configured")
     return config

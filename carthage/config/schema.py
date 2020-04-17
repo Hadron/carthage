@@ -128,7 +128,11 @@ class ConfigSchema(metaclass = ConfigSchemaMeta, prefix = ""):
             try:
                 res = injector.get_instance(self.key)
                 return res
-            except  (KeyError, InjectorClosed):
+            except InjectorClosed:
+                #We may miss substitutions, but this is the best we can do if the injector is closed
+                return self.default
+                return res
+            except  (KeyError):
                 if self.default is None: return None
                 try:
                     res = injector(self.type, self.default)
