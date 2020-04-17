@@ -3,9 +3,10 @@ import os.path
 import hvac
 from .config import ConfigSchema, ConfigLayout
 from .dependency_injection import *
-from .config.types import ConfigString, ConfigPath
+from .config.types import ConfigString, ConfigPath, ConfigLookupPlugin
 
 class VaultError(RuntimeError): pass
+
 class VaultConfig(ConfigSchema, prefix = "vault"):
 
     #: The address of the vault to contact
@@ -17,16 +18,18 @@ class VaultConfig(ConfigSchema, prefix = "vault"):
 vault_token_key = InjectionKey('vault.token')
 
 @inject( config = ConfigLayout,
-         ainjector = AsyncInjector)
-class Vault(AsyncInjectable):
+         injector = Injector),
+token = InjectionKey("vault.token", optional = True),
+)
+class Vault(Injectable):
 
-    def __init__(self, config, ainjector):
+    def __init__(self, config, injector, token = None):
         self.vault_config = config.vault
-        self.ainjector = ainjector
+        self.injector = injector
         super().__init__()
         #: The hvac client for this vault
         self.client = None
-
+        self.setup_client(token)
 
     def setup_client(self, token):
 
@@ -43,12 +46,6 @@ class Vault(AsyncInjectable):
                                   token = token)
         
 
-    async def async_ready(self):
-        try:
-            token = await self.ainjector.get_instance_async(vault_token_key)
-        except KeyError: token = None
-        self.setup_client(token = token)
-        return await super().async_ready()
 
     def initialize(self, output_directory, unseal = True,
                    secret_threshold = 1,
@@ -155,3 +152,31 @@ def _apply_audit(client, audit):
                 device_type = device_type, path = a,                                           options = info)
         except Exception as e:
             raise VaultError(f"Unable to enable auth method at path {a}")
+
+
+@inject(
+    vault = Vault)
+class VaultConfigPlugin(ConfigLookupPlugin):
+
+    '''
+    Usage in yaml::
+
+        password: {vault:secret/password/{host}:password}
+
+    '''
+
+    def __init__(self, vault):
+        self.vault = vault
+
+    def __call__(self, selector):
+        client = self.vault.client
+        secret, sep, field = selector.partition(':')
+        if field == "":
+            raise SyntaxError("The vault plugin requires a field")
+        result = client.read(secret)
+        return result['data'][field]
+
+def carthage_plugin(injector):
+    injector.add_provider(Vault)
+VaultConfigPlugin.register(injector, "vault")
+
