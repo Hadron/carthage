@@ -1,4 +1,4 @@
-import logging, os
+import logging, os, os.path, requests
 from ..image import ImageVolume, SetupTaskMixin, setup_task
 from ..utils import memoproperty
 from ..dependency_injection import *
@@ -7,6 +7,7 @@ from ..config.types import ConfigPath
 from .. import sh
 from .credentials import vmware_credentials
 from .datastore import VmwareDataStore
+from .datacenter import VmwareDatacenter
 
 
 logger = logging.getLogger('carthage.vmware')
@@ -95,6 +96,7 @@ vm_storage_key = config_key("vmware.datastore")
 
 @inject(
     storage = vm_storage_key,
+    data_center = VmwareDatacenter,
     credentials = vmware_credentials,
     **VmwareDataStore.injects)
 class NfsDataStore(VmwareDataStore):
@@ -104,8 +106,9 @@ class NfsDataStore(VmwareDataStore):
 
     '''
 
-    def __init__(self, storage, **kwargs):
+    def __init__(self, storage, data_center, **kwargs):
         self.storage = storage
+        self.data_center = data_center
         for k in ('name', 'path', 'local_path'):
             assert getattr(storage, k), \
                 "You must configure vmware.datastore.{}".format(k)
@@ -143,6 +146,23 @@ class NfsDataStore(VmwareDataStore):
         else:
             os.makedirs(self.storage.local_path)
 
+    def upload_file(self, path):
+        basename = os.path.basename(path)
+        logger.info( f'Uploading {basename} to {self.name}')
+        params = dict(
+            dsName = self.name,
+            dcPath = self.data_center.name)
+        verify = self.config_layout.vmware.validate_certs
+        host = self.config_layout.vmware.hostname
+        url = f'https://{host}:443/folder/{self.path}/{basename}'
+        with open(path, "rb") as f:
+            resp = requests.put(url, params = params,
+                                data = f, auth=self.auth_tuple,
+                                verify = verify)
+            if resp.status_code >= 400:
+                raise ValueError(f'Uploading {basename} failed: {resp.status_code}')
+            
+            
     async def copy_in(self, paths):
         '''
         Copy files into the datastore
@@ -158,7 +178,14 @@ class NfsDataStore(VmwareDataStore):
                 await sh.scp(self.ssh_opts, p, local_path,
                              _bg = True, _bg_exc = False)
         else:
-            raise NotImplementedError()
+            for p in paths:
+                self.upload_file(p)
+
+        
+    @memoproperty
+    def auth_tuple(self):
+        return (self.config_layout.vmware.username, self.config_layout.vmware.password)
+    
 
 @inject(storage = vm_storage_key,
         **VmwareDataStore.injects)
