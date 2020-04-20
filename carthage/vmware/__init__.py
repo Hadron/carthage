@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -27,11 +27,13 @@ def carthage_plugin(injector):
     from ..dependency_injection import partial_with_dependencies
     from ..utils import when_needed
     from . import inventory
+    from .datacenter import VmwareDatacenter
     injector.add_provider(inventory.custom_fields_key, inventory.default_custom_fields)
     injector.add_provider(DistributedPortgroup, allow_multiple = True)
     injector.add_provider(VmFolder)
     injector.add_provider(vmware_trunk_key, network._vmware_trunk)
     injector.add_provider(VmfsDataStore)
+    injector.add_provider(VmwareDatacenter)
     injector.add_provider(DvSwitch)
     injector.add_provider(VmwareConnection)
     image_injector = injector(carthage.dependency_injection.Injector)
