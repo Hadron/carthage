@@ -168,7 +168,8 @@ class Vm(Machine, VmwareMachineObject):
                 assert cur > -100
                 c.device.key = cur
                 cur = cur - 1
-
+        return config
+    
     async def do_create(self):
         try:
             cluster = await self.ainjector(VmwareCluster)
@@ -352,9 +353,14 @@ class DiskSpec(DeviceSpecStage,
     
     def filter_device(self, d):
         changed = False
+        self.disk_found = True
+
         if self.bag.mode == 'clone' and d.backing.thinProvisioned is False:
             d.backing.thinProvisioned = True
             changed = True
+
+        if self.bag.mode == "clone":
+            return d if changed else True
             
         if d.capacityInBytes < self.obj.disk_size:
             if (self.bag.mode == "reconfig" and d.backing.parent) or ( self.bag.mode == "clone" and self.obj.template_snapshot):
@@ -366,7 +372,6 @@ class DiskSpec(DeviceSpecStage,
         if d.controllerKey != self.bag.scsi_key:
             d.controllerKey = self.bag.scsi_key
             changed = True
-        self.disk_found = True
         return d if changed else True
 
     async def new_devices(self, config):
