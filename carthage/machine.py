@@ -146,6 +146,7 @@ class Machine(AsyncInjectable, SshMixin):
     The main capabilities of this interface are to be able to start and stop machines, know their IP address, and connect via ssh.
 
     '''
+
     def __init__(self, name, injector, config_layout):
         super().__init__(injector = injector)
         self.name = name
@@ -154,6 +155,7 @@ class Machine(AsyncInjectable, SshMixin):
         self.ainjector = self.injector(AsyncInjector)
         self.machine_running = MachineRunning(self)
         self.with_running_count = 0
+        self.injector.add_provider(Machine, self)
 
 
     @property

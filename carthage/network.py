@@ -1,9 +1,9 @@
 from __future__ import annotations
-import asyncio, logging, re, typing, weakref
+import asyncio, dataclasses, logging, re, typing, weakref
 from . import sh
 from .dependency_injection import inject, AsyncInjectable, Injector, AsyncInjector, InjectionKey, Injectable
 from .config import ConfigLayout
-from .utils import permute_identifier, when_needed
+from .utils import permute_identifier, when_needed, memoproperty
 
 logger = logging.getLogger('carthage.network')
 
@@ -337,3 +337,27 @@ class ExternalNetwork(Network):
         yield from super().supplementary_injection_keys(k)
         
 external_network = when_needed(ExternalNetwork)
+
+@dataclasses.dataclass
+class HostMapEntry:
+
+    ip: str
+    mac: str
+
+host_map_key = InjectionKey('host_map')
+
+
+@inject(host_map = host_map_key,ainjector = AsyncInjector)
+def mac_from_host_map(i, host_map, ainjector):
+    from .machine import Machine
+    machine = ainjector.get_instance(Machine)
+    entry = host_map[machine.name]
+    machine.ip_address = entry.ip
+    return entry.mac
+
+
+
+
+__all__ = r'''Network TechnologySpecificNetwork BridgeNetwork 
+    external_network_key HostMapEntry mac_from_host_map host_map_key
+    '''.split()

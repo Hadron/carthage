@@ -262,12 +262,30 @@ sed -i -e 's:GRUB_CMDLINE_LINUX=.*$:GRUB_CMDLINE_LINUX="random.trust_cpu=on net.
                 except FileNotFoundError: pass
 
 
+@inject(
+    config_layout = ConfigLayout,
+    injector = Injector,
+    loop = asyncio.AbstractEventLoop,
+    image = container_image,
+    network_config = carthage.network.NetworkConfig)
+class HadronVaultContainer(Container):
+
+    def __init__(self, name = "vault.hadronindustries.com",
+                 **kwargs):
+        super().__init__(name = name, **kwargs)
+
+hadron_vault_key = InjectionKey(Machine, host = "vault.hadronindustries.com")
+    
+
 
 
 
 hadron_vm_image = when_needed(HadronVmImage)
+
+
 __all__ = r'''
     hadron_vm_image database_key hadron_container_image
     HadronImageMixin HadronContainerImage TestDatabase
+HadronVaultContainer hadron_vault_key
  HadronVmImage
 '''.split()

@@ -1,5 +1,5 @@
-from .network import Network, NetworkConfig, external_network_key
-from .hadron import hadron_container_image, TestDatabase, database_key
+from .network import Network, NetworkConfig, external_network_key, HostMapEntry, host_map_key
+from .hadron.images import hadron_container_image, TestDatabase, database_key, HadronVaultContainer
 from .dependency_injection import InjectionKey, inject
 from .utils import when_needed
 from .container import Container
@@ -10,9 +10,13 @@ fake_internet = when_needed(Network, 'vpn',
                             vlan_id = 1000,
                             addl_keys = ['fake-internet', 'vpn-network'])
 
+services_vlan = when_needed(Network, "n103", vlan_id = 103,)
+
 database_network_config = NetworkConfig()
 database_network_config.add('eth0', external_network_key, None)
 database_network_config.add('eth1',  InjectionKey('fake-internet'), None)
+database_network_config.add('eth2', services_vlan, None)
+
 
 
 
@@ -32,3 +36,9 @@ router_network_config.add('eth1', InjectionKey('site-network'), mac_from_databas
 
 site_network_config = NetworkConfig()
 site_network_config.add('eth0', InjectionKey('site-network'), mac_from_database)
+
+hadron_host_map = {
+    'vault.hadronindustries.com': HostMapEntry(
+        mac = "00:50:56:97:3e:be",
+        ip = '192.168.103.2'),
+    }
