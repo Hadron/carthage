@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -154,6 +154,7 @@ class Machine(AsyncInjectable, SshMixin):
     The main capabilities of this interface are to be able to start and stop machines, know their IP address, and connect via ssh.
 
     '''
+
     def __init__(self, name, injector, config_layout):
         super().__init__(injector = injector)
         self.name = name
@@ -162,6 +163,7 @@ class Machine(AsyncInjectable, SshMixin):
         self.ainjector = self.injector(AsyncInjector)
         self.machine_running = MachineRunning(self)
         self.with_running_count = 0
+        self.injector.add_provider(Machine, self)
 
 
     @property
