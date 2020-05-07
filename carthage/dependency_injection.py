@@ -130,7 +130,7 @@ class Injector(Injectable):
         if k in self:
             if p is self._get(k): return k
             existing_provider = self._get(k)
-            if existing_provider.is_factory or replace:
+            if replace:
                 existing_provider.provider = p.provider
             else: raise ExistingProvider(k)
         else:
@@ -464,7 +464,7 @@ class AsyncInjector(Injectable):
 
     def __init__(self, injector, loop):
         self.injector = type(injector)(injector) # create our own sub injector
-        self.injector.add_provider(self)
+        self.injector.replace_provider(self)
         self.loop = loop
         # For methods that injector has but we do not, then call the method on our injector.  This is a lot like inheritance but does not make us a subclass.
         for k in Injector.__dict__.keys():
