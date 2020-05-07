@@ -1,0 +1,7 @@
+# Override definition of hadron_operations with a variable substitution
+# to make sure they work in config files
+hadron_operations: '{base_dir}/hadron-operations'
+hadron_release: 9.3
+min_port: 2931
+delete_volumes: true
+
