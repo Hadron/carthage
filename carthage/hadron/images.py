@@ -88,6 +88,9 @@ class TestDatabase(Container):
             #Convince NetworkManager to leave eth1 alone before internet-zone comes along
             f.write("iface eth1 inet manual\n")
             f.write("iface binternet inet manual\n")
+            # And use dhcp from ifupdown rather than NetworkManager so we can get easy access to the nameservers
+            f.write('iface eth0 inet dhcp\nauto eth0\niface eth2 inet manual\n')
+            
         async with self.container_running:
             await self.network_online()
             await self.shell("/usr/bin/apt-get", "update",
@@ -97,6 +100,7 @@ class TestDatabase(Container):
             await self.shell("/usr/bin/apt",
                                                "-y", "install", "hadron-inventory-admin",
                                            "hadron-photon-admin",
+                             "resolvconf",
                              "socat",
                              "hadron-ansible",
                              _in = "/dev/null",
@@ -105,12 +109,14 @@ class TestDatabase(Container):
                              _bg = True, _bg_exc = False)
 
     @inject(ssh_key = carthage.ssh.SshKey,
-            pki = carthage.pki.PkiManager)
+            pki = carthage.pki.PkiManager,
+            host_map = carthage.network.host_map_key)
     @setup_task('clone-hadron-ops')
-    async def clone_hadron_operations(self, ssh_key, pki):
+    async def clone_hadron_operations(self, ssh_key, pki, host_map):
         config = self.config_layout
         mirror_addr_result = await self.loop.getaddrinfo(config.aces_mirror, None, proto=6)
         aces_mirror_address = mirror_addr_result[0][4][0]
+        host_map[config.aces_mirror] = carthage.network.HostMapEntry(ip = aces_mirror_address)
         await sh.git('bundle',
                      'create', self.volume.path+"/hadron-operations.bundle",
                      "HEAD",
@@ -132,7 +138,9 @@ class TestDatabase(Container):
                 "config/test.yml"), "wt") as f:
             f.write(yaml.dump({
                 "aces_apt_server": str(config.aces_mirror),
-                "expose_routes": config.expose_routes + [aces_mirror_address]},
+                "expose_routes": config.expose_routes + [aces_mirror_address],
+                "host_map": {
+                    name: [e.ip, e.mac] for name, e in host_map.items()}},
                               default_flow_style = False))
             
         os.unlink(os.path.join(self.volume.path, 'hadron-operations.bundle'))
@@ -275,7 +283,7 @@ class HadronVaultContainer(Container):
         super().__init__(name = name, **kwargs)
 
 hadron_vault_key = InjectionKey(Machine, host = "vault.hadronindustries.com")
-    
+
 
 
 

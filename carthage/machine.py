@@ -155,7 +155,7 @@ class Machine(AsyncInjectable, SshMixin):
         self.ainjector = self.injector(AsyncInjector)
         self.machine_running = MachineRunning(self)
         self.with_running_count = 0
-        self.injector.add_provider(Machine, self)
+        self.injector.add_provider(InjectionKey(Machine), self)
 
 
     @property
