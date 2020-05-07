@@ -350,7 +350,7 @@ external_network = when_needed(ExternalNetwork)
 class HostMapEntry:
 
     ip: str
-    mac: str
+    mac: str = None
 
 host_map_key = InjectionKey('host_map')
 
