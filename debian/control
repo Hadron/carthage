@@ -13,10 +13,16 @@ Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python3:Depends}, socat, systemd-container,  python3-hadron-inventory-admin, socat, libvirt-clients, hadron-entanglement-cli (>= 0.10~), hadron-ansible, qemu-utils, python3-mako, bridge-utils, python3-yaml, python3-pyvmomi
 Description: Burn it to the ground and Rebuild it Framework
 
-Package: hadron-carthage
+Package: hadron-carthage-cli
 Section: proprietary/net
 Architecture: all
 Multi-Arch: foreign
-Depends: python3-carthage(= ${binary:Version}), ${python3:Depends}, hadron-container-image, hadron-installer-direct, qemu-kvm, ovmf, libvirt-daemon-system
+Depends: python3-carthage(= ${binary:Version}), ${python3:Depends}
 Description: CLI scripts for Carthage
 
+
+Package: hadron-carthage
+Architecture: all
+Depends: hadron-carthage-cli (= ${binary:Version}), hadron-container-image, hadron-installer-direct, qemu-kvm, ovmf, libvirt-daemon-system
+Multi-Arch: foreign
+Description: Carthage run environment

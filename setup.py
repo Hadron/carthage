@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2018, 2019, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -22,9 +22,10 @@ setup(
     install_requires = ['pytest', ],
     scripts = ['bin/carthage-runner',
                'bin/carthage-console',
+               'bin/carthage-vault-tool'
                'bin/btrfs-rmrf'],
     package_data = {'carthage': ['resources/templates/*'],
     },
-    version = "0.3",
+    version = "0.5",
 )
 
