@@ -1,5 +1,5 @@
 from carthage import dependency_injection
-from carthage.dependency_injection import inject, InjectionKey, AsyncInjectable
+from carthage.dependency_injection import inject, InjectionKey, AsyncInjectable, inject_autokwargs
 from carthage.utils import when_needed
 from carthage.pytest import async_test
 
@@ -225,3 +225,62 @@ async def test_async_ready_requires_return(a_injector):
     with pytest.raises(TypeError):
         res = await a_injector.get_instance_async(AI)
         
+
+def test_injectable_sets_dependencies(injector):
+    "Test that the constructor for Injectable tries to store dependencies as instance variables"
+    k = InjectionKey("test_key")
+    @inject(foo = k)
+    class i1(dependency_injection.Injectable): pass
+    injector.add_provider(k, 33)
+    i1_obj = injector(i1)
+    assert i1_obj.foo == 33
+
+def test_injectable_fails_on_unknown_args(injector):
+    k = InjectionKey("test_key")
+    @inject(foo = k)
+    class i1(dependency_injection.Injectable): pass
+    injector.add_provider(k, 33)
+    with pytest.raises(TypeError):
+        i1_obj = injector(i1, bar = 40)
+
+def test_injectable_autokwargs(injector):
+    k = InjectionKey("test_key")
+    @inject_autokwargs(foo = k)
+    class i1(dependency_injection.Injectable): pass
+    injector.add_provider(k, 40)
+    i1_obj = injector(i1)
+    assert i1_obj.foo == 40
+    with pytest.raises(TypeError):
+        i1()
+    
+
+@async_test
+async def test_injectable_inheritance(injector, a_injector):
+    from carthage.dependency_injection import Injectable
+    k1 = InjectionKey("k1")
+    k2 = InjectionKey("k2")
+    @inject_autokwargs(k1 = k1)
+    class a(Injectable): pass
+    @inject(k2 = k2)
+    class b(a): pass
+    @inject(k1 = None)
+    class c(b):
+
+        def __init__(self, **kwargs):
+            super().__init__(k1 = 20, **kwargs)
+
+
+    injector.add_provider(k1, 10)
+    injector.add_provider(k2, 30)
+    b_obj = injector(b)
+    assert b_obj.k1 == 10
+    assert b_obj.k2 == 30
+    c_obj = injector(c)
+    assert c_obj.k2 == 30
+    assert c_obj.k1 == 20
+
+    a_injector.add_provider(k1, 30)
+    a_injector.add_provider(k2, 55)
+    c_obj2 = await a_injector(c)
+    assert c_obj2.k1 == 20
+
