@@ -20,8 +20,35 @@ logger = logging.getLogger('carthage.dependency_injection')
 logger.setLevel('INFO')
 
 class Injectable:
+
+    '''
+    Represents a class that has dependencies injected into it. By default, the :meth:`__init__` will:
+    
+    * Store any keyword arguments corresponding to injection dependencies into instance variables of the same name as the keyword argument
+
+    * Remove these keyword arguments prior to calling the superclass init.
+
+    So for example::
+
+        @inject(router = SiteRouter)
+        class Receiver(Injectable): pass
+
+    When ``Receiver`` is instantiated, its instances will have the *router* attribute set.
+
+    '''
+    
     def __init__(self, *args, **kwargs):
-        super().__init__()
+        autokwargs =set(getattr(self, '_injection_autokwargs', set()))
+        for k in getattr(self, '_injection_dependencies', {}):
+            if k in kwargs:
+                setattr(self, k, kwargs.pop(k))
+                try: autokwargs.remove(k)
+                except KeyError: pass
+                
+        if autokwargs:
+            raise TypeError( f'The following dependencies were not specified: {autokwargs}')
+        
+        super().__init__(*args, **kwargs)
 
     @classmethod
     def supplementary_injection_keys(cls, k):
@@ -204,7 +231,9 @@ Return the first injector in our parent chain containing *k* or None if there is
 '''
         self._check_closed()
         try:
-            dks = set(cls._injection_dependencies.keys())
+            dks = set(filter(
+                lambda k: cls._injection_dependencies[k] is not None,
+                cls._injection_dependencies.keys()))
         except AttributeError: dks = set()
         injector = self # or sub_injector if created
         sub_injector = None
@@ -220,6 +249,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                         raise UnsatisfactoryDependency(dependency, provider)
                     sub_injector.add_provider(dependency, provider, close = False)
             for k, d in (cls._injection_dependencies.items()) if dks else []:
+                if d is None: continue
                 kwargs[k] = injector.get_instance(d)
             return cls(*args, **kwargs)
         finally:
@@ -405,12 +435,52 @@ def inject(**dependencies):
         for k,v in deps.items():
             if isinstance(v, InjectionKey):
                 yield k,v
+            elif v is None: yield k,v
             else: yield k, InjectionKey(v, require_type = True)
+    def init_from_bases(c, dependencies, autokwargs):
+        for b in c.__bases__:
+            if hasattr(b, "_injection_dependencies"):
+                autokwargs -= b._injection_this_level
+                dependencies.update(b._injection_dependencies)
+                autokwargs |= b._injection_autokwargs
     def wrap(fn):
         if (not hasattr(fn, '_injection_dependencies')) or (isinstance(fn, type) and '_injection_dependencies' not in fn.__dict__):
             fn._injection_dependencies = dict()
-        fn._injection_dependencies.update(convert_to_key(dependencies))
+            fn._injection_this_level = set()
+            fn._injection_autokwargs = set()
+            if isinstance(fn, type):
+                init_from_bases(fn, fn._injection_dependencies, fn._injection_autokwargs)
+            
+        for k,v in convert_to_key(dependencies):
+            try: fn._injection_autokwargs.remove(k)
+            except KeyError: pass
+            if v is not None:
+                # So autokwargs doesn't include it
+                fn._injection_this_level.add(k)
+            fn._injection_dependencies[k] = v
         return fn
+    return wrap
+
+
+def inject_autokwargs(**dependencies):
+    '''
+    Like :func:`inject` but explicitly marks that the keywords are expected to fall through to :meth:`Injectable.__init__`
+    Applies to all dependencies at the current level so can be used either like::
+
+        @inject_autokwargs(foo = bar)
+        class baz(Injectable):
+
+    or like::
+
+        @inject_autokwargs()
+        @inject(foo = bar)
+        class baz(Injectable):
+
+    '''
+    def wrap(cls):
+        inject(**dependencies)(cls)
+        cls._injection_autokwargs |= cls._injection_this_level
+        return cls
     return wrap
 
 def copy_and_inject(_wraps = None, **kwargs):
@@ -503,6 +573,7 @@ class AsyncInjector(Injectable):
         except AttributeError: dependencies = {}
         try:
             for k,d in dependencies.items():
+                if d is None: continue
                 if k in kwargs: continue
                 p = injector.get_instance(d,
                                           futures_instantiate = self._instantiate_future)
@@ -569,7 +640,9 @@ class AsyncInjector(Injectable):
         InjectionKey involved.
 '''
         try:
-            dks = set(cls._injection_dependencies.keys())
+            dks = set(filter(
+                lambda k: cls._injection_dependencies[k] is not None,
+                cls._injection_dependencies.keys()))
         except AttributeError: dks = set()
         injector = self.injector # or sub_injector if created
         sub_injector = None
