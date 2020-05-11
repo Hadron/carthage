@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -222,7 +222,7 @@ class Container(Machine, SetupTaskMixin):
         if self.running: return
         started_future = self.loop.create_future()
         self.find_output(r'\].*Reached target.*Basic System', started_callback, True)
-        await self.run_container("--kill-signal=SIGRTMIN+3", "/bin/systemd", *args,
+        await self.run_container("--kill-signal=SIGRTMIN+3", *args, "/bin/systemd",
                                  networking = True, as_pid2 = False,
                                  raise_on_running = False)
         done_future = self.done_future()
