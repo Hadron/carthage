@@ -199,12 +199,17 @@ class TestDatabase(Container):
                              _err_to_out = True)
 
     async def ansible(self, host_pattern, play,
-                *, log_to = None):
+                      *, log_to = None,
+                      tags = []):
+        extra_args = []
+        if tags:
+            extra_args.append("--tags="+",".join(tags))
         if log_to is None: log_to = self
         log_file = os.path.join(log_to.stamp_path, "ansible.log")
         with open(log_file, "at") as log:
             await self.ssh("-A","cd /hadron-operations/ansible &&ansible-playbook",
                            "-iinventory/hosts.txt",
+                           *extra_args,
                            "-l"+host_pattern,
                            play,
                            _out = log,
@@ -278,18 +283,25 @@ sed -i -e 's:GRUB_CMDLINE_LINUX=.*$:GRUB_CMDLINE_LINUX="random.trust_cpu=on net.
                 except FileNotFoundError: pass
 
 
-@inject(
-    config_layout = ConfigLayout,
-    injector = Injector,
-    loop = asyncio.AbstractEventLoop,
-    image = container_image,
-    network_config = carthage.network.NetworkConfig)
 class HadronVaultContainer(Container):
 
     def __init__(self, name = "vault.hadronindustries.com",
                  **kwargs):
         super().__init__(name = name, **kwargs)
 
+    @setup_task("Bootstrap vault")
+    @inject(db = database_key)
+    async def bootstrap_vault(self, db):
+        await self.start_machine()
+        await self.ssh_online()
+        await db.ansible(self.name,
+                         "hosts/vault.yml",
+                         log_to = self,
+                         tags = ['bootstrap_vault'])
+
+    def start_machine(self):
+        return self.start_container("--capability=CAP_IPC_LOCK")
+    
 hadron_vault_key = InjectionKey(Machine, host = "vault.hadronindustries.com")
 
 
