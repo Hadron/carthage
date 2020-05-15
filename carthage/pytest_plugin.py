@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -38,7 +38,7 @@ def pytest_collection_modifyitems(items):
 
 @pytest.fixture()
 def ainjector():
-    ainjector = base_injector(AsyncInjector)
+    ainjector = base_injector.claim()(AsyncInjector)
     yield ainjector
     ainjector.close()
 

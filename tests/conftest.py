@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -26,12 +26,12 @@ pytest_plugins = ('carthage.pytest_plugin',)
 async def test_ainjector(loop):
     if posix.geteuid() != 0:
         pytest.skip("Not running as root; volume tests skipped", )
-    ainjector = base_injector(AsyncInjector)
+    ainjector = base_injector.claim()(AsyncInjector)
     config = await ainjector(ConfigLayout)
     config.delete_volumes = True
     vol = await ainjector(ContainerImage, name = "base")
-    base_injector.add_provider(container_image, vol)
-    base_injector.add_provider(await ainjector(Network,'brint', vlan_id = 0))
+    base_injector.replace_provider(container_image, vol)
+    base_injector.replace_provider(await ainjector(Network,'brint', vlan_id = 0))
     ainjector.replace_provider(ssh_origin, DependencyProvider(None))
     return ainjector
 

@@ -23,11 +23,11 @@ logger = logging.getLogger('carthage.vmware')
 #: Injection key used for looking up templates for VMs
 image_datastore_key = InjectionKey(VmwareDataStore, role = "images")
 
-@inject(injector = Injector,
+@inject_autokwargs(
         config_layout = ConfigLayout,
         store = image_datastore_key
         )
-class VmdkTemplate(SetupTaskMixin, AsyncInjectable):
+class VmdkTemplate(AsyncInjectable, SetupTaskMixin):
 
     '''
     Produce a VMDK from an image that can be loaded as a template VM.
@@ -38,12 +38,9 @@ class VmdkTemplate(SetupTaskMixin, AsyncInjectable):
 
 '''
 
-    def __init__(self, image, store, *, injector, config_layout):
-        self.injector = injector.copy_if_owned().claim()
-        self.ainjector = self.injector(AsyncInjector)
+    def __init__(self, image, **kwargs):
         self.image = image
-        self.store = store
-        super().__init__()
+        super().__init__(**kwargs)
         assert image.path.endswith('.raw')
         base_path = image.path[:-4]
         self.paths = (base_path+'.vmdk',

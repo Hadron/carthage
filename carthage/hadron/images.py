@@ -63,15 +63,12 @@ class HadronImageMixin(ContainerCustomization):
                      os.path.join(self.path, "etc/X11/xorg.conf.d/10-hadron-modes.conf"))
 
 
-@inject(
-    config_layout = ConfigLayout,
-    injector = Injector
-    )
+
 class HadronContainerImage(ContainerImage):
 
-    def __init__(self, injector, config_layout):
-        super().__init__(config_layout = config_layout, name = "base-hadron")
-        self.injector = injector
+    def __init__(self, **kwargs):
+        super().__init__(name = "base-hadron", **kwargs)
+
 
     hadron_customizations = customization_task(HadronImageMixin)
 
@@ -222,20 +219,16 @@ class TestDatabase(Container):
 
 hadron_container_image = when_needed(HadronContainerImage)
 
-@inject(
-    config_layout = ConfigLayout,
-    ainjector = AsyncInjector
-    )
+
 class HadronVmImage(ImageVolume):
 
-    def __init__(self, *, config_layout, ainjector, name = "base-hadron-vm",
+    def __init__(self, *, name = "base-hadron-vm",
                  path = None, **kwargs):
         if path is not None: kwargs['path'] = path
         if 'create_size' not in kwargs:
-            kwargs['create_size'] = config_layout.vm_image_size
+            kwargs['create_size'] = kwargs['config_layout'].vm_image_size
         super().__init__(name,
-                         config_layout = config_layout,
-                         ainjector = ainjector, **kwargs)
+                         **kwargs)
 
 
 

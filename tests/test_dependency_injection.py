@@ -120,7 +120,8 @@ async def test_async_ready(a_injector, loop):
             self.ready = True
             return self
 
-        def __init__(self):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
             self.ready = False
     @inject(r = AsyncDependency)
     def is_ready(r):
@@ -292,3 +293,33 @@ async def test_injectable_inheritance(injector, a_injector):
     c_obj2 = await a_injector(c)
     assert c_obj2.k1 == 20
 
+
+@async_test
+async def test_injector_claiming(injector, a_injector):
+    ainjector = a_injector
+    i2 = injector(dependency_injection.Injector)
+    assert i2.claimed_by is None
+    assert i2.claim() is i2
+    i3 = i2.claim()
+    assert i2 is not i3
+    assert i3.claimed_by
+    class c(AsyncInjectable): pass
+    c_obj = await ainjector(c)
+    assert c_obj.injector.claimed_by() is c_obj
+    ai2 = c_obj.ainjector.claim()
+    assert ai2 is not c_obj.ainjector
+    assert ai2.injector is not c_obj.ainjector.injector
+    assert c_obj.ainjector.injector is c_obj.injector
+    # If you are permitted to override injectors on a call to an
+    # injector, interesting semantic questions come up; are you just
+    # overriding the kwarg, or are you also overriding what the
+    # subinjector will provide when asked to provide an injector.  If
+    # so, you are violating the invarient that injectors always inject
+    # themselves when asked for an injector.  In any case, if it ever
+    # becomes possible to override the injector keyword, the following
+    # test probably should pass for any reasonable semantics.
+    with pytest.raises(dependency_injection.ExistingProvider):
+        c2_obj = await ainjector(c, injector = i3)
+        assert c2_obj.injector.claimed_by() is c2_obj
+        assert c2_obj.injector.parent_injector is i3
+    

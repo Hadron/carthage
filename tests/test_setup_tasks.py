@@ -23,8 +23,8 @@ def ainjector(ainjector):
 
 class  Stampable(SetupTaskMixin, AsyncInjectable):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         f = sys._getframe(3)
         self.name = f.f_code.co_name
 

@@ -30,6 +30,9 @@ async def run(ainjector):
     await ainjector.get_instance_async(SshKey)
     template = await ainjector(aces_vm_template)
     if not args.cleanup:
+        network = await ainjector.get_instance_async(external_network_key)
+        dvswitch = await ainjector(carthage.vmware.network.DvSwitch, name="/Hadron/network/Internet")
+        network.ainjector.add_provider(dvswitch)
         vm = await ainjector(CarthageVm, args.name, template = template)
         try: await vm.start_machine()
         except TimeoutError:

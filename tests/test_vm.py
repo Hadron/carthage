@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -25,7 +25,7 @@ resource_dir = os.path.dirname(__file__)
 def ainjector():
     if posix.geteuid() != 0:
         pytest.skip("Not running as root; volume tests skipped", )
-    injector = base_injector(AsyncInjector)
+    injector = base_injector.claim()(AsyncInjector)
     cl = injector.get_instance(InjectionKey(ConfigLayout))
     cl.delete_volumes = True
     nc = NetworkConfig()

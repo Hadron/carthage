@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -39,10 +39,6 @@ class RsyncPath:
         ainjector = AsyncInjector)
 class SshKey(AsyncInjectable, SetupTaskMixin):
 
-    def __init__(self, config_layout, ainjector):
-        super().__init__()
-        self.config_layout = config_layout
-        self.ainjector = ainjector
 
     @memoproperty
     def known_hosts(self):
