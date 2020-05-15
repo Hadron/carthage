@@ -30,7 +30,7 @@ def pytest_collection_modifyitems(items):
 
 @pytest.fixture()
 def ainjector():
-    ainjector = base_injector(AsyncInjector)
+    ainjector = base_injector.claim()(AsyncInjector)
     yield ainjector
     ainjector.close()
 

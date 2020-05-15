@@ -17,7 +17,7 @@ resource_dir = os.path.dirname(__file__)
 def ainjector():
     if posix.geteuid() != 0:
         pytest.skip("Not running as root; volume tests skipped", )
-    injector = base_injector(AsyncInjector)
+    injector = base_injector.claim()(AsyncInjector)
     cl = injector.get_instance(InjectionKey(ConfigLayout))
     cl.delete_volumes = True
     nc = NetworkConfig()

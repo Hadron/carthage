@@ -5,7 +5,7 @@ import carthage.hadron_layout
 import carthage.config
 import carthage.ssh
 import carthage.container
-from ..dependency_injection import inject, InjectionKey, Injector, AsyncInjector
+from ..dependency_injection import *
 from ..ports import ExposedPort
 from ..container import Container
 from ..network import Network
@@ -16,7 +16,8 @@ from .images import database_key
 
 @inject(
     config_layout = carthage.config.ConfigLayout,
-    database = carthage.hadron_layout.database_key)
+    database = carthage.hadron_layout.database_key,
+    ssh_origin = None)
 class RemotePostgres(ExposedPort):
 
     def __init__(self, config_layout, database):
@@ -45,20 +46,18 @@ class RemotePostgres(ExposedPort):
             
 site_network_key = InjectionKey('site-network')
 
-@inject(
+@inject_autokwargs(
     config_layout = ConfigLayout,
-    injector = Injector)
+    )
 class HadronNetwork(Network):
 
-    def __init__(self, model, *, config_layout, injector):
+    def __init__(self, model, **kwargs):
         self.model = model
         self.netid = model.netid
-        injector = injector.copy_if_owned()
-        injector.claim()
-        injector.add_provider(site_network_key, self)
         super().__init__(name = "n{}".format(model.netid),
                          vlan_id = 1000+model.netid,
-                         injector = injector)
+                         **kwargs)
+        self.injector.add_provider(site_network_key, self)
         
     async def async_ready(self):
         await super().async_ready()

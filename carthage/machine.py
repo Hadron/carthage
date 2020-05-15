@@ -129,6 +129,7 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
         except sh.ErrorReturnCode: pass
         
         
+@inject_autokwargs(config_layout = ConfigLayout)
 class Machine(AsyncInjectable, SshMixin):
 
     '''
@@ -147,12 +148,9 @@ class Machine(AsyncInjectable, SshMixin):
 
     '''
 
-    def __init__(self, name, injector, config_layout):
-        super().__init__(injector = injector)
+    def __init__(self, name, **kwargs):
+        super().__init__(**kwargs)
         self.name = name
-        self.config_layout = config_layout
-        self.injector = injector.copy_if_owned().claim()
-        self.ainjector = self.injector(AsyncInjector)
         self.machine_running = MachineRunning(self)
         self.with_running_count = 0
         self.injector.add_provider(InjectionKey(Machine), self)
@@ -194,17 +192,14 @@ class Machine(AsyncInjectable, SshMixin):
         meth = getattr(customization, method)
         return await meth()
     
-@inject(injector = Injector,
-        config_layout = ConfigLayout)
+@inject_autokwargs( config_layout = ConfigLayout)
 class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
-    def __init__(self, apply_to: Machine, *,
-                 injector, config_layout, **kwargs):
-        self.injector = injector.copy_if_owned().claim()
-        self.ainjector = self.injector(AsyncInjector)
-        self.config_layout = config_layout
+    def __init__(self, apply_to: Machine,
+                  **kwargs):
         self.host = apply_to
         super().__init__(**kwargs)
+
     async def async_ready(self):
         # We do not run setup tasks on construction.
         return self
@@ -260,11 +255,11 @@ class ContainerCustomization(BaseCustomization):
     '''A customization class for running tasks on :class:`~carthage.container.Container` instances or :class:`~carthage.image.ImageVolume` instances without actually booting the container.  This is valuable for tasks used in image production that want to manipulate the filesystem.
 '''
 
-    def __init__(self, apply_to, injector, config_layout):
+    def __init__(self, apply_to, **kwargs):
         from .container import Container
         if not isinstance(apply_to, Container):
             raise TypeError(f'{self.__class__.__name__} can only be applied to Containers or ImageVolumes')
-        super().__init__(apply_to = apply_to, injector = injector, config_layout = config_layout)
+        super().__init__(apply_to = apply_to, **kwargs)
 
     @property
     def path(self):

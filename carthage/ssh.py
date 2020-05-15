@@ -31,10 +31,6 @@ class RsyncPath:
         ainjector = AsyncInjector)
 class SshKey(AsyncInjectable, SetupTaskMixin):
 
-    def __init__(self, config_layout, ainjector):
-        super().__init__()
-        self.config_layout = config_layout
-        self.ainjector = ainjector
 
     @memoproperty
     def known_hosts(self):

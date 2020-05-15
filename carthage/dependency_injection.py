@@ -13,8 +13,7 @@ logger.setLevel('INFO')
 
 class Injectable:
 
-    '''
-    Represents a class that has dependencies injected into it. By default, the :meth:`__init__` will:
+    '''Represents a class that has dependencies injected into it. By default, the :meth:`__init__` will:
     
     * Store any keyword arguments corresponding to injection dependencies into instance variables of the same name as the keyword argument
 
@@ -27,13 +26,27 @@ class Injectable:
 
     When ``Receiver`` is instantiated, its instances will have the *router* attribute set.
 
+    It is **recommended** but not required that classes with injected
+    dependencies inherit from *Injectable*.  The
+    :meth:`satisfies_injection_key` and
+    :meth:`supplementary_injection_keys` protocols are only available
+    to classes that do inherit from *Injectable*.
+
+    Subclasses that may be mixins and that wish injected dependency handling different than the keyword assignment provided by *Injectable* must inherit from *Injectable*.
+
+    This class does not have :class:`Injector` as an injected dependency.  It is possible to have injected dependencies without doing so.  However, in a dependency is *Injector*, then that injector will be :meth:`claimed <Injector.claim>`.
+
     '''
     
     def __init__(self, *args, **kwargs):
         autokwargs =set(getattr(self, '_injection_autokwargs', set()))
-        for k in getattr(self, '_injection_dependencies', {}):
+        for k, d in getattr(self, '_injection_dependencies', {}).items():
             if k in kwargs:
-                setattr(self, k, kwargs.pop(k))
+                if d is _injector_injection_key:
+                    injector = kwargs.pop(k)
+                    setattr(self, k, injector.claim(self))
+                else:
+                    setattr(self, k, kwargs.pop(k))
                 try: autokwargs.remove(k)
                 except KeyError: pass
                 
@@ -113,21 +126,32 @@ class Injector(Injectable):
                 providers = providers[1:]
 
         self.parent_injector = parent_injector
+        self.claimed_by = None
         for p in providers:
             self.add_provider(p)
         self.add_provider(self) #Make sure we can inject an Injector
         self.add_provider(InjectionKey(AsyncInjector ), AsyncInjector, allow_multiple = True)
         self.closed = False
 
-    def copy_if_owned(self):
-        # currently always copies
-        return type(self)(self)
 
-    def claim(self):
-        "Take ownership of the injector"
-# Currently a stub
-        return self
+    def claim(self, claimed_by = True):
+        '''
+        Take ownership of the injector.
 
+        :param claimed_by: Either *True* or an object that this injector is marked as belonging to.
+
+        Returns either *self* or a new subinjector.
+
+        '''
+        if self.claimed_by:
+            return self(type(self)).claim(claimed_by)
+        else:
+            if claimed_by is True or isinstance(claimed_by, str):
+                self.claimed_by = claimed_by
+            else: self.claimed_by = weakref.ref(claimed_by)
+            return self
+
+        
     def add_provider(self, k, p = None, *,
                      allow_multiple = False,
                      close = True,
@@ -345,7 +369,25 @@ Return the first injector in our parent chain containing *k* or None if there is
     def __del__(self):
         if not self.closed:
             self.close()
-            
+
+    def __repr__(self):
+        claim_str = ""
+        if self.claimed_by is True:
+            claim_str = f'claimed id: {id(self)}'
+        elif isinstance(self.claimed_by, str):
+            claim_str = self.claimed_by
+        elif self.claimed_by is None:
+            claim_str = f'unclaimed id: {id(self)}'
+        elif self.claimed_by() is None:
+            claim_str = "claimed by dead object"
+        else: claim_str = f'claimed by {repr(self.claimed_by())}'
+        return f'<{self.__class__.__name__} {claim_str}>'
+
+    @property
+    def is_claimed(self):
+        return self.claimed_by is not None
+    
+    
 
 class InjectionKey:
 
@@ -405,7 +447,10 @@ class InjectionKey:
             for c in p.__class__.__mro__:
                 if c is p.__class__: continue
                 yield InjectionKey(c)
-                
+
+# Used in Injector.__init__
+_injector_injection_key = InjectionKey(Injector)
+    
 @dataclass
 class UnsatisfactoryDependency(RuntimeError):
     dependency: InjectionKey
@@ -517,8 +562,15 @@ def directly_has_dependencies(f):
    #########################################
    # Asynchronous support:
 
+@inject_autokwargs(
+    injector = Injector)
 class AsyncInjectable(Injectable):
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # superclass claims the injector for us.
+        self.ainjector = self.injector(AsyncInjector)
+        
     async def async_ready(self):
         return self
 
@@ -530,10 +582,13 @@ class AsyncInjector(Injectable):
     Injector because AsyncInjector's call function is a coroutine and
     so it has an incompatible interface.  In other ways the classes
     should behave the same.
+
+    This class overrides :class:`Injectable`'s behavior of claiming the injector.  Instead, if you construct an *AsyncInjector* you get exactly what you asked for: an *AsyncInjector* that maps directly onto the injector you construct.  Note however that when an *AsyncInjector* is constructed by :class:`AsyncInjectable`, the injector is claimed properly.
+
 '''
 
     def __init__(self, injector, loop):
-        self.injector = type(injector)(injector) # create our own sub injector
+        self.injector = injector
         self.injector.replace_provider(self)
         self.loop = loop
         # For methods that injector has but we do not, then call the method on our injector.  This is a lot like inheritance but does not make us a subclass.
@@ -544,23 +599,29 @@ class AsyncInjector(Injectable):
             if hasattr(self, k): continue
             setattr(self, k, getattr(self.injector, k))
 
-    def claim(self):
-        # currently a stub as for main injectors
-        return self
+    def claim(self, claimed_by = True):
+        if self.injector.is_claimed:
+            return type(self)(injector = self.injector.claim(claimed_by),
+                              loop = self.loop)
+        else:
+            assert self.injector.claim(claimed_by) is self.injector
+            return self
 
-    def copy_if_owned(self):
-        # For now we can always return self because we copy in the constructor
-        return self
+    def __repr__(self):
+        return f'<Async Injector Injector: {repr(self.injector)}>'
+    
     def __contains__(self, k):
         return k in self.injector
 
-    def _instantiate_future(self, injector, orig_k, provider, *args, **kwargs):
+    def _instantiate_future(self, injector, orig_k, provider, args = None, kwargs = None):
         #__call__ handles overrides and anything in there is already satisfactory.
         def handle_future(k):
             def callback(fut):
                 kwargs[k] = fut.result() # may raise
             return callback
         futures = []
+        if args is None: args = []
+        if kwargs is None: kwargs = {}
         try: dependencies = provider._injection_dependencies
         except AttributeError: dependencies = {}
         try:
@@ -649,7 +710,7 @@ class AsyncInjector(Injectable):
                     if isinstance(provider,Injectable) and not provider.satisfies_injection_key(dependency):
                         raise UnsatisfactoryDependency(dependency, provider)
                     sub_injector.add_provider(dependency, provider, close = False)
-            res = self._instantiate_future(injector, None, cls, *args, **kwargs)
+            res = self._instantiate_future(injector, None, cls, args, kwargs)
             if isinstance(res, (asyncio.Future, collections.abc.Coroutine)):
                 return await self._handle_async(res)
             else: return res
@@ -687,7 +748,7 @@ def _call_close(obj, canceled_futures):
 
 
 __all__ = '''
-    inject Injector AsyncInjector
+    inject inject_autokwargs Injector AsyncInjector
     Injectable AsyncInjectable InjectionFailed ExistingProvider
     InjectionKey
     DependencyProvider

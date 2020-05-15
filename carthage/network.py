@@ -105,7 +105,7 @@ class TechnologySpecificNetwork(AsyncInjectable):
     
                                
 
-@inject(injector = Injector)
+
 class Network(AsyncInjectable):
 
     '''
@@ -124,9 +124,8 @@ class Network(AsyncInjectable):
     '''
     
 
-    def __init__(self, name, vlan_id = None, *, injector):
-        self.injector = injector.copy_if_owned().claim()
-        self.ainjector = self.injector(AsyncInjector)
+    def __init__(self, name, vlan_id = None, **kwargs):
+        super().__init__(**kwargs)
         self.name = name
         self.vlan_id = vlan_id
         self.injector.add_provider(this_network, self)

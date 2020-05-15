@@ -12,7 +12,7 @@ import posix, gc
 def a_injector():
     if posix.geteuid() != 0:
         pytest.skip("Not running as root; volume tests skipped", )
-    injector = base_injector(AsyncInjector)
+    injector = base_injector.claim()(AsyncInjector)
     cl = injector.get_instance(InjectionKey(ConfigLayout))
     cl.delete_volumes = True
     yield injector

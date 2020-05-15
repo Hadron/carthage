@@ -39,13 +39,11 @@ class VmwareStampable(SetupTaskMixin, AsyncInjectable):
                    injector = Injector,
                    connection = VmwareConnection)
 
-    def __init__(self, *args, config_layout, injector, connection, **kwargs):
-        if len(args) != 0: raise ValueError(args)
-        self.injector = injector.copy_if_owned().claim()
+    def __init__(self, config_layout, injector, connection, **kwargs):
+        self.injector = injector.claim()
         self.config_layout = config_layout
         self.connection = connection
-        self.ainjector = self.injector(AsyncInjector)
-        super().__init__(*args, **kwargs)
+        super().__init__( **kwargs)
 
     @memoproperty
     def stamp_descriptor(self):

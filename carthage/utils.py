@@ -53,12 +53,13 @@ def when_needed(wraps, *args, injector = None,
       non-injected configuration to their constructors.
 
     '''
-    from .dependency_injection import inject, AsyncInjectable, AsyncInjector, InjectionKey, Injectable, _call_close
+    from .dependency_injection import inject, AsyncInjectable, AsyncInjector, InjectionKey, Injectable, _call_close, Injector
     # We do not copy the wrapped function's dependencies out.  We will
     # submit the wrapped object to an injector as part of resolving it
     # and we may need to control which injector is used for the
     # dependencies.
-    @inject(ainjector = AsyncInjector)
+    # We override the injector dependency to avoid autokwargs behavior because we do not want our injector claimed
+    @inject(injector = Injector)
     @functools.wraps(wraps,
                      assigned = functools.WRAPPER_ASSIGNMENTS ,
                      updated = tuple())
@@ -67,17 +68,21 @@ def when_needed(wraps, *args, injector = None,
         resolved_obj = None
         resolving = None
 
-        def __init__(self, *inside_args,  ainjector, **inside_kwargs):
+        def __init__(self, *inside_args,   **inside_kwargs):
             nonlocal args
             if args and inside_args:
                 raise RuntimeError("It does not make sense to specify args both in the call to when_needed and when it is resolved.")
             if inside_args:
                 args = inside_args
             if injector is not None:
-                #override ainjector
-                ainjector = injector(AsyncInjector)
-            self.ainjector = ainjector
-            self.ainjector_set.add(ainjector)
+                #override injector
+                inside_kwargs['injector'] = injector
+            # We want to end up  with a copied injector but not one that is claimed so the resulting object can claim it.
+            self.injector = inside_kwargs.pop('injector')
+            self.injector = self.injector(type(self.injector))
+# super will set up ainjector
+            super().__init__()
+            self.ainjector_set.add(self.ainjector)
             self.inside_kwargs = inside_kwargs
 
         @classmethod

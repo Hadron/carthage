@@ -8,7 +8,7 @@ from carthage.dependency_injection import *
 def injector():
     if posix.geteuid() != 0:
         pytest.skip("Not running as root; network tests skipped", )
-    return base_injector
+    return base_injector.claim()
 
 
 @async_test

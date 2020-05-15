@@ -22,14 +22,11 @@ container_volume = InjectionKey('container-volume')
         injector = Injector)
 class Container(Machine, SetupTaskMixin):
 
-    def __init__(self, name, *, config_layout, image, injector, loop, network_config,
-                 skip_ssh_keygen = False):
-        super().__init__(injector = injector, config_layout = config_layout,
-                         name = name)
-        self.loop = loop
+    def __init__(self, name, *,  network_config,
+                 skip_ssh_keygen = False, **kwargs):
+        super().__init__(
+                         name = name, **kwargs)
         self.process = None
-        self.image = image
-        self.config_layout = config_layout
         self.skip_ssh_keygen = skip_ssh_keygen
         self.running = False
         self._operation_lock = asyncio.Lock()

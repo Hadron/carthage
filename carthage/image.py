@@ -1,6 +1,6 @@
 import contextlib, os, os.path, pkg_resources, shutil, sys, time
 from tempfile import TemporaryDirectory
-from .dependency_injection import Injector, AsyncInjectable, inject, AsyncInjector
+from .dependency_injection import *
 from .config import ConfigLayout
 from . import sh
 from .utils import possibly_async
@@ -15,8 +15,8 @@ from .machine import ContainerCustomization
 @inject(config_layout = ConfigLayout)
 class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
 
-    def __init__(self, config_layout, name, clone_from = None):
-        super().__init__()
+    def __init__(self, config_layout, name, clone_from = None, **kwargs):
+        super().__init__(**kwargs)
         self.config_layout = config_layout
         self._name = name
         self._path = os.path.join(config_layout.image_dir, name)
@@ -89,8 +89,8 @@ class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
 @inject(config_layout = ConfigLayout)
 class ContainerImage(BtrfsVolume):
 
-    def __init__(self, name, config_layout):
-        super().__init__(config_layout = config_layout, name = name)
+    def __init__(self, name, config_layout, **kwargs):
+        super().__init__(config_layout = config_layout, name = name, **kwargs)
 
     async def apply_customization(self, cust_class, method = 'apply'):
         from .container import container_image, container_volume, Container
@@ -135,18 +135,13 @@ class ContainerImage(BtrfsVolume):
 
 
 
-@inject(
-    config_layout = ConfigLayout,
-ainjector = AsyncInjector)
+@inject_autokwargs(config_layout = ConfigLayout)
 class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
     def __init__(self, name, path = None, create_size = None,
-                 *, config_layout, ainjector):
-        self.config_layout = config_layout
-        if path is None: path = config_layout.vm_image_dir
-        self.ainjector = ainjector
-        self.injector = ainjector.injector.claim()
-        super().__init__()
+                 **kwargs):
+        super().__init__(**kwargs)
+        if path is None: path = self.config_layout.vm_image_dir
         self.name = name
         if name.startswith('/'):
             self.path = name
@@ -285,8 +280,7 @@ self.path)
         if self.config_layout.delete_volumes:
             self.delete_volume()
 
-@inject(config_layout = ConfigLayout,
-        ainjector = AsyncInjector)
+@inject_autokwargs(config_layout = ConfigLayout)
 class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
 
     '''Mount a disk image for use as a container_image or
@@ -297,11 +291,10 @@ class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
     '''
 
     def __init__(self, image,
-                 *, config_layout, ainjector):
-        super().__init__()
+                 **kwargs):
+        super().__init__(**kwargs)
         self.image = image
-        self.config_layout = config_layout
-        self.injector = ainjector.injector.copy_if_owned().claim()
+
         self.name = image.name
         self.mount_image()
         self.stamp_path = image.stamp_path
