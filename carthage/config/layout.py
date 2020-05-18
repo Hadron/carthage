@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -52,7 +52,23 @@ class ConfigLayout(ConfigAccessor, Injectable):
                             return super().__new__(self, self.new_value, **kwargs)
 
                         def __init__(self, **kwargs):
-                            super().__init__(self.new_value, **kwargs)
+                            # This is a bit complicated because of the
+                            # various cases.  It appears that if a
+                            # class never overrides __init__ at all,
+                            # type.__new__ may not end up calling
+                            # __init__.  But if any args or kwargs
+                            # chain back to object.__init__, then
+                            # construction will raise.  Unfortunately,
+                            # Injectable needs an __init__.  So if the
+                            # underlying type is something like str,
+                            # without __init__, then we need to not
+                            # pass args along to super().__init__.  If the underlying type is list or something with __init__ provided by C code, we need to pass along a value, but the only way we can detect this is if __init__ has no __function__ attribute.  If the underlying type is something that does have an __init__ written in python we need  to pass along args, but in that case, we detect a __function__ attribute that is not Injectable.__init__.
+                            sup_obj = super()
+                            if getattr(sup_obj.__init__,'__func__', None) == Injectable.__init__:
+                                #Nothing will eat the value, so it will pass along to Object.__init__ and fail
+                                sup_obj.__init__(**kwargs)
+                            else:
+                                sup_obj.__init__(self.new_value, **kwargs)
                             
                     injector.replace_provider(config_key(full_key), value)
                 except AttributeError:
