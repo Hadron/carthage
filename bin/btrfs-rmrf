@@ -8,7 +8,7 @@ from carthage.config import ConfigLayout
 from carthage.image import BtrfsVolume
 
 async def run(volumes):
-    ainjector = base_injector(AsyncInjector)
+    ainjector = base_injector.claim()(AsyncInjector)
     config_layout = base_injector(ConfigLayout)
     config_layout.delete_volumes = True
     ainjector.add_provider(config_layout)
