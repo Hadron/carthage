@@ -26,6 +26,6 @@ setup(
                'bin/btrfs-rmrf'],
     package_data = {'carthage': ['resources/templates/*'],
     },
-    version = "0.5",
+    version = "0.6",
 )
 
