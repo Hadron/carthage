@@ -34,7 +34,7 @@ def test_injector_provides_self(injector):
 
 def test_injector_available(injector):
     assert isinstance(injector, dependency_injection.Injector)
-    
+
 
 def test_override_dependency(injector):
     k = dependency_injection.InjectionKey('some key')
@@ -66,7 +66,7 @@ def test_override_replaces_subinjector(injector):
     injector.add_provider(o1)
     injector(func, o = o2)
     injector(func2)
-    
+
 
 
 
@@ -77,14 +77,14 @@ def test_injector_instantiates(injector):
         assert isinstance(s, SomeClass)
     injector.add_provider(SomeClass)
     injector(func)
-    
+
 def test_async_injector_construction(loop, injector):
     @inject(a = dependency_injection.AsyncInjector)
     def f(a):
         assert isinstance(a,dependency_injection.AsyncInjector)
 
     injector(f)
-    
+
 
 @async_test
 async def test_construct_using_coro(a_injector, loop):
@@ -110,8 +110,8 @@ async def test_async_function(a_injector, loop):
     a_injector.add_provider(InjectionKey(Dependency), setup_dependency)
     await a_injector(coro)
     assert called is True
-    
-    
+
+
 
 @async_test
 async def test_async_ready(a_injector, loop):
@@ -127,7 +127,7 @@ async def test_async_ready(a_injector, loop):
     def is_ready(r):
         assert r.ready
     await a_injector(is_ready, r = AsyncDependency)
-    
+
 
 def test_allow_multiple(injector):
     from carthage.config import ConfigLayout
@@ -146,7 +146,7 @@ def test_allow_multiple(injector):
     assert isinstance(c3, ConfigLayout)
     assert c3 is not c1
     assert c3 is not c2
-    
+
 
 def test_allow_multiple_provider_at_root(injector):
     from carthage.config import ConfigLayout
@@ -159,7 +159,7 @@ def test_allow_multiple_provider_at_root(injector):
     c2 = s2.get_instance(ConfigLayout)
     assert c3 is c1
     assert c2 is c3
-    
+
 
 def test_allow_multiple_false(injector):
     from carthage.config import ConfigLayout
@@ -170,7 +170,7 @@ def test_allow_multiple_false(injector):
     c1 = s1.get_instance(ConfigLayout)
     c2 = s2.get_instance(ConfigLayout)
     assert c1 is c2
-    
+
 @async_test
 async def test_when_needed(a_injector, loop):
     class foo(dependency_injection.Injectable):
@@ -203,7 +203,7 @@ async def test_when_needed_override(a_injector, loop):
         return "foo"
     wn = when_needed(func, n = 29)
     assert await a_injector(wn) == "foo"
-    
+
 
 @async_test
 async def test_when_needed_cancels(loop, a_injector):
@@ -222,7 +222,7 @@ async def test_when_needed_cancels(loop, a_injector):
     await asyncio.sleep(0.1)
     await dependency_injection.shutdown_injector(ainjector)
     assert cancelled is True
-    
+
 
 @async_test
 async def test_async_ready_requires_return(a_injector):
@@ -233,7 +233,7 @@ async def test_async_ready_requires_return(a_injector):
     a_injector.add_provider(AI)
     with pytest.raises(TypeError):
         res = await a_injector.get_instance_async(AI)
-        
+
 
 def test_injectable_sets_dependencies(injector):
     "Test that the constructor for Injectable tries to store dependencies as instance variables"
@@ -261,7 +261,7 @@ def test_injectable_autokwargs(injector):
     assert i1_obj.foo == 40
     with pytest.raises(TypeError):
         i1()
-    
+
 
 @async_test
 async def test_injectable_inheritance(injector, a_injector):
@@ -322,4 +322,11 @@ async def test_injector_claiming(injector, a_injector):
         c2_obj = await ainjector(c, injector = i3)
         assert c2_obj.injector.claimed_by() is c2_obj
         assert c2_obj.injector.parent_injector is i3
-    
+
+def test_injection_key_copy():
+    i1 = InjectionKey(int)
+    assert i1 is InjectionKey(i1)
+    i2 = InjectionKey(i1, optional = True)
+    assert i2.optional
+    assert i2 == i1
+    assert i2 is not i1

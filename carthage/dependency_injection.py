@@ -406,6 +406,13 @@ class InjectionKey:
         assert (cls is InjectionKey) or constraints, "You cannot subclass InjectionKey with empty constraints"
         if require_type and not isinstance(target_, type):
             raise TypeError('Only types can be used as implicit injection keys; if this is intended then construct the injection key explicitly')
+        if isinstance(target_, InjectionKey):
+            # mostly so you can take an existing injection key and mark it optional
+            new_constraints = dict(target_.constraints)
+            new_constraints.update(constraints)
+            constraints = new_constraints
+            optional = optional or target_.optional
+            target_ = target_.target
         if (not constraints) and (not optional):
             if  target_ in cls._target_injection_keys:
                 return cls._target_injection_keys[target_]
