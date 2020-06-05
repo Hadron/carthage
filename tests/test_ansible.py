@@ -27,3 +27,16 @@ async def test_run_failing_play(configured_ainjector):
                                           [{"fail": "msg=foo"}])
 
     
+@async_test
+async def test_ansible_with_log(configured_ainjector):
+    ainjector = configured_ainjector
+    try: os.unlink(state_dir+"/ansible.log")
+    except: pass
+    await ainjector(carthage.ansible.run_play,
+                    [carthage.ansible.localhost_machine],
+                    {'debug': 'msg=barbaz'},
+                    log = state_dir+"/ansible.log")
+    with open(state_dir+"/ansible.log", "rb") as f:
+        log_contents = f.read()
+    assert b'barbaz' in log_contents
+                    

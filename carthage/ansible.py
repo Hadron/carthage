@@ -1,29 +1,139 @@
 import json, os, os.path, tempfile, yaml
 from .dependency_injection import *
-from . import sh
+from . import sh, Machine
+from .config import ConfigLayout
 from .ssh import SshKey
+from .utils import validate_shell_safe
 from types import SimpleNamespace
-
+__all__ = []
 
 class AnsibleFailure(RuntimeError):
 
-    def __init__(self, msg, ansible_result):
+    def __init__(self, msg, ansible_result = None):
         super().__init__(msg)
         self.ansible_result = ansible_result
 
     def __str__(self):
         s = super().__str__()
-        s += ": "+repr(self.ansible_result)
+        if self.ansible_result:
+            s += ": "+repr(self.ansible_result)
         return s
-    
-@inject(injector = Injector,
+
+__all__ += ['AnsibleFailure']
+
+ansible_origin = InjectionKey(Machine, role="ansible/origin")
+
+__all__ += ['ansible_origin']
+
+class AnsibleConfig:
+    '''This is a stub for now.  Long term it should help manage  library path, role path, etc.
+'''
+    pass
+__all__ += ['AnsibleConfig']
+
+@inject(origin = InjectionKey(ansible_origin, optional = True),
+        ainjector = AsyncInjector,
+        )
+async def run_playbook(hosts,
+                       playbook: str,
+                       inventory: str,
+                       log:str = None,
+                       *,
+                       raise_on_failure: bool = True,
+                       ansible_config,
+                       ainjector,
+                       origin = None,
+                       ):
+    '''
+    Run an ansible playbook against a set of hosts.  If *origin* is ``None``, then ``ansible-playbook`` is run locally, otherwise it is run via ``ssh`` to ``origin``.
+    A new ansible configuration is created for each run of ansible.
+    if *log* is ``None`` then ansible output is parsed and an :class:`AnsibleResult` is returned.  Otherwise ``True`` is returned on a successful ansible run.
+
+    :param playbook: Path to the playbook local to *origin*.  The current directory when ansible is run will be the directory containing the playbook.
+
+    :param hosts: A list of hosts to run the play against.  Hosts can be strings, or :class:`Machine` objects.  For machine objects, *ansible_inventory_name* will be tried before :meth:`Machine.name`.
+
+:param log: A local path where a log of output and errors should be created or ``None`` to parse the ansible result programatically after ansible completes.  It is not possible to produce human readable output and a result that can be parsed at the same time without writing a custom ansible callback plugin.
+
+    '''
+    target_hosts = []
+    for h in hosts:
+        if isinstance(h, str):
+            target_hosts.append(h)
+        else:
+            if hasattr(h, 'ansible_inventory_name'):
+                target_hosts.append(h.ansible_inventory_name)
+            else: target_hosts.append(h.name)
+    list(map(lambda h: validate_shell_safe(h), target_hosts))
+    target_hosts = ":".join(target_hosts)
+    playbook_dir = os.path.dirname(playbook)
+    validate_shell_safe(playbook)
+    if playbook_dir:
+        ansible_command = f'cd "{playbook_dir}"&& '
+    else: ansible_command = ''
+    assert origin is None
+    config_file = await ainjector(write_config, ansible_config = ansible_config, log = log)
+
+    ansible_command += f'ANSIBLE_CONFIG={config_file.name} ansible-playbook -l"{target_hosts}" {os.path.basename(playbook)}'
+    log_args = {}
+    if log:
+        log_args['_out'] = log
+        log_args['_err_to_out'] = True
+    with config_file:
+        if origin:
+            cmd = origin.ssh(ansible_command,
+                         _bg = True,
+                         _bg_exc = False,
+                         **log_args)
+        else:
+            cmd = sh.sh(
+            '-c', ansible_command,
+            **log_args,
+            _bg = True,
+            _bg_exc = False)
+        try:
+            ansible_exc = None
+            await cmd
+        except (sh.ErrorReturnCode_2, sh.ErrorReturnCode_4) as e:
+            # Remember the exception, preferring it to other
+            # exceptions if we get a parse error on the output
+            ansible_exc = e
+        except Exception as e:
+            if log: log_str = f'; logs in {log}'
+            else: log_str = ""
+            raise AnsibleFailure(f'Failed Running {playbook} on {target_hosts}{log_str}') from e
+    if log and ansible_exc:
+        raise AnsibleFailure(f'Failed running {playbook} on {target_hosts}; logs in {log}') from ansible_exc
+    elif log: return True
+    try:
+        json_out = json.loads(cmd.stdout)
+        result = AnsibleResult(json_out)
+    except  Exception:
+        if ansible_exc: raise ansible_exc from None
+        raise
+    if (not result.success ) and raise_on_failure:
+        raise AnsibleFailure(f'Failed running {playbook} on{target_hosts}', result)
+    return result
+
+__all__ += ['run_playbook']
+
+
+@inject(ainjector = AsyncInjector,
         ssh_key = SshKey)
 async def run_play(hosts, play,
-                   raise_on_error = True,
+                   raise_on_failure = True,
                    gather_facts = False,
-                   *, ssh_key, injector):
+                   *,
+                   log = None,
+                   ssh_key, ainjector):
+    '''
+    Run a single Ansible play, specified as a python dictionary.
+    The typical usage of this function is for cases where code wants to use an Ansible module to access some resource, especially when the results need to be programatically examined.  As an example, this can be used to examine the output of Ansible modules that gather facts.
+
+    **If you are considering loading a YAML file, parsing it, and calling this function, you are almost certainly better served by :func:`run_playbook`.**
+'''
     with tempfile.TemporaryDirectory() as ansible_dir:
-        injector(write_config, ansible_dir, ssh_key = ssh_key)
+        config = AnsibleConfig()
         with open(os.path.join(ansible_dir,
                                "playbook.yml"), "wt") as f:
             if isinstance(play, dict): play = [play]
@@ -42,49 +152,53 @@ async def run_play(hosts, play,
                     f.write(h.ansible_inventory_line()+"\n")
                 except AttributeError:
                     f.write(f'{h.name} ansible_ip={h.ip_address}\n')
-        res = sh.ansible_playbook("playbook.yml",
-i='inventory.txt',
-                                  _bg = True, _bg_exc = False,
-                                  _cwd = ansible_dir)
-        try:
-            ansible_exc = None
-            await res
-        except (sh.ErrorReturnCode_2, sh.ErrorReturnCode_4) as e:
-            # Remember the exception, preferring it to other
-            # exceptions if we get a parse error on the output
-            ansible_exc = e
-        try:
-            json_result = json.loads(res.stdout)
-            result = AnsibleResult(json_result)
-        except Exception:
-            if ansible_exc is not None: raise ansible_exc from None
-            raise
-        if raise_on_error and not result.success:
-            raise AnsibleFailure(f"Ansible Failed running play: {yaml.dump(pb, default_flow_style = False)}", result)
-        return result
-                                  
+        return await ainjector(run_playbook,
+                               hosts,
+                               ansible_dir+"/playbook.yml",
+                               ansible_dir+"/inventory.txt",
+                               ansible_config = config,
+                               origin = None,
+                               raise_on_failure = raise_on_failure,
+                               log = log)
 
-@inject(ssh_key = SshKey)
-def write_config(ansible_dir,
-                 *, ssh_key):
+__all__ += ['run_play']
+
+
+@inject(ssh_key = SshKey,
+        config = ConfigLayout)
+def write_config(
+                 *, ssh_key, log,
+        config, ansible_config):
     private_key = None
     if ssh_key:
         private_key = f"private_key_file = {ssh_key.key_path}"
-    with open(os.path.join(ansible_dir,
-                           "ansible.cfg"), "wt") as f:
-        f.write("[defaults]\n")
-        f.write(f'''\
-stdout_callback = json
+    if not log:
+        stdout_str = "stdout_callback = json"
+    else: stdout_str = ""
+    f =tempfile.NamedTemporaryFile(
+        dir = config.state_dir,
+        encoding = 'utf-8',
+        mode = "wt",
+        prefix = "ansible", suffix = ".cfg")
+    f.write("[defaults]\n")
+    f.write(f'''\
+{stdout_str}
 retry_files_enabled = false
-{private_key}''')
-        
+{private_key}
+
+        [ssh_connection]
+pipelining=True
+''')
+    f.flush()
+    return f
+
 class LocalhostMachine:
     name = "localhost"
     ip_address = "127.0.0.1"
 
     def ansible_inventory_line(self):
         return "localhost ansible_connection=local"
-    
+
 
 localhost_machine = LocalhostMachine()
 
@@ -137,7 +251,3 @@ plays:[{[k for k in self.tasks.keys()]}]"
                 except AttributeError: pass
         res +=">"
         return res
-                    
-
-__all__ = ["localhost_machine", "run_play"]
-
