@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import argparse, asyncio, functools, logging, weakref
+import argparse, asyncio, functools, logging, re, weakref
 
 async def possibly_async(r):
     '''If r is a coroutine, await it.  Otherwise return it.  Used like the
@@ -234,6 +234,12 @@ def carthage_main_run(func, *args, **kwargs):
     finally:
         loop.run_until_complete(shutdown_injector(base_injector))
 
+shell_safe_re = re.compile(r'^[a-zA-Z0-9_./ ]*$')
+def validate_shell_safe(s):
+    if shell_safe_re.search(s): return True
+    return False
+
 __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
            'add_carthage_arguments', 'carthage_main_argparser',
-           'carthage_main_setup', 'carthage_main_run']
+           'carthage_main_setup', 'carthage_main_run',
+           'validate_shell_safe']

@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -35,3 +35,16 @@ async def test_run_failing_play(configured_ainjector):
                                           [{"fail": "msg=foo"}])
 
     
+@async_test
+async def test_ansible_with_log(configured_ainjector):
+    ainjector = configured_ainjector
+    try: os.unlink(state_dir+"/ansible.log")
+    except: pass
+    await ainjector(carthage.ansible.run_play,
+                    [carthage.ansible.localhost_machine],
+                    {'debug': 'msg=barbaz'},
+                    log = state_dir+"/ansible.log")
+    with open(state_dir+"/ansible.log", "rb") as f:
+        log_contents = f.read()
+    assert b'barbaz' in log_contents
+                    
