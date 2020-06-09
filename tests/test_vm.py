@@ -14,6 +14,7 @@ from carthage.config import ConfigLayout
 from carthage.vm import VM
 from carthage.network import NetworkConfig
 from carthage.machine import ssh_origin
+import carthage.ansible
 import gc, posix, os
 
 resource_dir = os.path.dirname(__file__)
@@ -51,4 +52,11 @@ async def test_vm_test(request, ainjector, vm_image):
         await vm.ssh("apt-get -y install python3-pytest")
         await subtest_controller(request, vm, "/carthage/tests/inner_plugin_test.py",
                                  python_path = "/carthage")
+        # We also test ansible here because we already have a VM up and running
+        await ainjector(
+            carthage.ansible.run_playbook,
+            "/carthage/tests/resources/test_playbook.yml",
+            "/carthage/tests/resources/inventory.txt",
+            origin = vm)
+        
         
