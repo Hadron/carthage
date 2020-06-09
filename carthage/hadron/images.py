@@ -97,6 +97,7 @@ class TestDatabase(Container):
             await self.shell("/usr/bin/apt",
                                                "-y", "install", "hadron-inventory-admin",
                                            "hadron-photon-admin",
+                             "hadron-carthage-cli",
                              "resolvconf",
                              "socat",
                              "hadron-ansible",
