@@ -66,15 +66,18 @@ class Injectable:
     @classmethod
     def supplementary_injection_keys(cls, k):
         for c in cls.__mro__:
-            if c is Injectable: continue
+            if c in (Injectable, AsyncInjectable): continue
             if issubclass(c,Injectable) and c != k.target:
                 yield InjectionKey(c)
+                if k.constraints: yield InjectionKey(c, **k.constraints)
+            elif c is k.target and k.constraints:
+                    yield InjectionKey(c, **k.constraints)
 
     @classmethod
     def satisfies_injection_key(cls, k):
         if k == InjectionKey(cls): return True
         if isinstance(k.target, (str, tuple)): return True
-        return k in cls.supplementary_injection_keys(InjectionKey(cls))
+        return k in cls.supplementary_injection_keys(k)
 
 class DependencyProvider:
     __slots__ = ('provider',

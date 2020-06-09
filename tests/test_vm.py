@@ -45,7 +45,7 @@ async def test_vm_config(loop, ainjector, vm_image):
 @async_test
 async def test_vm_test(request, ainjector, vm_image):
     vm = await ainjector(VM, name = "vm_2", image = vm_image)
-    async with vm.machine_running:
+    async with vm.machine_running():
         await vm.ssh_online()
         await ainjector(rsync_git_tree, resource_dir, vm.rsync_path('/carthage'))
         await vm.ssh("apt-get update")
@@ -55,6 +55,7 @@ async def test_vm_test(request, ainjector, vm_image):
         # We also test ansible here because we already have a VM up and running
         await ainjector(
             carthage.ansible.run_playbook,
+            ["localhost"],
             "/carthage/tests/resources/test_playbook.yml",
             "/carthage/tests/resources/inventory.txt",
             origin = vm)

@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import json, os, os.path, tempfile, yaml
+import contextlib, json, os, os.path, tempfile, yaml
 from .dependency_injection import *
 from . import sh, Machine
 from .config import ConfigLayout
@@ -41,6 +41,7 @@ __all__ += ['AnsibleConfig']
 
 @inject(origin = InjectionKey(ansible_origin, optional = True),
         ainjector = AsyncInjector,
+        config = ConfigLayout,
         )
 async def run_playbook(hosts,
                        playbook: str,
@@ -48,8 +49,9 @@ async def run_playbook(hosts,
                        log:str = None,
                        *,
                        raise_on_failure: bool = True,
-                       ansible_config,
+                       ansible_config = AnsibleConfig(),
                        ainjector,
+                       config,
                        origin = None,
                        ):
     '''
@@ -64,64 +66,77 @@ async def run_playbook(hosts,
 :param log: A local path where a log of output and errors should be created or ``None`` to parse the ansible result programatically after ansible completes.  It is not possible to produce human readable output and a result that can be parsed at the same time without writing a custom ansible callback plugin.
 
     '''
-    target_hosts = []
-    for h in hosts:
-        if isinstance(h, str):
-            target_hosts.append(h)
-        else:
-            if hasattr(h, 'ansible_inventory_name'):
-                target_hosts.append(h.ansible_inventory_name)
-            else: target_hosts.append(h.name)
-    list(map(lambda h: validate_shell_safe(h), target_hosts))
-    target_hosts = ":".join(target_hosts)
-    playbook_dir = os.path.dirname(playbook)
-    validate_shell_safe(playbook)
-    if playbook_dir:
-        ansible_command = f'cd "{playbook_dir}"&& '
-    else: ansible_command = ''
-    assert origin is None
-    config_file = await ainjector(write_config, ansible_config = ansible_config, log = log)
-
-    ansible_command += f'ANSIBLE_CONFIG={config_file.name} ansible-playbook -l"{target_hosts}" {os.path.basename(playbook)}'
-    log_args = {}
-    if log:
-        log_args['_out'] = log
-        log_args['_err_to_out'] = True
-    with config_file:
+    def to_inner(s):
+        return config_inner + s[len(config_dir):]
+    assert isinstance(hosts, list), "Hosts needs to be a list of hosts"
+    async with contextlib.AsyncExitStack() as stack:
+        target_hosts = []
+        for h in hosts:
+            if isinstance(h, str):
+                target_hosts.append(h)
+            else:
+                if hasattr(h, 'ansible_inventory_name'):
+                    target_hosts.append(h.ansible_inventory_name)
+                else: target_hosts.append(h.name)
+        list(map(lambda h: validate_shell_safe(h), target_hosts))
+        target_hosts = ":".join(target_hosts)
+        playbook_dir = os.path.dirname(playbook)
+        validate_shell_safe(playbook)
+        if playbook_dir:
+            ansible_command = f'cd "{playbook_dir}"&& '
+        else: ansible_command = ''
         if origin:
-            cmd = origin.ssh(ansible_command,
-                         _bg = True,
-                         _bg_exc = False,
-                         **log_args)
+            config_dir = await stack.enter_async_context(origin.filesystem_access())
+            config_dir += "/run/ansible"
+            os.makedirs(config_dir, exist_ok = True)
+            config_inner = "/run/ansible"
         else:
-            cmd = sh.sh(
-            '-c', ansible_command,
-            **log_args,
-            _bg = True,
-            _bg_exc = False)
+            config_dir = config.state_dir
+            config_inner = config.state_dir
+        config_file = await ainjector(
+                write_config, config_dir,
+                ansible_config = ansible_config, log = log)
+
+        ansible_command += f'ANSIBLE_CONFIG={to_inner(config_file.name)} ansible-playbook -l"{target_hosts}" {os.path.basename(playbook)}'
+        log_args = {}
+        if log:
+            log_args['_out'] = log
+            log_args['_err_to_out'] = True
+        with config_file:
+            if origin:
+                cmd = origin.ssh(ansible_command,
+                                 _bg = True,
+                                 _bg_exc = False,
+                                 **log_args)
+            else:
+                cmd = sh.sh(
+                    '-c', ansible_command,
+                    **log_args,
+                    _bg = True,
+                    _bg_exc = False)
+            try:
+                ansible_exc = None
+                await cmd
+            except (sh.ErrorReturnCode_2, sh.ErrorReturnCode_4) as e:
+                # Remember the exception, preferring it to other
+                # exceptions if we get a parse error on the output
+                ansible_exc = e
+            except Exception as e:
+                if log: log_str = f'; logs in {log}'
+                else: log_str = ""
+                raise AnsibleFailure(f'Failed Running {playbook} on {target_hosts}{log_str}') from e
+        if log and ansible_exc:
+            raise AnsibleFailure(f'Failed running {playbook} on {target_hosts}; logs in {log}') from ansible_exc
+        elif log: return True
         try:
-            ansible_exc = None
-            await cmd
-        except (sh.ErrorReturnCode_2, sh.ErrorReturnCode_4) as e:
-            # Remember the exception, preferring it to other
-            # exceptions if we get a parse error on the output
-            ansible_exc = e
-        except Exception as e:
-            if log: log_str = f'; logs in {log}'
-            else: log_str = ""
-            raise AnsibleFailure(f'Failed Running {playbook} on {target_hosts}{log_str}') from e
-    if log and ansible_exc:
-        raise AnsibleFailure(f'Failed running {playbook} on {target_hosts}; logs in {log}') from ansible_exc
-    elif log: return True
-    try:
-        json_out = json.loads(cmd.stdout)
-        result = AnsibleResult(json_out)
-    except  Exception:
-        if ansible_exc: raise ansible_exc from None
-        raise
-    if (not result.success ) and raise_on_failure:
-        raise AnsibleFailure(f'Failed running {playbook} on{target_hosts}', result)
-    return result
+            json_out = json.loads(cmd.stdout)
+            result = AnsibleResult(json_out)
+        except  Exception:
+            if ansible_exc: raise ansible_exc from None
+            raise
+        if (not result.success ) and raise_on_failure:
+            raise AnsibleFailure(f'Failed running {playbook} on{target_hosts}', result)
+        return result
 
 __all__ += ['run_playbook']
 
@@ -173,10 +188,10 @@ __all__ += ['run_play']
 
 
 @inject(ssh_key = SshKey,
-        config = ConfigLayout)
-def write_config(
+)
+def write_config(config_dir,
                  *, ssh_key, log,
-        config, ansible_config):
+                 ansible_config):
     private_key = None
     if ssh_key:
         private_key = f"private_key_file = {ssh_key.key_path}"
@@ -184,7 +199,7 @@ def write_config(
         stdout_str = "stdout_callback = json"
     else: stdout_str = ""
     f =tempfile.NamedTemporaryFile(
-        dir = config.state_dir,
+        dir = config_dir,
         encoding = 'utf-8',
         mode = "wt",
         prefix = "ansible", suffix = ".cfg")
