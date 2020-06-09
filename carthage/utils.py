@@ -1,4 +1,4 @@
-import argparse, asyncio, functools, logging, re, weakref
+import argparse, asyncio, contextlib, functools, logging, os, re, weakref
 
 async def possibly_async(r):
     '''If r is a coroutine, await it.  Otherwise return it.  Used like the
@@ -231,7 +231,21 @@ def validate_shell_safe(s):
     if shell_safe_re.search(s): return True
     return False
 
-__all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
+@contextlib.contextmanager
+def TemporaryMountPoint(**kwargs):
+    '''
+    Create a tempory directory to be used as a mount point.  The directory name is the value of the context.
+    If the directory is empty, it is deleted when the context is exited.
+
+    The advantage of this function over :class:`tempfile.TemporaryDirectory` for mount points is that if somehow the unmount fails, the mounted filesystem's contents are not deleted.
+'''
+    dir = tempfile.mkdtemp(**kwargs)
+    try:
+        yield dir
+    finally:
+        os.rmdir(dir)
+        
+        __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
            'add_carthage_arguments', 'carthage_main_argparser',
            'carthage_main_setup', 'carthage_main_run',
            'validate_shell_safe']
