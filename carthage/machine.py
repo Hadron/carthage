@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import asyncio, os, os.path
+import asyncio, contextlib, os, os.path
 from .dependency_injection import *
 from .config import ConfigLayout
 from .ssh import SshKey, SshAgent, RsyncPath
@@ -18,11 +18,14 @@ from .setup_tasks import SetupTaskMixin, setup_task
 class MachineRunning:
 
     async def __aenter__(self):
+        if self.machine.running_count <= 0:
+            self.machine.already_running = self.machine.running
         self.machine.with_running_count +=1
         if self.machine.running:
             return
         try:
             await self.machine.start_machine()
+            if self.ssh_online: await self.machine.ssh_online()
             return
 
         except:
@@ -31,13 +34,15 @@ class MachineRunning:
 
     async def __aexit__(self, exc, val, tb):
         self.machine.with_running_count -= 1
-        if self.machine.with_running_count <= 0:
+        if self.machine.with_running_count <= 0 and not self.machine.already_running:
             self.machine_with_running_count = 0
             await self.machine.stop_machine()
 
 
-    def __init__(self, machine):
+    def __init__(self, machine, *,
+                 ssh_online = False):
         self.machine = machine
+        self.ssh_online = ssh_online
 
 ssh_origin = InjectionKey('ssh-origin')
 class SshMixin:
@@ -159,10 +164,15 @@ class Machine(AsyncInjectable, SshMixin):
     def __init__(self, name, **kwargs):
         super().__init__(**kwargs)
         self.name = name
-        self.machine_running = MachineRunning(self)
         self.with_running_count = 0
+        self.already_running = False
         self.injector.add_provider(InjectionKey(Machine), self)
 
+    def machine_running(self, **kwargs):
+        '''Returns a asynchronous context manager; within the context manager, the machine is expected to be running unless :meth:`stop_machine` is explicitly called.
+'''
+        return MachineRunning(self, **kwargs)
+    
 
     @property
     def full_name(self):
@@ -199,6 +209,17 @@ class Machine(AsyncInjectable, SshMixin):
         customization = await self.ainjector(cust_class, apply_to = self)
         meth = getattr(customization, method)
         return await meth()
+
+    @contextlib.asynccontextmanager
+    async def filesystem_access(self):
+        '''
+        An asynchronous context manager that makes the filesystem of the *Machine* available on a local path.
+
+        :returns: Path at which the filesystem can be accessed while in the context.
+
+        '''
+        #Implement with sshfs eventually
+        raise NotImplementedError
     
 @inject_autokwargs( config_layout = ConfigLayout)
 class BaseCustomization(SetupTaskMixin, AsyncInjectable):
@@ -256,7 +277,7 @@ class MachineCustomization(BaseCustomization):
     
     @property
     def customization_context(self):
-        return self.host.machine_running
+        return self.host.machine_running(ssh_online = True)
 
 class ContainerCustomization(BaseCustomization):
 

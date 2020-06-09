@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -99,7 +99,7 @@ class CarthageVm(Vm):
 
     @setup_task("Install Carthage Software")
     async def install_carthage(self):
-        async with self.machine_running:
+        async with self.machine_running():
             await self.ssh_online()
             await self.ssh("apt -y install hadron-carthage python-pyvmomi",
                            _bg = True, _bg_exc = False)

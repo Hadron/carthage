@@ -6,8 +6,8 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import asyncio, logging, os, re, shutil, sys
-from .dependency_injection import inject, AsyncInjectable, InjectionKey, Injector, AsyncInjector
+import asyncio, contextlib, logging, os, re, shutil, sys
+from .dependency_injection import *
 from .image import  SetupTaskMixin, setup_task, SkipSetupTask, BtrfsVolume
 from . import sh, ConfigLayout
 from .utils import memoproperty
@@ -287,3 +287,9 @@ class Container(Machine, SetupTaskMixin):
         env = os.environ.copy()
         env['DEBIAN_FRONTEND'] = 'noninteractive'
         return env
+
+    @contextlib.asynccontextmanager
+    async def filesystem_access(self):
+        async with self.machine_running():
+            yield self.volume.path
+            

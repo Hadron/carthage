@@ -96,7 +96,7 @@ class TestDatabase(Container):
             # And use dhcp from ifupdown rather than NetworkManager so we can get easy access to the nameservers
             f.write('iface eth0 inet dhcp\nauto eth0\niface eth2 inet manual\n')
             
-        async with self.container_running:
+        async with self.machine_running():
             await self.network_online()
             await self.shell("/usr/bin/apt-get", "update",
                              _bg = True, _bg_exc = False,
@@ -158,7 +158,7 @@ class TestDatabase(Container):
     @setup_task('copy-database')
     async def copy_database_from_master(self):
         "Copy the master database.  Run automatically.  Could be run agains if hadroninventoryadmin is locally dropped and recreated"
-        async with self.container_running:
+        async with self.machine_running():
             self.injector.add_provider(ssh_origin, self)
             await self.ssh_online()
             await asyncio.sleep(5)
@@ -180,7 +180,7 @@ class TestDatabase(Container):
     @setup_task('make-update')
     async def make_update(self):
         "Run make update in /hadron-operations; can be repeated as needed"
-        async with self.container_running:
+        async with self.machine_running():
             await self.network_online()
             from .database import fixup_database
             await self.ainjector(fixup_database)
