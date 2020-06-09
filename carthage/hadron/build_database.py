@@ -98,7 +98,7 @@ class ContainerWaiter(Machine, SetupTaskMixin):
         
 
 async def run_ansible_initial_router(machine, database):
-    async with machine.machine_running:
+    async with machine.machine_running():
         await database.ssh_online()
         await machine.ssh_online()
         machine.ssh('ls /proc/sys/net/netfilter')
@@ -125,7 +125,7 @@ class PhotonServerMixin(SetupTaskMixin):
     @setup_task('install-creds')
     @inject(pki = carthage.pki.PkiManager)
     async def install_photon_credentials(self, pki):
-        async with self.machine_running:
+        async with self.machine_running():
             await self.ssh_online()
             self.ssh('mkdir -p /etc/photon ||true')
             self.ssh('cat' '>/etc/photon/photon-credentials.pem',

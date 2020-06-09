@@ -91,7 +91,7 @@ class CarthageVm(Vm):
 
     @setup_task("Install Carthage Software")
     async def install_carthage(self):
-        async with self.machine_running:
+        async with self.machine_running():
             await self.ssh_online()
             await self.ssh("apt -y install hadron-carthage python-pyvmomi",
                            _bg = True, _bg_exc = False)
