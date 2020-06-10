@@ -1,4 +1,4 @@
-import asyncio, contextlib, os, os.path
+import asyncio, contextlib, os, os.path, tempfile
 from .dependency_injection import *
 from .config import ConfigLayout
 from .ssh import SshKey, SshAgent, RsyncPath
@@ -10,7 +10,7 @@ from .setup_tasks import SetupTaskMixin, setup_task
 class MachineRunning:
 
     async def __aenter__(self):
-        if self.machine.running_count <= 0:
+        if self.machine.with_running_count <= 0:
             self.machine.already_running = self.machine.running
         self.machine.with_running_count +=1
         if self.machine.running:
@@ -27,7 +27,7 @@ class MachineRunning:
     async def __aexit__(self, exc, val, tb):
         self.machine.with_running_count -= 1
         if self.machine.with_running_count <= 0 and not self.machine.already_running:
-            self.machine_with_running_count = 0
+            self.machine.with_running_count = 0
             await self.machine.stop_machine()
 
 
@@ -158,6 +158,8 @@ class Machine(AsyncInjectable, SshMixin):
         self.name = name
         self.with_running_count = 0
         self.already_running = False
+        self.sshfs_count = 0
+        self.sshfs_lock = asyncio.Lock()
         self.injector.add_provider(InjectionKey(Machine), self)
 
     def machine_running(self, **kwargs):
@@ -210,9 +212,57 @@ class Machine(AsyncInjectable, SshMixin):
         :returns: Path at which the filesystem can be accessed while in the context.
 
         '''
-        #Implement with sshfs eventually
-        raise NotImplementedError
-    
+        self.sshfs_count += 1
+        try:
+            # Argument for correctness of locking.  The goal of
+            # sshfs_lock is to make sure that two callers are not both
+            # trying to spin up sshfs at the same time.  The lock is
+            # never held when sshfs_count is < 1, so it will not block
+            # when the coroutine that actually starts sshfs acquires
+            # the lock.  Therefore the startup can actually proceed.
+            # It would be equally correct to grab the lock before
+            # incrementing sshfs_count, but more difficult to
+            # implement because the lock must be released by time of
+            # yield so other callers can concurrently access the filesystem.
+            async with self.sshfs_lock:
+                if self.sshfs_count == 1:
+                    self.sshfs_path = tempfile.mkdtemp(dir = self.config_layout.state_dir, prefix=self.name, suffix = "sshfs")
+                    self.sshfs_process = sh.sshfs(
+                        '-o' 'ssh_command='+" ".join(
+                            str(self.ssh).split()[:-1]) ,
+                        f'{self.ip_address}:/',
+                        self.sshfs_path,
+                        '-f',
+                        _bg = True,
+                        _bg_exc = False)
+                    for x in range(5):
+                        await asyncio.sleep(0.4)
+                        if os.path.exists(os.path.join(
+                                self.sshfs_path, "run")):
+                            break
+                        alive, *rest = self.sshfs_process.process.is_alive()
+                        if not alive:
+                            await self.sshfs_process
+                            raise RuntimeError #I'd expect that to have happened from an sh exit error already
+                    else:
+                        raise TimeoutError("sshfs failed to mount")
+            yield self.sshfs_path
+        finally:
+            self.sshfs_count -= 1
+            if self.sshfs_count <= 0:
+                self.sshfs_count = 0
+                try:
+                    self.sshfs_process.process.terminate()
+                except: pass
+                dir = self.sshfs_path
+                self.sshfs_path = None
+                self.sshfs_process = None
+                await asyncio.sleep(0.2)
+                with contextlib.suppress(OSError):
+                    os.rmdir(dir)
+
+                
+                
 @inject_autokwargs( config_layout = ConfigLayout)
 class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
