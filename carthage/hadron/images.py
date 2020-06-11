@@ -1,9 +1,9 @@
-import asyncio, os, os.path, shutil, sys, yaml
+import asyncio, os, os.path, pkg_resources, shutil, sys, yaml
 from ..image import ContainerImage, setup_task, SetupTaskMixin, ImageVolume, ContainerImageMount, SshAuthorizedKeyCustomizations
 from ..container import Container, container_volume, container_image
-from ..dependency_injection import inject, Injector, AsyncInjectable, AsyncInjector, InjectionKey
+from ..dependency_injection import *
 from ..config import ConfigLayout
-from .. import sh
+from .. import sh, ansible
 from ..utils import when_needed
 from ..machine import Machine, ContainerCustomization, customization_task, ssh_origin
 import carthage.ssh
@@ -24,28 +24,28 @@ class HadronImageMixin(ContainerCustomization):
             await self.container_command('/bin/systemctl', 'disable', 'sddm', 'systemd-networkd', 'systemd-resolved', 'systemd-networkd.socket')
             await self.container_command(bind_mount, "/usr/bin/apt", "update")
             await self.container_command(bind_mount, "/usr/bin/apt",
-                                                    "install", "-y", "ansible",
-                                                    "git", "python3-pytest",
-                                                    "python-apt", "haveged"
+                                         "install", "-y", "ansible",
+                                         "git", "python3-pytest",
+                                         "python-apt", "haveged"
             )
             await self.container_command(bind_mount, "/usr/bin/ansible-playbook",
-                                                    "-clocal",
-                                                    "-ehadron_os=ACES",
-                                                    "-ehadron_track=proposed",
-                                                    "-epackagedir=/hadron-operations/ansible/packages",
-                                                    f"-ehadron_release={config.hadron_release}",
-                                                    f"-eaces_apt_server={config.aces_mirror}",
-                                                    "-i/hadron-operations/ansible/localhost-debian.txt",
-                                                    "/hadron-operations/ansible/commands/hadron-packages.yml"
+                                         "-clocal",
+                                         "-ehadron_os=ACES",
+                                         "-ehadron_track=proposed",
+                                         "-epackagedir=/hadron-operations/ansible/packages",
+                                         f"-ehadron_release={config.hadron_release}",
+                                         f"-eaces_apt_server={config.aces_mirror}",
+                                         "-i/hadron-operations/ansible/localhost-debian.txt",
+                                         "/hadron-operations/ansible/commands/hadron-packages.yml"
             )
             await self.container_command("/usr/bin/apt", "update")
             await self.container_command(
                 #'--bind-ro=/bin/true:/usr/sbin/update-grub',
                                                     '/usr/bin/apt', '-y', '--allow-downgrades', 'dist-upgrade')
             await self.container_command('/usr/bin/apt', 'install', '-y',
-                                                    'hadron-container-image', 'python3-photon')
+                                         'hadron-container-image', 'python3-photon')
         finally: pass
-    ssh_authorized_keys = customization_task(SshAuthorizedKeyCustomizations)
+        ssh_authorized_keys = customization_task(SshAuthorizedKeyCustomizations)
 
     @setup_task('hadron-xorg-modes')
     def install_xorg_modes(self):
@@ -78,6 +78,8 @@ class TestDatabase(Container):
         super().__init__(name = name, **kwargs)
         self.injector.add_provider(database_key, self)
 
+    ansible_inventory_name = "database.hadronindustries.com"
+
 
     @setup_task("install-db")
     async def install_packages(self):
@@ -87,7 +89,7 @@ class TestDatabase(Container):
             f.write("iface binternet inet manual\n")
             # And use dhcp from ifupdown rather than NetworkManager so we can get easy access to the nameservers
             f.write('iface eth0 inet dhcp\nauto eth0\niface eth2 inet manual\n')
-            
+
         async with self.machine_running():
             await self.network_online()
             await self.shell("/usr/bin/apt-get", "update",
@@ -95,8 +97,8 @@ class TestDatabase(Container):
                              _out = self._out_cb,
                              _err_to_out = True)
             await self.shell("/usr/bin/apt",
-                                               "-y", "install", "hadron-inventory-admin",
-                                           "hadron-photon-admin",
+                             "-y", "install", "hadron-inventory-admin",
+                             "hadron-photon-admin",
                              "hadron-carthage-cli",
                              "resolvconf",
                              "socat",
@@ -122,8 +124,8 @@ class TestDatabase(Container):
                      _bg = True, _bg_exc = False,
                      _cwd = self.config_layout.hadron_operations)
         process = await self.run_container('/usr/bin/git',
-                                     'clone', '--branch=master',
-                                     '/hadron-operations.bundle')
+                                           'clone', '--branch=master',
+                                           '/hadron-operations.bundle')
         await process
         hadron_ops = os.path.join(self.volume.path, "hadron-operations")
         carthage_vars = os.path.join(hadron_ops, "ansible/inventory/group_vars/all/carthage.yml")
@@ -140,13 +142,13 @@ class TestDatabase(Container):
                 "host_map": {
                     name: [e.ip, e.mac] for name, e in host_map.items()}},
                               default_flow_style = False))
-            
+
         os.unlink(os.path.join(self.volume.path, 'hadron-operations.bundle'))
         with open(os.path.join(self.volume.path,
                                "hadron-operations/ansible/resources/cacerts/carthage.pem"), "wt") as f:
             f.write(pki.ca_cert)
-        os.truncate(os.path.join(hadron_ops, "config/ipsec_mesh.yaml"), 0)
-            
+            os.truncate(os.path.join(hadron_ops, "config/ipsec_mesh.yaml"), 0)
+
     @setup_task('copy-database')
     async def copy_database_from_master(self):
         "Copy the master database.  Run automatically.  Could be run agains if hadroninventoryadmin is locally dropped and recreated"
@@ -159,12 +161,12 @@ class TestDatabase(Container):
                              _bg = True, _bg_exc = False)
             env['PYTHONPATH'] = "/hadron-operations"
             await self.shell( '/usr/bin/python3',
-                         '-mhadron.inventory.config.update',
-                         '--copy=postgresql:///hadroninventoryadmin',
-                         '--copy-users',
-                         _bg = True,
-                         _bg_exc = False,
-                             _out = self._out_cb,
+                              '-mhadron.inventory.config.update',
+                              '--copy=postgresql:///hadroninventoryadmin',
+                              '--copy-users',
+                              _bg = True,
+                              _bg_exc = False,
+                              _out = self._out_cb,
                               _err_to_out = True,
                               _env = env)
 
@@ -178,10 +180,10 @@ class TestDatabase(Container):
             await self.ainjector(fixup_database)
             await self.shell('/bin/sh', '-c',
                              "cd /hadron-operations&&PULL_OPTS='--database postgresql:///hadroninventoryadmin' make update",
-                       _out = self._out_cb,
-                       _err_to_out = True,
-                       _bg = True,
-                       _bg_exc = False)
+                             _out = self._out_cb,
+                             _err_to_out = True,
+                             _bg = True,
+                             _bg_exc = False)
             await self.shell("/bin/sh", "-c",
                              "cd /hadron-operations/ansible&&ansible-playbook -c local commands/test-database.yml",
                              _bg = True, _bg_exc = False,
@@ -190,8 +192,9 @@ class TestDatabase(Container):
 
     async def ansible(self, host_pattern, play,
                       *, log_to = None,
-                      tags = []):
+                      tags = [], args = None):
         extra_args = []
+        if args: extra_args.append(args)
         if tags:
             extra_args.append("--tags="+",".join(tags))
         if log_to is None: log_to = self
@@ -205,7 +208,7 @@ class TestDatabase(Container):
                            _out = log,
                            _bg = True,
                            _bg_exc = False, _err_to_out=True)
-            
+
 
     ip_address = "192.168.101.1"
 
@@ -221,7 +224,7 @@ class HadronVmImage(ImageVolume):
         if 'create_size' not in kwargs:
             kwargs['create_size'] = kwargs['config_layout'].vm_image_size
         super().__init__(name,
-                         **kwargs)
+                             **kwargs)
 
 
 
@@ -235,7 +238,7 @@ class HadronVmImage(ImageVolume):
             ainjector.add_provider(container_volume, mount)
             ainjector.add_provider(container_image, mount)
             container = await ainjector(Container, name = self.name,
-                                    skip_ssh_keygen = True)
+                                        skip_ssh_keygen = True)
             rootdev = mount.mount.rootdev
             loopdev = mount.mount.loopdev
             process = await container.run_container(
@@ -263,7 +266,7 @@ sed -i -e 's:GRUB_CMDLINE_LINUX=.*$:GRUB_CMDLINE_LINUX="random.trust_cpu=on net.
 /usr/sbin/update-grub
 ''')
                     os.chmod(f.fileno(), 0o755)
-                i.chroot("/run.sh")
+                    i.chroot("/run.sh")
             finally:
                 try: os.unlink(os.path.join(i.rootdir, "run.sh"))
                 except FileNotFoundError: pass
@@ -278,16 +281,41 @@ class HadronVaultContainer(Container):
     @setup_task("Bootstrap vault")
     @inject(db = database_key)
     async def bootstrap_vault(self, db):
-        await self.start_machine()
-        await self.ssh_online()
-        await db.ansible(self.name,
-                         "hosts/vault.yml",
-                         log_to = self,
-                         tags = ['bootstrap_vault'])
+        from os.path import join as j
+        def capture(f):
+            if os.path.exists(j(target_path, f)):
+                return False
+            shutil.copyfile(j(source_path, f), j(target_path, f))
+            with open(j(target_path, f), "rt") as f:
+                return f.read()
+
+        async with self.machine_running(ssh_online = True):
+            await db.ssh("mkdir -p /vault_bootstrap",
+                         _bg = True, _bg_exc = True)
+            await db.ansible(self.name,
+                             "hosts/vault.yml",
+                             log_to = self,
+                             args ='-evault_bootstrap_dir=/vault_bootstrap',
+                             tags = ['bootstrap_vault'])
+            async with db.filesystem_access() as db_path, self.filesystem_access() as fs_path:
+                target_path = fs_path
+                source_path = j(db_path, "vault_bootstrap")
+                token = capture("token")
+                if token:
+                    capture("ca.pem")
+                    capture("key.0")
+                    await self.ainjector(
+                        ansible.run_playbook,
+                        [self, db, ansible.localhost_machine],
+                        pkg_resources.resource_filename("carthage.hadron", "resources/vault_config.yml"),
+                        j(db_path, "hadron-operations/ansible/inventory/hosts.txt"),
+                        log = j(self.stamp_path, "ansible.log"),
+origin = ansible.NetworkNamespaceOrigin(db))
+
 
     def start_machine(self):
         return self.start_container("--capability=CAP_IPC_LOCK")
-    
+
 hadron_vault_key = InjectionKey(Machine, host = "vault.hadronindustries.com")
 
 
