@@ -8,8 +8,10 @@ state_dir  = os.path.join(os.path.dirname(__file__), "test_state")
 
 @pytest.fixture()
 def ainjector(ainjector):
+    ainjector = ainjector.claim("test_setup.py")
     config = ainjector.injector(carthage.ConfigLayout)
     config.state_dir = state_dir
+    os.makedirs(state_dir, exist_ok = True)
     yield ainjector
     shutil.rmtree(state_dir, ignore_errors = True)
 
