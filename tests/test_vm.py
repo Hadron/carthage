@@ -47,7 +47,7 @@ async def test_vm_test(request, ainjector, vm_image):
         # We also test ansible here because we already have a VM up and running
         await ainjector(
             carthage.ansible.run_playbook,
-            ["localhost"],
+            ["vm"],
             "/carthage/tests/resources/test_playbook.yml",
             "/carthage/tests/resources/inventory.txt",
             origin = vm)
