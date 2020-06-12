@@ -1,4 +1,4 @@
-- hosts: localhost
+- hosts: vm
   remote_user: root
   tasks:
     - debug: msg="Blah blah blah"
