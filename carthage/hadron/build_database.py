@@ -43,17 +43,13 @@ def provide_networks(injector, session):
 
 container_host = InjectionKey('hadron/container-host')
 
-@inject(injector = Injector,
+@inject_autokwargs(
         host = container_host)
 class ContainerWaiter(Machine, SetupTaskMixin):
 
-    def __init__(self, name, *, injector, host):
-        self.host = host
-        config_layout = injector(ConfigLayout)
-        super().__init__(name, injector = injector,
-                         config_layout = config_layout)
-
-        self.stamp_path = os.path.join(config_layout.image_dir, 'containers', self.name)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.stamp_path = os.path.join(self.config_layout.image_dir, 'containers', self.name)
         os.makedirs(self.stamp_path, exist_ok = True)
 
     async def async_ready(self):
