@@ -200,6 +200,10 @@ class ConfigAccessor:
                 d[k] = d_subsection
         return d
 
+    def __getstate__(self):
+        return self._dictify(True)
+
+    
     def __repr__(self):
         return f'<{self.__class__.__name__} overrides: {self._dictify()}>'
 
