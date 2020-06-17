@@ -45,7 +45,8 @@ class HadronImageMixin(ContainerCustomization):
             await self.container_command('/usr/bin/apt', 'install', '-y',
                                          'hadron-container-image', 'python3-photon')
         finally: pass
-        ssh_authorized_keys = customization_task(SshAuthorizedKeyCustomizations)
+
+    ssh_authorized_keys = customization_task(SshAuthorizedKeyCustomizations)
 
     @setup_task('hadron-xorg-modes')
     def install_xorg_modes(self):
@@ -128,15 +129,11 @@ class TestDatabase(Container):
                                            '/hadron-operations.bundle')
         await process
         hadron_ops = os.path.join(self.volume.path, "hadron-operations")
-        carthage_vars = os.path.join(hadron_ops, "ansible/inventory/group_vars/all/carthage.yml")
-        os.makedirs(os.path.dirname(carthage_vars), exist_ok = True)
-        with open(carthage_vars, "wt") as f:
-            f.write("#Carthage Automation Key\n")
-            f.write("carthage_key: "+ssh_key.pubkey_contents)
         with open(os.path.join(
                 hadron_ops,
                 "config/test.yml"), "wt") as f:
             f.write(yaml.dump({
+                'carthage_key': ssh_key.pubkey_contents,
                 "aces_apt_server": str(config.aces_mirror),
                 "expose_routes": config.expose_routes + [aces_mirror_address],
                 "host_map": {
@@ -154,7 +151,7 @@ class TestDatabase(Container):
         "Copy the master database.  Run automatically.  Could be run agains if hadroninventoryadmin is locally dropped and recreated"
         async with self.machine_running():
             self.injector.add_provider(ssh_origin, self)
-            await self.ssh_online()
+            await self.network_online()
             await asyncio.sleep(5)
             env = os.environ
             await self.shell("/bin/touch", "/hadron-operations/config/no_vault",
@@ -266,7 +263,8 @@ sed -i -e 's:GRUB_CMDLINE_LINUX=.*$:GRUB_CMDLINE_LINUX="random.trust_cpu=on net.
 /usr/sbin/update-grub
 ''')
                     os.chmod(f.fileno(), 0o755)
-                    i.chroot("/run.sh")
+
+                i.chroot("/run.sh")
             finally:
                 try: os.unlink(os.path.join(i.rootdir, "run.sh"))
                 except FileNotFoundError: pass
