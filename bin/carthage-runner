@@ -51,7 +51,7 @@ async def queue_worker():
         
 async def run():
     container, pg = await ainjector(build_database.provide_world)
-    async with container.container_running:
+    async with container.container_running():
         try:
             await load_layout(args.layout)
             if args.make_update:
