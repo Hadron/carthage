@@ -1,6 +1,7 @@
-import contextlib, json, os, os.path, tempfile, yaml
+import contextlib, dataclasses, json, os, os.path, tempfile, yaml
 from .dependency_injection import *
 from . import sh, Machine
+from .container import Container
 from .config import ConfigLayout
 from .ssh import SshKey
 from .utils import validate_shell_safe
@@ -21,7 +22,7 @@ class AnsibleFailure(RuntimeError):
 
 __all__ += ['AnsibleFailure']
 
-ansible_origin = InjectionKey(Machine, role="ansible/origin")
+ansible_origin = InjectionKey("ansible/origin")
 
 __all__ += ['ansible_origin']
 
@@ -30,6 +31,20 @@ class AnsibleConfig:
 '''
     pass
 __all__ += ['AnsibleConfig']
+
+@dataclasses.dataclass
+class NetworkNamespaceOrigin:
+    '''An *origin* to be passed into :func:`.run_playbook` that indicates
+    that we wish to run *Ansible* using the network namespace to which
+    a :class:`.Container` belongs.  The container could be used
+    directly, but in that case *run_playbook* will ssh to the
+    container, effectively using both the network and filesystem
+    namespace.  In contrast, with this class, the filesystem namespace
+    in which *Carthage* runs will be used.
+    '''
+    namespace: Container
+
+__all__ += ["NetworkNamespaceOrigin"]
 
 @inject(origin = InjectionKey(ansible_origin, optional = True),
         ainjector = AsyncInjector,
@@ -46,6 +61,7 @@ async def run_playbook(hosts,
                        config,
                        origin = None,
                        ):
+
     '''
     Run an ansible playbook against a set of hosts.  If *origin* is ``None``, then ``ansible-playbook`` is run locally, otherwise it is run via ``ssh`` to ``origin``.
     A new ansible configuration is created for each run of ansible.
@@ -77,7 +93,7 @@ async def run_playbook(hosts,
         if playbook_dir:
             ansible_command = f'cd "{playbook_dir}"&& '
         else: ansible_command = ''
-        if origin:
+        if origin and not isinstance(origin, NetworkNamespaceOrigin):
             config_dir = await stack.enter_async_context(origin.filesystem_access())
             config_dir += "/run/ansible"
             os.makedirs(config_dir, exist_ok = True)
@@ -85,17 +101,27 @@ async def run_playbook(hosts,
         else:
             config_dir = config.state_dir
             config_inner = config.state_dir
-        config_file = await ainjector(
+        with await ainjector(
                 write_config, config_dir,
-                ansible_config = ansible_config, log = log)
+                [inventory],
+                ansible_config = ansible_config, log = log, origin = origin) as config_file:
 
-        ansible_command += f'ANSIBLE_CONFIG={to_inner(config_file.name)} ansible-playbook -l"{target_hosts}" {os.path.basename(playbook)}'
-        log_args = {}
-        if log:
-            log_args['_out'] = log
-            log_args['_err_to_out'] = True
-        with config_file:
-            if origin:
+            ansible_command += f'ANSIBLE_CONFIG={to_inner(config_file)} ansible-playbook -l"{target_hosts}" {os.path.basename(playbook)}'
+            log_args = {}
+            if log:
+                log_args['_out'] = log
+                log_args['_err_to_out'] = True
+
+            if origin and isinstance(origin, NetworkNamespaceOrigin):
+                await stack.enter_async_context(origin.namespace.machine_running(ssh_online = True))
+                cmd = sh.nsenter(
+                    "-t"+origin.namespace.container_leader,
+                    "-n", "sh",
+                    '-c', ansible_command,
+                    **log_args,
+                    _bg = True,
+                    _bg_exc = False)
+            elif origin                :
                 cmd = origin.ssh(ansible_command,
                                  _bg = True,
                                  _bg_exc = False,
@@ -180,9 +206,11 @@ __all__ += ['run_play']
 
 
 @inject(ssh_key = SshKey,
-)
-def write_config(config_dir,
+        config = ConfigLayout)
+@contextlib.contextmanager
+def write_config(config_dir, inventory,
                  *, ssh_key, log,
+                 config, origin,
                  ansible_config):
     private_key = None
     if ssh_key:
@@ -190,22 +218,47 @@ def write_config(config_dir,
     if not log:
         stdout_str = "stdout_callback = json"
     else: stdout_str = ""
-    f =tempfile.NamedTemporaryFile(
+    with tempfile.TemporaryDirectory(
         dir = config_dir,
-        encoding = 'utf-8',
-        mode = "wt",
-        prefix = "ansible", suffix = ".cfg")
-    f.write("[defaults]\n")
-    f.write(f'''\
+        prefix = "ansible") as dir, \
+        open(dir+"/ansible.cfg", "wt") as f:
+        f.write("[defaults]\n")
+        f.write(f'''\
 {stdout_str}
 retry_files_enabled = false
 {private_key}
 
-        [ssh_connection]
+''')
+        if origin is None or isinstance(origin, NetworkNamespaceOrigin):
+            os.makedirs(dir+"/inventory/group_vars")
+            with open(dir + "/inventory/hosts.ini", "wt") as hosts_file:
+                # This may need to be more generalized as Carthage core gains the ability to construct nontrivial Ansible inventory.
+                # Another concern is that the way Ansible uses hosts, groups and variables is conceptually similar to how Carthage uses injectors.  It's likely that we want a way to reference more injection keys as dependencies for a play than just  config variables, and to access attributes of those dependencies.
+# If those mechanisms become available, we may want to revisit this.
+                #This hosts file is empty and only present so the inventory source is valid
+                hosts_file.write("[all]\n")
+            with open(dir + "/inventory/group_vars/all.yml", "wt") as config_yaml:
+                config_yaml.write(yaml.dump(
+                    {'config': config.__getstate__()},
+                    default_flow_style = False))
+            inventory = [dir + "/inventory/hosts.ini"] + inventory
+        f.write(f'inventory = {",".join(inventory)}')
+
+        #ssh section
+        f.write('''
+[ssh_connection]
 pipelining=True
 ''')
-    f.flush()
-    return f
+        if origin is None or isinstance(origin, NetworkNamespaceOrigin):
+            f.write(f'''\
+ssh_args = -o ControlMaster=auto -o ControlPersist=60s -oUserKnownHostsFile={config.state_dir}/ssh_known_hosts
+''')
+
+        f.flush()
+        yield dir+"/ansible.cfg"
+        
+
+
 
 class LocalhostMachine:
     name = "localhost"
