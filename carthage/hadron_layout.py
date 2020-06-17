@@ -54,7 +54,11 @@ hadron_host_map = {
     'vault.hadronindustries.com': HostMapEntry(
         mac = "00:50:56:97:3e:be",
         ip = '192.168.103.2'),
-    }
+    'database.hadronindustries.com':
+        # If this mapping gets used for anything but ansible_host, that will be problematic
+        # But that should not be the case without a MAC
+        HostMapEntry(ip = "127.0.0.1"),
+}
 
 hadron_vault_container = when_needed( HadronVaultContainer,
                                       network_config = services_vlan_config,
