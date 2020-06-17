@@ -176,6 +176,7 @@ class ConfigAccessor:
         self._injector.replace_provider(config_key(self._prefix+k), v)
 
     def _dictify(self, include_defaults = False):
+        from .types import ConfigBool
         d = {}
         for k, schema_item in self._schema.items():
             def_v = schema_item.default
@@ -184,6 +185,22 @@ class ConfigAccessor:
             except ConfigResolutionFailed:
                 v = "<resolution failed>"
             if include_defaults or (v != def_v) :
+                for t in (float, int, str):
+                    # bool is an int but we want to handle that below
+                    if isinstance(v,t) and not isinstance(v, (bool, ConfigBool)):
+                        v = t(v) #Remove any ConfigValue class
+                        break
+                else:
+                    if isinstance(v,ConfigBool):
+                        v = bool(v)
+                    elif isinstance(v, (tuple, list)):
+                        v = list(v)
+                    elif v is None or isinstance(v, bool):
+                        #just fine as is
+                        pass
+                    else:
+                        raise TypeError( f'{v} is a {type(v)} which will not work so well saved to YAML')
+                    
                 d[k] = v
 
         for k in ConfigSchema.subsections(self._prefix):
