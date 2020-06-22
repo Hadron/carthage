@@ -3,7 +3,6 @@ import atexit
 
 import carthage.config
 import carthage.dependency_injection
-import carthage.pki
 
 __all__ = []
 
@@ -24,6 +23,7 @@ __all__ += [ 'Network', 'NetworkConfig' ]
 
 from .machine import Machine
 import carthage.ssh # ssh import must come after machine
+import carthage.pki
 
 
 from .files import rsync_git_tree

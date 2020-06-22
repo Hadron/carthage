@@ -29,7 +29,7 @@
           ExecStart=/root/unseal.sh
 
           [Install]
-          WantedBy=multiuser.target
+          WantedBy=multi-user.target
 
     - name: Enable unseal service
       systemd: name=unseal.service enabled=yes
@@ -43,6 +43,15 @@
   tasks:
     - name: Enable root PKI
       command: carthage-vault-tool --ca /vault_bootstrap/ca.pem --vault-config /hadron-operations/ansible/resources/vault/hadron-root.yml
+    - name: Disable capability on Vault
+      command: setcap -r /usr/lib/vault/vault
+      ignore_errors: true
+    - name: Login to Vault
+      command: vault login -
+      environment:
+        VAULT_SKIP_VERIFY: yes
+      args:
+        stdin: '{{hostvars["vault.hadronindustries.com"].vault_token.stdout}}'
 
 - hosts: localhost
   remote_user: root

@@ -1,9 +1,11 @@
+import contextlib
 import os, os.path
 from .dependency_injection import *
 from . import sh
 from .config import ConfigLayout
 from .utils import memoproperty
-
+from . import machine
+from .setup_tasks import *
 @inject(config_layout = ConfigLayout)
 class PkiManager(Injectable):
 
@@ -35,3 +37,34 @@ class PkiManager(Injectable):
         with open(self.pki_dir+'/ca.pem','rt') as f:
             return f.read()
         
+@inject_autokwargs(
+    pki = PkiManager)
+class PkiCustomizations(machine.BaseCustomization):
+
+    @setup_task("Install Carthage Root Cert")
+    async def install_carthage_root_cert(self):
+        from .container import Container
+        host = self.host
+        async with contextlib.AsyncExitStack() as stack:
+            if isinstance(host,Container) and not host.running:
+                path = host.volume.path
+                run_on_host = host.container_command
+            else:
+                path = await stack.enter_async_context(host.filesystem_access())
+                run_on_host = host.ssh
+            carthage_cert_dir = os.path.join(
+                path,
+                "usr/share/ca-certificates/carthage")
+            os.makedirs(carthage_cert_dir, exist_ok = True)
+            with open(os.path.join(
+                    carthage_cert_dir, "carthage.crt"),
+                      "wt") as f:
+                f.write(self.pki.ca_cert)
+            with open(os.path.join(
+                    path, "etc/ca-certificates.conf"),
+                      "ta") as f:
+                f.write("carthage/carthage.crt\n")
+            await run_on_host("/usr/sbin/update-ca-certificates")
+
+
+__all__ = ["PkiManager", "PkiCustomizations"]
