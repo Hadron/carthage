@@ -11,7 +11,7 @@ from ..image import ContainerImage, setup_task, SetupTaskMixin, ImageVolume, Con
 from ..container import Container, container_volume, container_image
 from ..dependency_injection import *
 from ..config import ConfigLayout
-from .. import sh, ansible
+from .. import sh, ansible, pki
 from ..utils import when_needed
 from ..machine import Machine, ContainerCustomization, customization_task, ssh_origin
 import carthage.ssh
@@ -34,6 +34,7 @@ class HadronImageMixin(ContainerCustomization):
             await self.container_command(bind_mount, "/usr/bin/apt",
                                          "install", "-y", "ansible",
                                          "git", "python3-pytest",
+                                         "ca-certificates",
                                          "python-apt", "haveged"
             )
             await self.container_command(bind_mount, "/usr/bin/ansible-playbook",
@@ -56,6 +57,7 @@ class HadronImageMixin(ContainerCustomization):
 
     ssh_authorized_keys = customization_task(SshAuthorizedKeyCustomizations)
 
+    pki_customizations = customization_task(pki.PkiCustomizations)
     @setup_task('hadron-xorg-modes')
     def install_xorg_modes(self):
         os.makedirs(os.path.join(self.path,
