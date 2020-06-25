@@ -125,10 +125,6 @@ class ContainerImage(BtrfsVolume):
         try: os.rename(os.path.join(self.path, "sbin/init.dist"),
                   os.path.join(self.path, "sbin/init"))
         except FileNotFoundError: pass
-        with open(os.path.join(self.path,
-                               "etc/udev/rules.d/80-net-setup-link.rules"), "wb") as f:
-            f.write(
-                pkg_resources.resource_stream("carthage", "resources/80-net-setup-link.rules").read())
 
 
 
