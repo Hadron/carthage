@@ -260,6 +260,16 @@ class HadronVmImage(ImageVolume):
             if mount is not None:             mount.close()
 
     hadron_customizations = customization_task(HadronImageMixin)
+
+    @setup_task("Install udev rules for bridges")
+    def install_udev_rules(self):
+        from hadron.allspark.imagelib import image_mounted
+        with image_mounted(self.path) as i:
+            with open(os.path.join(i.rootdir,
+                               "etc/udev/rules.d/80-net-setup-link.rules"), "wb") as f:
+                f.write(
+                    pkg_resources.resource_stream("carthage", "resources/80-net-setup-link.rules").read())
+        
     @setup_task("Run update-grub")
     async def run_update_grub(self):
         from hadron.allspark.imagelib import image_mounted
