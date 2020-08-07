@@ -1,4 +1,5 @@
 import asyncio, time
+import pyVim.task
 
 def wait_for_task(task):
     loop = asyncio.get_event_loop()
@@ -10,8 +11,7 @@ def wait_for_task(task):
     '''
     # We use a separate thread to avoid blocking the async loop on http round trips to look up task state
     def callback():
-        while task.info.state not in ('success', 'error'):
-            time.sleep(0.2)
+        pyVim.task.WaitForTask(task)
         if task.info.state == 'error':
             class TaskError(type(task.info.error)):
                 def __str__(self):
