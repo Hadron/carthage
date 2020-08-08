@@ -308,7 +308,7 @@ class VmTemplate(Vm):
         except Exception: pass
 
 class BasicConfig(ConfigSpecStage, stage_for = Vm, order = 20,
-                  mode = ('create', 'reconfig')):
+                  mode = ('create', 'reconfig', 'clone')):
 
     def apply_config(self, config):
         obj = self.obj
