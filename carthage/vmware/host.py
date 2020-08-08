@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -32,7 +32,7 @@ class VmwareHost(VmwareNamedObject, kind='host'):
         super().__init__(**kwargs)
 
     def _find_parent(self):
-        if isinstance(self.mob.parent, vim.ClusterComputeResource):
+        if (self.mob is not None) and isinstance(self.mob.parent, vim.ClusterComputeResource):
             self.parent_type = VmwareCluster
         else: self.parent_type = HostFolder
         return super()._find_parent()
