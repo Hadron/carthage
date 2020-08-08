@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -97,7 +97,7 @@ class DistributedPortgroup(VmwareNetwork):
         learning = vim.dvs.VmwareDistributedVirtualSwitch.MacLearningPolicy()
         learning.enabled = True
         learning.allowUnicastFlooding = True
-        learning.limit = 64
+        learning.limit = 512
         learning.limitPolicy = "DROP"
         default.macManagementPolicy.macLearningPolicy = learning
         if self.network.vlan_id:

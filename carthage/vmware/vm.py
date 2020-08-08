@@ -177,7 +177,7 @@ class Vm(Machine, VmwareMachineObject):
                 c.device.key = cur
                 cur = cur - 1
         return config
-    
+
     async def do_create(self):
         try:
             cluster = await self.ainjector(VmwareCluster)
