@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -142,6 +142,7 @@ class DistributedPortgroup(VmwareNetwork):
         cs.autoExpand = True
         cs.type = "earlyBinding"
         cs.policy = vim.dvs.VmwareDistributedVirtualSwitch.VMwarePortgroupPolicy()
+        cs.policy.trafficFilterOverrideAllowed = True
         cs.policy.macManagementOverrideAllowed = True
         default  = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
         default.macManagementPolicy = vim.dvs.VmwareDistributedVirtualSwitch.MacManagementPolicy()
