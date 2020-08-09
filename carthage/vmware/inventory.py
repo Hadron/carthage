@@ -282,6 +282,7 @@ class VmwareNamedObject(VmwareManagedObject):
 
     def __init__(self, name=None, *args, **kwargs):
         parent = kwargs.get('parent', None)
+        if name is None: raise ValueError(f'must specify name')
         if parent and name.startswith('/'):
             raise TypeError("Cannot specify both a parent and a name containing a full path")
         elif parent and '/' in name:
