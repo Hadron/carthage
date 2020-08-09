@@ -105,6 +105,7 @@ class VmwareMachineObject(VmwareSpecifiedObject):
 @inject(
     **VmwareSpecifiedObject.injects,
     storage = VmwareDataStore,
+    cluster = VmwareCluster,
     parent = InjectionKey(VmFolder, optional = True),
     network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
     # We add a template VM to the dependencies later avoiding a forward reference
@@ -119,14 +120,14 @@ class Vm(Machine, VmwareMachineObject):
 
     def __init__(self, name, template,
                  guest_id = "ubuntu64Guest",
-                 *args, storage, network_config = None,
+                 *args, storage, cluster, network_config = None,
                  console_needed = True, **kwargs):
         kwargs.setdefault('readonly', False)
         VmwareNamedObject.__init__(self, name = name, **kwargs)
         Machine.__init__(self, name = name, config_layout = kwargs['config_layout'],
                          injector = kwargs['injector'])
         
-
+        self.cluster = cluster
         self.storage = storage
         self.running = False
         self.folder = self.parent
@@ -180,14 +181,13 @@ class Vm(Machine, VmwareMachineObject):
 
     async def do_create(self):
         try:
-            cluster = await self.ainjector(VmwareCluster)
             if self.template:
                 spec = vim.vm.CloneSpec()
                 locspec = vim.vm.RelocateSpec()
                 spec.location = locspec
                 spec.config = await self.build_config('clone', oconfig = self.template.mob.config)
                 locspec.datastore = self.storage.mob
-                locspec.pool = cluster.mob.resourcePool
+                locspec.pool = self.cluster.mob.resourcePool
                 if self.template_snapshot:
                     for s in self.template.all_snapshots():
                         if s.name == self.template_snapshot:
@@ -202,7 +202,7 @@ class Vm(Machine, VmwareMachineObject):
                     )
             else:
                 config = await self.build_config('create')
-                res = self.parent.mob.CreateVm(config, cluster.mob.resourcePool)
+                res = self.parent.mob.CreateVm(config, self.cluster.mob.resourcePool)
             await carthage.vmware.utils.wait_for_task(res)
             
         except carthage.ansible.AnsibleFailure as e:
