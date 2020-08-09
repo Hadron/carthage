@@ -59,9 +59,14 @@ class Injectable:
                 except KeyError: pass
                 
         if autokwargs:
-            raise TypeError( f'The following dependencies were not specified: {autokwargs}')
-        
-        super().__init__(*args, **kwargs)
+            raise TypeError(f'The following dependencies were not specified: {autokwargs}')
+
+        try:
+            super().__init__(*args, **kwargs)
+        except TypeError as t:
+            if 'object.__init__()' in str(t):
+                raise TypeError(f'The following extra arguments were specified: {list(kwargs.keys())}')
+            raise
 
     @classmethod
     def supplementary_injection_keys(cls, k):
