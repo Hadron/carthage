@@ -367,8 +367,9 @@ class DiskSpec(DeviceSpecStage,
             d.backing.thinProvisioned = True
             changed = True
 
-        if self.bag.mode == "clone":
-            return d if changed else True
+        if False:
+            if self.bag.mode == "clone":
+                return d if changed else True
             
         if d.capacityInBytes < self.obj.disk_size:
             if (self.bag.mode == "reconfig" and d.backing.parent) or ( self.bag.mode == "clone" and self.obj.template_snapshot):
