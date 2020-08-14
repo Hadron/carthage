@@ -91,7 +91,7 @@ class DvSwitch(VmwareSpecifiedObject):
         config.name = self.name
         config.uplinkPortPolicy = vim.DistributedVirtualSwitch.NameArrayUplinkPortPolicy()
         config.uplinkPortPolicy.uplinkPortName = [ 'uplink0', 'uplink1' ]
-        config.maxPorts = 2000
+        config.maxPorts = 8000
         config.host = hostconfigs
 
         create = vim.DistributedVirtualSwitch.CreateSpec()
