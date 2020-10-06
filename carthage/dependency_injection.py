@@ -172,7 +172,7 @@ class Injector(Injectable):
         :param replace: If True, an existing provider is being updated.  :meth:`replace_provider` is a convenience function for calling :meth:`add_provider` with *replace* set to True.  Replacing providers may lead to inconsistent results if the provider has already been injected to fill a dependency in a constructed object.
 
 '''
-        if p is None:
+        if p is None and not isinstance(k, InjectionKey):
             p,k = k,p #swap; we construct the key later
 
         if k is None:

@@ -322,3 +322,14 @@ def test_injection_key_copy():
     assert i2.optional
     assert i2 == i1
     assert i2 is not i1
+
+
+def test_none_kwargs():
+    class foo(dependency_injection.Injectable): pass
+    injector = dependency_injection.Injector()
+    injector.add_provider(foo)
+    @inject(i = foo)
+    def isinst(i): return isinstance(i, foo)
+    assert injector(isinst) is True
+    assert injector(isinst, i = None) is False
+    
