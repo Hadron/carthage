@@ -14,7 +14,7 @@ _task_order = 0
 def _inc_task_order():
     global _task_order
     t = _task_order
-    _task_order += 1
+    _task_order += 100
     return t
 
 @dataclasses.dataclass
@@ -192,17 +192,33 @@ class TaskMethod:
 
     
     
-def setup_task(description):
+def setup_task(description, *,
+               order = None,
+               before = None):
     '''Mark a method as a setup task.  Describe the task for logging.  Must be in a class that is a subclass of
-    SetupTaskMixin.  Usage:
+    SetupTaskMixin.  Usage::
 
         @setup_task("unpack"
         async def unpack(self): ...
+
+    :param order: Overrides the order in which tasks are run; an integer; lower numbered tasks are run first, higher numbered tasks are run later.  It is recommended that task ordering be a total ordering, but this is not a requirement.  It is an error if both *order* and *before* are set.
+
+    :param before: Run this task before the task referenced in *before*.
+
     '''
+    global _task_order
+    if order and before:
+        raise TypeError('Order and before cannot both be specified')
+    if before:
+        order = before.order-1
+    if order and order > _task_order:
+        _task_order = order
+        _inc_task_order()
+
     def wrap(fn):
-        global _task_order
-        t = TaskWrapper(func = fn, description = description, order = _task_order)
-        _task_order += 1
+        kws = {}
+        if order: kws['order'] = order
+        t = TaskWrapper(func = fn, description = description, **kws)
         return t
     return wrap
 

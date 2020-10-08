@@ -111,3 +111,28 @@ async def test_failure_forces_rerun(ainjector):
     await ainjector(c)
     assert called == 3
     
+@async_test
+async def test_order_override(ainjector):
+    two_called = False
+    class c (Stampable):
+        @setup_task("one")
+        def one(self): pass
+        
+        @setup_task("foo", order = 9200)
+        def two(self):
+            nonlocal two_called
+            two_called = True
+
+        @setup_task("three")
+        def three(self):
+            assert two_called is True
+
+        @setup_task("before_two", before = two)
+        def before_two(self):
+            assert two_called is False
+
+    assert c.one.order < 9200
+    assert c.before_two.order < c.two.order
+    assert c.three.order > c.two.order
+    await ainjector(c)
+    
