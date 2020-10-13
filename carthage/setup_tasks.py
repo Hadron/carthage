@@ -9,8 +9,9 @@
 from __future__ import annotations
 import asyncio, dataclasses, datetime, logging, os, os.path, time, typing, sys, weakref
 import carthage
-from carthage.dependency_injection import AsyncInjector
+from carthage.dependency_injection import AsyncInjector, inject
 from carthage.config import ConfigLayout
+from carthage.utils import memoproperty
 import collections.abc
 
 __all__ = [ 'logger', 'TaskWrapper', 'TaskMethod', 'setup_task', 'SkipSetupTask', 'SetupTaskMixin' ]
@@ -35,11 +36,11 @@ class TaskWrapper:
     invalidator_func = None
     check_completed_func = None
 
-    @property
+    @memoproperty
     def stamp(self):
         return self.func.__name__
 
-    def __set_name(self, owner, name):
+    def __set_name__(self, owner, name):
         self.stamp = name
     def __get__(self, instance, owner):
         if instance is None: return self
@@ -91,8 +92,9 @@ class TaskWrapper:
     def __wraps__(self):
         return self.func
 
-    async def should_run_task(self, obj: SetupTaskMixin, ainjector:AsyncInjector,
-                              dependency_last_run: float):
+    async def should_run_task(self, obj: SetupTaskMixin, 
+                              dependency_last_run: float = None,
+                              *, ainjector:AsyncInjector):
 
 
         ''' 
@@ -259,7 +261,7 @@ class SetupTaskMixin:
         dry_run = config.tasks.dry_run
         dependency_last_run = 0.0
         for t in self.setup_tasks:
-            should_run, dependency_last_run = await t.should_run_task(self, ainjector, dependency_last_run)
+            should_run, dependency_last_run = await t.should_run_task(self,  dependency_last_run, ainjector = ainjector)
             if should_run:
                 try:
                     if (not context_entered) and context is not None:
@@ -294,8 +296,8 @@ class SetupTaskMixin:
 
     async def async_ready(self):
         '''
-This may need to be overridden, but is provided as a default
-'''
+        This may need to be overridden, but is provided as a default
+        '''
         await self.run_setup_tasks()
         return self
 
@@ -330,7 +332,45 @@ This may need to be overridden, but is provided as a default
         try:
             return self.logger
         except AttributeError: return logger
-    
+        
 
 def _iso_time(t):
     return datetime.datetime.fromtimestamp(t).isoformat()
+
+class cross_object_dependency(TaskWrapper):
+
+    '''
+    Usage::
+
+        # in a client machine's class
+        fileserver_dependency = cross_object_dependency(FileServer.update_files, 'fileserver')
+
+    :param task: a :class:`TaskWrapper`, typically associated with another class.
+
+    :param relationship: The string name of a relationship such that calling the *relationship* method on an instance containing this dependency will yield the instance containing *task* that we want to depend on.
+
+    '''
+
+    dependent_task: TaskWrapper
+    relationship: str
+
+    def __init__(self, task, relationship, **kwargs):
+        super().__init__(func = lambda self: None,
+                         description = f'Dependency on `{task.description}\' task of {relationship}',
+                         **kwargs)
+        self.dependent_task = task
+        self.relationship = relationship
+
+    @inject(ainjector = AsyncInjector)
+    async def check_completed_func(self, instance, ainjector):
+        task = self.dependent_task
+        should_run, last_run  = await task.should_run_task( getattr(instance, self.relationship), ainjector = ainjector)
+        # We don't care about whether the task would run again, only when it last run.
+        if last_run >0.0: return last_run
+        #We have no last_run info so we don't know that we need to trigger a re-run
+        return True
+
+
+    def __repr__(self):
+        return f'<Depend on {self.dependent_task.description} task of {self.relationship}>'
+    
