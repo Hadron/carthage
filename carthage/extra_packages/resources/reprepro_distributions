@@ -1,0 +1,4 @@
+Codename: carthage_extra
+Suite: carthage_extra
+Architectures: ${config.extra_packages.architectures}
+Components: ${config.extra_packages.components}
