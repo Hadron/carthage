@@ -275,11 +275,8 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
         # We do not run setup tasks on construction.
         return self
 
-    @property
-    def customization_context(self):
-        '''Can be overridden; a context manager in which customization tasks should be run
-'''
-        pass
+    #:Can be overridden; a context manager in which customization tasks should be run
+    customization_context = None
 
     @property
     def stamp_path(self):
@@ -291,7 +288,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
         '''
         last_run = 0.0
         for t in self.setup_tasks:
-            run_task, last_run = await t.should_run_task(self, self.ainjector, last_run)
+            run_task, last_run = await t.should_run_task(self,  last_run, ainjector = self.ainjector)
             if run_task:
                 return False #We're a check_completed function not a should_run function
         return last_run
@@ -302,6 +299,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
     def __getattr__(self, a):
         if a in ('ssh', 'ip_address', 'start_machine', 'stop_machine',
+                 "filesystem_access",
                  'name', 'full_name',
                  'apply_customization'):
             return getattr(self.host, a)
@@ -342,8 +340,35 @@ class ContainerCustomization(BaseCustomization):
         else: return super().__getattr__(a)
         
 
+class FilesystemCustomization(BaseCustomization):
+
+    '''
+    A Customization class for interacting with the filesystem either of a :class:`carthage.container.Container`, :class:`ImageVolume` or :class:`Machine`.  If possible (for containers and image volumes), do not actually boot the machine.
+'''
+
+    def __init__(self, apply_to, **kwargs):
+        from .container import Container
+        if isinstance(apply_to, Container):
+            self.path = apply_to.volume.path
+            run_command = apply_to.container_command
+        else:
+            self.customization_context = self._machine_context()
+            run_command = apply_to.ssh
+        #: Run a command on the given filesystem, avoiding a boot if possible
+        self.run_command = run_command
+        super().__init__(apply_to, **kwargs)
+
+    @contextlib.asynccontextmanager
+    async def _machine_context(self):
+        async with self.host.filesystem_access() as path:
+            self.path = path
+            yield
+            return
+        
+            
     
-def customization_task    (c: BaseCustomization):
+def customization_task    (c: BaseCustomization, order: int = None,
+                           before = None):
     '''
     :return: a setup_task for using a particular :class:`Customization` in a given :class:`Machine`.
 
@@ -353,7 +378,7 @@ def customization_task    (c: BaseCustomization):
         add_packages = customization_task(AddOurPackagesCustomization)
 
     '''
-    @setup_task(c.description)
+    @setup_task(c.description, order = order, before = before)
     @inject(ainjector = AsyncInjector)
     async def do_task(machine, ainjector):
         await machine.apply_customization(c)
@@ -368,4 +393,5 @@ def customization_task    (c: BaseCustomization):
             
 
 __all__ = ['Machine', 'MachineRunning', 'SshMixin', 'BaseCustomization', 'ContainerCustomization',
+           'FilesystemCustomization',
            'MachineCustomization']
