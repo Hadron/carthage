@@ -78,9 +78,10 @@ site_router_key = InjectionKey('site-router')
 async def fixup_database(ainjector, config):
     pg = await ainjector(RemotePostgres)
     session = Session(pg.engine())
-    session.query(models.Network).update({
+    session.query(models.Network).filter(models.Network.netid != 103).update({
         "extif": "eth0",
-        "intif": "eth1"})
+        "intif": "eth1",
+        'vpnid': 101})
     machine_role = session.query(models.Role).filter_by(name = 'machine').one()
     for s in session.query(models.Slot).join(models.Role).filter(models.Role.name == 'apt-server'):
         s.role = machine_role
