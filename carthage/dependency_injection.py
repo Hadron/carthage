@@ -14,7 +14,8 @@ import types
 import sys
 from dataclasses import dataclass
 
-from . import tb_utils
+from . import tb_utils, event
+
 _chatty_modules = {asyncio.futures, asyncio.tasks, sys.modules[__name__]}
 logger = logging.getLogger('carthage.dependency_injection')
 logger.setLevel('INFO')
@@ -126,7 +127,7 @@ class  InjectorClosed(RuntimeError): pass
 # Note that after @inject is defined, this class is redecorated to take parent_injector as a dependency so that
 #    injector = sub_injector(Injector)
 # works
-class Injector(Injectable):
+class Injector(Injectable, event.EventListener):
 
     def __init__(self, *providers,
                  parent_injector = None):
@@ -138,6 +139,11 @@ class Injector(Injectable):
 
         self.parent_injector = parent_injector
         self.claimed_by = None
+        if self.parent_injector:
+            event_scope = self.parent_injector._event_scope
+            event_scope.add_child(parent_injector, self)
+        else: event_scope = None
+        super().__init__(event_scope = event_scope)
         for p in providers:
             self.add_provider(p)
         self.add_provider(self) #Make sure we can inject an Injector
