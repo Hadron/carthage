@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import inspect, weakref
+import contextvars, enum, inspect, weakref
 import collections.abc
 import asyncio, functools
 import logging
@@ -19,6 +19,11 @@ from . import tb_utils, event
 _chatty_modules = {asyncio.futures, asyncio.tasks, sys.modules[__name__]}
 logger = logging.getLogger('carthage.dependency_injection')
 logger.setLevel('INFO')
+
+class ReadyState(enum.Enum):
+    NOT_READY = 0
+    READY_PENDING = 1
+    READY = 2
 
 class Injectable:
 
@@ -346,17 +351,22 @@ Return the first injector in our parent chain containing *k* or None if there is
         if isinstance(p, collections.abc.Coroutine):
             return asyncio.ensure_future(p, loop = self.loop)
         if isinstance(p, AsyncInjectable):
-            return asyncio.ensure_future(self._call_async_ready(p), loop = self.loop)
+            return asyncio.ensure_future(self._handle_async_injectable(p), loop = self.loop)
         if isinstance(p, asyncio.Future): return p
         raise RuntimeError('_is_async returned True when _handle_async cannot handle')
 
-    @staticmethod
-    async def _call_async_ready(obj):
-        res = await obj.async_ready()
-        if res is None:
-            raise TypeError("async_ready must return the object that satisfies the dependency; typically return self")
-        return res
-    
+
+    async def _handle_async_injectable(self, obj):
+        #Don't bother running the resolve protocol for the base case
+        if obj.async_resolve.__func__ !=AsyncInjectable.async_resolve:
+            res = await obj.async_resolve()
+            if self._is_async(res):
+                return await self._handle_async(res)
+            else: return res
+        else: # no resolution required
+            await obj.async_become_ready()
+            return obj
+            
     def close(self, canceled_futures = None):
         '''
         Close all subinjectors or providers
@@ -590,13 +600,49 @@ def directly_has_dependencies(f):
     injector = Injector)
 class AsyncInjectable(Injectable):
 
+    '''
+
+    An :class:`Injectable` that supports asyncronous operations as part of making a dependency available.  This happens in several phases:
+
+    * Prior to construction, all the dependencies of the *Injectable* are prepared.
+
+    * :meth:`async_resolve` is called.  This asynchronous method can return a different object, which entirely replaces this object as the provider of the dependency.  The *async_resolve* protocol is intended for cases where figuring out which object will provide a dependency requires asynchronous operations.  In many cases :meth:`async_resolve` returns *self*.
+
+    * Call :meth:`async_ready` to prepare this object.  This may include doing things like running :func:`~carthage.setup_tasks.setup_task`.
+
+'''
+
+    _async_ready_state: ReadyState
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # superclass claims the injector for us.
         self.ainjector = self.injector(AsyncInjector)
+        self._async_ready_state = ReadyState.NOT_READY
+        
         
     async def async_ready(self):
+        self._async_ready_state = ReadyState.READY
         return self
+
+    async def async_resolve(self):
+        '''Returns None or an object that should replace *self* in providing dependencies.'''
+        return None
+
+    async def async_become_ready(self):
+        if self._async_ready_state == ReadyState.NOT_READY:
+            self._ready_future = asyncio.ensure_future(self.async_ready())
+            self._async_ready_state = ReadyState.READY_PENDING
+            try:
+                return await self._ready_future
+            except:
+                self._async_ready_state = ReadyState.NOT_READY
+                raise
+            finally: del self._ready_future
+        elif self._async_ready_state == ReadyState.READY_PENDING:
+            return await asyncio.shield(self._ready_future)
+        else: return
+        
 
 
 @inject(loop = asyncio.AbstractEventLoop, injector = Injector)

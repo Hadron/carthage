@@ -191,6 +191,7 @@ async def test_when_needed(a_injector, loop):
     i2r = await a_injector.get_instance_async(i2)
     assert i2r is i1r
     assert await a_injector(wn) is i1r
+    assert called
 
 
 @async_test
@@ -224,15 +225,6 @@ async def test_when_needed_cancels(loop, a_injector):
     assert cancelled is True
 
 
-@async_test
-async def test_async_ready_requires_return(a_injector):
-    class AI(AsyncInjectable):
-
-        async def async_ready(self):
-            pass
-    a_injector.add_provider(AI)
-    with pytest.raises(TypeError):
-        res = await a_injector.get_instance_async(AI)
 
 
 def test_injectable_sets_dependencies(injector):
