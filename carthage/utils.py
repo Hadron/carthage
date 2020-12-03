@@ -106,7 +106,7 @@ def when_needed(wraps, *args, injector = None,
         # class level property to track all the injectors in use.
         ainjector_set = weakref.WeakSet()
                 
-        async def async_ready(self):
+        async def async_resolve(self):
             nonlocal kwargs
             if self.resolved_obj:
                 return self.resolved_obj
