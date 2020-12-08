@@ -512,14 +512,32 @@ Return the first injector in our parent chain containing *k* or None if there is
         return self.claimed_by is not None
     
     
+_INJECTION_KEY_DEFAULTS = {
+    'optional': False,
+    'ready': None}
 
 class InjectionKey:
 
+    '''
+    Represents information about what is requested to satisfy a dependency.
+
+    :param target: A type or other object representing what is desired.
+
+        * A type indicating an object of that type is desired
+
+        * An object such as a string that is a unique identifier for what is desired
+
+    :param optional: If true, then if no provider for the dependency is registered, None will be passed rather than raising
+
+    :param ready:  If None (the default), then use the same readyness as the object into which this is being injected (or full readyness if this is a base operation).  If True, then to satisfy this dependency, the provided object must be fully ready.  If False, then a not ready object is preferred.
+
+    '''
+    
 
     _target_injection_keys = weakref.WeakKeyDictionary()
 
-    def __new__(cls, target_, *, require_type = False, optional = False, **constraints):
-        assert (cls is InjectionKey) or constraints, "You cannot subclass InjectionKey with empty constraints"
+    def __new__(cls, target_, *, require_type = False, **constraints):
+        assert (cls is InjectionKey) or set(constraints)-set(_INJECTION_KEY_DEFAULTS), "You cannot subclass InjectionKey with empty constraints"
         if require_type and not isinstance(target_, type):
             raise TypeError('Only types can be used as implicit injection keys; if this is intended then construct the injection key explicitly')
         if isinstance(target_, InjectionKey):
@@ -527,16 +545,20 @@ class InjectionKey:
             new_constraints = dict(target_.constraints)
             new_constraints.update(constraints)
             constraints = new_constraints
-            optional = optional or target_.optional
             target_ = target_.target
-        if (not constraints) and (not optional):
+        if (not constraints) :
             if  target_ in cls._target_injection_keys:
                 return cls._target_injection_keys[target_]
         self =super().__new__(cls)
+        customized = bool(constraints)
+        for k in _INJECTION_KEY_DEFAULTS:
+            self.__dict__[k] = constraints.pop(
+                k,_INJECTION_KEY_DEFAULTS[k])
+            
+            
         self.__dict__['constraints'] = dict(constraints)
         self.__dict__['target'] = target_
-        self.__dict__['optional'] = optional
-        if (not optional) and len(constraints) == 0 and not isinstance(target_, (str, int, float)):
+        if (not customized)  and not isinstance(target_, (str, int, float)):
             cls._target_injection_keys[target_] = self
         return self
 
