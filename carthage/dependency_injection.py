@@ -17,6 +17,8 @@ class ReadyState(enum.Enum):
     READY_PENDING = 1
     READY = 2
 
+instantiate_to_ready = contextvars.ContextVar('instantiate_to_ready', default = True)
+
 class Injectable:
 
     '''Represents a class that has dependencies injected into it. By default, the :meth:`__init__` will:
@@ -304,19 +306,37 @@ Return the first injector in our parent chain containing *k* or None if there is
                 if placement: placement(None)
                 return None
             raise KeyError("No dependency for {}".format(k)) from None
-        result = provider.provider
-        if provider.is_factory:
-            result = satisfy_against._instantiate(
-                result,
-                _loop = loop,
-                _placement = do_place,
-                _orig_k = k,
-                _interim_placement = do_interim_place,
+        try:
+            if k.ready is not None:
+                ready_reset = instantiate_to_ready.set(k.ready)
+            else: ready_reset = None
+            to_ready = instantiate_to_ready.get()
+            result = provider.provider
+            if provider.is_factory:
+                result = satisfy_against._instantiate(
+                    result,
+                    _loop = loop,
+                    _placement = do_place,
+                    _orig_k = k,
+                    _interim_placement = do_interim_place,
 )
-            if isinstance(result, asyncio.Future):
-                futures.append(result)
-                provider.record_instantiation(result, k, satisfy_against) 
-                return result
+                if isinstance(result, asyncio.Future):
+                    futures.append(result)
+                    provider.record_instantiation(result, k, satisfy_against) 
+                    return result
+            elif to_ready and isinstance(result,AsyncInjectable) \
+                     and result._async_ready_state != ReadyState.READY:
+                    if not loop:
+                        raise RuntimeError(f"Requesting instantiation of {result} to ready, outside of async context")
+                    if placement: placement(result)
+                    future = loop.create_task(self._handle_async_injectable(result, resolv = False))
+                    futures.append(future)
+                    return future
+                    
+        finally:
+            if ready_reset is not None:
+                instantiate_to_ready.reset(ready_reset)
+    
 
         # Either not a future or not a factory
         if placement: placement(result)
@@ -444,16 +464,20 @@ Return the first injector in our parent chain containing *k* or None if there is
 
         if interim_placement: interim_placement(done_future)
 
-    async def _handle_async_injectable(self, obj):
+    async def _handle_async_injectable(self, obj, resolv = True):
         try:
             #Don't bother running the resolve protocol for the base case
-            if obj.async_resolve.__func__ !=AsyncInjectable.async_resolve:
+            if resolv and (obj.async_resolve.__func__ !=AsyncInjectable.async_resolve):
                 res = await obj.async_resolve()
                 if self._is_async(res):
                     return await self._handle_async(res)
                 else: return res
             else: # no resolution required
-                await obj.async_become_ready()
+                if instantiate_to_ready.get():
+                    await obj.async_become_ready()
+                    if not obj._async_ready_state == ReadyState.READY:
+                        raise RuntimeError("async_ready must chain back to AsyncInjectable.async_ready.")
+                    
                 return obj
         except asyncio.CancelledError:
             if hasattr(obj, 'injector'):

@@ -110,6 +110,7 @@ async def test_async_ready(a_injector, loop):
     class AsyncDependency(dependency_injection.AsyncInjectable):
         async def async_ready(self):
             self.ready = True
+            await super().async_ready()
             return self
 
         def __init__(self, **kwargs):
@@ -324,4 +325,31 @@ def test_none_kwargs():
     def isinst(i): return isinstance(i, foo)
     assert injector(isinst) is True
     assert injector(isinst, i = None) is False
+    
+@async_test
+async def test_async_not_ready(a_injector):
+    class AsyncDependency(AsyncInjectable):
+        ready = False
+
+        async def async_ready(self):
+            await super().async_ready()
+            self.ready = True
+
+    @inject(baz = InjectionKey(AsyncDependency, ready = True))
+    class AsyncDependency2(AsyncDependency): pass
+    k = InjectionKey("baz")
+    k2 = InjectionKey("bazquux")
+    a_injector.add_provider(k,AsyncDependency)
+    a_injector.add_provider(k2, AsyncDependency2)
+    nr = await a_injector.get_instance_async(InjectionKey(k, ready = False))
+    assert isinstance(nr, AsyncDependency)
+    assert nr.ready is False
+    nr2 = await a_injector.get_instance_async(k)
+    assert nr2 is nr
+    assert nr.ready is True
+    nr3 = await a_injector.get_instance_async(InjectionKey(k2, ready = False))
+    assert nr3.baz.ready is True
+    assert nr3.ready is False
+    
+    
     
