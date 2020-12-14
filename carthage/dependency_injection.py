@@ -551,17 +551,22 @@ class InjectionKey:
 
         * An object such as a string that is a unique identifier for what is desired
 
-    :param optional: If true, then if no provider for the dependency is registered, None will be passed rather than raising
+    :param _optional: If true, then if no provider for the dependency is registered, None will be passed rather than raising
 
-    :param ready:  If None (the default), then use the same readyness as the object into which this is being injected (or full readyness if this is a base operation).  If True, then to satisfy this dependency, the provided object must be fully ready.  If False, then a not ready object is preferred.
+    :param _ready:  If None (the default), then use the same readyness as the object into which this is being injected (or full readyness if this is a base operation).  If True, then to satisfy this dependency, the provided object must be fully ready.  If False, then a not ready object is preferred.
 
     '''
+
+    POSSIBLE_PARAMETERS = frozenset(
+        set(map(
+            lambda k: '_'+k, _INJECTION_KEY_DEFAULTS))
+        |{'optional'})
     
 
     _target_injection_keys = weakref.WeakKeyDictionary()
 
     def __new__(cls, target_, *, require_type = False, **constraints):
-        assert (cls is InjectionKey) or set(constraints)-set(_INJECTION_KEY_DEFAULTS), "You cannot subclass InjectionKey with empty constraints"
+        assert (cls is InjectionKey) or set(constraints)-cls.POSSIBLE_PARAMETERS, "You cannot subclass InjectionKey with empty constraints"
         if require_type and not isinstance(target_, type):
             raise TypeError('Only types can be used as implicit injection keys; if this is intended then construct the injection key explicitly')
         if isinstance(target_, InjectionKey):
@@ -575,9 +580,12 @@ class InjectionKey:
                 return cls._target_injection_keys[target_]
         self =super().__new__(cls)
         customized = bool(constraints)
+        if '_optional' not in constraints:
+            try: constraints['_optional'] = constraints.pop('optional')
+            except KeyError: pass
         for k in _INJECTION_KEY_DEFAULTS:
             self.__dict__[k] = constraints.pop(
-                k,_INJECTION_KEY_DEFAULTS[k])
+                '_'+k,_INJECTION_KEY_DEFAULTS[k])
             
             
         self.__dict__['constraints'] = dict(constraints)
