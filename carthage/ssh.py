@@ -41,7 +41,7 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
         await self.run_setup_tasks()
         self.agent = await self.ainjector(ssh_agent, key = self)
         del self.ainjector
-        return self
+        return await super().async_ready()
 
     @setup_task('gen-key')
     async def generate_key(self):

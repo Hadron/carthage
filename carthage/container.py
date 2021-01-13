@@ -58,7 +58,7 @@ class Container(Machine, SetupTaskMixin):
                 self.network_config = await self.ainjector(network_config_unresolved.resolve, access_class = carthage.network.BridgeNetwork)
         await self.run_setup_tasks()
             
-        return self
+        return await super().async_ready()
 
     @memoproperty
     def stamp_path(self):

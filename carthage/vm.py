@@ -142,7 +142,7 @@ class VM(Machine, SetupTaskMixin):
     async def async_ready(self):
         await self.write_config()
         await self.run_setup_tasks(context = self.machine_running(ssh_online = True))
-        return self
+        return await super().async_ready()
 
     async def _find_ip_address(self):
         for i in range(30):

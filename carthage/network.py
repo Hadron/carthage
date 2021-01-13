@@ -171,14 +171,13 @@ this_network = InjectionKey(Network, role = "this_network")
 class BridgeNetwork(TechnologySpecificNetwork):
 
     def __init__(self, net, *, bridge_name = None,
-                 delete_bridge = True, injector, config_layout):
+                 delete_bridge = True, **kwargs):
+        super().__init__(**kwargs)
         self.name = net.name
-        self.injector = injector.claim()
-        self.config_layout = config_layout
         self.delete_bridge = delete_bridge
         self.interfaces = weakref.WeakValueDictionary()
         if bridge_name is None:
-            self.bridge_name = if_name('br', config_layout.container_prefix, self.name)
+            self.bridge_name = if_name('br', self.config_layout.container_prefix, self.name)
         else: self.bridge_name = bridge_name
         self.closed = False
         self.members = []
@@ -192,7 +191,7 @@ class BridgeNetwork(TechnologySpecificNetwork):
                     "type", "bridge", "stp_state", "1",
                     "forward_delay", "3")
             sh.ip("link", "set", self.bridge_name, "up")
-        return self
+        return await super().async_ready()
 
     def close(self):
         if self.closed: return

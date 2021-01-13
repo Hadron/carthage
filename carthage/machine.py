@@ -273,7 +273,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
     async def async_ready(self):
         # We do not run setup tasks on construction.
-        return self
+        return await AsyncInjectable.async_ready(self)
 
     #:Can be overridden; a context manager in which customization tasks should be run
     customization_context = None

@@ -291,7 +291,7 @@ class SetupTaskMixin:
         This may need to be overridden, but is provided as a default
         '''
         await self.run_setup_tasks()
-        return self
+        return await super().async_ready()
 
     def create_stamp(self, stamp):
         try:

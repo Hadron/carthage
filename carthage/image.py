@@ -61,7 +61,7 @@ class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
                     raise RuntimeError("{} is not a btrfs subvolume but already exists".format(self.path))
                 # If we're here it is a btrfs subvolume
                 await possibly_async(self.populate_volume())
-                return self
+                return await super().async_ready()
             # directory does not exist
             os.makedirs(os.path.dirname(self.path), exist_ok = True)
             if not self.clone_from:
@@ -72,7 +72,7 @@ class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
                 await sh.btrfs('subvolume', 'snapshot', self.clone_from.path, self.path,
                                _bg = True, _bg_exc = False)
             await possibly_async(self.populate_volume())
-            return self
+            return await super().async_ready()
         except:
             self.close()
             raise
@@ -159,7 +159,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
     async def async_ready(self):
         await self.run_setup_tasks()
-        return self
+        return await super().async_ready()
 
     def delete_volume(self):
         try:
@@ -319,7 +319,7 @@ class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
     async def async_ready(self):
         try:
             await self.run_setup_tasks()
-            return self
+            return await super().async_ready()
         except:
             self.close()
             raise
