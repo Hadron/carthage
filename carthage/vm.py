@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -150,7 +150,7 @@ class VM(Machine, SetupTaskMixin):
     async def async_ready(self):
         await self.write_config()
         await self.run_setup_tasks(context = self.machine_running(ssh_online = True))
-        return self
+        return await super().async_ready()
 
     async def _find_ip_address(self):
         for i in range(30):

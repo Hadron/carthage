@@ -491,7 +491,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                 if instantiate_to_ready.get():
                     await obj.async_become_ready()
                     if not obj._async_ready_state == ReadyState.READY:
-                        raise RuntimeError("async_ready must chain back to AsyncInjectable.async_ready.")
+                        raise RuntimeError(f"async_ready for {obj.__class__.__name__} must chain back to AsyncInjectable.async_ready.")
                     
                 return obj
         except asyncio.CancelledError:

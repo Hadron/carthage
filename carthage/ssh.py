@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -49,7 +49,7 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
         await self.run_setup_tasks()
         self.agent = await self.ainjector(ssh_agent, key = self)
         del self.ainjector
-        return self
+        return await super().async_ready()
 
     @setup_task('gen-key')
     async def generate_key(self):

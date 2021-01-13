@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -281,7 +281,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
     async def async_ready(self):
         # We do not run setup tasks on construction.
-        return self
+        return await AsyncInjectable.async_ready(self)
 
     #:Can be overridden; a context manager in which customization tasks should be run
     customization_context = None
