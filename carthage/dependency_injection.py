@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -420,13 +420,15 @@ Return the first injector in our parent chain containing *k* or None if there is
                 sub_injector = (type(self))(self)
                 injector = sub_injector
                 for k in kwarg_dependencies:
-                    provider = kwargs.pop(k)
+                    provider = kwargs[k]
                     dependency = cls._injection_dependencies[k]
                     if isinstance(provider,Injectable) and not provider.satisfies_injection_key(dependency):
                         raise UnsatisfactoryDependency(dependency, provider)
                     sub_injector.add_provider(dependency, provider, close = False)
+
             for k, d in (cls._injection_dependencies.items()) if dks else []:
                 if d is None: continue
+                if k in kwargs: continue
                 injector.get_instance(d, placement = kwarg_place(k),
                                       loop = _loop, futures = futures)
             if futures:
