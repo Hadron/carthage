@@ -348,7 +348,7 @@ host_map_key = InjectionKey('host_map')
 @inject(host_map = host_map_key,ainjector = AsyncInjector)
 def mac_from_host_map(i, host_map, ainjector):
     from .machine import Machine
-    machine = ainjector.get_instance(Machine)
+    machine = ainjector.get_instance(InjectionKey(Machine, ready = False))
     entry = host_map[machine.name]
     machine.ip_address = entry.ip
     return entry.mac
