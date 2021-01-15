@@ -105,8 +105,8 @@ class ContainerImage(BtrfsVolume):
         injector = self.injector(Injector)
         ainjector = injector(AsyncInjector)
         try:
-            injector.add_provider(container_image, self, close = False)
-            injector.add_provider(container_volume, self, close = False)
+            injector.add_provider(container_image, dependency_quote(self), close = False)
+            injector.add_provider(container_volume, dependency_quote(self), close = False)
             container = await ainjector(Container, name = self.name, skip_ssh_keygen = True)
             customization = await ainjector(cust_class, apply_to = container)
             meth = getattr(customization, method)
