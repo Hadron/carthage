@@ -16,7 +16,7 @@ from .images import database_key
 
 @inject(
     config_layout = carthage.config.ConfigLayout,
-    database = carthage.hadron_layout.database_key,
+    database = InjectionKey(carthage.hadron_layout.database_key, _ready = False),
     ssh_origin = None)
 class RemotePostgres(ExposedPort):
 
