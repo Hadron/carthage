@@ -478,7 +478,10 @@ Return the first injector in our parent chain containing *k* or None if there is
             if resolv and (obj.async_resolve.__func__ !=AsyncInjectable.async_resolve):
                 res = await obj.async_resolve()
                 if self._is_async(res):
-                    return await self._handle_async(res)
+                    future = self.loop.create_future()
+                    self._handle_async(res, done_future = future, placement = None,
+                                       interim_placement = None, loop = self.loop)
+                    return await future
                 else: return res
             else: # no resolution required
                 if instantiate_to_ready.get():
