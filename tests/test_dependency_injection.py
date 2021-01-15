@@ -353,3 +353,16 @@ async def test_async_not_ready(a_injector):
     
     
     
+@async_test
+async def test_dependency_quote(a_injector):
+    class AsyncDependency(AsyncInjectable):
+
+        async def async_ready(self):
+            raise AssertionError
+
+    k = InjectionKey("foo")
+    @inject(foo = k)
+    def func(foo):
+        assert foo is AsyncDependency
+    await a_injector(func, foo=dependency_injection.dependency_quote(AsyncDependency))
+

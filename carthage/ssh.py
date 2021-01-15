@@ -1,6 +1,6 @@
 from __future__ import annotations
 import dataclasses, io, os
-from .dependency_injection import inject, AsyncInjector, Injector, AsyncInjectable, Injectable, InjectionKey
+from .dependency_injection import inject, AsyncInjector, Injector, AsyncInjectable, Injectable, InjectionKey, dependency_quote
 from .config import ConfigLayout
 from .setup_tasks import SetupTaskMixin, setup_task
 from . import sh, machine
@@ -39,7 +39,7 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
         
     async def async_ready(self):
         await self.run_setup_tasks()
-        self.agent = await self.ainjector(ssh_agent, key = self)
+        self.agent = await self.ainjector(ssh_agent, key = dependency_quote(self))
         del self.ainjector
         return await super().async_ready()
 
