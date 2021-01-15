@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -24,7 +24,7 @@ from .images import database_key
 
 @inject(
     config_layout = carthage.config.ConfigLayout,
-    database = carthage.hadron_layout.database_key,
+    database = InjectionKey(carthage.hadron_layout.database_key, _ready = False),
     ssh_origin = None)
 class RemotePostgres(ExposedPort):
 
