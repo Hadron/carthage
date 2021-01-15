@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -361,3 +361,16 @@ async def test_async_not_ready(a_injector):
     
     
     
+@async_test
+async def test_dependency_quote(a_injector):
+    class AsyncDependency(AsyncInjectable):
+
+        async def async_ready(self):
+            raise AssertionError
+
+    k = InjectionKey("foo")
+    @inject(foo = k)
+    def func(foo):
+        assert foo is AsyncDependency
+    await a_injector(func, foo=dependency_injection.dependency_quote(AsyncDependency))
+

@@ -325,7 +325,10 @@ Return the first injector in our parent chain containing *k* or None if there is
             else: ready_reset = None
             to_ready = instantiate_to_ready.get()
             result = provider.provider
-            if provider.is_factory:
+            if isinstance(result, dependency_quote):
+                if placement: placement(result.value)
+                return result.value
+            elif provider.is_factory:
                 result = satisfy_against._instantiate(
                     result,
                     _loop = loop,
@@ -665,7 +668,21 @@ def inject(**dependencies):
             router = InjectionKey(SiteRouter, site ='cambridge'))
         def testfn(injector, router): pass
 
-    Can be applied to classes or functions
+    Can be applied to classes or functions.  Note that when an injector is used, dependencies will be resolved through the injector  even if they are supplied directly.  For example in::
+
+        @inject(dependency = InjectedClass)
+       def func(dependency):
+             assert isinstance(dependency, InjectedClass)
+
+
+        injector(func, dependency=InjectedClass)
+
+    The assertion will be true if *InjectedClass* is an :class:`Injectable` because the injector will instantiate the class.  Resolution provided by the injector includes:
+
+    #. Instantiating subclasses of :class:`Injectable` and providing their dependencies.
+
+    #. Calling :meth:`~AsyncInjectable.async_ready` on :class:`AsyncInjectable`.
+
     '''
     def convert_to_key(deps):
         for k,v in deps.items():
@@ -758,6 +775,27 @@ def directly_has_dependencies(f):
     if not hasattr(f, '__dict__'): return False
     return '_injection_dependencies' in f.__dict__
 
+
+class dependency_quote:
+
+    '''
+Indicate that a value (or dependency provider) should not be subject to injcoter resolution.  Used like::
+
+        injector(func, override = dependency_quote(self))
+
+    For example if *self* is an object that is not yet :meth:`~AsyncInjectable.async_ready` as part of bootstrapping.  Can be used both in a keyword argument to an injector call or in calls to :meth:`Injector.add_provider`.
+
+'''
+
+    __slots__ = ['value']
+    
+
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return f'dependency_quote({repr(self.value)})'
+    
    #########################################
    # Asynchronous support:
 
@@ -909,5 +947,6 @@ __all__ = '''
     Injectable AsyncInjectable InjectionFailed ExistingProvider
     InjectionKey
     DependencyProvider
+dependency_quote
     partial_with_dependencies shutdown_injector
 '''.split()
