@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -127,8 +127,7 @@ async def test_async_ready(a_injector, loop):
     @inject(r = AsyncDependency)
     def is_ready(r):
         assert r.ready
-    a_injector.add_provider(AsyncDependency)
-    await a_injector(is_ready)
+    await a_injector(is_ready, r = AsyncDependency)
 
 
 def test_allow_multiple(injector):
@@ -361,28 +360,4 @@ async def test_async_not_ready(a_injector):
     assert nr3.ready is False
     
     
-    
-@async_test
-async def test_override_and_async_ready(a_injector):
-    class AsyncDependency(AsyncInjectable):
-        ready = False
-
-        async def async_ready(self):
-            await super().async_ready()
-            self.ready = True
-
-    @inject(ad = AsyncDependency, ainjector = dependency_injection.AsyncInjector)
-    async def func(ainjector, ad):
-        assert ad.ready is False
-        ad2 = await ainjector.get_instance_async(AsyncDependency)
-        assert ad is ad2
-        # The following behavior may be wrong.  We may determine that
-        # in this sort of forced override situation it is better that
-        # you always get the override value even out of an injector.
-        # This test is for the current behavior to make sure that any
-        # changes are explicit rather than side effects of some other
-        # change.
-        assert ad2.ready is True
-    async_dependency = AsyncDependency(injector = a_injector.injector)
-    await a_injector(func, ad = async_dependency)
     
