@@ -320,6 +320,8 @@ Return the first injector in our parent chain containing *k* or None if there is
             if isinstance(result, dependency_quote):
                 if placement: placement(result.value)
                 return result.value
+            elif isinstance(result, asyncio.Future):
+                pass 
             elif provider.is_factory:
                 result = satisfy_against._instantiate(
                     result,
@@ -328,10 +330,10 @@ Return the first injector in our parent chain containing *k* or None if there is
                     _orig_k = k,
                     _interim_placement = do_interim_place,
 )
-                if isinstance(result, asyncio.Future):
-                    futures.append(result)
-                    provider.record_instantiation(result, k, satisfy_against) 
-                    return result
+            if isinstance(result, asyncio.Future):
+                futures.append(result)
+                provider.record_instantiation(result, k, satisfy_against) 
+                return result
             elif to_ready and isinstance(result,AsyncInjectable) \
                      and result._async_ready_state != ReadyState.READY:
                     if not loop:
@@ -393,6 +395,8 @@ Return the first injector in our parent chain containing *k* or None if there is
                 fut.result() #confirm all successful
                 #If they were all successful, then kwargs is fully populated at this point
                 handle_result(done_future)
+            except asyncio.CancelledError:
+                done_future.cancel()
             except Exception as e:
                 done_future.set_exception(e)
 
