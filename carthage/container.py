@@ -144,7 +144,10 @@ class Container(Machine, SetupTaskMixin):
                                              _tty_out = True,
                                              _in = "/dev/null",
                                              _encoding = 'utf-8',
-                                             _new_session = False
+                                             _new_session = False,
+                                             # systemd-nspawn fails to rename interfaces back because we rename them.
+                                             # A better solution would be to explicitly construct namespaces and to use the --network-namespace-path with sufficiently new systemd-nspawn.
+                                             _ok_code = [0,1] if networking else 0
                                              )
             
             self.running = True
@@ -168,7 +171,7 @@ class Container(Machine, SetupTaskMixin):
             # manner.
             for f in self._done_waiters:
                 if not f.cancelled():
-                    f.set_result(code)
+                    f.set_result(0 if success else code)
             self._done_waiters = []
             for i in self.network_interfaces:
                 i.close()
@@ -292,4 +295,4 @@ class Container(Machine, SetupTaskMixin):
     async def filesystem_access(self):
         async with self.machine_running():
             yield self.volume.path
-            
+
