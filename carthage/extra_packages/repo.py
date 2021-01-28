@@ -1,6 +1,6 @@
 import os
 from glob import glob
-from carthage.setup_tasks import setup_task, SetupTaskMixin, cross_object_dependency
+from carthage.setup_tasks import setup_task, SetupTaskMixin, cross_object_dependency, SkipSetupTask
 from carthage.dependency_injection import *
 from carthage import ConfigLayout
 from carthage.machine import FilesystemCustomization
@@ -94,7 +94,7 @@ pin-priority: 1030
     @setup_task("Copy in extra repo")
     async def copy_in_repo(self):
         j = os.path.join
-        if not self.repo.source_lines:
+        if not self.repo.source_lines():
             raise SkipSetupTask()
         await sh.rsync(
             '-a',
