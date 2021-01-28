@@ -34,6 +34,10 @@ class RsyncPath:
             return self.machine.injector.get_instance(ssh_origin)
         except KeyError: return None
 
+    @memoproperty
+    def ssh_origin_vrf(self):
+        from .machine import ssh_origin_vrf
+        return self.machine.injector.get_instance(InjectionKey(ssh_origin_vrf, optional = True))
         
 @inject(config_layout = ConfigLayout,
         ainjector = AsyncInjector)
@@ -74,6 +78,7 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
         return sh.ssh.bake(_env = self.agent.agent_environ)
 
     def rsync(self, *args, ssh_origin = None):
+        from .network import access_ssh_origin
         ssh_options = []
         args = list(args)
         for i, a in enumerate(args):
@@ -81,6 +86,7 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
                 sso = a.ssh_origin
                 if ssh_origin is None:
                     ssh_origin = sso
+                    vrf = a.ssh_origin_vrf
                     ssh_options = a.machine.ssh_options
                 elif ssh_origin is not sso:
                     raise RuntimeError(f"Two different ssh_origins: {sso} and {ssh_origin}")
@@ -94,8 +100,8 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
         rsync_opts = ('-e', 'ssh '+ssh_options)
         
         if ssh_origin:
-            return sh.nsenter('-t', str(ssh_origin.container_leader),
-                              '-n',
+            return access_ssh_origin(ssh_origin = ssh_origin,
+                                     ssh_origin_vrf = vrf)(
                               'rsync',
                               *rsync_opts, *args,
                               _bg = True, _bg_exc = False,

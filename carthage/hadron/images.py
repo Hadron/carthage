@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -87,7 +87,10 @@ class TestDatabase(Container):
 
     def __init__(self, name = "test-database", **kwargs):
         super().__init__(name = name, **kwargs)
-        self.injector.add_provider(database_key, self)
+        self.injector.add_provider(database_key, dependency_quote(self))
+
+    def start_machine(self):
+        return self.start_container('--capability=cap_bpf', '--system-call-filter=bpf')
 
     ansible_inventory_name = "database.hadronindustries.com"
 

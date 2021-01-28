@@ -45,6 +45,7 @@ class MachineRunning:
         self.ssh_online = ssh_online
 
 ssh_origin = InjectionKey('ssh-origin')
+ssh_origin_vrf = InjectionKey("ssh-origin-vrf")
 class SshMixin:
     '''An Item that can be sshed to.  Will look for the ssh_origin
     injection key.  If found, this should be a container.  The ssh will be
@@ -63,6 +64,7 @@ class SshMixin:
 
     @memoproperty
     def ssh(self):
+        from .network import access_ssh_origin
         try:
             ssh_origin_container = self.injector.get_instance(ssh_origin)
         except InjectionFailed:
@@ -72,10 +74,8 @@ class SshMixin:
         options = self.ssh_options + ('-oUserKnownHostsFile='+os.path.join(self.config_layout.state_dir, 'ssh_known_hosts'),)
         if ssh_origin_container is not None:
             ip_address = self.ip_address
-            if self is ssh_origin_container: ip_address = "127.0.0.1"
-            leader = ssh_origin_container.container_leader
             ssh_origin_container.done_future().add_done_callback(self.ssh_recompute)
-            return sh.nsenter.bake('-t', str(leader), "-n",
+            return self.injector(access_ssh_origin).bake(
                                    "/usr/bin/ssh",
                               "-i", ssh_key.key_path,
                                    *options,

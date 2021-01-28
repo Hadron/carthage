@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -82,6 +82,7 @@ async def run_playbook(hosts,
 :param log: A local path where a log of output and errors should be created or ``None`` to parse the ansible result programatically after ansible completes.  It is not possible to produce human readable output and a result that can be parsed at the same time without writing a custom ansible callback plugin.
 
     '''
+    injector = ainjector.injector
     def to_inner(s):
         return config_inner + s[len(config_dir):]
     assert isinstance(hosts, list), "Hosts needs to be a list of hosts"
@@ -122,15 +123,18 @@ async def run_playbook(hosts,
 
             if origin and isinstance(origin, NetworkNamespaceOrigin):
                 await stack.enter_async_context(origin.namespace.machine_running(ssh_online = True))
-                cmd = sh.nsenter(
-                    "-t"+origin.namespace.container_leader,
-                    "-n", "sh",
+                cmd = injector(access_ssh_origin, ssh_origin = origin.namespace)(
+"sh",
                     '-c', ansible_command,
                     **log_args,
                     _bg = True,
                     _bg_exc = False)
             elif origin                :
-                cmd = origin.ssh(ansible_command,
+                vrf = origin.injector.get_instance(InjectionKey(machine.ssh_origin_vrf, optional = True))
+                if vrf:
+                    vrf_fragment = ['ip', 'vrf', 'exec', vrf]
+                else: vrf_fragment = []
+                cmd = origin.ssh(*vrf_fragment, ansible_command,
                                  _bg = True,
                                  _bg_exc = False,
                                  **log_args)

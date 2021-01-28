@@ -12,7 +12,7 @@ from . import sh
 from .dependency_injection import inject, AsyncInjectable, Injector, AsyncInjector, InjectionKey, Injectable
 from .config import ConfigLayout
 from .utils import permute_identifier, when_needed, memoproperty
-
+from .machine import ssh_origin, ssh_origin_vrf
 logger = logging.getLogger('carthage.network')
 
 _cleanup_substitutions = [
@@ -362,8 +362,31 @@ def mac_from_host_map(i, host_map, ainjector):
     return entry.mac
 
 
+@inject(ssh_origin = ssh_origin,
+        ssh_origin_vrf = InjectionKey(ssh_origin_vrf, optional = True))
+def access_ssh_origin( ssh_origin, ssh_origin_vrf, extra_nsenter = []):
+    '''
+        A container can be used as an ssh_origin, using the container as
+        an injection point for entering a network under test.  This is
+        typically done by constructing an ``nsenter`` command to enter the
+        appropriate namespaces.  This function accomplishes that.
+
+        :return: A list of arguments to be included in a *sh* call
+
+        :param extra_nsenter: Extra namespaces to enter; something like ``['-p', '-m']``
+
+'''
+    vrf = []
+    if ssh_origin_vrf:
+        vrf = ['ip', 'vrf',
+               'exec', ssh_origin_vrf]
+    return sh.nsenter.bake( '-t', ssh_origin.container_leader,
+                '-n',
+                *vrf)
+    
 
 
 __all__ = r'''Network TechnologySpecificNetwork BridgeNetwork 
     external_network_key HostMapEntry mac_from_host_map host_map_key
+access_ssh_origin
     '''.split()
