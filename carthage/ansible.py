@@ -1,6 +1,6 @@
 import contextlib, dataclasses, json, os, os.path, tempfile, yaml
 from .dependency_injection import *
-from . import sh, Machine
+from . import sh, Machine, machine
 from .container import Container
 from .config import ConfigLayout
 from .ssh import SshKey
@@ -55,6 +55,7 @@ async def run_playbook(hosts,
                        inventory: str,
                        log:str = None,
                        *,
+                       extra_args = [],
                        raise_on_failure: bool = True,
                        ansible_config = AnsibleConfig(),
                        ainjector,
@@ -96,9 +97,9 @@ async def run_playbook(hosts,
         else: ansible_command = ''
         if origin and not isinstance(origin, NetworkNamespaceOrigin):
             config_dir = await stack.enter_async_context(origin.filesystem_access())
-            config_dir += "/run/ansible"
+            config_dir += "/ansible"
             os.makedirs(config_dir, exist_ok = True)
-            config_inner = "/run/ansible"
+            config_inner = "/ansible"
         else:
             config_dir = config.state_dir
             config_inner = config.state_dir
@@ -107,7 +108,7 @@ async def run_playbook(hosts,
                 [inventory],
                 ansible_config = ansible_config, log = log, origin = origin) as config_file:
 
-            ansible_command += f'ANSIBLE_CONFIG={to_inner(config_file)} ansible-playbook -l"{target_hosts}" {os.path.basename(playbook)}'
+            ansible_command += f'ANSIBLE_CONFIG={to_inner(config_file)} ansible-playbook -l"{target_hosts}" {" ".join(extra_args)} {os.path.basename(playbook)}'
             log_args = {}
             if log:
                 log_args['_out'] = log
@@ -124,9 +125,9 @@ async def run_playbook(hosts,
             elif origin                :
                 vrf = origin.injector.get_instance(InjectionKey(machine.ssh_origin_vrf, optional = True))
                 if vrf:
-                    vrf_fragment = ['ip', 'vrf', 'exec', vrf]
-                else: vrf_fragment = []
-                cmd = origin.ssh(*vrf_fragment, ansible_command,
+                    ansible_command = ansible_command.replace("ansible-playbook",
+                                            f'ip vrf exec {vrf} ansible-playbook')
+                cmd = origin.ssh( ansible_command,
                                  _bg = True,
                                  _bg_exc = False,
                                  **log_args)
