@@ -79,7 +79,10 @@ class TestDatabase(Container):
 
     def __init__(self, name = "test-database", **kwargs):
         super().__init__(name = name, **kwargs)
-        self.injector.add_provider(database_key, self)
+        self.injector.add_provider(database_key, dependency_quote(self))
+
+    def start_machine(self):
+        return self.start_container('--capability=cap_bpf', '--system-call-filter=bpf')
 
     ansible_inventory_name = "database.hadronindustries.com"
 

@@ -55,6 +55,7 @@ try:
     base_injector.add_provider(hadron.database.RemotePostgres)
 except ImportError: pass
 base_injector.add_provider(carthage.container.ssh_origin, carthage.hadron_layout.test_database_container)
+base_injector.add_provider(carthage.machine.ssh_origin_vrf, "vrf-internet")
 base_injector.add_provider(carthage.hadron.hadron_vault_key, carthage.hadron_layout.hadron_vault_container)
 
 base_injector.add_provider(carthage.container.container_image, carthage.hadron.hadron_container_image)
