@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -6,6 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import collections
 import weakref
 from ..dependency_injection import *
 from . import inventory
@@ -70,13 +71,17 @@ class ConfigSpecStage(metaclass = ConfigSpecMeta):
 '''
         cls.order = order
         if stage_for is None: return
-        cls.stage_for = weakref.proxy(stage_for)
         cls.mode = mode
-        assert issubclass(stage_for, inventory.VmwareSpecifiedObject)
-        if 'config_stages' not in stage_for.__dict__:
-            setattr(stage_for, 'config_stages', stage_for.config_stages.copy())
-        stage_for.config_stages.append(cls)
-        stage_for.config_stages.sort(key = lambda c: c.order)
+        if isinstance(stage_for, collections.Sequence):
+            cls.stage_for = [ weakref.proxy(sf) for sf in stage_for ]
+        else:
+            cls.stage_for = [ weakref.proxy(stage_for) ]
+        for sf in cls.stage_for:
+            assert issubclass(sf, inventory.VmwareSpecifiedObject)
+            if 'config_stages' not in sf.__dict__:
+                setattr(sf, 'config_stages', sf.config_stages.copy())
+            sf.config_stages.append(cls)
+            sf.config_stages.sort(key = lambda c: c.order)
 
     def __init__(self, obj, bag):
         self.obj = obj
