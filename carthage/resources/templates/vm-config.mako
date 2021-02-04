@@ -49,6 +49,7 @@ import uuid
       % endif
       <source bridge='${net.bridge_name}'/>
       <model type='virtio'/>
+      <target dev="${if_name(net)}" />
     </interface>
 % endfor
 <serial type='pty'>

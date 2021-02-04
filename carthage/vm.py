@@ -71,6 +71,7 @@ class VM(Machine, SetupTaskMixin):
                 console_port = self.console_port.port if self.console_needed else None,
                 name =self.full_name,
                 network_config = self.network_config,
+                if_name = lambda n: carthage.network.if_name("vn", self.config_layout.container_prefix, n.name, self.name),
                 volume = self.volume))
             if self.console_needed:
                 with open(self.console_json_path, "wt") as f:
