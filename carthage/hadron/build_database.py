@@ -1,18 +1,19 @@
 import logging, shutil, os, os.path
 from sqlalchemy.orm import Session
 from hadron.inventory.admin import models
-from ..dependency_injection import inject, Injector, InjectionKey, ExistingProvider
+from ..dependency_injection  import *
 from .database import *
 from ..utils import when_needed
 from ..setup_tasks import setup_task, SetupTaskMixin
 from ..vm import VM
 from ..machine import Machine, SshMixin
 from ..container import Container
+from ..ansible import run_playbook
 import carthage.hadron_layout, carthage.ssh
 from carthage import base_injector
 import carthage.pki
 from carthage.hadron_layout import database_key
-from carthage.machine import ssh_origin
+from carthage.machine import ssh_origin, ssh_origin_vrf
 vm_class = VM
 
 logger = logging.getLogger('carthage')
@@ -98,15 +99,15 @@ async def run_ansible_initial_router(machine, database):
         await database.ssh_online()
         await machine.ssh_online()
         machine.ssh('ls /proc/sys/net/netfilter')
-        await database.ssh('-A',
-                       'cd /hadron-operations/ansible && ansible-playbook',
-                       '-iinventory/hosts.txt',
-                       '-l{}'.format(machine.name),
-                       '-eansible_host={}'.format(machine.ip_address),
-                       'commands/initial-router.yml',
-                           _bg = True, _bg_exc = False,
-                           _out = os.path.join(machine.stamp_path, "ansible.log"),
-                           _err_to_out = True)
+        await machine.ainjector(
+            run_playbook,
+            [machine.name],
+            "/hadron-operations/ansible/commands/initial-router.yml",
+            "/hadron-operations/ansible/inventory/hosts.txt",
+            origin = database,
+            extra_args = ['-eansible_host={}'.format(machine.ip_address)],
+            log = os.path.join(machine.stamp_path, "ansible.log"),
+            )
 
 
 class RouterMixin(SetupTaskMixin):

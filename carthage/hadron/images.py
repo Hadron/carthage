@@ -192,7 +192,7 @@ class TestDatabase(Container):
                              _out = self._out_cb,
                              _err_to_out = True)
 
-    async def ansible(self, host_pattern, play,
+    def ansible(self, host_pattern, play,
                       *, log_to = None,
                       tags = [], args = None):
         extra_args = []
@@ -201,16 +201,16 @@ class TestDatabase(Container):
             extra_args.append("--tags="+",".join(tags))
         if log_to is None: log_to = self
         log_file = os.path.join(log_to.stamp_path, "ansible.log")
-        with open(log_file, "at") as log:
-            await self.ssh("-A","cd /hadron-operations/ansible &&ansible-playbook",
-                           "-iinventory/hosts.txt",
-                           *extra_args,
-                           "-l"+host_pattern,
-                           play,
-                           _out = log,
-                           _bg = True,
-                           _bg_exc = False, _err_to_out=True)
-
+        play = os.path.join("/hadron-operations/ansible", play)
+        return self.ainjector(
+            ansible.run_playbook,
+            host_pattern,play,
+            "/hadron-operations/ansible/inventory/hosts.txt",
+            extra_args = extra_args,
+            origin = self,
+            log = log_file)
+    
+            
 
     ip_address = "192.168.101.1"
 
