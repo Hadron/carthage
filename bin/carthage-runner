@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -18,7 +18,7 @@ from carthage.container import container_image, Container
 from carthage.hadron.database import RemotePostgres, HadronNetwork, only_permitted_vms
 from carthage.hadron import build_database
 from sqlalchemy.orm import Session
-from carthage.machine import ssh_origin, Machine
+from carthage.machine import Machine
 import carthage.ssh
 
 logger = logging.getLogger('carthage')
