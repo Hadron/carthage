@@ -42,12 +42,12 @@
     VAULT_TOKEN: '{{hostvars["vault.hadronindustries.com"].vault_token.stdout}}'
   tasks:
     - name: Enable root PKI
-      command: carthage-vault-tool --ca /vault_bootstrap/ca.pem --vault-config /hadron-operations/ansible/resources/vault/hadron-root.yml
+      command: ip vrf exec vrf-internet carthage-vault-tool --ca /vault_bootstrap/ca.pem --vault-config /hadron-operations/ansible/resources/vault/hadron-root.yml
     - name: Disable capability on Vault
       command: setcap -r /usr/lib/vault/vault
       ignore_errors: true
     - name: Login to Vault
-      command: vault login -
+      command: ip vrf exec vrf-internet vault login -
       environment:
         VAULT_SKIP_VERIFY: yes
       args:
