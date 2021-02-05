@@ -10,7 +10,7 @@ from carthage.container import container_image, Container
 from carthage.hadron.database import RemotePostgres, HadronNetwork, only_permitted_vms
 from carthage.hadron import build_database
 from sqlalchemy.orm import Session
-from carthage.machine import ssh_origin, Machine
+from carthage.machine import Machine
 import carthage.ssh
 
 logger = logging.getLogger('carthage')
