@@ -6,6 +6,8 @@ from .config import ConfigLayout
 from .ssh import SshKey
 from .utils import validate_shell_safe
 from types import SimpleNamespace
+from .network import access_ssh_origin
+
 __all__ = []
 
 class AnsibleFailure(RuntimeError):
@@ -78,7 +80,7 @@ async def run_playbook(hosts,
     injector = ainjector.injector
     def to_inner(s):
         return config_inner + s[len(config_dir):]
-    assert isinstance(hosts, list), "Hosts needs to be a list of hosts"
+    if not isinstance(hosts, list): hosts = [hosts]
     async with contextlib.AsyncExitStack() as stack:
         target_hosts = []
         for h in hosts:
@@ -127,7 +129,7 @@ async def run_playbook(hosts,
                 if vrf:
                     ansible_command = ansible_command.replace("ansible-playbook",
                                             f'ip vrf exec {vrf} ansible-playbook')
-                cmd = origin.ssh( ansible_command,
+                cmd = origin.ssh( "-A", ansible_command,
                                  _bg = True,
                                  _bg_exc = False,
                                  **log_args)
@@ -256,9 +258,14 @@ pipelining=True
 ''')
         if origin is None or isinstance(origin, NetworkNamespaceOrigin):
             f.write(f'''\
-ssh_args = -o ControlMaster=auto -o ControlPersist=60s -oUserKnownHostsFile={config.state_dir}/ssh_known_hosts
+ssh_args = -o ControlMaster=auto -o ControlPersist=60s -oUserKnownHostsFile={config.state_dir}/ssh_known_hosts -oStrictHostKeyChecking=no
 ''')
-
+        else:
+            f.write(f'''\
+ssh_args = -o ControlMaster=auto -o ControlPersist=60s -oStrictHostKeyChecking=no
+''')
+            
+    
         f.flush()
         yield dir+"/ansible.cfg"
         
