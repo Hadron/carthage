@@ -6,10 +6,12 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import threading, typing
 from carthage.dependency_injection import * # type: ignore
-import typing
 from .utils import *
 from carthage.network import NetworkConfig
+
+thread_local = threading.local()
 
 __all__ = []
 
@@ -55,22 +57,30 @@ class ModelingNamespace(dict):
 
     '''
 
-    def __init__(self, filters: typing.List[typing.Callable],
+    def __init__(self, cls: type,
+                 filters: typing.List[typing.Callable],
                  initial: typing.Mapping,
                  classes_to_inject: typing.Sequence[type]):
+        if not hasattr(thread_local, 'current_context'):
+            thread_local.current_context = None
+        self.cls = cls
         self.filters = filters
         self.classes_to_inject = frozenset(classes_to_inject)
         self.to_inject = {}
         super().__init__(initial)
+        self.parent_context = thread_local.current_context
+        self.context_imported = False
         self.initially_set = set(self.keys())
 
     def __setitem__(self, k, v):
+        if thread_local.current_context is not self:
+            self.update_context()
         state = InjectionEntry(v)
         if isinstance(v, type) and (self.classes_to_inject & set(v.__bases__)):
             state.inject_by_class = True
         handled = False
         for f in self.filters:
-            if f(self, k, state):
+            if f(self.cls, self, k, state):
                 #The filter has handled things
                 handled = True
         else:
@@ -78,6 +88,7 @@ class ModelingNamespace(dict):
             try: self.initially_set.remove(k)
             except KeyError: pass
         if k.startswith('_'):
+            if k == "__qualname__": self.import_context()
             return state.value
         if state.inject_by_name:
             self.to_inject[InjectionKey(k)] = (state.value, state.injection_options)
@@ -97,6 +108,28 @@ class ModelingNamespace(dict):
             except KeyError: pass
         return res
 
+    def import_context(self):
+        # We only want to import the context if our qualname is an
+        # extension of their qualname, so we need to wait until the
+        # first time our qualname is set.  If our qualname is later
+        # adjusted we do not want to reimport.
+        if (self.parent_context is None) or self.context_imported: return
+        our_qualname = self['__qualname__']
+        parent = self.parent_context
+        parent_qualname = parent['__qualname__']
+        our_qualname_count = len(our_qualname.split("."))
+        parent_qualname_count = len(parent_qualname.split("."))
+        self.context_imported = True
+        if not (our_qualname.startswith(parent_qualname) and our_qualname_count == parent_qualname_count+1):
+            return
+        for k in parent.keys():
+            if k in self: continue
+            super().__setitem__(k, parent[k])
+            self.initially_set.add(k)
+
+    def update_context(self):
+        thread_local.current_context = self
+        
 
 class ModelingBase(type):
 
@@ -111,7 +144,7 @@ class ModelingBase(type):
         initial = combine_mro_mapping(cls,
                                       ModelingBase,
                                       'namespace_initial')
-        return ModelingNamespace(filters = namespace_filters,
+        return ModelingNamespace(cls, filters = namespace_filters,
                                  initial = initial,
                                  classes_to_inject = classes_to_inject)
 
@@ -119,6 +152,7 @@ class ModelingBase(type):
         for k in namespace.initially_set:
             try: del namespace[k]
             except Exception: pass
+        thread_local.current_context = None
         return super(ModelingBase, cls).__new__(cls, name, bases, namespace, **kwargs)
 
     def __init_subclass__(cls, *args):
@@ -144,5 +178,48 @@ class InjectableModelType(ModelingBase):
         if 'classes_to_inject' not in cls.__dict__:
             cls.classes_to_inject = []
         super().__init_subclass__(*args, **kwargs)
+
         
 __all__ += ['InjectableModelType']
+
+class ModelingDecoratorWrapper:
+
+    subclass: type = ModelingBase
+    name: str
+
+    def __init__(value):
+        self.value = value
+
+    def __repr__(self):
+        return f'{self.__class__.name}({repr(self.value)})'
+
+    def handle(self, cls, ns, k, state):
+        if not issubclass(cls, self.subclass):
+            raise TypeError(f'{self.__class__.name} decorator only for subclasses of {self.cls.__name__}')
+        state.value =  self.value
+
+class InjectAsDecorator(ModelingDecoratorWrapper):
+    subclass = InjectableModelType
+    name = "inject_as"
+
+    def __init__(self, value, *keys):
+        super().__init__(value)
+        self.keys = keys
+
+    def handle(self, cls, ns, k, state):
+        super().handle(cls, ns, k, state)
+        state.extra_keys.extend(self.keys)
+
+def inject_as(*keys):
+    def wrapper(val):
+        return InjectAsDecorator(val, *keys)
+    return wrapper
+
+        
+class ModelingContainer(InjectableModelType):
+
+#: Returns the key under which we are registered in the parent.  Our
+#objects will be adapted by adding these constraints to register in
+#the parent as well.
+    our_key: InjectionKey
+    
