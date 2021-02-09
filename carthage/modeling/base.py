@@ -13,3 +13,14 @@ class InjectableModel(Injectable, metaclass = InjectableModelType):
                 self.injector.add_provider(k, v, **options)
             except Exception as e:
                 raise RuntimeError(f'Failed registering {v} as provider for {k}') from e
+
+class Enclave(InjectableModel, metaclass = ModelingContainer):
+
+    domain: str
+
+    @classmethod
+    def our_key(self):
+        return InjectionKey(Enclave, domain=self.domain)
+
+    __all__ = ['InjectableModel', 'Enclave']
+    

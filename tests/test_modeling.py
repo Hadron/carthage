@@ -2,7 +2,8 @@ import pytest
 from carthage.pytest import *
 from carthage.dependency_injection import *
 from carthage import base_injector
-from carthage.modeling.base import InjectableModel
+from carthage.modeling.base import *
+from carthage.modeling.implementation import ModelingContainer
 from carthage.network import NetworkConfig
 
 @pytest.fixture()
@@ -37,3 +38,17 @@ def test_namespace_cascade(injector):
 
         
             
+def test_container(injector):
+    class Layout(InjectableModel, metaclass = ModelingContainer):
+
+        class RedEnclave(Enclave):
+
+            domain = "evil.com"
+
+            class nc(NetworkConfig): pass
+    res = injector(Layout)
+    nc = res.injector.get_instance(InjectionKey(
+        NetworkConfig, domain = "evil.com"))
+    assert nc is Layout.RedEnclave.nc
+    
+    

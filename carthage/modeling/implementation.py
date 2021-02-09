@@ -49,6 +49,7 @@ class ModelingNamespace(dict):
 
     '''
 
+    to_inject: typing.Dict[InjectionKey, typing.Tuple[typing.Any, dict]]
     def __init__(self, cls: type,
                  filters: typing.List[typing.Callable],
                  initial: typing.Mapping,
@@ -92,7 +93,7 @@ class ModelingNamespace(dict):
             self.to_inject[k] = (state.value, state.injection_options)
         return state.value
 
-    def setitem(k, v, explicit: bool = True):
+    def setitem(self, k, v, explicit: bool = True):
         '''An override for use in filters to avoid recursive filtering'''
         res = super().__setitem__(k, v)
         if explicit:
@@ -148,8 +149,10 @@ class ModelingBase(type):
         return super(ModelingBase, cls).__new__(cls, name, bases, namespace, **kwargs)
 
     def __init_subclass__(cls, *args):
-        cls.namespace_filters = []
-        cls.namespace_initial = {}
+        if 'namespace_filters' not in cls.__dict__:
+            cls.namespace_filters = []
+        if 'namespace_initial' not in cls.__dict__:
+            cls.namespace_initial = {}
 
 
 __all__ += ["ModelingBase"]
@@ -158,6 +161,11 @@ __all__ += ["ModelingBase"]
 class InjectableModelType(ModelingBase):
 
     classes_to_inject: typing.Sequence[type] = (NetworkConfig, )
+    def _handle_provides(target_cls, ns, k, state):
+        if hasattr(state.value, '__provides_dependencies_for__'):
+            state.extra_keys.extend(state.value.__provides_dependencies_for__)
+
+    namespace_filters = [_handle_provides]
     
     def __new__(cls, name, bases, namespace, **kwargs):
         to_inject = namespace.to_inject
@@ -174,44 +182,52 @@ class InjectableModelType(ModelingBase):
         
 __all__ += ['InjectableModelType']
 
-class ModelingDecoratorWrapper:
-
-    subclass: type = ModelingBase
-    name: str
-
-    def __init__(value):
-        self.value = value
-
-    def __repr__(self):
-        return f'{self.__class__.name}({repr(self.value)})'
-
-    def handle(self, cls, ns, k, state):
-        if not issubclass(cls, self.subclass):
-            raise TypeError(f'{self.__class__.name} decorator only for subclasses of {self.cls.__name__}')
-        state.value =  self.value
-
-class InjectAsDecorator(ModelingDecoratorWrapper):
-    subclass = InjectableModelType
-    name = "inject_as"
-
-    def __init__(self, value, *keys):
-        super().__init__(value)
-        self.keys = keys
-
-    def handle(self, cls, ns, k, state):
-        super().handle(cls, ns, k, state)
-        state.extra_keys.extend(self.keys)
-
-def inject_as(*keys):
-    def wrapper(val):
-        return InjectAsDecorator(val, *keys)
-    return wrapper
-
         
 class ModelingContainer(InjectableModelType):
 
 #: Returns the key under which we are registered in the parent.  Our
 #objects will be adapted by adding these constraints to register in
 #the parent as well.
-    our_key: InjectionKey
+
     
+    
+    def _integrate_containment(target_cls, ns, k, state):
+        def propagate_provider(k_inner, v, options):
+            #There is the provides_dependencies_for (or outer) keys, and there is a
+            #set of inner keys from the providers being injected.  We
+            #want to pick one outer key and also add the inner keys
+            #(plus the constraints from the outer key) into the outer
+            #injector.  We pick one outer key just for simplicity; it
+            #could be made to work with more.
+            outer_constraints = outer_key.constraints
+            if set(outer_constraints) & set(k_inner.constraints):
+                return
+            k_new = InjectionKey(k_inner.target, **outer_constraints, **k_inner.constraints)
+            ns.to_inject[k_new] = (v, options)
+            
+        if not isinstance(state.value, ModelingContainer): return
+        val = state.value
+        if hasattr(val, '__provides_dependencies_for__'):
+            outer_key = None
+            for outer_key in val.__provides_dependencies_for__:
+                if isinstance(outer_key.target, ModelingContainer) and len(outer_key.constraints) > 0:
+                    break
+            if outer_key is None or len(outer_key.constraints) == 0: return
+            for k, info in val.__initial_injections__.items():
+                if not isinstance(k.target, type): continue
+                v, options = info
+                propagate_provider(k, v, options)
+
+    namespace_filters = [_integrate_containment]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            our_key  = self.our_key()
+            if not isinstance(our_key, InjectionKey):
+                our_key = InjectionKey(our_key)
+            setattr_default(self, '__provides_dependencies_for__', [])
+            self.__provides_dependencies_for__.insert(0,our_key)
+        except (AttributeError, NameError): pass
+        
+__all__ += ['ModelingContainer']
