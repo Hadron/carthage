@@ -12,6 +12,7 @@ from carthage.dependency_injection import *
 from carthage import base_injector
 from carthage.modeling.base import *
 from carthage.modeling.implementation import ModelingContainer
+from carthage.modeling.decorators import *
 from carthage.network import NetworkConfig
 
 @pytest.fixture()
@@ -69,3 +70,11 @@ def test_container(injector):
     
     
     
+def test_dynamic_name(injector):
+    class Layout(ModelGroup):
+
+        for i in range(3):
+            @dynamic_name(f'i{i+1}')
+            class ignored(InjectableModel): square = i*i
+    assert Layout.i3.square == 4
+    breakpoint()
