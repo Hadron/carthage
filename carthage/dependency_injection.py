@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import contextvars, enum, inspect, weakref
+import contextvars, enum, inspect, typing, weakref
 import collections.abc
 import asyncio, functools
 import logging
@@ -265,8 +265,43 @@ Return the first injector in our parent chain containing *k* or None if there is
     def _check_closed(self):
         if self.closed:
             raise InjectorClosed("Injector is closed")
-        
+
+    def filter(self,
+               target: type,
+               predicate: typing.Union[list, typing.Callable] = None):
+        ''':return: Set of :class:`InjectionKey`s with target type of
+        *target* and satisfying *predicate* in the current injector
+        and its parents.
+
+:param predicate: A list of constraints that must all be present in the key, or a callable that returns true if the key should be included.
+
+        :param target: A target type to filter against.
+
+        Example usage would be to find all registered plugins similar to the following::
+
+            plugin_keys =injector.filter(CarthagePlugin, ['name'])
+
+        '''
+        def filter_for_constraints(k):
+            return all(map(lambda c: c in k.constraints, constraints))
+        if isinstance(predicate, list):
+            constraints = predicate
+            predicate = filter_for_constraints
+        result = set(filter(predicate, self._providers.keys()))
+        if self.parent_injector:
+            result |= self.parent_injector.filter(target, predicate)
+        return result
+
+    def filter_instantiate(self, target, predicate):
+        '''
+        Like :meth:`filter` but an iterator returning tuples of keys instance.
+'''
+        for k in self.filter(target, predicate):
+            yield  k, self.get_instance(k)
+            
+            
     def __call__(self, cls, *args, **kwargs):
+
         '''Construct an instance of cls using the providers in this injector.
         Instantiate providers as needed.  In general a sub-injector is not
         constructed.  However if any keyword arguments pased in specify a
