@@ -111,7 +111,7 @@ async def run_playbook(hosts,
                 ansible_config = ansible_config, log = log, origin = origin) as config_file:
 
             ansible_command += f'ANSIBLE_CONFIG={to_inner(config_file)} ansible-playbook -l"{target_hosts}" {" ".join(extra_args)} {os.path.basename(playbook)}'
-            log_args = {}
+            log_args: dict = {}
             if log:
                 log_args['_out'] = log
                 log_args['_err_to_out'] = True
