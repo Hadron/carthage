@@ -611,8 +611,8 @@ class InjectionKey:
 
 
     def __getattr__(self,k):
-        if k in self.__dict__['constraints']: return self.__dict__['constraints'][k]
         if k in self.__dict__: return self.__dict__[k]
+        if k in self.__dict__['constraints']: return self.__dict__['constraints'][k]
         raise AttributeError
 
     def __repr__(self):
