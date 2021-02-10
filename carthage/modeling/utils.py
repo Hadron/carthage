@@ -53,3 +53,10 @@ __all__ = [
     'combine_mro_list',
     'combine_mro_mapping'
     ]
+
+def setattr_default(obj, a:str, default):
+    if not hasattr(obj, a):
+        setattr(obj, a, default)
+
+__all__ += ['setattr_default']
+
