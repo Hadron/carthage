@@ -49,6 +49,11 @@ def test_namespace_cascade(injector):
 def test_container(injector):
     class Layout(InjectableModel, metaclass = ModelingContainer):
 
+        add_provider(InjectionKey("key1"),
+                     42)
+        access_key_1 = injector_access("key1")
+        
+        net_config = injector_access(InjectionKey(NetworkConfig, domain = "evil.com"))
         class RedEnclave(Enclave):
 
             domain = "evil.com"
@@ -58,5 +63,9 @@ def test_container(injector):
     nc = res.injector.get_instance(InjectionKey(
         NetworkConfig, domain = "evil.com"))
     assert nc is Layout.RedEnclave.nc
+    assert res.net_config is res.RedEnclave.nc
+    assert res.access_key_1 == 42
+    
+    
     
     
