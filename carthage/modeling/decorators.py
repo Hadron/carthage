@@ -7,7 +7,7 @@ class ModelingDecoratorWrapper:
     subclass: type = ModelingBase
     name: str
 
-    def __init__(value):
+    def __init__(self, value):
         self.value = value
 
     def __repr__(self):
@@ -40,4 +40,36 @@ def provides(*keys):
             return ProvidesDecorator(val, *keys)
     return wrapper
 
-__all__ = ["ModelingDecoratorWrapper", "provides"]
+class DynamicNameDecorator(ModelingDecoratorWrapper):
+
+    def __init__(self, value, new_name):
+        super().__init__(value)
+        self.new_name = new_name
+
+    def handle(self, cls, ns, k, state):
+        super().handle(cls, ns, k, state)
+        value = self.value
+        while isinstance(value, ModelingDecoratorWrapper):
+            value.handle(cls, ns, k, state)
+            value = state.value
+        if hasattr(value, '__qualname__'):
+            value.__qualname__ = ns['__qualname__']+'.'+self.new_name
+            value.__name__ = self.new_name
+        ns[self.new_name] = value
+        return True
+
+def dynamic_name(name):
+    '''A decorator to be used in a modeling type to supply a dynamic name.  Example::
+
+        for i in range(3):
+            @dynamic_name(f'{i+1}')
+    class ignored: square = i*i
+
+    Will define threevariables i1 through i3, with values of squares (i1 = 0, i2 =1, i3 = 4).
+    '''
+    def wrapper(val):
+        return DynamicNameDecorator(val, name)
+    return wrapper
+
+    
+__all__ = ["ModelingDecoratorWrapper", "provides", 'dynamic_name']
