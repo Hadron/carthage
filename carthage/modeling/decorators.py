@@ -6,10 +6,10 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-from .implementation import ModelingBase, InjectableModelType
+from .implementation import ModelingBase, InjectableModelType, ModelingContainer
 from .utils import setattr_default
-
-
+import typing
+from ..dependency_injection import InjectionKey
 class ModelingDecoratorWrapper:
 
     subclass: type = ModelingBase
@@ -24,7 +24,13 @@ class ModelingDecoratorWrapper:
     def handle(self, cls, ns, k, state):
         if not issubclass(cls, self.subclass):
             raise TypeError(f'{self.__class__.name} decorator only for subclasses of {self.cls.__name__}')
-        state.value =  self.value
+        state.value = self.value
+        if isinstance(self.value, ModelingDecoratorWrapper):
+            if self.value.handle(cls, ns, k, state):
+                raise TypeError("A decorator that suppresses assignment must be outermost")
+            else:
+                self.value = state.value #in case superclasses care
+
 
 class ProvidesDecorator(ModelingDecoratorWrapper):
     subclass = InjectableModelType
@@ -40,16 +46,21 @@ class ProvidesDecorator(ModelingDecoratorWrapper):
 
 def provides(*keys):
     '''Indicate that the decorated value provides these InjectionKeys'''
+    keys = list(map( lambda k: InjectionKey(k), keys))
     def wrapper(val):
         try:
             setattr_default(val, '__provides_dependencies_for__', [])
             val.__provides_dependencies_for__ = keys+val.__provides_dependencies_for__
+            return val
         except:
+
             return ProvidesDecorator(val, *keys)
     return wrapper
 
 class DynamicNameDecorator(ModelingDecoratorWrapper):
 
+    name = "dynamic_name"
+    
     def __init__(self, value, new_name):
         super().__init__(value)
         self.new_name = new_name
@@ -57,9 +68,6 @@ class DynamicNameDecorator(ModelingDecoratorWrapper):
     def handle(self, cls, ns, k, state):
         super().handle(cls, ns, k, state)
         value = self.value
-        while isinstance(value, ModelingDecoratorWrapper):
-            value.handle(cls, ns, k, state)
-            value = state.value
         if hasattr(value, '__qualname__'):
             value.__qualname__ = ns['__qualname__']+'.'+self.new_name
             value.__name__ = self.new_name
@@ -70,7 +78,7 @@ def dynamic_name(name):
     '''A decorator to be used in a modeling type to supply a dynamic name.  Example::
 
         for i in range(3):
-            @dynamic_name(f'{i+1}')
+            @dynamic_name(f'i{i+1}')
     class ignored: square = i*i
 
     Will define threevariables i1 through i3, with values of squares (i1 = 0, i2 =1, i3 = 4).
@@ -79,5 +87,28 @@ def dynamic_name(name):
         return DynamicNameDecorator(val, name)
     return wrapper
 
-    
-__all__ = ["ModelingDecoratorWrapper", "provides", 'dynamic_name']
+
+def globally_unique_key(
+        self,
+        key: typing.Union[InjectionKey, typing.Callable[[object], InjectionKey]],
+                          ):
+    '''Decorate a value to indicate that *key* is a globally unique
+    :class:`~InjectionKey` that should provide the given value.
+    Globally unique keys are not extended with additional constraints
+    when propagated up through :class:`~ModelingContainers`.
+
+    :param key:  A callback that maps the value to a key.  Alternatively, simply the :class:`~InjectionKey` to use.
+
+    '''
+    def wrapper(val):
+        nonlocal key
+        if callable(key):
+            key = key(val)
+            val.__globally_unique_key__ = key
+            return val
+    return wrapper
+
+
+__all__ = ["ModelingDecoratorWrapper", "provides", 'dynamic_name',
+           'globally_unique_key',
+           ]

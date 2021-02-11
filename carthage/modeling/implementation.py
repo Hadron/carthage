@@ -8,6 +8,7 @@
 
 import functools, threading, typing
 from carthage.dependency_injection import * # type: ignore
+from carthage.dependency_injection import InjectorXrefMarker
 from .utils import *
 from carthage.network import NetworkConfig
 # There is a circular import of decorators at the end.
@@ -105,6 +106,13 @@ class ModelingNamespace(dict):
                     self.to_inject[InjectionKey(b)] = (state.value, state.injection_options)
         for k in state.extra_keys:
             self.to_inject[k] = (state.value, state.injection_options)
+        try:
+            global_key = state.value.__globally_unique_key__
+            options = state.injection_options
+            options['globally_unique'] = True
+            # This may replace an extra_key with global to True
+            self.to_inject[global_key] = (state.value, options)
+        except (AttributeError, KeyError): pass
         return state.value
 
     def setitem(self, k, v, explicit: bool = True):
@@ -131,6 +139,7 @@ class ModelingNamespace(dict):
             return
         for k in parent.keys():
             if k in self: continue
+            if k.startswith('_'): continue
             super().__setitem__(k, parent[k])
             self.initially_set.add(k)
 
@@ -223,7 +232,12 @@ class InjectableModelType(ModelingBase):
         to_inject = namespace.to_inject
         namespace.setdefault('_callbacks', [])
         self = super(InjectableModelType,cls).__new__(cls, name, bases, namespace, **kwargs)
-        self.__initial_injections__ = to_inject
+        initial_injections = dict()
+        for c in bases:
+            if hasattr(c, '__initial_injections__'):
+                initial_injections.update(c.__initial_injections__)
+        initial_injections.update(to_inject)
+        self.__initial_injections__ = initial_injections
         return self
     
 
@@ -236,12 +250,13 @@ class InjectableModelType(ModelingBase):
     def add_provider(cls, ns, k:InjectionKey,
                      v: typing.Any,
                      close = True,
-                     allow_multiple = False):
-        def callback(inst):
-            inst.injector.add_provider(
-                k, v,
-                close = close, allow_multiple = allow_multiple)
-        cls._add_callback(ns, callback)
+                     allow_multiple = False, globally_unique = False):
+        assert isinstance(k, InjectionKey)
+        ns.to_inject[k] = (v, dict(
+            close = close,
+            allow_multiple = allow_multiple,
+            globally_unique = globally_unique))
+        
         
 __all__ += ['InjectableModelType']
 
@@ -251,7 +266,7 @@ class ModelingContainer(InjectableModelType):
 #: Returns the key under which we are registered in the parent.  Our
 #objects will be adapted by adding these constraints to register in
 #the parent as well.
-
+    our_key: typing.Callable[[object], InjectionKey]
     
     
     def _integrate_containment(target_cls, ns, k, state):
@@ -262,11 +277,24 @@ class ModelingContainer(InjectableModelType):
             #(plus the constraints from the outer key) into the outer
             #injector.  We pick one outer key just for simplicity; it
             #could be made to work with more.
-            outer_constraints = outer_key.constraints
-            if set(outer_constraints) & set(k_inner.constraints):
-                return
-            k_new = InjectionKey(k_inner.target, **outer_constraints, **k_inner.constraints)
-            ns.to_inject[k_new] = (v, options)
+            globally_unique = options.get('globally_unique', False)
+            if not globally_unique:
+                outer_constraints = outer_key.constraints
+                if set(outer_constraints) & set(k_inner.constraints):
+                    return
+                k_new = InjectionKey(k_inner.target, **outer_constraints, **k_inner.constraints)
+            else:
+                k_new = k_inner #globally unique
+            # In some cases we could make the injector_xref more clear
+            # by adding the outer key's constraints to
+            # v.injectable_key and use that as the new injectable key,
+            # preserving the inner target key.  That generally works
+            # so long as the injectable_key is not masked by a key
+            # already in the outer injector or by an overlapping
+            # constraint.  Also, It just moves the recursion around.
+            v = injector_xref(outer_key, k_inner)
+            if k_new not in ns:
+                ns.to_inject[k_new] = (v, options)
             
         if not isinstance(state.value, ModelingContainer): return
         val = state.value
