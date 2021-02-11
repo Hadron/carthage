@@ -60,7 +60,7 @@ class ModelingNamespace(dict):
         if not hasattr(thread_local, 'current_context'):
             thread_local.current_context = None
         self.cls = cls
-        self.filters = filters
+        self.filters = list(reversed(filters))
         self.classes_to_inject = frozenset(classes_to_inject)
         self.to_inject = {}
         super().__init__()
@@ -76,7 +76,7 @@ class ModelingNamespace(dict):
         if thread_local.current_context is not self:
             self.update_context()
         state = InjectionEntry(v)
-        if isinstance(v, type) and (self.classes_to_inject & set(v.__bases__)):
+        if isinstance(v, type) and (self.classes_to_inject & set(v.__mro__)):
             state.inject_by_class = True
         handled = False
         for f in self.filters:
@@ -93,7 +93,7 @@ class ModelingNamespace(dict):
         if state.inject_by_name:
             self.to_inject[InjectionKey(k)] = (state.value, state.injection_options)
         if state.inject_by_class and isinstance(state.value, type):
-            for b in state.value.__bases__:
+            for b in state.value.__mro__:
                 if b in self.classes_to_inject:
                     self.to_inject[InjectionKey(b)] = (state.value, state.injection_options)
         for k in state.extra_keys:
