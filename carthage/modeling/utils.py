@@ -60,3 +60,14 @@ def setattr_default(obj, a:str, default):
 
 __all__ += ['setattr_default']
 
+def gather_from_class(self, *keys):
+    d: dict = {}
+    if isinstance(self, type):
+        cls = self
+    else: cls = self.__class__
+    for k in keys:
+        try: d[k] = getattr(cls, k)
+        except AttributeError: pass
+    return d
+
+__all__ += ['gather_from_class']

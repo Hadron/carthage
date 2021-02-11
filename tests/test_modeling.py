@@ -5,11 +5,12 @@ from carthage import base_injector
 from carthage.modeling.base import *
 from carthage.modeling.implementation import ModelingContainer
 from carthage.modeling.decorators import *
-from carthage.network import NetworkConfig
+from carthage.network import NetworkConfig, Network
 
 @pytest.fixture()
 def injector():
     injector = base_injector(Injector)
+    injector.claim()
     yield injector
     injector.close()
     
@@ -40,6 +41,7 @@ def test_namespace_cascade(injector):
         
             
 def test_container(injector):
+    class Foo(Injectable): pass
     class Layout(InjectableModel, metaclass = ModelingContainer):
 
         add_provider(InjectionKey("key1"),
@@ -52,12 +54,23 @@ def test_container(injector):
             domain = "evil.com"
 
             class nc(NetworkConfig): pass
+
+            @provides("site-network", InjectionKey(Network, name="red"))
+            class SiteNetwork(NetworkModel):
+                add_provider(InjectionKey(Foo), Foo)
+                name = "red"
+                
     res = injector(Layout)
     nc = res.injector.get_instance(InjectionKey(
         NetworkConfig, domain = "evil.com"))
     assert nc is Layout.RedEnclave.nc
     assert res.net_config is res.RedEnclave.nc
     assert res.access_key_1 == 42
+    foo = res.injector.get_instance(InjectionKey(
+        Foo, domain = "evil.com", name = "red",
+        _ready = False))
+    assert isinstance(foo, Foo)
+    
     
     
     
@@ -69,4 +82,23 @@ def test_dynamic_name(injector):
             @dynamic_name(f'i{i+1}')
             class ignored(InjectableModel): square = i*i
     assert Layout.i3.square == 4
-    breakpoint()
+    
+def test_machine_model(injector):
+    class Layout(ModelGroup):
+
+        class Red(Enclave):
+
+            domain = "evil.com"
+
+            class NetConfig (NetworkConfigModel):
+                pass
+            
+            class Router(MachineModel): pass
+
+        red_router = injector_access(InjectionKey(MachineModel, host  = "router.evil.com"))
+
+    res = injector(Layout)
+    assert res.red_router.name == "router.evil.com"
+    
+    
+

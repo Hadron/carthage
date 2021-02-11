@@ -2,7 +2,7 @@ from .implementation import *
 from carthage.dependency_injection import * #type: ignore
 import typing
 import carthage.network
-
+from .utils import *
 __all__ = []
 
 class injector_access:
@@ -49,16 +49,39 @@ class InjectableModel(Injectable, metaclass = InjectableModelType):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        dependency_providers: typing.Mapping[typing.Any,DependencyProvider] = {}
+        # This is complicated because we want to reuse the same
+        # DependencyProvider when registering the same value more than
+        # once so that instantiations alias and we don't accidentally
+        # get multiple instances of the same type providing related
+        # but different keys.
         for k,info in self.__class__.__initial_injections__.items():
             v, options = info
             try:
-                self.injector.add_provider(k, v, **options)
+                dp = dependency_providers[v]
+            # TypeError: unhashable
+            except (KeyError, TypeError):
+                dp = DependencyProvider(
+                    v, close = options['close'],
+                    allow_multiple = options['allow_multiple'])
+                try: dependency_providers[v] = dp
+                except TypeError: pass
+            if 'globally_unique' in options:
+                options = dict(options)
+                del options['globally_unique']
+            try:
+                self.injector.add_provider(k, dp, replace = True, **options)
             except Exception as e:
                 raise RuntimeError(f'Failed registering {v} as provider for {k}') from e
 
-        for cb in self.__class__._callbacks:
-            cb(self)
-            
+        for c in reversed(self.__class__.__mro__):
+            if isinstance(c, ModelingBase) and hasattr(c, '_callbacks'):
+                for cb in c._callbacks:
+                    cb(self)
+
+    def __init_subclass__(cls, *args, template = False, **kwargs):
+        super().__init_subclass__(*args, **kwargs)
+        
 __all__ += ['InjectableModel']
 
 class NetworkModel(carthage.Network, InjectableModel, metaclass = ModelingContainer):
@@ -99,12 +122,21 @@ __all__ += ['ModelGroup', 'Enclave']
 class MachineModelType(ModelingContainer):
 
     def __new__(cls, name, bases, ns, **kwargs):
-        if '.' not in ns.get('name', "."):
+        if 'name' not in ns:
+            ns['name'] = name.lower()
+        if '.' not in ns['name']:
             try:
-                ns['name'] = ns['name']+ns['domain']
+                ns['name'] = ns['name'] + '.' + ns['domain']
             except KeyError: pass
         return super().__new__(cls, name, bases, ns, **kwargs)
-class MachineModel(InjectableModel, metaclass = MachineModelType):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not kwargs.get('template', False):
+            self.__globally_unique_key__ = self.our_key()
+        
+        
+class MachineModel(InjectableModel, metaclass = MachineModelType, template = True):
 
     @classmethod
     def our_key(cls):
