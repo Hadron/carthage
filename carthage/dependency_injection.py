@@ -382,7 +382,7 @@ Return the first injector in our parent chain containing *k* or None if there is
             elif to_ready and isinstance(result,AsyncInjectable) \
                      and result._async_ready_state != ReadyState.READY:
                     if not loop:
-                        raise RuntimeError(f"Requesting instantiation of {result} to ready, outside of async context")
+                        raise AsyncRequired(f"Requesting instantiation of {result} to ready, outside of async context")
                     if placement: placement(result)
                     future = loop.create_task(self._handle_async_injectable(result, resolv = False))
                     futures.append(future)
@@ -486,9 +486,12 @@ Return the first injector in our parent chain containing *k* or None if there is
             pass
 
     def _is_async(self, p):
-        if isinstance(p, (collections.abc.Coroutine, AsyncInjectable,
+        if isinstance(p, (collections.abc.Coroutine, 
                           asyncio.Future)):
             return True
+        elif isinstance(p, AsyncInjectable) and p._async_ready_state != ReadyState.READY:
+            to_ready = instantiate_to_ready.get()
+            return to_ready
         return False
     
 
