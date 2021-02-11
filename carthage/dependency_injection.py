@@ -986,6 +986,19 @@ class InjectorXrefMarker(AsyncInjectable, metaclass = InjectorXrefMarkerMeta):
             self.ainjector = injector.get_instance(AsyncInjector)
             return self
 
+    @classmethod
+    def supplementary_injection_keys(cls, k):
+        return
+        yield None #to make it a generator
+
+    @classmethod
+    def satisfies_injection_key(cls, k):
+        target = cls.target_key.target
+        if (isinstance(target, type) and issubclass(target, Injectable)) or \
+           isinstance(target, Injectable):
+            return target.satisfies_injection_key(k)
+        return True
+    
     async def async_resolv(self):
         return self.ainjector.get_instance_async(self.target_key)
 
