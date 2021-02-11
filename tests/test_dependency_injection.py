@@ -1,5 +1,5 @@
 from carthage import dependency_injection
-from carthage.dependency_injection import inject, InjectionKey, AsyncInjectable, inject_autokwargs
+from carthage.dependency_injection import inject, InjectionKey, AsyncInjectable, Injectable, inject_autokwargs
 from carthage.utils import when_needed
 from carthage.pytest import async_test
 
@@ -366,3 +366,22 @@ async def test_dependency_quote(a_injector):
         assert foo is AsyncDependency
     await a_injector(func, foo=dependency_injection.dependency_quote(AsyncDependency))
 
+def test_injector_xref(injector):
+    injector_xref = dependency_injection.injector_xref
+
+    class Target(Injectable):
+        pass
+    @inject(injector = dependency_injection.Injector)
+    class Sub(Injectable):
+
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.injector.add_provider(InjectionKey(42), Target)
+    injector.add_provider(Sub)
+    injector.add_provider(InjectionKey("target"),
+                          injector_xref(
+                              InjectionKey(Sub),
+                              InjectionKey(Target)))
+    res = injector.get_instance(InjectionKey("target"))
+    assert isinstance(res, Target)
+    

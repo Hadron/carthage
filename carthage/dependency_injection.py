@@ -128,6 +128,8 @@ class ExistingProvider(RuntimeError):
 
 class  InjectorClosed(RuntimeError): pass
 
+class AsyncRequired(RuntimeError): pass
+
 # Note that after @inject is defined, this class is redecorated to take parent_injector as a dependency so that
 #    injector = sub_injector(Injector)
 # works
@@ -402,7 +404,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                 res = cls(*args, **kwargs)
                 if self._is_async(res):
                     if not _loop:
-                        raise RuntimeError("Asynchronous dependency injected into non-asynchronous context")
+                        raise AsyncRequired("Asynchronous dependency injected into non-asynchronous context")
                     if done_future is None: done_future = _loop.create_future()
                     self._handle_async(res, done_future,
                                        placement = _placement,
@@ -829,7 +831,7 @@ Indicate that a value (or dependency provider) should not be subject to injcoter
 
     def __repr__(self):
         return f'dependency_quote({repr(self.value)})'
-    
+
    #########################################
    # Asynchronous support:
 
@@ -952,7 +954,70 @@ class AsyncInjector(Injectable):
             return await res
         else: return res
 
+# Injector cross reference support
+class InjectorXrefMarkerMeta(type):
+
+    def __repr__(self):
+        return f'injector_xref({self.injectable_key}, {self.target_key})'
+
+    
+class InjectorXrefMarker(AsyncInjectable, metaclass = InjectorXrefMarkerMeta):
+
+    # A separate subclass is created for each injector_xref with one
+    # class attributes: target_key.  If possible our __new__ entirely
+    # resolves to target_key and simply returns that object.  If that
+    # requires asynchronous action, then we actually instantiate
+    # ourself and depend on async_resolv.  We receive an injectable
+    # through dependency injection.
+
+    def __new__(cls, injectable):
+        if isinstance(injectable, Injector):
+            injector = injectable
+        else: injector = injectable.injector
+        try:
+            res = injector.get_instance(cls.target_key)
+            return res
+        except AsyncRequired:
+            # Don't pass in the injector; we don't want to claim it
+            self = super().__new__(cls)
+            self.ainjector = injector.get_instance(AsyncInjector)
+            return self
+
+    async def async_resolv(self):
+        return self.ainjector.get_instance_async(self.target_key)
+
+def injector_xref(injectable_key: InjectionKey,
+                  target_key: InjectionKey,
+                  ):
+
+    '''Request that one injector look up a target in another injector.  Typical usage::
+
+        base_injector.add_provider(target_key,
+            injector_xref(sub_injector_key, target_key))
+
+    :param injectable_key: The :class:`InjectionKey` of an :class:`Injectable` or an :class:`Injector` in which the target is actually looked up.
+
+    :param target_key: An :class:`InjectionKey` registered with the
+    injector belonging to *injectable_key*.  It is important that
+    *target_key* actually be provided by that injector.  In the common
+    case where the parent of *injectable_key* eventually chains back
+    to the injector in which this *injector_xref* is provided, a loop
+    can happen otherwise.
+
+    '''
+    tkey = target_key
+    ikey = injectable_key
+    @inject(injectable = injectable_key,
+            injector = None)
+    class instance(InjectorXrefMarker):
+        target_key = tkey
+        injectable_key = ikey
+    return instance
+
+
+    
 async def shutdown_injector(injector, timeout = 5):
+
     '''
     Close an injector and cancel running tasks
         
@@ -981,6 +1046,6 @@ __all__ = '''
     Injectable AsyncInjectable InjectionFailed ExistingProvider
     InjectionKey
     DependencyProvider
-dependency_quote
+dependency_quote injector_xref
     partial_with_dependencies shutdown_injector
 '''.split()
