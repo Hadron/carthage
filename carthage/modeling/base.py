@@ -103,15 +103,20 @@ class NetworkModel(carthage.Network, InjectableModel, metaclass = ModelingContai
             
 __all__ += ['NetworkModel']
 
-class NetworkConfigModel(InjectableModel,
-                         carthage.network.NetworkConfig,
-                         ):
+class NetworkConfigModelType(InjectableModelType):
 
     @modelmethod
     def add(cls, ns, interface, net, mac):
         def callback(inst):
             inst.add(interface, net, mac)
         cls._add_callback(ns, callback)
+
+class NetworkConfigModel(InjectableModel,
+                         carthage.network.NetworkConfig,
+                         metaclass = NetworkConfigModelType
+                         ):
+    pass
+
 
 __all__ += ['NetworkConfigModel']
 
@@ -142,7 +147,11 @@ class MachineModelType(ModelingContainer):
         super().__init__(*args, **kwargs)
         if not kwargs.get('template', False):
             self.__globally_unique_key__ = self.our_key()
-        
+
+    @modelmethod
+    def add_ansible_role(self, *args):
+        pass #This is a stub
+
         
 class MachineModel(InjectableModel, metaclass = MachineModelType, template = True):
 
@@ -150,5 +159,8 @@ class MachineModel(InjectableModel, metaclass = MachineModelType, template = Tru
     def our_key(cls):
         return InjectionKey(MachineModel, host = cls.name)
 
+    network_config = injector_access(InjectionKey(carthage.network.NetworkConfig))
+
+    
 __all__ += ['MachineModel']
 

@@ -68,14 +68,20 @@ def setattr_default(obj, a:str, default):
 
 __all__ += ['setattr_default']
 
-def gather_from_class(self, *keys):
+def gather_from_class(self, *keys, mangle_name = True):
+    '''
+    :param mangle_name: If true, and name is not in class, set name from __name__
+    '''
+
     d: dict = {}
     if isinstance(self, type):
         cls = self
     else: cls = self.__class__
     for k in keys:
         try: d[k] = getattr(cls, k)
-        except AttributeError: pass
+        except AttributeError:
+            if k == 'name' and mangle_name:
+                d['name'] = cls.__name__.lower()
     return d
 
 __all__ += ['gather_from_class']
