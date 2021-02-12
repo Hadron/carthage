@@ -114,7 +114,9 @@ def test_machine_model(injector):
 async def test_example_model(ainjector):
     from carthage.modeling.example import Layout
     res = await ainjector(Layout)
-    nc =  res.injector.get_instance(res.net_config)
+    nc = res.net_config
+    assert isinstance(nc, NetworkConfigModel)
     samba = res.injector.get_instance(InjectionKey(MachineModel, host = "samba.evil.com"))
     assert samba.network_config is nc
+    breakpoint()
     

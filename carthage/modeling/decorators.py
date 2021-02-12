@@ -6,10 +6,13 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-from .implementation import ModelingBase, InjectableModelType, ModelingContainer
+from carthage.dependency_injection import Injector, InjectionKey, inject_autokwargs
+from .implementation import ModelingBase, InjectableModelType, ModelingContainer, NSFlags
 from .utils import setattr_default
 import typing
 from ..dependency_injection import InjectionKey
+
+
 class ModelingDecoratorWrapper:
 
     subclass: type = ModelingBase
@@ -30,6 +33,60 @@ class ModelingDecoratorWrapper:
                 raise TypeError("A decorator that suppresses assignment must be outermost")
             else:
                 self.value = state.value #in case superclasses care
+
+class injector_access(ModelingDecoratorWrapper):
+
+    '''Usage::
+
+        val = injector_access("foo")
+
+    At runtime, ``model_instance.val`` will be memoized to ``model_instance.injector.get_instance("foo")``.
+
+    '''
+
+    #Unlike most ModelingDecorators we want to get left in the
+    #namespace.  The only reason this is a ModelingDecorator is so we
+    #can clear the inject_by_name flag to avoid namespace polution and
+    #to minimize the probability of a circular references from
+    #something like ``internet = injector_access("internet")``
+
+    key: InjectionKey
+    name: str
+    target: type
+
+    def __init__(self, key, target = None):
+        super().__init__(key)
+        if not isinstance(key, InjectionKey):
+            key = InjectionKey(key, _ready = False)
+        if key.ready is None: key = InjectionKey(key, _ready = False)
+        #: The injection key to be accessed.
+        self.key = key
+        self.target = target
+        # Our __call__method needs an injector
+        inject_autokwargs(injector = Injector)(self)
+
+    def handle(self, cls, ns, k, state):
+        super().handle(cls, ns, k, state)
+        state.value = self
+        state.flags &= ~NSFlags.inject_by_name
+
+    def __get__(self, inst, owner):
+        if inst is None:
+            if self.target: return self.target
+            return self
+        res = inst.injector.get_instance(self.key)
+        setattr(inst, self.name, res)
+        return res
+
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def __call__(self, injector: Injector):
+        return injector.get_instance(self.key)
+    def __repr__(self):
+        return f'injector_access({repr(self.key)})'
+
+
 
 
 class ProvidesDecorator(ModelingDecoratorWrapper):
@@ -60,7 +117,7 @@ def provides(*keys):
 class DynamicNameDecorator(ModelingDecoratorWrapper):
 
     name = "dynamic_name"
-    
+
     def __init__(self, value, new_name):
         super().__init__(value)
         self.new_name = new_name
@@ -71,7 +128,8 @@ class DynamicNameDecorator(ModelingDecoratorWrapper):
         if hasattr(value, '__qualname__'):
             value.__qualname__ = ns['__qualname__']+'.'+self.new_name
             value.__name__ = self.new_name
-        ns[self.new_name] = value
+        state.value = value
+        ns[self.new_name] = state.instantiate_value(self.new_name)
         return True
 
 def dynamic_name(name):
@@ -109,6 +167,31 @@ def globally_unique_key(
     return wrapper
 
 
+class FlagClearDecorator(ModelingDecoratorWrapper):
+
+    def __init__(self, value, flag: NSFlags):
+        super().__init__(value)
+        self.flag = flag
+    def handle(self, cls, ns, k, state):
+        super().handle(cls, ns, k, state)
+        state.flags &= ~self.flag
+
+def no_instantiate():
+    def wrapper(val):
+        return FlagClearDecorator(val, NSFlags.instantiate_on_access)
+    return wrapper
+
+def no_close():
+    def wrapper(val):
+        return FlagClearDecorator(val, NSFlags.close)
+    return wrapper
+
+def allow_multiple():
+    raise NotImplementedError("Need to write FlagSetDecorator")
+
+
 __all__ = ["ModelingDecoratorWrapper", "provides", 'dynamic_name',
+           'injector_access', 'no_instantiate',
+           'allow_multiple', 'no_close',
            'globally_unique_key',
            ]

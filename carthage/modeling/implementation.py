@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import functools, threading, typing
+import enum, functools, threading, typing
 from carthage.dependency_injection import * # type: ignore
 from carthage.dependency_injection import InjectorXrefMarker
 from .utils import *
@@ -17,35 +17,50 @@ thread_local = threading.local()
 
 __all__ = []
 
-class InjectionEntry:
+class NSFlags(enum.Flag):
+    close = 1
+    allow_multiple = 2
+    inject_by_name = 4
+    inject_by_class = 8
+    instantiate_on_access = 16
+    
+class NsEntry:
 
-    __slots__ = ['extra_keys', 'inject_by_name',
-                 'inject_by_class', 'value',
-                 'perform_close', 'allow_multiple']
+    __slots__ = ['extra_keys',                  'value',
+                 'flags']
+    flags: NSFlags
     extra_keys: list
-    inject_by_name: bool
-    inject_by_class: bool
-    perform_close: bool
-    allow_multiple: bool
     
 
     def __init__(self, value):
         self.value = value
-        self.inject_by_name = True
-        self.inject_by_class = False
         self.extra_keys = []
-        self.perform_close = True
-        self.allow_multiple = False
+        self.flags = NSFlags.close | NSFlags.instantiate_on_access | NSFlags.inject_by_name
         
 
     @property
     def injection_options(self):
+        f = self.flags
         return dict(
-            allow_multiple = self.allow_multiple,
-            close = self.perform_close)
-    
+            allow_multiple = bool(f&NSFlags.allow_multiple),
+            close = bool(f&NSFlags.close),
+            )
+
     def __repr__(self):
-        return f'<InjectionEntry: name = {self.inject_by_name}, class = {self.inject_by_class}, keys = {self.extra_keys}>'
+        return f'<NsEntry: flags = {self.flags}, keys: {self.extra_keys}, value: {self.value}>'
+
+
+    def instantiate_value(self, name):
+        if (self.flags&NSFlags.instantiate_on_access) and isinstance(self.value, type):
+            if self.flags&NSFlags.inject_by_name:
+                key = InjectionKey(name)
+            elif self.extra_keys:
+                key = self.extra_keys[0]
+            else: return self.value
+            return decorators.injector_access(key, self.value)
+        return self.value
+    
+
 
     
 
@@ -83,24 +98,24 @@ class ModelingNamespace(dict):
     def __setitem__(self, k, v):
         if thread_local.current_context is not self:
             self.update_context()
-        state = InjectionEntry(v)
+        state = NsEntry(v)
         if isinstance(v, type) and (self.classes_to_inject & set(v.__mro__)):
-            state.inject_by_class = True
+            state.flags |= NSFlags.inject_by_class
         handled = False
         for f in self.filters:
             if f(self.cls, self, k, state):
                 #The filter has handled things
                 handled = True
         else:
-            if not handled: super().__setitem__(k,state.value)
+            if not handled: super().__setitem__(k,state.instantiate_value(k))
             try: self.initially_set.remove(k)
             except KeyError: pass
         if k.startswith('_'):
             if k == "__qualname__": self.import_context()
             return state.value
-        if state.inject_by_name:
+        if state.flags & NSFlags.inject_by_name:
             self.to_inject[InjectionKey(k)] = (state.value, state.injection_options)
-        if state.inject_by_class and isinstance(state.value, type):
+        if state.flags & NSFlags.inject_by_class:
             for b in state.value.__mro__:
                 if b in self.classes_to_inject:
                     self.to_inject[InjectionKey(b)] = (state.value, state.injection_options)

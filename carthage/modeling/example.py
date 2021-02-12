@@ -24,6 +24,7 @@ class Layout(ModelGroup):
         site_network = injector_access("site-network")
         add("eth0", site_network, None)
         
+    @provides(InjectionKey("internet"))
     class Internet(NetworkModel):
         
 
