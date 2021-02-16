@@ -1,4 +1,4 @@
-import enum, functools, threading, typing
+import enum, functools, inspect, threading, typing
 from carthage.dependency_injection import * # type: ignore
 from carthage.dependency_injection import InjectorXrefMarker
 from .utils import *
@@ -340,6 +340,36 @@ class ModelingContainer(InjectableModelType):
             setattr_default(self, '__provides_dependencies_for__', [])
             self.__provides_dependencies_for__.insert(0,our_key)
         except (AttributeError, NameError): pass
+
+    @modelmethod
+    def include_container(cls, ns, obj,
+                          *, close = True,
+                          allow_multiple = False,
+                          **kwargs):
+        def handle_function(func):
+            params = set(inspect.signature(func).parameters.keys())
+            open_params = params - set(kwargs.keys())
+            for k in open_params:
+                if k not in ns:
+                    raise AttributeError( f'{k} not found in enclosing class')
+                kwargs[k] = ns[k]
+            return func(**kwargs)
+        if not hasattr(obj, '__provides_dependencies_for__') and callable(obj):
+            obj = handle_function(obj)
+        if not hasattr(obj, '__provides_dependencies_for__'):
+            raise TypeError( f'{obj} is not a modeling container class')
+        state = NsEntry(obj)
+        ModelingContainer._integrate_containment(cls, ns, obj.__name__, state)
+        if not close:
+            state.flags &= ~NSFlags.close
+        if allow_multiple:
+            state.flags |= NSFlags.allow_multiple
+        options = state.injection_options
+        for k in obj.__provides_dependencies_for__:
+            options['globally_unique'] = (k == getattr(obj, '__globally_unique_key__', None))
+            if k not in ns.to_inject:
+                ns.to_inject[k] = (obj, options)
+            
         
 __all__ += ['ModelingContainer']
 
