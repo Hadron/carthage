@@ -45,6 +45,7 @@ class Container(Machine, SetupTaskMixin):
             vol = await self.ainjector.get_instance_async(container_volume)
             self.close_volume = False
         except KeyError:
+            await self.image.async_become_ready()
             vol = await self.ainjector(BtrfsVolume,
                               clone_from = self.image,
                               name = "containers/"+self.name)
