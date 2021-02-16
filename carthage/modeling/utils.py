@@ -77,3 +77,14 @@ def gather_from_class(self, *keys, mangle_name = True):
     return d
 
 __all__ += ['gather_from_class']
+
+def key_from_injector_access(*accesses):
+    from .decorators import injector_access
+    result = []
+    for k in accesses:
+        if isinstance(k, injector_access):
+            k = k.key
+        result.append(k)
+    return result
+
+__all__ += ['key_from_injector_access']
