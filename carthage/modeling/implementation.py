@@ -300,6 +300,19 @@ class ModelingContainer(InjectableModelType):
                 k_new = InjectionKey(k_inner.target, **outer_constraints, **k_inner.constraints)
             else:
                 k_new = k_inner #globally unique
+            # Must be after we have chosen a globally unique key if there is one.
+            if isinstance(v, decorators.injector_access):
+                # Normally injector_access will not actually get a key
+                # in __initial_injections__, but there are important
+                # cases where that happens, like the machine entry on
+                # MachineModel.  In general this situation will come
+                # up if some modeling type wishes to propagate
+                # something that is referenced by an InjectionKey
+                # rather than a value.  One of the biggest reasons to
+                # try and collapse out injector_access is that
+                # injector_access cannot deal with AsyncRequired but
+                # injector_xref can.
+                k_inner = v.key
             # In some cases we could make the injector_xref more clear
             # by adding the outer key's constraints to
             # v.injectable_key and use that as the new injectable key,

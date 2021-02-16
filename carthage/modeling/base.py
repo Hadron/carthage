@@ -9,8 +9,11 @@
 from .implementation import *
 from .decorators import *
 from carthage.dependency_injection import * #type: ignore
+from carthage.utils import when_needed
 import typing
 import carthage.network
+import carthage.machine
+
 from .utils import *
 __all__ = []
 
@@ -52,7 +55,7 @@ class InjectableModel(Injectable, metaclass = InjectableModelType):
 
     def __init_subclass__(cls, *args, template = False, **kwargs):
         super().__init_subclass__(*args, **kwargs)
-        
+
 __all__ += ['InjectableModel']
 
 class NetworkModel(carthage.Network, InjectableModel, metaclass = ModelingContainer):
@@ -61,9 +64,9 @@ class NetworkModel(carthage.Network, InjectableModel, metaclass = ModelingContai
         kwargs.update(gather_from_class(self, 'name', 'vlan_id'))
         super().__init__(**kwargs)
         if hasattr(self,'bridge_name'):
-            self.ainjector.add_provider(carthage.network.BridgeNetwork,
-                                        carthage.network.BridgeNetwork(self.bridge_name, delete_bridge = False))
-            
+            self.ainjector.add_provider(InjectionKey(carthage.network.BridgeNetwork),
+                                        when_needed(carthage.network.BridgeNetwork, bridge_name = self.bridge_name, delete_bridge = False))
+
 __all__ += ['NetworkModel']
 
 class NetworkConfigModelType(InjectableModelType):
@@ -71,6 +74,8 @@ class NetworkConfigModelType(InjectableModelType):
     @modelmethod
     def add(cls, ns, interface, net, mac):
         def callback(inst):
+            nonlocal mac, net
+            mac, net = key_from_injector_access(mac, net)
             inst.add(interface, net, mac)
         cls._add_callback(ns, callback)
 
@@ -95,6 +100,12 @@ class Enclave(InjectableModel, metaclass = ModelingContainer):
 
 __all__ += ['ModelGroup', 'Enclave']
 
+machine_implementation_key = InjectionKey(carthage.machine.Machine, role = "implementation")
+
+__all__ += [ 'machine_implementation_key']
+
+
+
 class MachineModelType(ModelingContainer):
 
     def __new__(cls, name, bases, ns, **kwargs):
@@ -110,12 +121,18 @@ class MachineModelType(ModelingContainer):
         super().__init__(*args, **kwargs)
         if not kwargs.get('template', False):
             self.__globally_unique_key__ = self.our_key()
+            self.__initial_injections__[InjectionKey(
+                carthage.machine.Machine, host = self.name)] = (
+                    self.machine, dict(
+                        close = True, allow_multiple = False,
+                        globally_unique = True))
+
 
     @modelmethod
     def add_ansible_role(self, *args):
         pass #This is a stub
 
-        
+
 class MachineModel(InjectableModel, metaclass = MachineModelType, template = True):
 
     @classmethod
@@ -124,6 +141,38 @@ class MachineModel(InjectableModel, metaclass = MachineModelType, template = Tru
 
     network_config = injector_access(InjectionKey(carthage.network.NetworkConfig))
 
-    
-__all__ += ['MachineModel']
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.injector.add_provider(InjectionKey(MachineModel), dependency_quote(self))
+        self.injector.add_provider(InjectionKey(carthage.machine.Machine), MachineImplementation)
 
+    machine = injector_access(InjectionKey(carthage.machine.Machine))
+
+@inject(injector = Injector,
+            implementation = machine_implementation_key,
+            model = MachineModel,
+            )
+class MachineImplementation(AsyncInjectable):
+
+    # Another class that is only a type because of how the injection
+    # machineary works.
+
+    def __new__(cls, injector, implementation, model):
+        bases = [implementation] + list(map(lambda x: x[1], injector.filter_instantiate(MachineMixin, ['name'])))
+        for b in bases:
+            assert isinstance(b, type), f'{b} is not a type; did you forget a dependency_quote'
+            res = type("MachineImplementation", tuple(bases), {})
+        try:
+            return injector(res, name = model.name)
+        except AsyncRequired:
+            self = super().__new__(cls)
+            self.name = model.name
+            self.injector = injector
+            self.res = res
+            return self
+
+    async def async_resolve(self):
+        return await self.ainjector(self.res, name = self.name)
+
+
+__all__ += ['MachineModel']

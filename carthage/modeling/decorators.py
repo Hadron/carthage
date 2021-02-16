@@ -189,9 +189,40 @@ def no_close():
 def allow_multiple():
     raise NotImplementedError("Need to write FlagSetDecorator")
 
+class MachineMixin(ModelingDecoratorWrapper):
+
+    subclass = InjectableModelType
+    name = "machine_mixin"
+
+    def __init__(self, value, name):
+        super().__init__(value)
+        self.name = name
+
+    def handle(self, cls, ns, k, state):
+        super().handle(cls, ns, k. state)
+        state.flags &= ~(NSFlags.inject_by_name | NsFlags.inject_by_class | NSFlags.instantiate_on_access)
+        ns.to_inject[InjectionKey(MachineMixin,
+                                  name = self.name)] = (
+                                      dependency_quote(state.value), state.injection_options)
+        
+def machine_mixin(name = None):
+    '''Mark a class (subclass of :class:`Machine` typically) as something that should be mixed in to any machine declared lower in the injector hierarchy withing modeling classes.  To accomplish the same thing outside of modeling classes::
+
+        injector.add_provider(InjectionKey(MachineMixin, name = "some_name"), dependency_quote(mixin_class))
+
+    The call to :func:~carthage.dependency_injection.dependency_quote`
+    is required to prevent the injector from trying to build a machine
+    when the Mixin is looked up.
+
+'''
+    def wrapper(val):
+        return MachineMixin(val, name or val.__name__)
+    return wrapper
+
 
 __all__ = ["ModelingDecoratorWrapper", "provides", 'dynamic_name',
            'injector_access', 'no_instantiate',
            'allow_multiple', 'no_close',
            'globally_unique_key',
+           'MachineMixin', 'machine_mixin',
            ]
