@@ -50,6 +50,14 @@ def test_namespace_cascade(injector):
             
 def test_container(injector):
     class Foo(Injectable): pass
+    def extra_container(domain):
+        d = domain
+        @provides(InjectionKey("included", constraint = 20))
+        class Baz(ModelGroup):
+            domain = d
+            class server(MachineModel):
+                name = "server"
+        return Baz
     class Layout(InjectableModel, metaclass = ModelingContainer):
 
         add_provider(InjectionKey("key1"),
@@ -63,6 +71,8 @@ def test_container(injector):
 
             class nc(NetworkConfig): pass
 
+            include_container(extra_container)
+
             @provides("site-network", InjectionKey(Network, name="red"))
             class SiteNetwork(NetworkModel):
                 add_provider(InjectionKey(Foo), Foo)
@@ -72,6 +82,8 @@ def test_container(injector):
     nc = res.injector.get_instance(InjectionKey(
         NetworkConfig, domain = "evil.com"))
     assert nc is Layout.RedEnclave.nc
+    machine = res.injector.get_instance(InjectionKey(MachineModel, host = "server.evil.com"))
+    assert isinstance(machine, MachineModel)
     assert res.net_config is res.RedEnclave.nc
     assert res.access_key_1 == 42
     foo = res.injector.get_instance(InjectionKey(
