@@ -14,8 +14,9 @@ logger.setLevel('INFO')
 
 class ReadyState(enum.Enum):
     NOT_READY = 0
-    READY_PENDING = 1
-    READY = 2
+    RESOLVED = 1
+    READY_PENDING = 2
+    READY = 3
 
 instantiate_to_ready = contextvars.ContextVar('instantiate_to_ready', default = True)
 
@@ -281,7 +282,7 @@ Return the first injector in our parent chain containing *k* or None if there is
         if isinstance(predicate, list):
             constraints = predicate
             predicate = filter_for_constraints
-        result = set(filter(predicate, self._providers.keys()))
+        result = set(filter(lambda k: k.target is target and predicate(k), self._providers.keys()))
         if self.parent_injector:
             result |= self.parent_injector.filter(target, predicate)
         return result
@@ -291,8 +292,10 @@ Return the first injector in our parent chain containing *k* or None if there is
         Like :meth:`filter` but an iterator returning tuples of keys instance.
 '''
         for k in self.filter(target, predicate):
-            yield  k, self.get_instance(k)
-            
+            res = self.get_instance(k)
+            if res is not None:
+                yield k, res
+                
             
     def __call__(self, cls, *args, **kwargs):
 
@@ -417,6 +420,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                     return res
             except TypeError as e:
                 raise TypeError(f'Error constructing {cls}:') from e
+            except AsyncRequired: raise
             except Exception as e:
                 tb_utils.filter_chatty_modules(e, _chatty_modules, 4)
                 if _orig_k:
@@ -483,7 +487,7 @@ Return the first injector in our parent chain containing *k* or None if there is
             return True
         elif isinstance(p, AsyncInjectable) and p._async_ready_state != ReadyState.READY:
             to_ready = instantiate_to_ready.get()
-            return to_ready
+            return (p._async_ready_state ==  ReadyState.NOT_READY) or to_ready
         return False
     
 
@@ -519,8 +523,12 @@ Return the first injector in our parent chain containing *k* or None if there is
     async def _handle_async_injectable(self, obj, resolv = True):
         try:
             #Don't bother running the resolve protocol for the base case
-            if resolv and (obj.async_resolve.__func__ !=AsyncInjectable.async_resolve):
+            if resolv and (obj._async_ready_state == ReadyState.NOT_READY):
                 res = await obj.async_resolve()
+                if res is None:
+                    if obj._async_ready_state == ReadyState.NOT_READY:
+                        obj._async_ready_state = ReadyState.RESOLVED
+                    res = obj
                 if self._is_async(res):
                     future = self.loop.create_future()
                     self._handle_async(res, done_future = future, placement = None,
@@ -859,8 +867,12 @@ class AsyncInjectable(Injectable):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # superclass claims the injector for us.
-        self.ainjector = self.injector(AsyncInjector)
-        self._async_ready_state = ReadyState.NOT_READY
+        if hasattr(self, 'injector'):
+            self.ainjector = self.injector(AsyncInjector)
+        if self.async_resolve.__func__ is AsyncInjectable.async_resolve:
+            self._async_ready_state = ReadyState.RESOLVED
+        else:
+            self._async_ready_state = ReadyState.NOT_READY
         
         
     async def async_ready(self):
@@ -873,12 +885,14 @@ class AsyncInjectable(Injectable):
 
     async def async_become_ready(self):
         if self._async_ready_state == ReadyState.NOT_READY:
+            raise RuntimeError("Resolution should have already happened")
+        elif self._async_ready_state == ReadyState.RESOLVED:
             self._ready_future = asyncio.ensure_future(self.async_ready())
             self._async_ready_state = ReadyState.READY_PENDING
             try:
                 return await self._ready_future
             except:
-                self._async_ready_state = ReadyState.NOT_READY
+                self._async_ready_state = ReadyState.RESOLVED
                 raise
             finally: del self._ready_future
         elif self._async_ready_state == ReadyState.READY_PENDING:
@@ -999,7 +1013,7 @@ class InjectorXrefMarker(AsyncInjectable, metaclass = InjectorXrefMarkerMeta):
             return target.satisfies_injection_key(k)
         return True
     
-    async def async_resolv(self):
+    async def async_resolve(self):
         return self.ainjector.get_instance_async(self.target_key)
 
 def injector_xref(injectable_key: InjectionKey,
@@ -1060,7 +1074,7 @@ def _call_close(obj, canceled_futures):
 __all__ = '''
     inject inject_autokwargs Injector AsyncInjector
     Injectable AsyncInjectable InjectionFailed ExistingProvider
-    InjectionKey
+    InjectionKey AsyncRequired
     DependencyProvider
 dependency_quote injector_xref
     partial_with_dependencies shutdown_injector
