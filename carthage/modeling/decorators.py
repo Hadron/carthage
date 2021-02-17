@@ -121,8 +121,7 @@ class DynamicNameDecorator(ModelingDecoratorWrapper):
             value.__qualname__ = ns['__qualname__']+'.'+self.new_name
             value.__name__ = self.new_name
         state.value = value
-        ns[self.new_name] = state.instantiate_value(self.new_name)
-        return True
+        state.new_name = self.new_name
 
 def dynamic_name(name):
     '''A decorator to be used in a modeling type to supply a dynamic name.  Example::
@@ -139,7 +138,6 @@ def dynamic_name(name):
 
 
 def globally_unique_key(
-        self,
         key: typing.Union[InjectionKey, typing.Callable[[object], InjectionKey]],
                           ):
     '''Decorate a value to indicate that *key* is a globally unique
@@ -154,8 +152,12 @@ def globally_unique_key(
         nonlocal key
         if callable(key):
             key = key(val)
-            val.__globally_unique_key__ = key
-            return val
+        val.__globally_unique_key__ = key
+        #Make sure we're providing the key as well.
+        setattr_default(val, '__provides_dependencies_for__', [])
+        if key not in val.__provides_dependencies_for__:
+            val.__provides_dependencies_for__.append(key)
+        return val
     return wrapper
 
 

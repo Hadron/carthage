@@ -19,15 +19,17 @@ class NSFlags(enum.Flag):
 class NsEntry:
 
     __slots__ = ['extra_keys',                  'value',
-                 'flags']
+                 'flags', 'new_name']
     flags: NSFlags
     extra_keys: list
+    new_name: typing.Optional[str]
     
 
     def __init__(self, value):
         self.value = value
         self.extra_keys = []
         self.flags = NSFlags.close | NSFlags.instantiate_on_access | NSFlags.inject_by_name
+        self.new_name = None
         
 
     @property
@@ -98,6 +100,9 @@ class ModelingNamespace(dict):
             if f(self.cls, self, k, state):
                 #The filter has handled things
                 handled = True
+            if state.new_name:
+                k = state.new_name
+                state.new_name = None
         else:
             if not handled: super().__setitem__(k,state.instantiate_value(k))
             try: self.initially_set.remove(k)
@@ -263,6 +268,12 @@ class InjectableModelType(ModelingBase):
             close = close,
             allow_multiple = allow_multiple,
             globally_unique = globally_unique))
+
+    @modelmethod
+    def self_provider(cls, ns, k: InjectionKey):
+        def callback(inst):
+            inst.injector.add_provider(k, dependency_quote(inst))
+        cls._add_callback(ns, callback)
         
         
 __all__ += ['InjectableModelType']
@@ -313,7 +324,7 @@ class ModelingContainer(InjectableModelType):
             # already in the outer injector or by an overlapping
             # constraint.  Also, It just moves the recursion around.
             v = injector_xref(outer_key, k_inner)
-            if k_new not in ns:
+            if k_new not in ns.to_inject:
                 ns.to_inject[k_new] = (v, options)
             
         if not isinstance(state.value, ModelingContainer): return
@@ -345,6 +356,7 @@ class ModelingContainer(InjectableModelType):
     def include_container(cls, ns, obj,
                           *, close = True,
                           allow_multiple = False,
+                          dynamic_name = None,
                           **kwargs):
         def handle_function(func):
             params = set(inspect.signature(func).parameters.keys())
@@ -359,7 +371,15 @@ class ModelingContainer(InjectableModelType):
         if not hasattr(obj, '__provides_dependencies_for__'):
             raise TypeError( f'{obj} is not a modeling container class')
         state = NsEntry(obj)
+        if dynamic_name:
+            # This is gross, but it's not clear how to support
+            # decorators ourselves
+            if (not close) or allow_multiple:
+                raise TypeError('If using dynamic_name, use decorators to adjust close and allow_multple')
+            ns[dynamic_name] = obj
+            return
         ModelingContainer._integrate_containment(cls, ns, obj.__name__, state)
+        # Since we're not able to use ns.__setitem__, do the injection key stuff ourself.
         if not close:
             state.flags &= ~NSFlags.close
         if allow_multiple:
