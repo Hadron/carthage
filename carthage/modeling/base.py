@@ -133,6 +133,7 @@ class MachineModelType(ModelingContainer):
         pass #This is a stub
 
 
+
 class MachineModel(InjectableModel, metaclass = MachineModelType, template = True):
 
     @classmethod
@@ -163,16 +164,26 @@ class MachineImplementation(AsyncInjectable):
             assert isinstance(b, type), f'{b} is not a type; did you forget a dependency_quote'
             res = type("MachineImplementation", tuple(bases), {})
         try:
-            return injector(res, name = model.name)
+            return cls.prep(injector(res, name = model.name), model)
         except AsyncRequired:
             self = super().__new__(cls)
             self.name = model.name
+            self.model = model
             self.injector = injector
             self.res = res
             return self
 
+    @staticmethod
+    def prep(implementation: carthage.machine.Machine, model: MachineModel):
+        implementation.model = model
+        try: implementation.ip_address = model.ip_address
+        except AttributeError: pass
+        try: implementation.short_name = model.short_name
+        except AttributeError: pass
+        return implementation
+
     async def async_resolve(self):
-        return await self.ainjector(self.res, name = self.name)
+        return self.prep(await self.ainjector(self.res, name = self.name), self.model)
 
 
 __all__ += ['MachineModel']
