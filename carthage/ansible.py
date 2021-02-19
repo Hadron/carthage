@@ -1,4 +1,5 @@
-import contextlib, dataclasses, json, os, os.path, tempfile, yaml
+import contextlib, dataclasses, json, os, os.path, tempfile, typing, yaml
+from abc import ABC, abstractmethod
 from .dependency_injection import *
 from . import sh, Machine, machine
 from .container import Container
@@ -282,6 +283,8 @@ class LocalhostMachine:
 
 localhost_machine = LocalhostMachine()
 
+__all__ += ['localhost_machine']
+
 class AnsibleResult:
 
     def __init__(self, res):
@@ -331,3 +334,140 @@ plays:[{[k for k in self.tasks.keys()]}]"
                 except AttributeError: pass
         res +=">"
         return res
+
+__all__ += ['AnsibleResult']
+
+class AnsibleInventory(AsyncInjectable):
+
+    '''A source of ansible inventory.  This class will generate an
+        ansible inventory file and optionally transfer it to a target
+        :class:`~carthage.machine.Machine`.
+
+        :param destination: A file path or :class:`carthage.ssh.RsyncPath` where the resulting inventory yaml will be placed.
+
+
+    '''
+
+    def __init__(self, destination, **kwargs):
+        self.destination = destination
+        super().__init__(**kwargs)
+
+    async def async_ready(self):
+        result = await self.generate_inventory()
+        await self.write_inventory(self.destination, result)
+        await super().async_ready()
+        
+    async def collect_machines(self):
+        self.machines = await self.ainjector.filter_instantiate_async(Machine, ['host'], ready = False)
+
+    async def collect_groups(self):
+        plugins = await self.ainjector.filter_instantiate_async(AnsibleGroupPlugin, ['name'], ready = True)
+        self.group_plugins = [p[1] for p in plugins]
+        group_info: dict[str, dict] = {}
+        for k, p in plugins:
+            try:
+                result = await self.ainjector(p.group_info)
+            except:
+                logger.exception( f"Error getting group variables from {p.name} plugin:")
+                raise
+            for group, result_info in result.items():
+                group_info.setdefault(group, {})
+                for info_type, info_type_dict in result_info:
+                    group_info[group].setdefault(info_type, {})
+                    #info_type will be vars, hosts or children
+                    for k,v in info_type_dict.items():
+                        group_info[group][info_type][k] = v
+        return group_info
+
+    async def collect_hosts(self, result_dict : dict[str, dict]):
+        plugin_filtered = await self.ainjector.filter_instantiate_async(AnsibleHostPlugin, ['name'], ready = True)
+        plugins = [p[1] for p in plugin_filtered]
+        all = result_dict.setdefault('all', {})
+        hosts_dict = all.setdefault('hosts', {})
+        for ignore_key, m in self.machines:
+            try: machine_name = m.ansible_inventory_name
+            except AttributeError: machine_name = m.name
+            var_dict: dict[str, dict] = {}
+            for p in plugins:
+                try:
+                    var_dict.update( await self.ainjector(p.host_vars, m))
+                except:
+                    logger.exception( f"Error getting variables for {machine_name} from {p.name} plugin:")
+                    raise
+            hosts_dict[machine_name] = var_dict
+            groups = []
+            for p in self.group_plugins:
+                try: groups += await self.ainjector(p.groups_for, m)
+                except:
+                    logger.exception( f"Error determining groups for {machine_name} from group plugin {p.name}")
+                    raise
+            for g in groups:
+                result_dict.setdefault(g, {})
+                result_dict[g].setdefault('hosts', {})
+                result_dict[g]['hosts'].setdefault( machine_name, {})
+
+    async def generate_inventory(self):
+        await self.collect_machines()
+        result = await self.collect_groups()
+        await self.collect_hosts(result)
+        self.inventory = result
+        return result
+
+    async def write_inventory(self, destination, inventory: dict[ str, dict]):
+        from . import ssh
+        with contextlib.ExitStack() as stack:
+            if not isinstance(destination, ssh.RsyncPath):
+                local_path = destination
+            else:
+                dir = stack.enter_context(TemporaryDirectory( dir = self.config_layout.state_dir, prefix = "ansible-inventory"))
+                local_path = os.path.join(dir, "hosts.yml")
+            with open(local_path, "wt") as f:
+                f.write(yaml.dump(inventory, default_flow_style = False))
+                if isinstance(destination, ssh.RsyncPath):
+                    key = await self.ainjector.get_instance_async(ssh.SshKey)
+                    await key.rsync(local_path, destination)
+                    
+        
+
+        
+
+class AnsibleGroupPlugin(Injectable, ABC):
+
+
+
+    @abstractmethod
+    async def group_info(self) -> dict[str: dict[str: typing.Any]]:
+        '''
+        Returns an ansible inventory dictionary.  An example might loolook like the following in yaml::
+
+            group_name:
+                vars:
+                    var_1: value_1
+                children:
+                    group_2:
+                hosts:
+                    host.com:
+
+        '''
+        raise NotImplementedError
+
+    @abstractmethod
+    async def groups_for(self, m: Machine):
+        raise NotImplementedError
+    
+    @classmethod
+    def supplementary_injection_keys(self, k):
+        yield InjectionKey(AnsibleGroupPlugin, name=self.name)
+
+        
+class AnsibleHostPlugin(AsyncInjectable, ABC):
+
+    @abstractmethod
+    async def host_vars(self, m: Machine):
+        raise NotImplementedError
+
+    @classmethod
+    def supplementary_injection_keys(self, k:InjectionKey):
+        yield InjectionKey(AnsibleHostPlugin, name = self.name)
+
+__all__ += ['AnsibleInventory', 'AnsibleGroupPlugin', 'AnsibleHostPlugin']
