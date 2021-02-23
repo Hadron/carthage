@@ -74,9 +74,15 @@ class injector_access(ModelingDecoratorWrapper):
         if inst is None:
             if self.target: return self.target
             return self
-        res = inst.injector.get_instance(self.key)
-        setattr(inst, self.name, res)
-        return res
+        try:
+            res = inst.injector.get_instance(self.key)
+            setattr(inst, self.name, res)
+            return res
+        except KeyError as e:
+            # Injectors return KeyError, but for a missing Attribute
+            # we want to raise AttributeError so for example hasattr
+            # will be false.
+            raise AttributeError(str(e)) from e
 
     def __set_name__(self, owner, name):
         self.name = name
