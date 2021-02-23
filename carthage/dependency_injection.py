@@ -31,7 +31,7 @@ instantiate_to_ready = contextvars.ContextVar('instantiate_to_ready', default = 
 class Injectable:
 
     '''Represents a class that has dependencies injected into it. By default, the :meth:`__init__` will:
-    
+
     * Store any keyword arguments corresponding to injection dependencies into instance variables of the same name as the keyword argument
 
     * Remove these keyword arguments prior to calling the superclass init.
@@ -54,7 +54,7 @@ class Injectable:
     This class does not have :class:`Injector` as an injected dependency.  It is possible to have injected dependencies without doing so.  However, in a dependency is *Injector*, then that injector will be :meth:`claimed <Injector.claim>`.
 
     '''
-    
+
     def __init__(self, *args, **kwargs):
         autokwargs =set(getattr(self, '_injection_autokwargs', set()))
         for k, d in getattr(self, '_injection_dependencies', {}).items():
@@ -66,7 +66,7 @@ class Injectable:
                     setattr(self, k, kwargs.pop(k))
                 try: autokwargs.remove(k)
                 except KeyError: pass
-                
+
         if autokwargs:
             raise TypeError(f'The following dependencies were not specified: {autokwargs}')
 
@@ -115,20 +115,24 @@ self.allow_multiple, repr(self.provider))
             or asyncio.isfuture(self.provider) \
             or directly_has_dependencies(self.provider)
 
-    def record_instantiation(self, instance, k, satisfy_against):
+    def record_instantiation(self, instance, k, satisfy_against, final):
         dp = satisfy_against._providers.setdefault(k, DependencyProvider(instance, self.allow_multiple, close = self.close))
         assert dp.is_factory or dp.provider is instance
         dp.provider = instance
+        if final:
+            #If requested again, would try to instantiate again.
+            if dp.is_factory:
+                dp.provider = dependency_quote(dp.provider)
         return dp
-        
-    
+
+
 
 class InjectionFailed(RuntimeError):
 
     def __init__(self, k):
         super().__init__(f"Error resolving dependency for {k}")
         self.failed_dependency = k
-        
+
 class ExistingProvider(RuntimeError):
 
     def __init__(self, k):
@@ -184,7 +188,7 @@ class Injector(Injectable, event.EventListener):
             else: self.claimed_by = weakref.ref(claimed_by)
             return self
 
-        
+
     def add_provider(self, k, p = None, *,
                      allow_multiple = False,
                      close = True,
@@ -226,7 +230,7 @@ class Injector(Injectable, event.EventListener):
 
     def replace_provider(self, *args, **kwargs):
         return self.add_provider( *args, **kwargs, replace = True)
-    
+
     def _get(self, k):
         return self._providers[k]
 
@@ -259,7 +263,7 @@ Return the first injector in our parent chain containing *k* or None if there is
             injector = injector.parent_injector
         if k in injector: return injector
         return None
-        
+
     def __contains__(self, k):
         if not isinstance(k, InjectionKey):
             k = InjectionKey(k)
@@ -295,16 +299,17 @@ Return the first injector in our parent chain containing *k* or None if there is
             result |= self.parent_injector.filter(target, predicate)
         return result
 
-    def filter_instantiate(self, target, predicate):
+    def filter_instantiate(self, target, predicate, ready = False):
         '''
         Like :meth:`filter` but an iterator returning tuples of keys instance.
 '''
         for k in self.filter(target, predicate):
+            if ready is not None: k = InjectionKey(k, _ready = ready)
             res = self.get_instance(k)
             if res is not None:
                 yield k, res
-                
-            
+
+
     def __call__(self, cls, *args, **kwargs):
 
         '''Construct an instance of cls using the providers in this injector.
@@ -317,7 +322,7 @@ Return the first injector in our parent chain containing *k* or None if there is
 '''
         self._check_closed()
         return self._instantiate(
-            cls, *args, **kwargs, 
+            cls, *args, **kwargs,
             _loop = None,
             _orig_k = None,
             _placement = None,
@@ -328,7 +333,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                      placement = None,
                      loop = None, futures = None):
         '''
-        Get an instance satisfying a given :class:`InjectionKey`.  
+        Get an instance satisfying a given :class:`InjectionKey`.
 
         :param loop: An asyncio loop.  If provided, then asynchronous activities  can take place.
 :param placement: A function taking one argument.  Once the dependency is resolved, this function will be called with the result.  More convenient for asyncronous  operations.
@@ -340,13 +345,13 @@ Return the first injector in our parent chain containing *k* or None if there is
         if loop:
             assert futures is not None
         def do_place(res):
-            provider.record_instantiation(res, k, satisfy_against)
+            provider.record_instantiation(res, k, satisfy_against, final = True)
             if placement: placement(res)
         def do_interim_place(res):
-            provider.record_instantiation(res, k, satisfy_against)
-            
+            provider.record_instantiation(res, k, satisfy_against, final = False)
+
         logger.debug("Looking up provider for {}".format(k))
-        
+
 
 
         if not isinstance(k, InjectionKey):
@@ -369,7 +374,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                 if placement: placement(result.value)
                 return result.value
             elif isinstance(result, asyncio.Future):
-                pass 
+                pass
             elif provider.is_factory:
                 result = satisfy_against._instantiate(
                     result,
@@ -380,7 +385,7 @@ Return the first injector in our parent chain containing *k* or None if there is
 )
             if isinstance(result, asyncio.Future):
                 futures.append(result)
-                provider.record_instantiation(result, k, satisfy_against) 
+                provider.record_instantiation(result, k, satisfy_against, final = False)
                 return result
             elif to_ready and isinstance(result,AsyncInjectable) \
                      and result._async_ready_state != ReadyState.READY:
@@ -390,11 +395,11 @@ Return the first injector in our parent chain containing *k* or None if there is
                     future = loop.create_task(self._handle_async_injectable(result, resolv = False))
                     futures.append(future)
                     return future
-                    
+
         finally:
             if ready_reset is not None:
                 instantiate_to_ready.reset(ready_reset)
-    
+
 
         # Either not a future or not a factory
         if placement: placement(result)
@@ -412,7 +417,9 @@ Return the first injector in our parent chain containing *k* or None if there is
         def handle_result(done_future = None):
             # Called when all kwargs are populated
             try:
-                res = cls(*args, **kwargs)
+                try: res = cls(*args, **kwargs)
+                except TypeError as e:
+                    raise TypeError(f'Error constructing {cls}:') from e
                 if self._is_async(res):
                     if not _loop:
                         raise AsyncRequired("Asynchronous dependency injected into non-asynchronous context")
@@ -426,8 +433,6 @@ Return the first injector in our parent chain containing *k* or None if there is
                     if _placement: _placement(res)
                     if done_future: done_future.set_result(res)
                     return res
-            except TypeError as e:
-                raise TypeError(f'Error constructing {cls}:') from e
             except AsyncRequired: raise
             except Exception as e:
                 tb_utils.filter_chatty_modules(e, _chatty_modules, 4)
@@ -490,14 +495,14 @@ Return the first injector in our parent chain containing *k* or None if there is
             pass
 
     def _is_async(self, p):
-        if isinstance(p, (collections.abc.Coroutine, 
+        if isinstance(p, (collections.abc.Coroutine,
                           asyncio.Future)):
             return True
         elif isinstance(p, AsyncInjectable) and p._async_ready_state != ReadyState.READY:
             to_ready = instantiate_to_ready.get()
             return (p._async_ready_state ==  ReadyState.NOT_READY) or to_ready
         return False
-    
+
 
     def _handle_async(self, p, done_future,
                       interim_placement, placement,
@@ -512,7 +517,7 @@ Return the first injector in our parent chain containing *k* or None if there is
             except Exception as e:
                 tb_utils.filter_chatty_modules(e, _chatty_modules, 3)
                 done_future.set_exception(e)
-                
+
         if not hasattr(self, 'loop'):
             self.loop = loop
         if isinstance(p, collections.abc.Coroutine):
@@ -548,7 +553,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                     await obj.async_become_ready()
                     if not obj._async_ready_state == ReadyState.READY:
                         raise RuntimeError(f"async_ready for {obj.__class__.__name__} must chain back to AsyncInjectable.async_ready.")
-                    
+
                 return obj
         except asyncio.CancelledError:
             if hasattr(obj, 'injector'):
@@ -605,8 +610,8 @@ Return the first injector in our parent chain containing *k* or None if there is
     @property
     def is_claimed(self):
         return self.claimed_by is not None
-    
-    
+
+
 _INJECTION_KEY_DEFAULTS = {
     'optional': False,
     'ready': None}
@@ -632,7 +637,7 @@ class InjectionKey:
         set(map(
             lambda k: '_'+k, _INJECTION_KEY_DEFAULTS))
         |{'optional'})
-    
+
 
     _target_injection_keys = weakref.WeakKeyDictionary()
 
@@ -657,8 +662,8 @@ class InjectionKey:
         for k in _INJECTION_KEY_DEFAULTS:
             self.__dict__[k] = constraints.pop(
                 '_'+k,_INJECTION_KEY_DEFAULTS[k])
-            
-            
+
+
         self.__dict__['constraints'] = dict(constraints)
         self.__dict__['target'] = target_
         if (not customized)  and not isinstance(target_, (str, int, float)):
@@ -707,7 +712,7 @@ class InjectionKey:
 
 # Used in Injector.__init__
 _injector_injection_key = InjectionKey(Injector)
-    
+
 @dataclass
 class UnsatisfactoryDependency(RuntimeError):
     dependency: InjectionKey
@@ -758,7 +763,7 @@ def inject(**dependencies):
             fn._injection_autokwargs = set()
             if isinstance(fn, type):
                 init_from_bases(fn, fn._injection_dependencies, fn._injection_autokwargs)
-            
+
         for k,v in convert_to_key(dependencies):
             try: fn._injection_autokwargs.remove(k)
             except KeyError: pass
@@ -800,7 +805,7 @@ def copy_and_inject(_wraps = None, **kwargs):
     if _wraps is not None:
         return wrap(_wraps)
     else: return wrap
-    
+
 Injector = inject(parent_injector = Injector)(Injector)
 
 def partial_with_dependencies(func, *args, **kwargs):
@@ -843,7 +848,7 @@ Indicate that a value (or dependency provider) should not be subject to injcoter
 '''
 
     __slots__ = ['value']
-    
+
 
     def __init__(self, value):
         self.value = value
@@ -881,8 +886,8 @@ class AsyncInjectable(Injectable):
             self._async_ready_state = ReadyState.RESOLVED
         else:
             self._async_ready_state = ReadyState.NOT_READY
-        
-        
+
+
     async def async_ready(self):
         self._async_ready_state = ReadyState.READY
         return self
@@ -906,7 +911,7 @@ class AsyncInjectable(Injectable):
         elif self._async_ready_state == ReadyState.READY_PENDING:
             return await asyncio.shield(self._ready_future)
         else: return
-        
+
 
 
 @inject(loop = asyncio.AbstractEventLoop, injector = Injector)
@@ -943,7 +948,7 @@ class AsyncInjector(Injectable):
 
     def __repr__(self):
         return f'<Async Injector Injector: {repr(self.injector)}>'
-    
+
     def __contains__(self, k):
         return k in self.injector
 
@@ -979,13 +984,27 @@ class AsyncInjector(Injectable):
             return await res
         else: return res
 
+    async def filter_instantiate_async(self, target, predicate,
+                                       ready = None):
+        results = []
+        result_keys = []
+        for k in self.filter(target, predicate):
+            if ready is not None: k = InjectionKey(k, _ready = ready)
+            results.append(self.get_instance_async(k))
+            result_keys.append(k)
+        results = await asyncio.gather(*results)
+        zipped = zip(result_keys, results)
+        return [z for z in zipped if z[1] is not None]
+
+
+
 # Injector cross reference support
 class InjectorXrefMarkerMeta(type):
 
     def __repr__(self):
         return f'injector_xref({self.injectable_key}, {self.target_key})'
 
-    
+
 class InjectorXrefMarker(AsyncInjectable, metaclass = InjectorXrefMarkerMeta):
 
     # A separate subclass is created for each injector_xref with one
@@ -1020,9 +1039,9 @@ class InjectorXrefMarker(AsyncInjectable, metaclass = InjectorXrefMarkerMeta):
            isinstance(target, Injectable):
             return target.satisfies_injection_key(k)
         return True
-    
+
     async def async_resolve(self):
-        return self.ainjector.get_instance_async(self.target_key)
+        return await self.ainjector.get_instance_async(self.target_key)
 
 def injector_xref(injectable_key: InjectionKey,
                   target_key: InjectionKey,
@@ -1053,12 +1072,12 @@ def injector_xref(injectable_key: InjectionKey,
     return instance
 
 
-    
+
 async def shutdown_injector(injector, timeout = 5):
 
     '''
     Close an injector and cancel running tasks
-        
+
 
     This closes an injector, canceling any running tasks.  It waits up to *timeout* seconds for any canceled tasks to terminate.
 
@@ -1067,7 +1086,7 @@ async def shutdown_injector(injector, timeout = 5):
     injector.close(canceled_futures = canceled_futures)
     if canceled_futures:
         await asyncio.wait(canceled_futures, timeout = timeout)
-        
+
 def _call_close(obj, canceled_futures):
     if not hasattr(obj, 'close'): return
     sig = inspect.signature(obj.close)
@@ -1076,7 +1095,46 @@ def _call_close(obj, canceled_futures):
             return obj.close(canceled_futures = canceled_futures)
         else: return obj.close()
     except TypeError: pass #calling on not yet constructed class
-    
+
+def aspect_for( cls: typing.Type[Injectable],
+               property: str):
+    '''A decorator for a class indicating that the class provides an
+    optional dependency to another class.  Once decorated, newly
+    created instances of *cls* may have a property *property* if
+    *cls*'s :class:`Injector` is able to instantiate the decorated
+    class.  Usage might be something like::
+
+        @aspect_for(Machine, 'model')
+        class MachineModel:
+        . . .
+
+    Then in code that is given a machine you can do things like::
+
+        try:
+            os = machine.model.os
+        except AttributeError: os = "unknown"
+
+    In a dependency injection framework, it is common for a middle
+    layer not to care about domain-specific knowledge that is needed
+    both in an interface layer and in domain-specific implementation
+    code.  As an example, implementations of
+    :class:`~carthage.container.Container` don't care much what
+    operating system the container is running.  However user-interface
+    code to configure the container might need to set what operating
+    system is desired, and various domain-specific
+    :class:`~carthage.machine.BaseCustomization` classes may need to
+    change behavior based on the operating system.  Aspects provide a
+    convenient syntax for the injector hierarchy to be used to access
+    this information.
+
+    '''
+    def wrapper(val):
+        raise NotImplementedError("This approach is not great because of subclasses")
+        if property in cls._injection_dependencies:
+            raise TypeError( f'{k} is already a dependency for {cls.__name__}.')
+        inject(property = val)(cls)
+        return val
+    return wrapper
 
 
 __all__ = '''
@@ -1084,6 +1142,7 @@ __all__ = '''
     Injectable AsyncInjectable InjectionFailed ExistingProvider
     InjectionKey AsyncRequired
     DependencyProvider
+aspect_for
 dependency_quote injector_xref
     partial_with_dependencies shutdown_injector
 '''.split()
