@@ -1,3 +1,4 @@
+from __future__ import annotations
 import contextlib, dataclasses, json, os, os.path, tempfile, typing, yaml
 from abc import ABC, abstractmethod
 from .dependency_injection import *
@@ -8,7 +9,9 @@ from .ssh import SshKey
 from .utils import validate_shell_safe
 from types import SimpleNamespace
 from .network import access_ssh_origin
+import logging
 
+logger = logging.getLogger("carthage")
 __all__ = []
 
 class AnsibleFailure(RuntimeError):
