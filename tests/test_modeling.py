@@ -61,13 +61,14 @@ def test_container(injector):
 
             domain = "evil.com"
 
+            @propagate_up()
             class nc(NetworkConfig): pass
 
             include_container(extra_container)
 
             @provides("site-network", InjectionKey(Network, name="red"))
             class SiteNetwork(NetworkModel):
-                add_provider(InjectionKey(Foo), Foo)
+                add_provider(InjectionKey(Foo), Foo, propagate = True)
                 name = "red"
                 
     res = injector(Layout)
@@ -122,5 +123,4 @@ async def test_example_model(ainjector):
     assert isinstance(nc, NetworkConfigModel)
     samba = res.injector.get_instance(InjectionKey(MachineModel, host = "samba.evil.com"))
     assert samba.network_config is nc
-    breakpoint()
     

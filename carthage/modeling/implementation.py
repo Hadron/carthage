@@ -15,6 +15,7 @@ class NSFlags(enum.Flag):
     inject_by_name = 4
     inject_by_class = 8
     instantiate_on_access = 16
+    propagate_key = 32
     
 class NsEntry:
 
@@ -28,7 +29,7 @@ class NsEntry:
     def __init__(self, value):
         self.value = value
         self.extra_keys = []
-        self.flags = NSFlags.close | NSFlags.instantiate_on_access | NSFlags.inject_by_name
+        self.flags = NSFlags.close | NSFlags.instantiate_on_access | NSFlags.inject_by_name|NSFlags.inject_by_class
         self.new_name = None
         
 
@@ -89,12 +90,29 @@ class ModelingNamespace(dict):
         self.context_imported = False
         self.initially_set = set(self.keys())
 
+    def keys_for(self, name, state):
+        # returns key, (value, options)
+        options = state.injection_options
+        if state.flags & NSFlags.inject_by_name:
+            yield InjectionKey(name), (state.value, options)
+        if isinstance(state.value, type) and (state.flags & NSFlags.inject_by_class):
+            for b in state.value.__mro__:
+                if b in self.classes_to_inject:
+                    yield InjectionKey(b), (state.value, options)
+        try:
+            global_key = state.value.__globally_unique_key__
+            global_options = state.injection_options
+            global_options['globally_unique'] = True
+            yield global_key, (state.value, global_options)
+        except (AttributeError, KeyError): global_key = None
+        for k in state.extra_keys:
+            if global_key and (global_key ==k): continue
+            yield k, (state.value, options)
+
     def __setitem__(self, k, v):
         if thread_local.current_context is not self:
             self.update_context()
         state = NsEntry(v)
-        if isinstance(v, type) and (self.classes_to_inject & set(v.__mro__)):
-            state.flags |= NSFlags.inject_by_class
         handled = False
         for f in self.filters:
             if f(self.cls, self, k, state):
@@ -110,22 +128,15 @@ class ModelingNamespace(dict):
         if k.startswith('_'):
             if k == "__qualname__": self.import_context()
             return state.value
-        if state.flags & NSFlags.inject_by_name:
-            self.to_inject[InjectionKey(k)] = (state.value, state.injection_options)
-        if state.flags & NSFlags.inject_by_class:
-            for b in state.value.__mro__:
-                if b in self.classes_to_inject:
-                    self.to_inject[InjectionKey(b)] = (state.value, state.injection_options)
-        for k in state.extra_keys:
-            self.to_inject[k] = (state.value, state.injection_options)
-        try:
-            global_key = state.value.__globally_unique_key__
-            options = state.injection_options
-            options['globally_unique'] = True
-            # This may replace an extra_key with global to True
-            self.to_inject[global_key] = (state.value, options)
-        except (AttributeError, KeyError): pass
+        for k, info in self.keys_for(name = k, state = state):
+            self.to_inject[k] = info
         return state.value
+
+    def __delitem__(self, k):
+        res = super().__delitem__(k)
+        try: del self.to_inject[InjectionKey(k)]
+        except Exception: pass
+        return res
 
     def setitem(self, k, v, explicit: bool = True):
         '''An override for use in filters to avoid recursive filtering'''
@@ -262,12 +273,16 @@ class InjectableModelType(ModelingBase):
     def add_provider(cls, ns, k:InjectionKey,
                      v: typing.Any,
                      close = True,
-                     allow_multiple = False, globally_unique = False):
+                     allow_multiple = False, globally_unique = False,
+                     propagate = False):
         assert isinstance(k, InjectionKey)
         ns.to_inject[k] = (v, dict(
             close = close,
             allow_multiple = allow_multiple,
             globally_unique = globally_unique))
+        if propagate:
+            assert issubclass(cls, ModelingContainer), "Only ModelingContainers accept propagation"
+            ns.to_propagate[k] = ns.to_inject[k]
 
     @modelmethod
     def self_provider(cls, ns, k: InjectionKey):
@@ -285,7 +300,7 @@ class ModelingContainer(InjectableModelType):
 #objects will be adapted by adding these constraints to register in
 #the parent as well.
     our_key: typing.Callable[[object], InjectionKey]
-    
+
     
     def _integrate_containment(target_cls, ns, k, state):
         def propagate_provider(k_inner, v, options):
@@ -326,6 +341,7 @@ class ModelingContainer(InjectableModelType):
             v = injector_xref(outer_key, k_inner)
             if k_new not in ns.to_inject:
                 ns.to_inject[k_new] = (v, options)
+                ns.to_propagate[k_new] = (v, options)
             
         if not isinstance(state.value, ModelingContainer): return
         val = state.value
@@ -335,12 +351,33 @@ class ModelingContainer(InjectableModelType):
                 if isinstance(outer_key.target, ModelingContainer) and len(outer_key.constraints) > 0:
                     break
             if outer_key is None or len(outer_key.constraints) == 0: return
-            for k, info in val.__initial_injections__.items():
-                if not isinstance(k.target, type): continue
+        to_propagate = combine_mro_mapping(val, ModelingContainer, '__container_propagations__')
+        to_propagate.update(val.__container_propagations__)
+        for k, info in to_propagate.items():
                 v, options = info
                 propagate_provider(k, v, options)
 
-    namespace_filters = [_integrate_containment]
+    def _propagate_filter(target_cls, ns, k, state):
+        if isinstance(state.value, ModelingContainer) or (state.flags&NSFlags.propagate_key):
+            for k, info in ns.keys_for(name = k, state = state):
+                ns.to_propagate[k] = info
+
+    namespace_filters = [_integrate_containment, _propagate_filter]
+
+    @classmethod
+    def __prepare__(cls, *args, **kwargs):
+        ns = super().__prepare__(*args, **kwargs)
+        ns.to_propagate = {}
+        return ns
+
+    def __new__(cls, name, bases, ns, **kwargs):
+        to_propagate = ns.to_propagate
+        self = super().__new__(cls, name, bases, ns, **kwargs)
+        for k in list(to_propagate.keys()):
+            if k not in self.__initial_injections__:
+                del to_propagate[k]
+        self.__container_propagations__ = to_propagate
+        return self
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -389,6 +426,7 @@ class ModelingContainer(InjectableModelType):
             options['globally_unique'] = (k == getattr(obj, '__globally_unique_key__', None))
             if k not in ns.to_inject:
                 ns.to_inject[k] = (obj, options)
+                ns.to_propagate[k] = (obj, options)
             
         
 __all__ += ['ModelingContainer']
