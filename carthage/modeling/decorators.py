@@ -227,10 +227,39 @@ def machine_mixin(name = None):
         return MachineMixin(val, name or val.__name__)
     return wrapper
 
+class PropagateUpDecorator(ModelingDecoratorWrapper):
+
+    name = "propagate_up"
+    subclass = ModelingContainer
+
+    def handle(self, cls, ns, k, state):
+        super().handle(cls, ns, k, state)
+        state.flags |= NSFlags.propagate_key
+
+def propagate_up():
+    '''Indicate that an assignment should have its keys propagated up in
+    a container::
+
+        class foo(ModelingContainer):
+            @propagate_up()
+            @provides(InjectionKey(Baz, target = 42))
+            class ourbaz(Baz): ...
+
+    When *foo* is included ain a container, then the *Baz* injection
+    key will be propagated up to dependencies provided by that
+    container.  Since the key was not marked globally unique,
+    constraints from *foo.our_key()* will be added to it as it is
+    propagated.
+
+    '''
+    def wrap(val):
+        return PropagateUpDecorator(val)
+    return wrap
 
 __all__ = ["ModelingDecoratorWrapper", "provides", 'dynamic_name',
            'injector_access', 'no_instantiate',
            'allow_multiple', 'no_close',
            'globally_unique_key',
            'MachineMixin', 'machine_mixin',
+           'propagate_up',
            ]
