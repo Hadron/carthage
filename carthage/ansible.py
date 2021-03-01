@@ -383,7 +383,7 @@ class AnsibleInventory(AsyncInjectable):
                 raise
             for group, result_info in result.items():
                 group_info.setdefault(group, {})
-                for info_type, info_type_dict in result_info:
+                for info_type, info_type_dict in result_info.items():
                     group_info[group].setdefault(info_type, {})
                     #info_type will be vars, hosts or children
                     for k,v in info_type_dict.items():
@@ -449,7 +449,7 @@ class AnsibleGroupPlugin(Injectable, ABC):
     @abstractmethod
     async def group_info(self) -> dict[str: dict[str: typing.Any]]:
         '''
-        Returns an ansible inventory dictionary.  An example might loolook like the following in yaml::
+        Returns an ansible inventory dictionary.  An example might look like the following in yaml::
 
             group_name:
                 vars:
