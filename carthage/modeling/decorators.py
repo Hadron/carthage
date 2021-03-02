@@ -248,10 +248,56 @@ def propagate_up():
         return PropagateUpDecorator(val)
     return wrap
 
+class TranscludeOverrideDecorator(ModelingDecoratorWrapper):
+
+    name = 'transclude_overrides'
+
+    def __init__(self, val, key):
+        super().__init__(val)
+        self.key = key
+
+    def handle(self, cls, ns, k, state):
+        super().handle(cls, ns, k, state)
+        state.transclusion_key = self.key
+        state.flags |= NSFlags.instantiate_on_access
+        
+def transclude_overrides(injector:Injector = None,
+                         key:InjectionKey = None):
+    '''
+
+    Decorator indicating that the decorated item should be overridden by one from the injector against which the containing layout is eventually instantiated.
+
+    :param key: If supplied, is the key expected to be registered with the transcluding injector to override  this object.  If not supplied, the object must have a globally unique key.
+
+    :param injector: If supplied, and the key exists in the injector or its parents, then replace this object at modeling time with the uninstantiated provided of the key from *injector*.  This does not affect which object is chosen at run time, but rather affects which object is used  for class attribute access  on the resulting modeling class.
+
+    Ultimately the key will be looked up in the injector supplied as a dependency to the instantiated class.  If *injector* is provided and if it doesn't significantly resemble the runtime injector, things can get confusing and class level accesses may not line up well with instance level accesses.
+
+    '''
+    def wrap(val):
+        nonlocal key
+        if key is None:
+            key = val.__globally_unique_key__
+        if injector:
+            target = injector.injector_containing(key)
+            if target:
+                # We intentionally throw away val.  We break the
+                # abstraction of the injector, because we want to get
+                # a potentially uninstantiated provider.  There are
+                # various ways in which this can give disappointing
+                # results, but also ways in which it can provide the
+                # most consistent transclusions in common cases.
+                return injector_access(key, target._providers[key].provider)
+        # no injector or it doesn't contain the key
+        return TranscludeOverrideDecorator(val, key)
+    return wrap
+
+                
 __all__ = ["ModelingDecoratorWrapper", "provides", 'dynamic_name',
            'injector_access', 'no_instantiate',
            'allow_multiple', 'no_close',
            'globally_unique_key',
            'MachineMixin', 'machine_mixin',
            'propagate_up',
+           'transclude_overrides',
            ]

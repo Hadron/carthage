@@ -1,7 +1,7 @@
 import pytest
 from carthage.pytest import *
 from carthage.dependency_injection import *
-from carthage import base_injector
+from carthage import base_injector, Machine
 from carthage.modeling.base import *
 from carthage.modeling.implementation import ModelingContainer
 from carthage.modeling.decorators import *
@@ -123,4 +123,22 @@ async def test_example_model(ainjector):
     assert isinstance(nc, NetworkConfigModel)
     samba = res.injector.get_instance(InjectionKey(MachineModel, host = "samba.evil.com"))
     assert samba.network_config is nc
+    
+def test_transclusion(injector):
+    class Layout(ModelGroup):
+
+        @transclude_overrides()
+        class moo(MachineModel):
+            name = "moo.com"
+        class mar(MachineModel):
+            name = "mar.com"
+            
+
+    injector.add_provider(InjectionKey(MachineModel, host="moo.com"),
+                          "bar")
+    injector.add_provider(InjectionKey(Machine, host = "mar.com"),
+                          "baz")
+    l = injector(Layout)
+    assert l.moo == "bar"
+    assert l.mar.machine == "baz"
     
