@@ -261,7 +261,7 @@ Return the first injector in our parent chain containing *k* or None if there is
         injector = self
         while injector and not k in injector:
             injector = injector.parent_injector
-        if k in injector: return injector
+        if injector and (k in injector): return injector
         return None
 
     def __contains__(self, k):
