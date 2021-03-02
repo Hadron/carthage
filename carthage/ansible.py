@@ -373,6 +373,7 @@ class AnsibleInventory(AsyncInjectable):
 
     async def collect_groups(self):
         plugins = await self.ainjector.filter_instantiate_async(AnsibleGroupPlugin, ['name'], ready = True)
+        plugins = sorted(plugins, key = lambda x: getattr(x[0],'priority', 100), reverse = True)
         self.group_plugins = [p[1] for p in plugins]
         group_info: dict[str, dict] = {}
         for k, p in plugins:
@@ -392,6 +393,7 @@ class AnsibleInventory(AsyncInjectable):
 
     async def collect_hosts(self, result_dict : dict[str, dict]):
         plugin_filtered = await self.ainjector.filter_instantiate_async(AnsibleHostPlugin, ['name'], ready = True)
+        plugin_filtered = sorted(plugin_filtered, key = lambda x: getattr(x[0], 'priority', 100), reverse = True)
         plugins = [p[1] for p in plugin_filtered]
         all = result_dict.setdefault('all', {})
         hosts_dict = all.setdefault('hosts', {})
