@@ -28,10 +28,11 @@ class NSFlags(enum.Flag):
 class NsEntry:
 
     __slots__ = ['extra_keys',                  'value',
-                 'flags', 'new_name']
+                 'flags', 'new_name', 'transclusion_key']
     flags: NSFlags
     extra_keys: list
     new_name: typing.Optional[str]
+    transclusion_key: typing.Optional[InjectionKey]
     
 
     def __init__(self, value):
@@ -39,23 +40,28 @@ class NsEntry:
         self.extra_keys = []
         self.flags = NSFlags.close | NSFlags.instantiate_on_access | NSFlags.inject_by_name|NSFlags.inject_by_class
         self.new_name = None
+        self.transclusion_key = None
         
 
     @property
     def injection_options(self):
         f = self.flags
-        return dict(
+        d =  dict(
             allow_multiple = bool(f&NSFlags.allow_multiple),
             close = bool(f&NSFlags.close),
             )
-
+        if self.transclusion_key: d['transclusion_key'] = self.transclusion_key
+        return d
     def __repr__(self):
         return f'<NsEntry: flags = {self.flags}, keys: {self.extra_keys}, value: {self.value}>'
 
 
     def instantiate_value(self, name):
-        if (self.flags&NSFlags.instantiate_on_access) and isinstance(self.value, type):
-            if self.flags&NSFlags.inject_by_name:
+        if (self.flags&NSFlags.instantiate_on_access) and \
+           (isinstance(self.value, type) or self.transclusion_key):
+            if self.transclusion_key:
+                key = self.transclusion_key
+            elif self.flags&NSFlags.inject_by_name:
                 key = InjectionKey(name)
             elif self.extra_keys:
                 key = self.extra_keys[0]
@@ -262,7 +268,7 @@ class InjectableModelType(ModelingBase):
     def __new__(cls, name, bases, namespace, **kwargs):
         to_inject = namespace.to_inject
         namespace.setdefault('_callbacks', [])
-        self = super(InjectableModelType,cls).__new__(cls, name, bases, namespace, **kwargs)
+        self = super(InjectableModelType,cls).__new__(cls, name, bases,namespace,  **kwargs)
         initial_injections = dict()
         for c in bases:
             if hasattr(c, '__initial_injections__'):
@@ -282,12 +288,16 @@ class InjectableModelType(ModelingBase):
                      v: typing.Any,
                      close = True,
                      allow_multiple = False, globally_unique = False,
-                     propagate = False):
+                     propagate = False,
+                     transclusion_override = False):
         assert isinstance(k, InjectionKey)
+        transclude = {}
+        if transclusion_override: transclude['transclusion_key'] = k
         ns.to_inject[k] = (v, dict(
             close = close,
             allow_multiple = allow_multiple,
-            globally_unique = globally_unique))
+            globally_unique = globally_unique,
+            **transclude))
         if propagate:
             assert issubclass(cls, ModelingContainer), "Only ModelingContainers accept propagation"
             ns.to_propagate[k] = ns.to_inject[k]

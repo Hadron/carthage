@@ -23,6 +23,7 @@ class InjectableModel(Injectable, metaclass = InjectableModelType):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        injector = self.injector
         dependency_providers: typing.Mapping[typing.Any,DependencyProvider] = {}
         # This is complicated because we want to reuse the same
         # DependencyProvider when registering the same value more than
@@ -31,6 +32,11 @@ class InjectableModel(Injectable, metaclass = InjectableModelType):
         # but different keys.
         for k,info in self.__class__.__initial_injections__.items():
             v, options = info
+            transclusion_key = options.get('transclusion_key', None)
+            if transclusion_key and injector.injector_containing(transclusion_key):
+                if k == transclusion_key: continue
+                v = injector_access(transclusion_key)
+                
             try:
                 dp = dependency_providers[v]
             # TypeError: unhashable
@@ -40,9 +46,11 @@ class InjectableModel(Injectable, metaclass = InjectableModelType):
                     allow_multiple = options['allow_multiple'])
                 try: dependency_providers[v] = dp
                 except TypeError: pass
-            if 'globally_unique' in options:
-                options = dict(options)
-                del options['globally_unique']
+            options = dict(options)
+            try: del options['globally_unique']
+            except: pass
+            try: del options['transclusion_key']
+            except: pass
             try:
                 self.injector.add_provider(k, dp, replace = True, **options)
             except Exception as e:
@@ -125,7 +133,11 @@ class MachineModelType(ModelingContainer):
                 carthage.machine.Machine, host = self.name)] = (
                     self.machine, dict(
                         close = True, allow_multiple = False,
+                        transclusion_key = InjectionKey(carthage.machine.Machine, host = self.name),
                         globally_unique = True))
+            self.__container_propagations__[InjectionKey(carthage.machine.Machine, host = self.name)] = \
+                self.__initial_injections__[InjectionKey(carthage.machine.Machine, host = self.name)]
+
 
 
     @modelmethod
@@ -145,7 +157,12 @@ class MachineModel(InjectableModel, metaclass = MachineModelType, template = Tru
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.injector.add_provider(InjectionKey(MachineModel), dependency_quote(self))
-        self.injector.add_provider(InjectionKey(carthage.machine.Machine), MachineImplementation)
+        machine_key = InjectionKey(carthage.machine.Machine, host = self.name)
+        if machine_key in self.injector: # not transcluded
+            self.injector.add_provider(InjectionKey(carthage.machine.Machine), MachineImplementation)
+        else:
+            self.injector.add_provider(InjectionKey(carthage.machine.Machine), injector_access(machine_key))
+            
 
     machine = injector_access(InjectionKey(carthage.machine.Machine))
 
