@@ -24,7 +24,7 @@ class NSFlags(enum.Flag):
     inject_by_class = 8
     instantiate_on_access = 16
     propagate_key = 32
-    
+
 class NsEntry:
 
     __slots__ = ['extra_keys',                  'value',
@@ -33,7 +33,7 @@ class NsEntry:
     extra_keys: list
     new_name: typing.Optional[str]
     transclusion_key: typing.Optional[InjectionKey]
-    
+
 
     def __init__(self, value):
         self.value = value
@@ -41,7 +41,7 @@ class NsEntry:
         self.flags = NSFlags.close | NSFlags.instantiate_on_access | NSFlags.inject_by_name|NSFlags.inject_by_class
         self.new_name = None
         self.transclusion_key = None
-        
+
 
     @property
     def injection_options(self):
@@ -50,15 +50,15 @@ class NsEntry:
             allow_multiple = bool(f&NSFlags.allow_multiple),
             close = bool(f&NSFlags.close),
             )
-        if self.transclusion_key: d['transclusion_key'] = self.transclusion_key
         return d
+
     def __repr__(self):
         return f'<NsEntry: flags = {self.flags}, keys: {self.extra_keys}, value: {self.value}>'
 
 
     def instantiate_value(self, name):
         if (self.flags&NSFlags.instantiate_on_access) and \
-           (isinstance(self.value, type) or self.transclusion_key):
+           (self.transclusion_key or  isinstance(self.value, type)):
             if self.transclusion_key:
                 key = self.transclusion_key
             elif self.flags&NSFlags.inject_by_name:
@@ -68,10 +68,10 @@ class NsEntry:
             else: return self.value
             return decorators.injector_access(key, self.value)
         return self.value
-    
 
 
-    
+
+
 
 class ModelingNamespace(dict):
 
@@ -84,6 +84,11 @@ class ModelingNamespace(dict):
     '''
 
     to_inject: typing.Dict[InjectionKey, typing.Tuple[typing.Any, dict]]
+    #: The set of keys that may be transcluded introduced in this
+    #namespace.  Notice that __tranclusions__ in the resulting class
+    #has a slightly different format.
+    transclusions: typing.Set[typing.Tuple[InjectionKey, InjectionKey]]
+
 
     def __init__(self, cls: type,
                  filters: typing.List[typing.Callable],
@@ -95,6 +100,7 @@ class ModelingNamespace(dict):
         self.filters = list(reversed(filters))
         self.classes_to_inject = frozenset(classes_to_inject)
         self.to_inject = {}
+        self.transclusions = set()
         super().__init__()
         for k,v in initial.items():
             if isinstance(v, modelmethod):
@@ -103,25 +109,30 @@ class ModelingNamespace(dict):
         self.parent_context = thread_local.current_context
         self.context_imported = False
         self.initially_set = set(self.keys())
+        self.setitem('__transclusions__', set())
 
     def keys_for(self, name, state):
         # returns key, (value, options)
+        def val(k):
+            if k == state.transclusion_key or state.transclusion_key is None:
+                return state.value
+            return decorators.injector_access(state.transclusion_key)
         options = state.injection_options
         if state.flags & NSFlags.inject_by_name:
-            yield InjectionKey(name), (state.value, options)
+            yield InjectionKey(name), (val(InjectionKey(name)), options)
         if isinstance(state.value, type) and (state.flags & NSFlags.inject_by_class):
             for b in state.value.__mro__:
                 if b in self.classes_to_inject:
-                    yield InjectionKey(b), (state.value, options)
+                    yield InjectionKey(b), (val(InjectionKey(b)), options)
         try:
             global_key = state.value.__globally_unique_key__
             global_options = state.injection_options
             global_options['globally_unique'] = True
-            yield global_key, (state.value, global_options)
+            yield global_key, (val(global_key), global_options)
         except (AttributeError, KeyError): global_key = None
         for k in state.extra_keys:
             if global_key and (global_key ==k): continue
-            yield k, (state.value, options)
+            yield k, (val(k), options)
 
     def __setitem__(self, k, v):
         if thread_local.current_context is not self:
@@ -204,7 +215,7 @@ def method(cls, ns, *args, **kwargs):
 
     def __repr__(self):
         return f'<modelmethod: {repr(self.method)}>'
-    
+
 __all__ += ['modelmethod']
 
 class ModelingBase(type):
@@ -212,10 +223,10 @@ class ModelingBase(type):
     def _handle_decorator(target_cls, ns, k, state):
         if isinstance(state.value, decorators.ModelingDecoratorWrapper):
             return state.value.handle(target_cls, ns, k, state)
-            
+
     namespace_filters: typing.List[typing.Callable] = [_handle_decorator]
     namespace_initial: typing.Mapping = {}
-    
+
     @classmethod
     def __prepare__(cls, *args, **kwargs):
         classes_to_inject = combine_mro_list(cls, InjectableModelType, 'classes_to_inject')
@@ -243,7 +254,7 @@ class ModelingBase(type):
         for k,v in cls.__dict__.items():
             if isinstance(v, modelmethod):
                 cls.namespace_initial[k] = v # Parsed further in the namespace constructor
-                
+
 
 __all__ += ["ModelingBase"]
 
@@ -257,6 +268,9 @@ class InjectableModelType(ModelingBase):
     def _handle_provides(target_cls, ns, k, state):
         if hasattr(state.value, '__provides_dependencies_for__'):
             state.extra_keys.extend(state.value.__provides_dependencies_for__)
+            if isinstance(state.value, InjectableModelType):
+                ns.setdefault('__transclusions__', set())
+                ns['__transclusions__'] |= state.value.__transclusions__
 
     namespace_filters = [_handle_provides]
 
@@ -264,11 +278,19 @@ class InjectableModelType(ModelingBase):
     def _add_callback(cls, ns:ModelingNamespace, cb: typing.Callable):
         ns.setdefault('_callbacks', [])
         ns['_callbacks'].append(cb)
-        
+
     def __new__(cls, name, bases, namespace, **kwargs):
         to_inject = namespace.to_inject
         namespace.setdefault('_callbacks', [])
+        transclusions_initial = set()
+        for b in bases:
+            if isinstance(b, InjectableModelType):
+                transclusions_initial |= b.__transclusions__
+        if '__transclusions__' in namespace: transclusions_initial |= namespace['__transclusions__']
         self = super(InjectableModelType,cls).__new__(cls, name, bases,namespace,  **kwargs)
+        for ko, ki in namespace.transclusions:
+            transclusions_initial.add((ko, ki, self))
+        self.__transclusions__ = transclusions_initial
         initial_injections = dict()
         for c in bases:
             if hasattr(c, '__initial_injections__'):
@@ -276,7 +298,7 @@ class InjectableModelType(ModelingBase):
         initial_injections.update(to_inject)
         self.__initial_injections__ = initial_injections
         return self
-    
+
 
     def __init_subclass__(cls, *args, **kwargs):
         if 'classes_to_inject' not in cls.__dict__:
@@ -289,15 +311,15 @@ class InjectableModelType(ModelingBase):
                      close = True,
                      allow_multiple = False, globally_unique = False,
                      propagate = False,
-                     transclusion_override = False):
+                     transclusion_overrides = False):
         assert isinstance(k, InjectionKey)
-        transclude = {}
-        if transclusion_override: transclude['transclusion_key'] = k
+        if transclusion_overrides:
+            ns.transclusions.add((k,k))
         ns.to_inject[k] = (v, dict(
             close = close,
             allow_multiple = allow_multiple,
             globally_unique = globally_unique,
-            **transclude))
+            ))
         if propagate:
             assert issubclass(cls, ModelingContainer), "Only ModelingContainers accept propagation"
             ns.to_propagate[k] = ns.to_inject[k]
@@ -307,11 +329,23 @@ class InjectableModelType(ModelingBase):
         def callback(inst):
             inst.injector.add_provider(k, dependency_quote(inst))
         cls._add_callback(ns, callback)
-        
-        
+
+
 __all__ += ['InjectableModelType']
 
-        
+def handle_transclusions(val, injector):
+    try:
+        transclusions = val.__transclusions__
+    except AttributeError: return
+    for ko, ki, o in transclusions:
+        target = injector.injector_containing(ko)
+        if target:
+            try: del o.__initial_injections__[ki]
+            except KeyError: pass
+    del val.__transclusions__
+    return val
+
+
 class ModelingContainer(InjectableModelType):
 
 #: Returns the key under which we are registered in the parent.  Our
@@ -319,7 +353,7 @@ class ModelingContainer(InjectableModelType):
 #the parent as well.
     our_key: typing.Callable[[object], InjectionKey]
 
-    
+
     def _integrate_containment(target_cls, ns, k, state):
         def propagate_provider(k_inner, v, options):
             #There is the provides_dependencies_for (or outer) keys, and there is a
@@ -329,6 +363,7 @@ class ModelingContainer(InjectableModelType):
             #injector.  We pick one outer key just for simplicity; it
             #could be made to work with more.
             globally_unique = options.get('globally_unique', False)
+            inner_transcludable = (k_inner, k_inner, val) in val.__transclusions__
             if not globally_unique:
                 outer_constraints = outer_key.constraints
                 if set(outer_constraints) & set(k_inner.constraints):
@@ -360,7 +395,12 @@ class ModelingContainer(InjectableModelType):
             if k_new not in ns.to_inject:
                 ns.to_inject[k_new] = (v, options)
                 ns.to_propagate[k_new] = (v, options)
-            
+                if inner_transcludable:
+                    ns.transclusions.add((k_new, k_new))
+                if (outer_key,outer_key) in ns.transclusions:
+                    ns.transclusions.add((k_new, k_new))
+                    ns.transclusions.add((outer_key, k_new))
+
         if not isinstance(state.value, ModelingContainer): return
         val = state.value
         if hasattr(val, '__provides_dependencies_for__'):
@@ -423,7 +463,7 @@ class ModelingContainer(InjectableModelType):
             return func(**kwargs)
         if not hasattr(obj, '__provides_dependencies_for__') and callable(obj):
             obj = handle_function(obj)
-        if not hasattr(obj, '__provides_dependencies_for__'):
+        if (not hasattr(obj, '__provides_dependencies_for__')) and not dynamic_name:
             raise TypeError( f'{obj} is not a modeling container class')
         state = NsEntry(obj)
         if dynamic_name:
@@ -445,8 +485,8 @@ class ModelingContainer(InjectableModelType):
             if k not in ns.to_inject:
                 ns.to_inject[k] = (obj, options)
                 ns.to_propagate[k] = (obj, options)
-            
-        
+
+
 __all__ += ['ModelingContainer']
 
 from . import decorators

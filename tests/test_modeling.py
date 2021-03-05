@@ -133,19 +133,22 @@ async def test_example_model(ainjector):
     assert samba.network_config is nc
     
 def test_transclusion(injector):
+    injector.add_provider(InjectionKey(MachineModel, host="moo.com"),
+                          "bar")
+    injector.add_provider(InjectionKey(Machine, host = "mar.com"),
+                          "baz")
+
+    @transclude_injector(injector)
     class Layout(ModelGroup):
 
         @transclude_overrides()
         class moo(MachineModel):
             name = "moo.com"
+
         class mar(MachineModel):
             name = "mar.com"
             
 
-    injector.add_provider(InjectionKey(MachineModel, host="moo.com"),
-                          "bar")
-    injector.add_provider(InjectionKey(Machine, host = "mar.com"),
-                          "baz")
     l = injector(Layout)
     assert l.moo == "bar"
     assert l.mar.machine == "baz"
