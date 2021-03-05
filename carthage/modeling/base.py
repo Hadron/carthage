@@ -24,10 +24,6 @@ class InjectableModel(Injectable, metaclass = InjectableModelType):
         # but different keys.
         for k,info in self.__class__.__initial_injections__.items():
             v, options = info
-            transclusion_key = options.get('transclusion_key', None)
-            if transclusion_key and injector.injector_containing(transclusion_key):
-                if k == transclusion_key: continue
-                v = injector_access(transclusion_key)
                 
             try:
                 dp = dependency_providers[v]
@@ -40,8 +36,6 @@ class InjectableModel(Injectable, metaclass = InjectableModelType):
                 except TypeError: pass
             options = dict(options)
             try: del options['globally_unique']
-            except: pass
-            try: del options['transclusion_key']
             except: pass
             try:
                 self.injector.add_provider(k, dp, replace = True, **options)
@@ -121,14 +115,17 @@ class MachineModelType(ModelingContainer):
         super().__init__(*args, **kwargs)
         if not kwargs.get('template', False):
             self.__globally_unique_key__ = self.our_key()
-            self.__initial_injections__[InjectionKey(
-                carthage.machine.Machine, host = self.name)] = (
+            machine_key = InjectionKey(carthage.machine.Machine, host = self.name)
+            self.__transclusions__ |= {
+                (machine_key, machine_key, self),
+                (self.our_key(), machine_key, self),
+                }
+            self.__initial_injections__[machine_key] = (
                     self.machine, dict(
                         close = True, allow_multiple = False,
-                        transclusion_key = InjectionKey(carthage.machine.Machine, host = self.name),
                         globally_unique = True))
-            self.__container_propagations__[InjectionKey(carthage.machine.Machine, host = self.name)] = \
-                self.__initial_injections__[InjectionKey(carthage.machine.Machine, host = self.name)]
+            self.__container_propagations__[machine_key] = \
+                self.__initial_injections__[machine_key]
 
 
 
@@ -150,7 +147,7 @@ class MachineModel(InjectableModel, metaclass = MachineModelType, template = Tru
         super().__init__(**kwargs)
         self.injector.add_provider(InjectionKey(MachineModel), dependency_quote(self))
         machine_key = InjectionKey(carthage.machine.Machine, host = self.name)
-        if machine_key in self.injector: # not transcluded
+        if machine_key in self.__class__.__initial_injections__: # not transcluded
             self.injector.add_provider(InjectionKey(carthage.machine.Machine), MachineImplementation)
         else:
             self.injector.add_provider(InjectionKey(carthage.machine.Machine), injector_access(machine_key))
@@ -170,7 +167,7 @@ class MachineImplementation(AsyncInjectable):
     def __new__(cls, injector, implementation, model):
         bases = [implementation] + list(map(lambda x: x[1], injector.filter_instantiate(MachineMixin, ['name'])))
         for b in bases:
-            assert isinstance(b, type), f'{b} is not a type; did you forget a dependency_quote'
+            assert isinstance(b, type) or hasattr(b, '__mro_entries__'), f'{b} is not a type; did you forget a dependency_quote'
             res = type("MachineImplementation", tuple(bases), {})
         try:
             return cls.prep(injector(res, name = model.name), model)
