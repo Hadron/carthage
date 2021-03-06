@@ -1,3 +1,4 @@
+import types
 from .implementation import *
 from .decorators import *
 from carthage.dependency_injection import * #type: ignore
@@ -168,7 +169,7 @@ class MachineImplementation(AsyncInjectable):
         bases = [implementation] + list(map(lambda x: x[1], injector.filter_instantiate(MachineMixin, ['name'])))
         for b in bases:
             assert isinstance(b, type) or hasattr(b, '__mro_entries__'), f'{b} is not a type; did you forget a dependency_quote'
-            res = type("MachineImplementation", tuple(bases), {})
+            res = types.new_class("MachineImplementation", tuple(bases), {})
         try:
             return cls.prep(injector(res, name = model.name), model)
         except AsyncRequired:
