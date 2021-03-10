@@ -3,6 +3,7 @@ from carthage.pytest import *
 from carthage  import base_injector, AsyncInjector, inject
 from carthage import ConfigLayout
 import carthage.ssh
+'''This is a test for the pytest plugins, not for the carthage plugin mechanism'''
 
 from machine_mock import Machine
 
