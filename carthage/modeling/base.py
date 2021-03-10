@@ -130,9 +130,6 @@ class MachineModelType(ModelingContainer):
 
 
 
-    @modelmethod
-    def add_ansible_role(self, *args):
-        pass #This is a stub
 
 
 
@@ -143,6 +140,9 @@ class MachineModel(InjectableModel, metaclass = MachineModelType, template = Tru
         return InjectionKey(MachineModel, host = cls.name)
 
     network_config = injector_access(InjectionKey(carthage.network.NetworkConfig))
+
+3        #: A set of ansible groups to add a model to; see :func:`carthage.modeling.ansible.enable_modeling_ansible`.
+    ansible_groups: typing.Sequence[str]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
