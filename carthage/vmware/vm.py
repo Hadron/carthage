@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -418,17 +418,21 @@ class NetSpecStage(DeviceSpecStage,
         self.net_index = 0
 
     async def apply_config(self,config):
-        if not self.obj.network_config: return []
-        network_config = await self.obj.ainjector(self.obj.network_config.resolve,
-                                              access_class=network.DistributedPortgroup)
-        self.net_config = list(network_config)
+        await self.obj.resolve_networking()
+        if not self.obj.network_links: return []
+        self.network_links = list(self.obj.network_links.values())
+        for n in self.network_links:
+            await n.instantiate(network.DistributedPortGroup)
         await self.obj.ainjector(super().apply_config, config)
         
             
     async def new_devices(self, config):
         devs = []
-        network_config = self.net_config[self.net_index:]
-        for net, i, mac in network_config:
+        links = self.network_links[self.net_index:]
+        for link in links:
+            net = link.net_instance
+            mac = link.mac
+            if not net: continue
             pc = vim.dvs.PortConnection()
             pc.portgroupKey = net.mob.key
             pc.switchUuid = net.mob.config.distributedVirtualSwitch.uuid
@@ -444,14 +448,15 @@ class NetSpecStage(DeviceSpecStage,
 
     def filter_device(self, d):
         if self.bag.mode == 'clone': return False
-        net, iface, mac = self.net_config[self.net_index]
+        link = self.network_links[self.net_index]
+        net = link.net_instance
+        mac = link.mac
         if d.backing.port.portgroupKey != net.mob.key: return False
         self.net_index += 1
         return True
     
         
             
-
 
 @inject(folder = VmwareFolder, connection = VmwareConnection)
 class VmInventory(Injectable):

@@ -6,7 +6,8 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import asyncio, contextlib, os, os.path, tempfile
+from __future__ import annotations
+import abc, asyncio, contextlib, os, os.path, tempfile, typing
 from .dependency_injection import *
 from .config import ConfigLayout
 from .ssh import SshKey, SshAgent, RsyncPath
@@ -119,7 +120,7 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
             break
         if not online:
             raise TimeoutError("{} not online".format(self.ip_address))
-        
+
     def ssh_recompute(self, *args):
         try:
             del self.__dict__['ssh']
@@ -140,8 +141,14 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
                 "-R", self.ip_address,
                 f=os.path.join(self.config_layout.state_dir, "ssh_known_hosts"))
         except sh.ErrorReturnCode: pass
-        
-        
+
+class AbstractMachineModel(Injectable):
+
+    network_links: typing.Mapping[str, carthage.network.NetworkLink]
+    name: str
+
+
+
 @inject_autokwargs(config_layout = ConfigLayout)
 class Machine(AsyncInjectable, SshMixin):
 
@@ -161,6 +168,10 @@ class Machine(AsyncInjectable, SshMixin):
 
     '''
 
+    model: typing.Optional[AbstractMachineModel]
+    name: str
+    network_links: typing.Mapping[str, carthage.network.NetworkLink]
+
     def __init__(self, name, **kwargs):
         super().__init__(**kwargs)
         self.name = name
@@ -169,21 +180,27 @@ class Machine(AsyncInjectable, SshMixin):
         self.sshfs_count = 0
         self.sshfs_lock = asyncio.Lock()
         self.injector.add_provider(InjectionKey(Machine), self)
+        self.model = None
 
     def machine_running(self, **kwargs):
         '''Returns a asynchronous context manager; within the context manager, the machine is expected to be running unless :meth:`stop_machine` is explicitly called.
 '''
         return MachineRunning(self, **kwargs)
-    
+
 
     @property
     def full_name(self):
         return self.config_layout.container_prefix+self.name
 
+    @memoproperty
+    def network_links(self):
+        if self.model: return self.model.network_links
+        return {}
+
     async def start_dependencies(*args, **kwargs):
         '''Interface point that should be called by :meth:`start_machine` to start any dependent machines such as routers needed by this machine.'''
         pass
-    
+
 
     def start_machine(self):
         '''
@@ -203,6 +220,25 @@ class Machine(AsyncInjectable, SshMixin):
         except Exception: pass
         res += ">"
         return res
+
+    async def resolve_networking(self, force: bool = False):
+        '''
+        Adds all :class:`carthage.network.NetworkLink` objects specified in the :class:`carthage.network.NetworkConfig`  to the network_links property.
+
+        :param force: if True, resolve the network config even if it has already been resolved once.
+
+        '''
+        from carthage.network import NetworkConfig
+        if not force and self.network_links: return
+        try: network_config = await self.ainjector.get_instance_async(NetworkConfig)
+        except KeyError: return
+        result = await self.ainjector(network_config.resolve, self.model or self)
+        for k, link in result.items():
+            if k in self.network_links:
+                self.network_links[k].close()
+            self.network_links[k] = link
+
+
 
     async def apply_customization(self, cust_class, method = 'apply'):
         '''
@@ -269,8 +305,8 @@ class Machine(AsyncInjectable, SshMixin):
                 with contextlib.suppress(OSError):
                     os.rmdir(dir)
 
-                
-                
+
+
 @inject_autokwargs( config_layout = ConfigLayout)
 class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
@@ -315,14 +351,14 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
     def __repr__(self):
         return f"<{self.__class__.__name__} description:\"{self.description}\" for {self.host.name}>"
-    
+
     #: A description of the customization for inclusion in task logging
     description = ""
 
 class MachineCustomization(BaseCustomization):
 
     '''A customization class for running customizations on running machines.'''
-    
+
     @property
     def customization_context(self):
         return self.host.machine_running(ssh_online = True)
@@ -341,12 +377,12 @@ class ContainerCustomization(BaseCustomization):
     @property
     def path(self):
         return self.host.volume.path
-    
+
     def __getattr__(self, a):
         if a in ('container_command', ):
             return getattr(self.host, a)
         else: return super().__getattr__(a)
-        
+
 
 class FilesystemCustomization(BaseCustomization):
 
@@ -372,9 +408,9 @@ class FilesystemCustomization(BaseCustomization):
             self.path = path
             yield
             return
-        
-            
-    
+
+
+
 def customization_task    (c: BaseCustomization, order: int = None,
                            before = None):
     '''
@@ -386,6 +422,7 @@ def customization_task    (c: BaseCustomization, order: int = None,
         add_packages = customization_task(AddOurPackagesCustomization)
 
     '''
+
     @setup_task(c.description, order = order, before = before)
     @inject(ainjector = AsyncInjector)
     async def do_task(machine, ainjector):
@@ -398,7 +435,7 @@ def customization_task    (c: BaseCustomization, order: int = None,
     return do_task
 
 
-            
+
 
 __all__ = ['Machine', 'MachineRunning', 'SshMixin', 'BaseCustomization', 'ContainerCustomization',
            'FilesystemCustomization',

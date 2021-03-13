@@ -59,12 +59,7 @@ class Container(Machine, SetupTaskMixin):
                               name = "containers/"+self.name)
             self.injector.add_provider(container_volume, vol)
         self.volume = vol
-        try:
-            network_config_unresolved = await self.ainjector.get_instance_async(carthage.network.NetworkConfig)
-        except KeyError:
-            self.network_config = None
-        else:
-                self.network_config = await self.ainjector(network_config_unresolved.resolve, access_class = carthage.network.BridgeNetwork)
+        await self.resolve_networking()
         await self.run_setup_tasks()
             
         return await super().async_ready()
@@ -77,18 +72,20 @@ class Container(Machine, SetupTaskMixin):
 
 
     async def do_network_config(self, networking):
-        if networking and self.network_config:
+        if networking and self.network_links:
             interfaces = []
             network_script = ""
             self.network_interfaces = []
-            for net, i, mac in self.network_config:
-                interface = net.add_veth(self.name)
-                interfaces.append("--network-interface={}".format(interface.ifname))
+            for interface, link  in self.network_links.items():
+                net = await link.instantiate(carthage.network.BridgeNetwork)
+                mac = link.mac
+                veth= net.add_veth(self.name)
+                interfaces.append("--network-interface={}".format(veth.ifname))
                 network_script += "ip link set {i1} {mac} name {i2}\n".format(
-                    i1 = interface.ifname,
+                    i1 = veth.ifname,
                     mac = "address "+mac if mac else "",
-                    i2 = i)
-                self.network_interfaces.append(interface)
+                    i2 = interface)
+                self.network_interfaces.append(veth)
                 
             interfaces.append("/network-script.sh")
             with open(self.volume.path+"/network-script.sh", "wt") as f:

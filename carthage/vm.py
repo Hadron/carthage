@@ -40,14 +40,12 @@ class VM(Machine, SetupTaskMixin):
                  *, injector, config_layout, image, network_config):
         super().__init__(injector = injector, config_layout = config_layout,
                          name = name)
-        self.network_config_unresolved = network_config
         self.image = image
         self.console_needed = console_needed
         if self.console_needed:
             self.console_port = injector(PortReservation)
         self.running = False
         self.volume = None
-        self.network_config = None
         self.vm_running = self.machine_running
         self._operation_lock = asyncio.Lock()
 
@@ -62,15 +60,16 @@ class VM(Machine, SetupTaskMixin):
 
     async def write_config(self):
         template = _templates.get_template("vm-config.mako")
-        if self.network_config is None:
-            self.network_config = await self.ainjector(self.network_config_unresolved.resolve, access_class = carthage.network.BridgeNetwork)
+        await self.resolve_networking()
+        for i, link in self.network_links.items():
+            await link.instantiate(carthage.network.BridgeNetwork)
         self.gen_volume()
         with open(self.config_path, 'wt') as f:
             f.write(template.render(
                 console_needed = self.console_needed,
                 console_port = self.console_port.port if self.console_needed else None,
                 name =self.full_name,
-                network_config = self.network_config,
+                links = self.network_links,
                 if_name = lambda n: carthage.network.if_name("vn", self.config_layout.container_prefix, n.name, self.name),
                 volume = self.volume))
             if self.console_needed:

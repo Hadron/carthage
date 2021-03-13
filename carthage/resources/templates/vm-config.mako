@@ -42,12 +42,12 @@ import uuid
 
     </disk>
     <controller type='scsi' model='virtio-scsi' />
-    %for net, i, mac in network_config:
+    %for i, link in links.items():
         <interface type='bridge'>
 %if mac is not None:
       <mac address='${mac}'/>
       % endif
-      <source bridge='${net.bridge_name}'/>
+      <source bridge='${link.net_instance.bridge_name}'/>
       <model type='virtio'/>
       <target dev="${if_name(net)}" />
     </interface>
