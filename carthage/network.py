@@ -122,7 +122,8 @@ class Network(AsyncInjectable):
             for `carthage.vmware.Vm`
 
     '''
-    
+
+    network_links: weakref.WeakSet
 
     def __init__(self, name, vlan_id = None, **kwargs):
         super().__init__(**kwargs)
@@ -130,6 +131,7 @@ class Network(AsyncInjectable):
         self.vlan_id = vlan_id
         self.injector.add_provider(this_network, self)
         self.technology_networks = []
+        self.network_links = weakref.WeakSet()
         
 
     async def access_by(self, cls: TechnologySpecificNetwork):
@@ -252,9 +254,7 @@ class BridgeNetwork(TechnologySpecificNetwork):
 
 class NetworkConfig:
 
-    '''Represents a network configuration for a container or a VM.  A
-    network config maps interface names to a network and a MAC
-    address.  Eventually a MAC is represented as a string and a
+    '''Represents a network configuration for a :class:`~carthage.machine.Machine`.  A network config maps interface names to a network alink.  A network link contains a MAC address, a network, and other information.  Eventually a MAC is represented as a string and a
     network as a Network object.  However indirection is possible in
     two ways.  First, an injection key can be passed in; this
     dependency will be resolved in the context of an
@@ -265,37 +265,165 @@ class NetworkConfig:
     '''
 
     def __init__(self):
-        self.nets = {}
-        self.macs = {}
-
-    def add(self, interface, net, mac):
+        self.link_specs = {}
+        
+    def add(self, interface, net, mac, **kwargs):
         assert isinstance(interface, str)
-        assert isinstance(mac, (str, InjectionKey, type(None))) or callable(mac)
-        assert isinstance(net, (Network, InjectionKey)) or callable(net)
-        self.nets[interface] = net
-        self.macs[interface] = mac
+        kwargs['mac'] = mac
+        kwargs['net'] = net
+        NetworkLink.validate(kwargs, unresolved = True)
+        self.link_specs[interface] = kwargs
 
     @inject(ainjector = AsyncInjector)
-    async def resolve(self, access_class, ainjector):
-        "Return a NetworkConfigInstance for a given environment"
-        async def resolve1(r, i):
+    async def resolve(self, connection, ainjector) -> dict[str, NetworkLink]:
+        "Return a mapping of interfaces to NetworkLinks"
+        
+        async def resolve1(r:typing.any, i, args, k):
             if isinstance(r, InjectionKey):
                 r = await ainjector.get_instance_async(r)
             elif  callable(r):
                 r = await ainjector(r, i)
-            return r
+            args[k] = r
+        def handle_other(link, other_args):
+            def callback(future):
+                link.net.link_futures.remove(future)
+                try: other = future.result()
+                except Exception:
+                    logger.exception(f'Error resolving other side of {link.interface} link of {link.machine}')
+                    return
+                if not isinstance(other, (machine.Machine, machine.AbstractMachineModel)):
+                    logger.error(f'The other side of the {interface} link to {link.machine} must be an Machine or AbstractMachineModel, not {other}')
+                    return
+                if other_interface in other.network_links:
+                    other_link = other.network_links[other_interface]
+                    if link.net != other_link.net:
+                        logger.error(f'Other side of {link.interface} link on {link.machine} connected to {other_link.net} not {link.net}')
+                        return
+                    if 'mac' in other_args and other_link.mac and \
+                       other_link.mac != other_args['mac']:
+                        logger.error(f'Other side of {link.interface} link on {link.machine} has MAC {other_link.mac} not {other_args["mac"]}')
+                        return
+                    for k,v in other_args.items(): setattr(other_link, k, v)
+                else: #other link exists
+                    try: other_link = NetworkLink(other, other_interface, other_args)
+                    except Exception:
+                        logger.exception(f'Error constructing {other_interface} link on {other} from {link.interface} link on {link.machine}')
+                        return
+                link.other = other_link
+            other_interface = other_args.pop('other_interface')
+            for k in list(other_args):
+                k_new = k[6:]
+                other_args[k_new] = other_args.pop(k)
+            return callback
+                    
         d = {}
-        for i in self.nets:
-            #Unpacking assignment to get parallel resolution of futures
-            res = {}
-            res['mac'], res['net'] = await asyncio.gather(
-                resolve1(self.macs[i], i),
-                resolve1(self.nets[i], i))
-            assert isinstance(res['mac'], (str, type(None))), "MAC Address for {} must resolve to string or None".format(i)
-            assert isinstance(res['net'], Network), "Network for {} must resolve to network object".format(i)
-            res['net'] = await res['net'].access_by(access_class)
-            d[i] = res
-        return await ainjector(NetworkConfigInstance,d)
+        futures = []
+        for i, link_spec in self.link_specs.items():
+            link_args = {}
+            for k,v in link_spec.items():
+                if k == 'other' or k.startswith('other_'):
+                    link_args.setdefault('_other', {})
+                    if k != 'other' and (callable(v) or isinstance(v, InjectionKey)):
+                        futures.append(asyncio.ensure_future(resolve1(v, i, link_args['_other'], k)))
+                    else: link_args['_other'][k] = v
+                    continue
+                if callable(v) or isinstance(v, InjectionKey):
+                    futures.append(asyncio.ensure_future(resolve1(v, i, link_args, k)))
+                else: link_args[k] = v
+            d[i] = link_args
+
+        await asyncio.gather(*futures)
+        del futures
+        result: dict[str, NetworkLink] = {}
+        for i, args in d.items():
+            other_args = args.pop('_other', None)
+            if other_args:
+                if not 'other_interface' in other_args and 'other' in other_args:
+                    raise RuntimeError(f'At least other_interface and other must be specified when specifying the other side of a link; {i} link on {connection}')
+            try:
+                link = NetworkLink(connection, i, args)
+                result[i] = link
+            except Exception:
+                logger.exception( f"Error constructing {i} link on {connection}")
+                raise
+            if other_args:
+                other_target = other_args.pop('other')
+                other_callback = handle_other(link, other_args)
+                if isinstance(other_target, InjectionKey):
+                    other_future = asyncio.ensure_future(ainjector.get_instance_async(other_target))
+                elif callable(other_target):
+                    other_future = asyncio.ensure_future(ainjector(other_target))
+                else:
+                    other_future = ainjector.loop.create_future()
+                    other_future.set_result(other_target)
+                # We don't wait on other_future because it's quite possible that the other side of the link will not resolve until after we resolve.
+                link.net.link_futures.add(other_future)
+                other_future.add_done_callback(other_callback)
+        return result
+
+@dataclasses.dataclass
+class NetworkLink:
+
+    interface: str
+    mac: typing.Optional[str]
+    net: Network
+    other: typing.Optional[NetworkLink]
+    machine: object
+
+    def __init__(self,  connection, interface, args):
+        self.validate(args)
+        self.machine = connection
+        self.interface = interface
+        self.__dict__.update(args)
+        self.net.network_links.add(self)
+        for k in self.__class__.__annotations__:
+            if k not in self.__dict__: setattr(self, k, None)
+
+    def __hash__(self):
+        return id(self)
+
+    def __eq__(self, other):
+        return self is other
+    
+
+    async def instantiate(self, cls: typing.Type[TechnologySpecificNetwork]):
+        self.net_instance =  await self.net.access_by(cls)
+        return self.net_instance
+        
+
+    @classmethod
+    def validate(cls, args: dict, unresolved:bool = False):
+        hints = typing.get_type_hints(cls)
+        for k, t in hints.items():
+            if k in ('machine', 'members', 'connection', 'interface'):
+                if k in args:
+                    raise TypeError( f'{k} cannot be specified directly')
+                continue
+            # don't know how to do this without accessing internals
+            if t.__class__ == typing._UnionGenericAlias:
+                t = typing.get_args(t)
+                if type(None) in t: optional = True
+                else: optional = False
+            else: #not a generic union alias
+                optional = False
+            if k not in args:
+                if not optional:
+                    raise TypeError(f'{k} is required')
+            elif (not unresolved) and (not isinstance(args[k], t)):
+                raise TypeError( f'{k} must be a {t} not {args[k]}')
+
+    def close(self):
+        if self.net:
+            try: self.net.network_links.remove(self)
+            except: pass
+        if self.machine:
+            try: del self.machine.network_links[self.interface]
+            except: pass
+        self.machine = None
+        self.net = None
+        
+            
+
 
 @inject(config_layout = ConfigLayout)
 class NetworkConfigInstance(Injectable):
