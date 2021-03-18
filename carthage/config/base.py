@@ -3,6 +3,7 @@ from .types import ConfigPath
 
 class BaseSchema(ConfigSchema, prefix = ""):
     base_dir: ConfigPath = "/srv/images/test"
+    output_dir: ConfigPath = "{base_dir}/output"
     image_dir:ConfigPath = "{base_dir}"
     vm_image_dir: ConfigPath = "{base_dir}/vm"
     state_dir: ConfigPath = "{base_dir}/state"

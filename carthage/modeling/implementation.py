@@ -1,3 +1,4 @@
+from __future__ import annotations
 import enum, functools, inspect, threading, typing
 from carthage.dependency_injection import * # type: ignore
 from carthage.dependency_injection import InjectorXrefMarker
@@ -480,5 +481,25 @@ class ModelingContainer(InjectableModelType):
 
 
 __all__ += ['ModelingContainer']
+
+def adjust_bases_for_tasks(bases: tuple[type], namespace: dict) -> tuple[type]:
+    '''
+If the namespace includes any setup_tasks, then add SetupTaskMixin to the baseses.
+    '''
+    from ..setup_tasks import SetupTaskMixin, TaskWrapper
+    if SetupTaskMixin in bases: return bases
+    for v in namespace.values():
+        if isinstance(v, TaskWrapper): break
+    else:
+        return bases
+    new_bases = [*bases, SetupTaskMixin]
+    for c in new_bases:
+        if AsyncInjectable in c.__mro__: break
+    else:
+        new_bases.append(AsyncInjectable)
+    return tuple(new_bases)
+
+
+__all__ += ['adjust_bases_for_tasks']
 
 from . import decorators
