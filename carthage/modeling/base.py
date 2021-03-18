@@ -20,7 +20,7 @@ from .utils import *
 __all__ = []
 
 
-@inject(injector = Injector)
+@inject_autokwargs(injector = Injector)
 class InjectableModel(Injectable, metaclass = InjectableModelType):
 
     def __init__(self, *args, **kwargs):
@@ -144,7 +144,7 @@ class MachineModelType(ModelingContainer):
 
 
 @inject_autokwargs(config_layout = ConfigLayout)
-class MachineModel(InjectableModel, metaclass = MachineModelType, template = True):
+class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metaclass = MachineModelType, template = True):
 
     @classmethod
     def our_key(cls):
