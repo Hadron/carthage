@@ -43,7 +43,7 @@ class Layout(ModelGroup):
             add_provider(InjectionKey(NetworkConfig), RouterConfig)
 
         class samba(MachineModel):
-            add_ansible_role("samba")
+            ansible_groups = ['samba']
 
         for u in ('george', 'sue', 'pat'):
             @dynamic_name(f'{u}_desktop')

@@ -7,9 +7,11 @@
 # LICENSE for details.
 
 import pytest
+from pathlib import Path
+
 from carthage.pytest import *
 from carthage.dependency_injection import *
-from carthage import base_injector, Machine
+from carthage import base_injector, Machine, setup_task, ConfigLayout
 from carthage.modeling.base import *
 from carthage.modeling.implementation import ModelingContainer
 from carthage.modeling.decorators import *
@@ -19,6 +21,10 @@ from carthage.network import NetworkConfig, Network
 def injector():
     injector = base_injector(Injector)
     injector.claim()
+    config = injector.get_instance(ConfigLayout)
+    base_dir = Path(__file__).parent
+    base_dir /= "state"
+    config.base_dir = str(base_dir)
     yield injector
     injector.close()
     
@@ -104,7 +110,8 @@ def test_dynamic_name(injector):
             class ignored(InjectableModel): square = i*i
     assert Layout.i3.square == 4
     
-def test_machine_model(injector):
+@async_test
+async def test_machine_model(injector):
     class Layout(ModelGroup):
 
         class Red(Enclave):
@@ -116,10 +123,17 @@ def test_machine_model(injector):
             
             class Router(MachineModel): pass
 
+            class task_machine(MachineModel):
+
+                @setup_task("Frob the frobbables")
+                def frob_stuff(self): pass
+
         red_router = injector_access(InjectionKey(MachineModel, host  = "router.evil.com"))
 
     res = injector(Layout)
     assert res.red_router.name == "router.evil.com"
+    assert hasattr(res.Red.task_machine, 'setup_tasks')
+    await res.Red.task_machine.async_become_ready()
     
     
 

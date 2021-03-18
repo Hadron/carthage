@@ -6,11 +6,12 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import types
+import os, types
 from .implementation import *
 from .decorators import *
 from carthage.dependency_injection import * #type: ignore
-from carthage.utils import when_needed
+from carthage.utils import when_needed, memoproperty
+from carthage import ConfigLayout
 import typing
 import carthage.network
 import carthage.machine
@@ -118,6 +119,7 @@ class MachineModelType(ModelingContainer):
             try:
                 ns['name'] = ns['name'] + '.' + ns['domain']
             except KeyError: pass
+        bases = adjust_bases_for_tasks(bases, ns)
         return super().__new__(cls, name, bases, ns, **kwargs)
 
     def __init__(self, *args, **kwargs):
@@ -141,6 +143,7 @@ class MachineModelType(ModelingContainer):
 
 
 
+@inject_autokwargs(config_layout = ConfigLayout)
 class MachineModel(InjectableModel, metaclass = MachineModelType, template = True):
 
     @classmethod
@@ -149,7 +152,7 @@ class MachineModel(InjectableModel, metaclass = MachineModelType, template = Tru
 
     network_config = injector_access(InjectionKey(carthage.network.NetworkConfig))
 
-3        #: A set of ansible groups to add a model to; see :func:`carthage.modeling.ansible.enable_modeling_ansible`.
+    #: A set of ansible groups to add a model to; see :func:`carthage.modeling.ansible.enable_modeling_ansible`.
     ansible_groups: typing.Sequence[str]
 
     def __init__(self, **kwargs):
@@ -163,6 +166,13 @@ class MachineModel(InjectableModel, metaclass = MachineModelType, template = Tru
             
 
     machine = injector_access(InjectionKey(carthage.machine.Machine))
+
+    @memoproperty
+    def stamp_path(self):
+        path = self.config_layout.output_dir+ f"/hosts/{self.name}"
+        os.makedirs(path, exist_ok = True)
+        return path
+    
 
 @inject(injector = Injector,
             implementation = machine_implementation_key,

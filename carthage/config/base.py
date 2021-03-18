@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -11,6 +11,7 @@ from .types import ConfigPath
 
 class BaseSchema(ConfigSchema, prefix = ""):
     base_dir: ConfigPath = "/srv/images/test"
+    output_dir: ConfigPath = "{base_dir}/output"
     image_dir:ConfigPath = "{base_dir}"
     vm_image_dir: ConfigPath = "{base_dir}/vm"
     state_dir: ConfigPath = "{base_dir}/state"
