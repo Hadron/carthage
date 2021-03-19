@@ -8,13 +8,16 @@
 
 from __future__ import annotations
 import asyncio, dataclasses, datetime, logging, os, os.path, time, typing, sys, weakref
+import importlib.resources
+from pathlib import Path
 import carthage
 from carthage.dependency_injection import AsyncInjector, inject
 from carthage.config import ConfigLayout
 from carthage.utils import memoproperty
 import collections.abc
 
-__all__ = [ 'logger', 'TaskWrapper', 'TaskMethod', 'setup_task', 'SkipSetupTask', 'SetupTaskMixin' ]
+__all__ = [ 'logger', 'TaskWrapper', 'TaskMethod', 'setup_task', 'SkipSetupTask', 'SetupTaskMixin',
+            'mako_task']
 
 logger = logging.getLogger('carthage.setup_tasks')
 
@@ -50,9 +53,11 @@ class TaskWrapper:
         if a == "func": raise AttributeError
         return getattr(self.func, a)
 
+    extra_attributes = frozenset()
+
     def __setattr__(self, a, v):
         if a in ('func', 'stamp', 'order',
-                 'invalidator_func', 'check_completed_func'):
+                 'invalidator_func', 'check_completed_func') or a in self.__class__.extra_attributes:
             return super().__setattr__(a, v)
         else:
             return setattr(self.func, a, v)
@@ -374,3 +379,53 @@ class cross_object_dependency(TaskWrapper):
     def __repr__(self):
         return f'<Depend on {self.dependent_task.description} task of {self.relationship}>'
     
+
+class mako_task(TaskWrapper):
+
+    template: str
+
+    extra_attributes = frozenset({'template', 'output',
+                                  })
+
+    def __init__(self, template, output = None, **kwargs):
+        injections = getattr(self, '_injection_dependencies', {})
+        #A separate function so that injection works; consider
+        #TaskMethod.__setattr__ to understand.
+        def func(*args, **kwargs):
+            return self.render(*args, **kwargs)
+        self.template = template
+        if output is None:
+            output = template
+            if output.endswith('.mako'): output = output[:-5]
+        self.output = output
+        super().__init__(func = func, 
+                         description = f'Render {self.template} template',
+                         **kwargs)
+
+    def __set_name__(self, owner, name):
+        super().__set_name__(owner, name)
+        import sys, mako.lookup
+        module = sys.modules[owner.__module__]
+        try: self.lookup = module._mako_lookup
+        except AttributeError:
+            if hasattr(module, '__path__'): resources= importlib.resources.files(module)
+            elif module.__package__ == "":
+                resources = Path(module.__file__).parent
+            else:
+                resources = importlib.resources.files(module.__package__)
+            templates = resources/'templates'
+            if not templates.exists(): templates = resources
+            module._mako_lookup = mako.lookup.TemplateLookup([str(templates)], strict_undefined = True)
+            self.lookup = module._mako_lookup
+
+
+    def render(task, instance, **kwargs):
+        template = task.lookup.get_template(task.template)
+        output = Path(instance.stamp_path).joinpath(task.output)
+        os.makedirs(output.parent, exist_ok = True)
+        with open(output, "wt") as f:
+            f.write(template.render(
+                instance = instance,
+                                    **kwargs))
+            
+        

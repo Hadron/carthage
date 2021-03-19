@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -11,8 +11,9 @@ from carthage.dependency_injection import *
 import carthage, carthage.ansible
 from carthage.pytest import *
 from carthage.setup_tasks import *
+from pathlib import Path
 
-state_dir  = os.path.join(os.path.dirname(__file__), "test_state")
+state_dir = Path(__file__).parent.joinpath("test_state")
 
 @pytest.fixture()
 def ainjector(ainjector):
@@ -35,7 +36,7 @@ class  Stampable(SetupTaskMixin, AsyncInjectable):
     
     def __init_subclass__(cls):
         super().__init_subclass__()
-        cls.stamp_path = os.path.join(state_dir, str(id(cls)))
+        cls.stamp_path = state_dir.joinpath(str(id(cls)))
 
 @async_test
 async def test_basic_setup(ainjector):
@@ -144,3 +145,20 @@ async def test_order_override(ainjector):
     assert c.three.order > c.two.order
     await ainjector(c)
     
+
+@async_test
+async def test_mako_task(ainjector):
+    class bar(Stampable):
+
+        templates = mako_task("test.mako")
+
+        template_2 = inject(name = InjectionKey("name")) \
+            (mako_task("template-2.mako"))
+            
+    ainjector.add_provider(InjectionKey("name"), "the name")
+    res = await ainjector(bar)
+    template_2 = res.stamp_path.joinpath("template-2").read_text()
+    template_2_expected = state_dir.parent.joinpath("template-2.expected").read_text()
+    assert template_2 == template_2_expected
+    
+                                      
