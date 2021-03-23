@@ -139,6 +139,19 @@ class AbstractMachineModel(Injectable):
     network_links: typing.Mapping[str, carthage.network.NetworkLink]
     name: str
 
+    async def resolve_networking(self, force: bool = False):
+        '''
+            Adds all :class:`carthage.network.NetworkLink` objects specified in the :class:`carthage.network.NetworkConfig`  to the network_links property.
+
+        :param force: if True, resolve the network config even if it has already been resolved once.
+
+        '''
+        from carthage.network import NetworkConfig
+        if not force and self.network_links: return
+        try: network_config = await self.ainjector.get_instance_async(NetworkConfig)
+        except KeyError: return
+        result = await self.ainjector(network_config.resolve,  self)
+
 
 
 @inject_autokwargs(config_layout = ConfigLayout)
@@ -225,10 +238,6 @@ class Machine(AsyncInjectable, SshMixin):
         try: network_config = await self.ainjector.get_instance_async(NetworkConfig)
         except KeyError: return
         result = await self.ainjector(network_config.resolve, self.model or self)
-        for k, link in result.items():
-            if k in self.network_links:
-                self.network_links[k].close()
-            self.network_links[k] = link
 
 
 
