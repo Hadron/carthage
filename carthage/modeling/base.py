@@ -76,11 +76,13 @@ __all__ += ['NetworkModel']
 class NetworkConfigModelType(InjectableModelType):
 
     @modelmethod
-    def add(cls, ns, interface, net, mac):
+    def add(cls, ns, interface, **kwargs):
         def callback(inst):
-            nonlocal mac, net
-            mac, net = key_from_injector_access(mac, net)
-            inst.add(interface, net, mac)
+            nonlocal kwargs
+            keys = kwargs.keys()
+            values = key_from_injector_access(*kwargs.values())
+            kwargs = {k:v for k,v in zip(keys, values)}
+            inst.add(interface, **kwargs)
         cls._add_callback(ns, callback)
 
 class NetworkConfigModel(InjectableModel,
@@ -88,7 +90,6 @@ class NetworkConfigModel(InjectableModel,
                          metaclass = NetworkConfigModelType
                          ):
     pass
-
 
 __all__ += ['NetworkConfigModel']
 
@@ -139,10 +140,6 @@ class MachineModelType(ModelingContainer):
                 self.__initial_injections__[machine_key]
 
 
-
-
-
-
 @inject_autokwargs(config_layout = ConfigLayout)
 class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metaclass = MachineModelType, template = True):
 
@@ -150,6 +147,11 @@ class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metac
     def our_key(cls):
         return InjectionKey(MachineModel, host = cls.name)
 
+
+
+    def __repr__(self):
+        return f'<{self.__class__.__name__} model name: {self.name}>'
+    
     network_config = injector_access(InjectionKey(carthage.network.NetworkConfig))
 
     #: A set of ansible groups to add a model to; see :func:`carthage.modeling.ansible.enable_modeling_ansible`.
@@ -157,6 +159,7 @@ class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metac
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.network_links = {}
         self.injector.add_provider(InjectionKey(MachineModel), dependency_quote(self))
         machine_key = InjectionKey(carthage.machine.Machine, host = self.name)
         if machine_key in self.__class__.__initial_injections__: # not transcluded
