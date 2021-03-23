@@ -64,7 +64,8 @@ class SystemdNetworkModelMixin(SetupTaskMixin):
             template = mako_lookup.get_template(template_name)
             try:
                 rendering = template.render(
-                    link = link
+                    link = link,
+                    NotNeeded = NotNeeded
                 )
                 output_fn = dir.joinpath( f"10-carthage-{link.interface}.{ext}")
                 with output_fn.open("wt") as f:
