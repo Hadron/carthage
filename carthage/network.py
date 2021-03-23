@@ -282,10 +282,17 @@ class NetworkConfig:
         NetworkLink.validate(kwargs, unresolved = True)
         self.link_specs[interface] = kwargs
 
+    def __repr__(self):
+        res = f'<{self.__class__.__name__}  {repr(self.link_specs)}>'
+        return res
+    
+
     @inject(ainjector = AsyncInjector)
     async def resolve(self, connection, ainjector) -> dict[str, NetworkLink]:
-        "Return a mapping of interfaces to NetworkLinks"
-        
+        '''
+        Return a mapping of interfaces to NetworkLinks
+        The *network_links* property of *connection* is updated based on the new network links.  That side effect is a bit unclean, but doing the update here allows :meth:`carthage.machine.Machine.resolve_networking` and :meth:`carthage.machine.AbstractMachineModel.resolve_networking` to have less duplicated code.
+        '''
         async def resolve1(r:typing.any, i, args, k):
             if isinstance(r, InjectionKey):
                 r = await ainjector.get_instance_async(r)
@@ -367,6 +374,18 @@ class NetworkConfig:
                 # We don't wait on other_future because it's quite possible that the other side of the link will not resolve until after we resolve.
                 link.net.link_futures.add(other_future)
                 other_future.add_done_callback(other_callback)
+        for k, link in result.items():
+            if k in connection.network_links:
+                connection.network_links[k].close()
+            connection.network_links[k] = link
+        for l in connection.network_links.values():
+            l.member_of = []
+            try: del l.member_links
+            except: pass
+            try: del l.member_of_links
+            except: pass
+            l.member_links
+
         return result
 
 @dataclasses.dataclass
@@ -377,6 +396,14 @@ class NetworkLink:
     net: Network
     other: typing.Optional[NetworkLink]
     machine: object
+    mtu: typing.Optional[int]
+    local_type: typing.Optional[str]
+
+    def __new__(cls, connection, interface, args):
+        if 'local_type' in args:
+            cls = NetworkLink.local_type_registry[args['local_type']]
+        return super().__new__(cls)
+    
 
     def __init__(self,  connection, interface, args):
         self.validate(args)
@@ -385,7 +412,8 @@ class NetworkLink:
         self.__dict__.update(args)
         self.net.network_links.add(self)
         for k in self.__class__.__annotations__:
-            if k not in self.__dict__: setattr(self, k, None)
+            if not hasattr(self, k): setattr(self, k, None)
+        self.member_of = []
 
     def __hash__(self):
         return id(self)
@@ -395,15 +423,34 @@ class NetworkLink:
     
 
     async def instantiate(self, cls: typing.Type[TechnologySpecificNetwork]):
+        if self.local_type is not None:
+            self.net_instance = None
+            return
+        try: return self.net_instance
+        except: pass
         self.net_instance =  await self.net.access_by(cls)
         return self.net_instance
         
 
+    def __init_subclass__(cls, **kwargs):
+        if hasattr(cls, 'local_type') and cls.local_type:
+            NetworkLink.local_type_registry[cls.local_type] = cls
+        super().__init_subclass__(**kwargs)
+
+        
+    local_type_registry: typing.ClassVar[typing.Mapping[str, NetworkLink]] = weakref.WeakValueDictionary()
+    
+
     @classmethod
     def validate(cls, args: dict, unresolved:bool = False):
-        hints = typing.get_type_hints(cls)
+        try: subclass = NetworkLink.local_type_registry[args['local_type']]
+        except KeyError: subclass = cls
+        hints = typing.get_type_hints(subclass)
+        if 'member' in args:
+            args['members'] = [args['member']]
+            del args['member']
         for k, t in hints.items():
-            if k in ('machine', 'members', 'connection', 'interface'):
+            if k in ('machine', 'connection', 'interface', 'member_of'):
                 if k in args:
                     raise TypeError( f'{k} cannot be specified directly')
                 continue
@@ -412,6 +459,8 @@ class NetworkLink:
                 t = typing.get_args(t)
                 if type(None) in t: optional = True
                 else: optional = False
+            elif t.__class__ == typing._GenericAlias:
+                continue
             else: #not a generic union alias
                 optional = False
             if k not in args:
@@ -419,7 +468,37 @@ class NetworkLink:
                     raise TypeError(f'{k} is required')
             elif (not unresolved) and (not isinstance(args[k], t)):
                 raise TypeError( f'{k} must be a {t} not {args[k]}')
+        if subclass: subclass.validate_subclass(args, unresolved = unresolved)
 
+    @classmethod
+    def validate_subclass(cls, args, unresolved: bool): pass
+    
+
+    @memoproperty
+    def member_links(self):
+        res = []
+        if not hasattr(self, 'members'): return res
+        for l in self.members:
+            try: res.append(self.machine.network_links[l])
+            except KeyError:
+                raise KeyError( f'{l} not found as an interface on {self.machine}') from None
+        for link in res:
+            if self.interface not in link.member_of:
+                link.member_of.append(self.interface)
+        return tuple(res)
+
+    @memoproperty
+    def member_of_links(self):
+        res = []
+        for l in self.member_of:
+            try:
+                res.append(self.machine.network_links[l])
+            except KeyError:
+                raise KeyError( f'{l} interface not found on {self.machine}') from None
+        return tuple(res)
+    
+            
+        
     def close(self):
         if self.net:
             try: self.net.network_links.remove(self)
@@ -427,6 +506,12 @@ class NetworkLink:
         if self.machine:
             try: del self.machine.network_links[self.interface]
             except: pass
+        other = self.other
+        self.other = None
+        if other: other.close()
+        try: self.net_instance.close()
+        except: pass
+        self.net_instance = None
         self.machine = None
         self.net = None
         
@@ -518,3 +603,5 @@ __all__ = r'''Network TechnologySpecificNetwork BridgeNetwork
     external_network_key HostMapEntry mac_from_host_map host_map_key
 access_ssh_origin
     '''.split()
+
+from . import network_links
