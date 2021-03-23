@@ -70,7 +70,10 @@ def load_plugin(spec: str,
             if '.' not in name:
                 name = "carthage.carthage_plugins."+name
             if package_path.exists():
-                spec = spec_from_file_location(name, location = package_path)
+                spec = spec_from_file_location(
+                    name, location = package_path,
+                    submodule_search_locations = [str(path/"python")]
+                )
             else: spec = None
             if spec:
                 package = module_from_spec(spec)

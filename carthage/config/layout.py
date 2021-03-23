@@ -87,9 +87,8 @@ Load and enable a Carthage plugin.
 
 '''
     from .. import base_injector
-    module = importlib.import_module(plugin)
-    plugin = getattr(module, 'carthage_plugin')
-    base_injector(plugin)
+    from ..plugins import load_plugin
+    base_injector(load_plugin, plugin)
     from . import inject_config
     inject_config(base_injector)
 
