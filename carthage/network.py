@@ -12,7 +12,7 @@ from . import sh
 from .dependency_injection import inject, AsyncInjectable, Injector, AsyncInjector, InjectionKey, Injectable
 from .config import ConfigLayout
 from .utils import permute_identifier, when_needed, memoproperty
-from .machine import ssh_origin, ssh_origin_vrf
+from .machine import ssh_origin, ssh_origin_vrf, Machine, AbstractMachineModel
 logger = logging.getLogger('carthage.network')
 
 _cleanup_substitutions = [
@@ -132,6 +132,7 @@ class Network(AsyncInjectable):
     '''
 
     network_links: weakref.WeakSet
+    link_futures: Set[asyncio.Future]
 
     def __init__(self, name, vlan_id = None, **kwargs):
         super().__init__(**kwargs)
@@ -140,6 +141,7 @@ class Network(AsyncInjectable):
         self.injector.add_provider(this_network, self)
         self.technology_networks = []
         self.network_links = weakref.WeakSet()
+        self.link_futures = set()
         
 
     async def access_by(self, cls: TechnologySpecificNetwork):
@@ -306,7 +308,7 @@ class NetworkConfig:
                 except Exception:
                     logger.exception(f'Error resolving other side of {link.interface} link of {link.machine}')
                     return
-                if not isinstance(other, (machine.Machine, machine.AbstractMachineModel)):
+                if not isinstance(other, (Machine, AbstractMachineModel)):
                     logger.error(f'The other side of the {interface} link to {link.machine} must be an Machine or AbstractMachineModel, not {other}')
                     return
                 if other_interface in other.network_links:
@@ -320,11 +322,14 @@ class NetworkConfig:
                         return
                     for k,v in other_args.items(): setattr(other_link, k, v)
                 else: #other link exists
-                    try: other_link = NetworkLink(other, other_interface, other_args)
+                    try:
+                        other_args['net'] = link.net
+                        other_link = NetworkLink(other, other_interface, other_args)
                     except Exception:
                         logger.exception(f'Error constructing {other_interface} link on {other} from {link.interface} link on {link.machine}')
                         return
                 link.other = other_link
+                other_link.other = link
             other_interface = other_args.pop('other_interface')
             for k in list(other_args):
                 k_new = k[6:]
