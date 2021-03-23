@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -7,6 +7,8 @@
 # LICENSE for details.
 
 import argparse, asyncio, contextlib, functools, logging, os, re, weakref
+import importlib.resources
+import mako.lookup
 
 async def possibly_async(r):
     '''If r is a coroutine, await it.  Otherwise return it.  Used like the
@@ -252,8 +254,14 @@ def TemporaryMountPoint(**kwargs):
         yield dir
     finally:
         os.rmdir(dir)
-        
-        __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
+
+mako_lookup = mako.lookup.TemplateLookup([importlib.resources.files(__package__)/"resources/templates"],
+                                         strict_undefined = True)
+
+__all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
            'add_carthage_arguments', 'carthage_main_argparser',
            'carthage_main_setup', 'carthage_main_run',
-           'validate_shell_safe']
+                   'validate_shell_safe',
+                   'TemporaryMountPoint',
+                   'mako_lookup',
+                   ]
