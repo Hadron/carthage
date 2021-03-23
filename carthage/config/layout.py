@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -95,9 +95,8 @@ Load and enable a Carthage plugin.
 
 '''
     from .. import base_injector
-    module = importlib.import_module(plugin)
-    plugin = getattr(module, 'carthage_plugin')
-    base_injector(plugin)
+    from ..plugins import load_plugin
+    base_injector(load_plugin, plugin)
     from . import inject_config
     inject_config(base_injector)
 
