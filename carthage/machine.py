@@ -148,9 +148,13 @@ class AbstractMachineModel(Injectable):
         '''
         from carthage.network import NetworkConfig
         if not force and self.network_links: return
-        try: network_config = await self.ainjector.get_instance_async(NetworkConfig)
+        try:
+            if hasattr(self, 'ainjector'):
+                ainjector = self.ainjector
+            else: ainjector = self.injector(AsyncInjector)
+            network_config = await ainjector.get_instance_async(NetworkConfig)
         except KeyError: return
-        result = await self.ainjector(network_config.resolve,  self)
+        result = await ainjector(network_config.resolve,  self)
 
 
 

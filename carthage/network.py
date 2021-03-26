@@ -124,7 +124,7 @@ class Network(AsyncInjectable):
     '''
 
     network_links: weakref.WeakSet
-    link_futures: Set[asyncio.Future]
+
 
     def __init__(self, name, vlan_id = None, **kwargs):
         super().__init__(**kwargs)
@@ -133,7 +133,7 @@ class Network(AsyncInjectable):
         self.injector.add_provider(this_network, self)
         self.technology_networks = []
         self.network_links = weakref.WeakSet()
-        self.link_futures = set()
+
         
 
     async def access_by(self, cls: TechnologySpecificNetwork):
@@ -164,6 +164,10 @@ class Network(AsyncInjectable):
     def close(self, canceled_futures = None):
         self.ainjector.close(canceled_futures = canceled_futures)
         self.technology_networks = []
+        for l in list(self.network_links):
+            try: l.close()
+            except: logger.exception(f'Error closing link for {repr(self)}')
+            
 
 this_network = InjectionKey(Network, role = "this_network")
 
@@ -293,35 +297,41 @@ class NetworkConfig:
             elif  callable(r):
                 r = await ainjector(r, i)
             args[k] = r
-        def handle_other(link, other_args):
+        def handle_other(link, other_args, other_future):
             def callback(future):
-                link.net.link_futures.remove(future)
-                try: other = future.result()
-                except Exception:
-                    logger.exception(f'Error resolving other side of {link.interface} link of {link.machine}')
-                    return
-                if not isinstance(other, (Machine, AbstractMachineModel)):
-                    logger.error(f'The other side of the {interface} link to {link.machine} must be an Machine or AbstractMachineModel, not {other}')
-                    return
-                if other_interface in other.network_links:
-                    other_link = other.network_links[other_interface]
-                    if link.net != other_link.net:
-                        logger.error(f'Other side of {link.interface} link on {link.machine} connected to {other_link.net} not {link.net}')
-                        return
-                    if 'mac' in other_args and other_link.mac and \
-                       other_link.mac != other_args['mac']:
-                        logger.error(f'Other side of {link.interface} link on {link.machine} has MAC {other_link.mac} not {other_args["mac"]}')
-                        return
-                    for k,v in other_args.items(): setattr(other_link, k, v)
-                else: #other link exists
-                    try:
-                        other_args['net'] = link.net
-                        other_link = NetworkLink(other, other_interface, other_args)
+                other_link = None
+                try:
+                    try: other = future.result()
                     except Exception:
-                        logger.exception(f'Error constructing {other_interface} link on {other} from {link.interface} link on {link.machine}')
+                        logger.exception(f'Error resolving other side of {link.interface} link of {link.machine}')
                         return
-                link.other = other_link
-                other_link.other = link
+                    if not isinstance(other, (Machine, AbstractMachineModel)):
+                        logger.error(f'The other side of the {interface} link to {link.machine} must be an Machine or AbstractMachineModel, not {other}')
+                        return
+                    if other_interface in other.network_links:
+                        other_link = other.network_links[other_interface]
+                        if link.net != other_link.net:
+                            logger.error(f'Other side of {link.interface} link on {link.machine} connected to {other_link.net} not {link.net}')
+                            return
+                        if 'mac' in other_args and other_link.mac and \
+                       other_link.mac != other_args['mac']:
+                            logger.error(f'Other side of {link.interface} link on {link.machine} has MAC {other_link.mac} not {other_args["mac"]}')
+                            return
+                        for k,v in other_args.items(): setattr(other_link, k, v)
+                    else: #other link exists
+                        try:
+                            other_args['net'] = link.net
+                            other_link = NetworkLink(other, other_interface, other_args)
+                        except Exception:
+                            logger.exception(f'Error constructing {other_interface} link on {other} from {link.interface} link on {link.machine}')
+                            return
+                    link.other = other_link
+                    other_link.other = link
+                    other_future.set_result(other_link)
+                finally:
+                    if not other_future.done():
+                        other_future.set_result(None)
+                    
             other_interface = other_args.pop('other_interface')
             for k in list(other_args):
                 k_new = k[6:]
@@ -330,6 +340,7 @@ class NetworkConfig:
                     
         d = {}
         futures = []
+        other_futures = []
         for i, link_spec in self.link_specs.items():
             link_args = {}
             for k,v in link_spec.items():
@@ -360,17 +371,27 @@ class NetworkConfig:
                 raise
             if other_args:
                 other_target = other_args.pop('other')
-                other_callback = handle_other(link, other_args)
+                #The future handling is complicated.  We want
+                #something like
+                #modeling.base.ModelingGroup.resolve_networking to be
+                #able to wait for both sides of the link to come up.
+                #But we also need a future to track when the target of
+                #the other side has been resolved, because we cannot
+                #construct the link before then.  So, we generate one
+                #future for the other_target, and another future for
+                #the fully constructed other link.
+                other_future = ainjector.loop.create_future()
+                other_futures.append(other_future)
+                other_callback = handle_other(link, other_args, other_future)
                 if isinstance(other_target, InjectionKey):
-                    other_future = asyncio.ensure_future(ainjector.get_instance_async(other_target))
+                    other_target_future = asyncio.ensure_future(ainjector.get_instance_async(other_target))
                 elif callable(other_target):
-                    other_future = asyncio.ensure_future(ainjector(other_target))
+                    other_target_future = asyncio.ensure_future(ainjector(other_target))
                 else:
-                    other_future = ainjector.loop.create_future()
-                    other_future.set_result(other_target)
-                # We don't wait on other_future because it's quite possible that the other side of the link will not resolve until after we resolve.
-                link.net.link_futures.add(other_future)
-                other_future.add_done_callback(other_callback)
+                    other_target_future = ainjector.loop.create_future()
+                    other_target_future.set_result(other_target)
+                # We don't wait on other_target_future because it's quite possible that the other side of the link will not resolve until after we resolve.
+                other_target_future.add_done_callback(other_callback)
         for k, link in result.items():
             if k in connection.network_links:
                 connection.network_links[k].close()
@@ -382,7 +403,14 @@ class NetworkConfig:
             try: del l.member_of_links
             except: pass
             l.member_links
-
+            
+        ainjector.emit_event(InjectionKey(NetworkConfig),
+                             "other-link-futures", self,
+                             other_futures,
+                             machine = connection,
+                             adl_keys = self.supplementary_injection_keys(InjectionKey(NetworkConfig)))
+        del other_futures
+                             
         return result
 
 @dataclasses.dataclass
