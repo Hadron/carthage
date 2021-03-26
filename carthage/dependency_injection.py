@@ -6,6 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+from __future__ import annotations
 import contextvars, enum, inspect, typing, weakref
 import collections.abc
 import asyncio, functools
@@ -275,7 +276,8 @@ Return the first injector in our parent chain containing *k* or None if there is
 
     def filter(self,
                target: type,
-               predicate: typing.Union[list, typing.Callable] = None):
+               predicate: typing.Union[list, typing.Callable] = None,
+               stop_at: Injector = None):
         ''':return: Set of :class:`InjectionKey`s with target type of
         *target* and satisfying *predicate* in the current injector
         and its parents.
@@ -283,6 +285,9 @@ Return the first injector in our parent chain containing *k* or None if there is
 :param predicate: A list of constraints that must all be present in the key, or a callable that returns true if the key should be included.
 
         :param target: A target type to filter against.
+
+        :param stop_at: An injector which must be a parent of this injector.  Do not progress past that injector in finding keys.  So if *stop_at* is *self*, only locally registered keys are returned.
+
 
         Example usage would be to find all registered plugins similar to the following::
 
@@ -295,15 +300,18 @@ Return the first injector in our parent chain containing *k* or None if there is
             constraints = predicate
             predicate = filter_for_constraints
         result = set(filter(lambda k: k.target is target and predicate(k), self._providers.keys()))
-        if self.parent_injector:
-            result |= self.parent_injector.filter(target, predicate)
+        if stop_at and not self.parent_injector:
+            raise ValueError( f'{stop_at} was not in the parent chain')
+        elif stop_at == self: pass# stop here
+        elif self.parent_injector:
+            result |= self.parent_injector.filter(target, predicate, stop_at = stop_at)
         return result
 
-    def filter_instantiate(self, target, predicate, ready = False):
+    def filter_instantiate(self, target, predicate, *, stop_at = None, ready = False):
         '''
         Like :meth:`filter` but an iterator returning tuples of keys instance.
 '''
-        for k in self.filter(target, predicate):
+        for k in self.filter(target, predicate, stop_at = stop_at):
             if ready is not None: k = InjectionKey(k, _ready = ready)
             res = self.get_instance(k)
             if res is not None:
@@ -985,10 +993,16 @@ class AsyncInjector(Injectable):
         else: return res
 
     async def filter_instantiate_async(self, target, predicate,
+                                       *, stop_at = None,
                                        ready = None):
+
+        '''
+        Like :meth:`filter_instantiate` except in an async context.  With *filter_instance* objects are not-ready by default.  With *filter_instance_async*, the ready state is default (true unless in the middle of instantiating something with ready false).
+
+        '''
         results = []
         result_keys = []
-        for k in self.filter(target, predicate):
+        for k in self.filter(target, predicate, stop_at = stop_at):
             if ready is not None: k = InjectionKey(k, _ready = ready)
             results.append(self.get_instance_async(k))
             result_keys.append(k)
