@@ -891,8 +891,10 @@ class AsyncInjectable(Injectable):
         if hasattr(self, 'injector'):
             self.ainjector = self.injector(AsyncInjector)
         if self.async_resolve.__func__ is AsyncInjectable.async_resolve:
-            self._async_ready_state = ReadyState.RESOLVED
-        else:
+            if self.async_ready.__func__ is AsyncInjectable.async_ready:
+                self._async_ready_state = ReadyState.READY
+            else: self._async_ready_state = ReadyState.RESOLVED
+        else: #has nontrivial async_resolve
             self._async_ready_state = ReadyState.NOT_READY
 
 
