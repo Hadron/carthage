@@ -1,4 +1,4 @@
-import os, types
+import asyncio, logging, os, types
 from .implementation import *
 from .decorators import *
 from carthage.dependency_injection import * #type: ignore
@@ -7,8 +7,10 @@ from carthage import ConfigLayout
 import typing
 import carthage.network
 import carthage.machine
-
 from .utils import *
+
+logger = logging.getLogger(__name__)
+
 __all__ = []
 
 
@@ -52,6 +54,8 @@ class InjectableModel(Injectable, metaclass = InjectableModelType):
     def __init_subclass__(cls, *args, template = False, **kwargs):
         super().__init_subclass__(*args, **kwargs)
 
+        
+
 __all__ += ['InjectableModel']
 
 class NetworkModel(carthage.Network, InjectableModel, metaclass = ModelingContainer):
@@ -85,9 +89,57 @@ class NetworkConfigModel(InjectableModel,
 
 __all__ += ['NetworkConfigModel']
 
-class ModelGroup(InjectableModel, metaclass = ModelingContainer): pass
+class ModelGroup(InjectableModel, AsyncInjectable, metaclass = ModelingContainer):
 
-class Enclave(InjectableModel, metaclass = ModelingContainer):
+    async def all_models(self, ready = None):
+        models = await self.ainjector.filter_instantiate_async(
+            MachineModel, ['host'],
+            stop_at = self.injector,
+            ready = ready)
+        return [m[1] for m in models]
+
+    async def resolve_networking(self, force = False):
+        if hasattr(self, 'resolve_networking_models'):
+            return self.resolve_networking_models
+        async def await_futures(futures, event, target, **kwargs):
+            if futures:
+                await asyncio.gather(*futures)
+        models = await self.all_models(ready = False)
+        with self.injector.event_listener_context(
+                InjectionKey(carthage.network.NetworkConfig), "other-link-futures",
+                await_futures) as event_futures:
+            resolve_networking_futures = []
+            for m in models:
+                resolve_networking_futures.append(asyncio.ensure_future(m.resolve_networking(force)))
+            if resolve_networking_futures: await asyncio.gather( *resolve_networking_futures)
+        if event_futures: await asyncio.gather(*event_futures)
+        self.resolve_networking_models = models
+        return models
+
+    def close(self, canceled_futures = None):
+        try: del self.resolved_networking_models
+        except: pass
+        
+        
+    async def generate(self):
+        async def cb(m):
+            try:
+                await m.async_become_ready()
+            except Exception:
+                logger.exception(f"Error generating for {repr(m)}")
+                raise
+        models = await self.resolve_networking()
+        futures = []
+        for m in models:
+            if not isinstance(m, AsyncInjectable): continue
+            futures.append(asyncio.ensure_future(cb(m)))
+        if futures: await asyncio.gather(*futures)
+        
+            
+    
+
+
+class Enclave(ModelGroup, metaclass = ModelingContainer):
 
     domain: str
 
