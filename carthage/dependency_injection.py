@@ -933,7 +933,7 @@ class AsyncInjector(Injectable):
         self.injector.replace_provider(self)
         self.loop = loop
         # For methods that injector has but we do not, then call the method on our injector.  This is a lot like inheritance but does not make us a subclass.
-        for k in Injector.__dict__.keys():
+        for k in list(Injector.__dict__.keys()) + list(event.EventListener.__dict__.keys()):
             if  not isinstance(getattr(Injector, k), types.FunctionType):
                 continue
 

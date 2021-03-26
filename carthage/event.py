@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import contextlib
 import weakref
 from .utils import possibly_async
 class EventScope:
@@ -87,11 +88,14 @@ class EventScope:
         
     def add_listener(self, k, event, callback):
         d = self.listeners.setdefault(k,{})
-        d[callback] = event
+        d[callback] = (event, set())
 
     def remove_listener(self, k, callback):
         d = self.listeners[k]
-        try: del d[callback]
+        try:
+            events, futures = d[callback]
+            del d[callback]
+            return futures
         except KeyError:
             # We prefer our message
             raise KeyError(f'{callback} not registered as a listener for {k}') from None
@@ -99,6 +103,14 @@ class EventScope:
     def emit(self, loop, k, event, target, *args,
              adl_keys = set(),
              **kwargs):
+        def gen_callback(futures):
+            def callback(future):
+                # ignore the result
+                try: future.result()
+                except: pass
+                futures.remove(future)
+            return callback
+        if not isinstance(adl_keys, set): adl_keys = set(adl_keys)
         target_keys = {k }|adl_keys
         result_futures = []
         if self.parent:
@@ -108,16 +120,21 @@ class EventScope:
         for ck in target_keys:
             try: d = self.listeners[ck]
             except KeyError: continue
-            for callback, events in d.items():
+            for callback, (events, futures) in d.items():
                 if event in events:
-                    result_futures.append(
-                        loop.create_task(possibly_async(callback( event=event, target = target, *args, **kwargs))))
+                    future = loop.create_task(possibly_async(callback( event=event, target = target, *args, **kwargs)))
+                    result_futures.append(future)
+                    futures.add(future)
+                    future.add_done_callback(gen_callback(futures))
+        del args
+        del kwargs
+        
 
         if result_futures:
             return asyncio.gather(*result_futures)
         else:
             future = loop.create_future()
-            future.set_result(False)
+            future.set_result([])
             return future
 
 class EventListener:
@@ -160,7 +177,11 @@ class EventListener:
         self._event_scope.add_listener(key, events, callback)
 
     def remove_event_listener(self, key, callback):
-        self._event_scope.remove_listener(key, callback)
+        '''
+        :return: Set of futures representing pending calls to the removed callback.
+
+        '''
+        return self._event_scope.remove_listener(key, callback)
 
     def emit_event(self, key, event, target,
                    *args,
@@ -174,6 +195,22 @@ class EventListener:
                                *args,
                                **kwargs,
                                adl_keys = adl_keys)
-        
 
-__all__ = 'EventListener'.split()
+    @contextlib.contextmanager
+    def event_listener_context(self, key, events, callback):
+        '''
+        Within the scope of the context, *callback* is registered as a listener for the *events* directed at *key*.
+        A callback may be removed prematurely if  it is registered for the same key on the same scope by multiple calls to this function or :meth:`add_event_listener`.
+
+        :return: A set of futures representing pending  calls to the callback.
+
+        '''
+        self.add_event_listener(key, events, callback)
+        try:
+            ignore, futures = self._event_scope.listeners[key][callback]
+            yield futures
+        finally:
+            self.remove_event_listener(key, callback)
+            
+__all__ = ['EventListener']
+ 
