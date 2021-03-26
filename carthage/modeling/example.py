@@ -15,14 +15,14 @@ class RouterConfig(NetworkConfigModel):
 
     internet = injector_access("internet")
     site_network = injector_access("site-network")
-    add("eth0", internet, None)
-    add("eth1", site_network,  None)
+    add("eth0", net = internet, mac = None)
+    add("eth1", net = site_network,  mac = None)
     
 class Layout(ModelGroup):
 
     class net_config(NetworkConfigModel):
         site_network = injector_access("site-network")
-        add("eth0", site_network, None)
+        add("eth0", net = site_network, mac = None)
         
     @provides(InjectionKey("internet"))
     class Internet(NetworkModel):

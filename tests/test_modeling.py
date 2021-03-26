@@ -167,3 +167,48 @@ def test_transclusion(injector):
     assert l.moo == "bar"
     assert l.mar.machine == "baz"
     
+
+@async_test
+async def test_generate_and_network(ainjector):
+
+
+    class Layout(ModelGroup):
+
+        class net(NetworkModel):
+
+            name = "the-net"
+            
+        class nc(NetworkConfigModel):
+            other_machine = injector_access("other-machine")
+
+            add('eth0', net = net, mac = None,
+                other = other_machine,
+                other_interface = "eth 2/1")
+
+        @provides("other-machine")
+        class OtherMachine(MachineModel):
+
+            name = "switch.foo.com"
+
+            class fooNetConfig(NetworkConfigModel): pass
+
+        class TheMachine(MachineModel):
+
+            name = "machine.foo.com"
+
+            @setup_task("Generate me")
+            def generate_stuff(self):
+                nonlocal stuff_generated
+                stuff_generated = True
+            @generate_stuff.invalidator()
+            def generate_stuff(self):
+                return False
+            
+                
+    stuff_generated = False
+    l = ainjector.injector(Layout)
+    await l.generate()
+    assert stuff_generated
+    assert l.TheMachine.network_links['eth0'].other.machine == l.OtherMachine
+    assert len(l.net.network_links) == 2
+    
