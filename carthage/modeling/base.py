@@ -259,3 +259,34 @@ class MachineImplementation(AsyncInjectable):
 
 
 __all__ += ['MachineModel']
+
+@inject(injector = Injector)
+def model_bases(typ: type, host: str, *bases,
+                   injector):
+    '''
+
+    One common modeling pattern is to automatically generate  :class:`MachineModel`s for a number of systems from some sort of inventory database.  However, it is often desirable to add a override mechanism so that customizations can be added for a specific model.  This function adds a modeling mixin if one is registered in the injector.  In the automated code it is used like::
+
+        @dynamic_name(inventory.name)
+        class model( *injector(model_bases, MachineModel, inventory.fqdn)):
+            name = inventory.fqdn
+
+    And then to add an override somewhere in an injector that :func:`transcludes <transclude_injector>` the model::
+
+        @model_mixin_for(host = "foo.com")
+        class FooMixin(MachineModel):
+            #This will be a base of the foo.com model
+
+    Compare and contrast with using :func:`transclude_overrides` which will replace the overridden model rather than augmenting it with a mixin.
+
+    '''
+    bases = list(bases)
+    try:
+        new_base = injector.get_instance(
+            InjectionKey(typ, host = host, role = "mixin"))
+        bases.append(new_base)
+    except KeyError: pass
+    return bases
+
+__all__ += ['model_bases']
+
