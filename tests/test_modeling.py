@@ -151,6 +151,14 @@ def test_transclusion(injector):
                           "bar")
     injector.add_provider(InjectionKey(Machine, host = "mar.com"),
                           "baz")
+    class FirstLayout(ModelGroup):
+
+        @model_mixin_for(host = "mar.com")
+        class MarMixin(MachineModel):
+            mixed_in = True
+
+    first_layout = injector(FirstLayout)
+    injector = first_layout.injector
 
     @transclude_injector(injector)
     class Layout(ModelGroup):
@@ -159,13 +167,14 @@ def test_transclusion(injector):
         class moo(MachineModel):
             name = "moo.com"
 
-        class mar(MachineModel):
+        class mar(*injector(model_bases, MachineModel, "mar.com")):
             name = "mar.com"
             
 
     l = injector(Layout)
     assert l.moo == "bar"
     assert l.mar.machine == "baz"
+    assert l.mar.mixed_in == True
     
 
 @async_test

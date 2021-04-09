@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-from carthage.dependency_injection import Injector, InjectionKey, inject_autokwargs
+from carthage.dependency_injection import Injector, InjectionKey, inject_autokwargs, dependency_quote
 from .implementation import ModelingBase, InjectableModelType, ModelingContainer, NSFlags, handle_transclusions
 from .utils import setattr_default
 import typing
@@ -331,6 +331,16 @@ def transclude_injector(injector):
         return val
     return wrap
 
+def model_mixin_for(**constraints):
+    '''
+    Indicate that a given model supplements a model declared automatically.  Only works if the automatic model uses :func:`~carthage.modeling.base.model_bases` to construct bases.  Must be used in a layout that provides a transcluding injector for the automatic model.
+    '''
+    from .base import MachineModel
+    def wrap(val):
+        return provides(InjectionKey(
+            MachineModel, **constraints, role = "mixin"))(dependency_quote(val))
+    return wrap
+
 
 __all__ = ["ModelingDecoratorWrapper", "provides", 'dynamic_name',
            'injector_access', 'no_instantiate',
@@ -339,4 +349,5 @@ __all__ = ["ModelingDecoratorWrapper", "provides", 'dynamic_name',
            'MachineMixin', 'machine_mixin',
            'propagate_up',
            'transclude_overrides', 'transclude_injector',
+           'model_mixin_for',
            ]
