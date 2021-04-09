@@ -25,6 +25,9 @@ class NSFlags(enum.Flag):
     inject_by_class = 8
     instantiate_on_access = 16
     propagate_key = 32
+    dependency_quote = 64
+
+classes_to_quote = set()
 
 class NsEntry:
 
@@ -40,6 +43,8 @@ class NsEntry:
         self.value = value
         self.extra_keys = []
         self.flags = NSFlags.close | NSFlags.instantiate_on_access | NSFlags.inject_by_name|NSFlags.inject_by_class
+        if isinstance(value, type) and (classes_to_quote  & set(value.__mro__)):
+            self.flags |= NSFlags.dependency_quote
         self.new_name = None
         self.transclusion_key = None
 
@@ -116,7 +121,10 @@ class ModelingNamespace(dict):
         # returns key, (value, options)
         def val(k):
             if k == state.transclusion_key or state.transclusion_key is None:
-                return state.value
+                value = state.value
+                if state.flags & NSFlags.dependency_quote:
+                    return dependency_quote(value)
+                else: return value
             return decorators.injector_access(state.transclusion_key)
         options = state.injection_options
         if state.flags & NSFlags.inject_by_name:
