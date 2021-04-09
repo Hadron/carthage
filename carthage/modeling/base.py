@@ -21,6 +21,15 @@ logger = logging.getLogger(__name__)
 
 __all__ = []
 
+def dependency_quote_class(c: type):
+    "When *c* is injected in a model, dependency_quote the result"
+    from .implementation import classes_to_quote
+    classes_to_quote.add(c)
+
+__all__ += ['dependency_quote_class']
+
+dependency_quote_class(carthage.machine.MachineCustomization)
+
 
 @inject_autokwargs(injector = Injector)
 class InjectableModel(Injectable, metaclass = InjectableModelType):
@@ -165,6 +174,8 @@ __all__ += [ 'machine_implementation_key']
 
 class MachineModelType(ModelingContainer):
 
+    classes_to_inject = (carthage.machine.MachineCustomization,)
+    
     def __new__(cls, name, bases, ns, **kwargs):
         if 'name' not in ns:
             ns['name'] = name.lower()
@@ -221,6 +232,24 @@ class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metac
             
 
     machine = injector_access(InjectionKey(carthage.machine.Machine))
+    classes_to_inject = (carthage.machine.MachineCustomization,)
+
+    #: Sequence of classes to be mixed into the resulting machine implementation
+    machine_mixins = tuple()
+    
+    @memoproperty
+    def machine_type(self):
+        implementation = self.injector.get_instance(machine_implementation_key)
+        bases = [implementation] + list(map(lambda x: x[1], self.injector.filter_instantiate(MachineMixin, ['name'])))
+        bases += self.machine_mixins
+        for b in bases:
+            assert isinstance(b, type) or hasattr(b, '__mro_entries__'), f'{b} is not a type; did you forget a dependency_quote'
+        res =  types.new_class("MachineImplementation", tuple(bases))
+        try:
+            customization = self.injector.get_instance(carthage.machine.MachineCustomization)
+            res.model_customization = carthage.machine.customization_task(customization)
+        except KeyError: pass
+        return res
 
     @memoproperty
     def stamp_path(self):
@@ -230,7 +259,6 @@ class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metac
     
 
 @inject(injector = Injector,
-            implementation = machine_implementation_key,
             model = MachineModel,
             )
 class MachineImplementation(AsyncInjectable):
@@ -238,11 +266,8 @@ class MachineImplementation(AsyncInjectable):
     # Another class that is only a type because of how the injection
     # machineary works.
 
-    def __new__(cls, injector, implementation, model):
-        bases = [implementation] + list(map(lambda x: x[1], injector.filter_instantiate(MachineMixin, ['name'])))
-        for b in bases:
-            assert isinstance(b, type) or hasattr(b, '__mro_entries__'), f'{b} is not a type; did you forget a dependency_quote'
-            res = types.new_class("MachineImplementation", tuple(bases), {})
+    def __new__(cls, injector,  model):
+        res = model.machine_type
         try:
             return cls.prep(injector(res, name = model.name), model)
         except AsyncRequired:
