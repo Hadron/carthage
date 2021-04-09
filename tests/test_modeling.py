@@ -8,7 +8,7 @@ from carthage.modeling.base import *
 from carthage.modeling.implementation import ModelingContainer
 from carthage.modeling.decorators import *
 from carthage.network import NetworkConfig, Network
-
+from carthage.machine import MachineCustomization
 @pytest.fixture()
 def injector():
     injector = base_injector(Injector)
@@ -212,4 +212,16 @@ async def test_generate_and_network(ainjector):
     assert stuff_generated
     assert l.TheMachine.network_links['eth0'].other.machine == l.OtherMachine
     assert len(l.net.network_links) == 2
+    
+def test_implicit_customization(injector):
+    class Layout(ModelGroup):
+
+        class foo(MachineModel):
+            name = "foo.com"
+            class cust(MachineCustomization):
+                pass
+
+    l = injector(Layout)
+    injector.add_provider(machine_implementation_key, dependency_quote(Machine))
+    assert hasattr(l.foo.machine_type, 'model_customization')
     
