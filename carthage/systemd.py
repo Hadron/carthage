@@ -5,7 +5,7 @@ from carthage.machine import AbstractMachineModel
 from carthage.setup_tasks import *
 from .network import NetworkLink
 from .utils import mako_lookup
-from carthage import ConfigLayout
+from carthage import ConfigLayout, sh
 
 local_type_map = dict(
     bond = dict(
@@ -38,6 +38,12 @@ class NotNeeded(Exception):
 @inject(config_layout = ConfigLayout)
 class SystemdNetworkModelMixin(SetupTaskMixin):
 
+    def __init__(self, **kwargs):
+        from .machine import AbstractMachineModel
+        super().__init__(**kwargs)
+        if isinstance(self, AbstractMachineModel) and hasattr(self, 'machine_mixins'):
+            self.machine_mixins = list(self.machine_mixins)+[SystemdNetworkInstallMixin]
+            
     @setup_task("Generate Network Configuration")
     async def generate_network_config(self):
         await self.resolve_networking()
@@ -64,8 +70,27 @@ class SystemdNetworkModelMixin(SetupTaskMixin):
                     f.write(rendering)
             except NotNeeded: pass
         
-        
-        
+
+class SystemdNetworkInstallMixin(SetupTaskMixin):
+
+    
+    @setup_task("Install Systemd Networking")
+    async def install_systemd_networking(self):
+        async with self.filesystem_access() as path:
+            try: networking_dir = Path(self.model.stamp_path)/"networking"
+            except AttributeError:
+                networking_dir = Path(self.stamp_dir)/"networking"
+            if not networking_dir.exists(): raise SkipSetupTask
+            await sh.rsync(
+                "-a", "--delete",
+                "--include=10-carthage-*",
+                str(networking_dir)+"/",
+                Path(path)/"etc/systemd/network",
+                _bg = True,
+                _bg_exc = False)
+            
+                
 __all__ = [
     'SystemdNetworkModelMixin',
-    ]
+    'SystemdNetworkInstallMixin',
+        ]
