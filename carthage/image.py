@@ -135,6 +135,25 @@ class ContainerImage(BtrfsVolume):
         except FileNotFoundError: pass
 
 
+class DebianContainerImage(ContainerImage):
+
+    mirror: str = "https://deb.debian.org/debian"
+    distribution: str = "bullseye"
+
+    def __init__(self, name:str = "base-debian",
+                 mirror: str = None, distribution: str = None, **kwargs):
+        if mirror: self.mirror = mirror
+        if distribution: self.distribution = distribution
+        super().__init__(name, **kwargs)
+
+    @setup_task("unpack")
+    async def unpack_container_image(self):
+        await sh.debootstrap('--include=openssh-server',
+                             self.distribution,
+                             self.path, self.mirror,
+                             _bg = True,
+                             _bg_exc = False)
+        
 
 
 
@@ -367,7 +386,8 @@ class SshAuthorizedKeyCustomizations(ContainerCustomization):
         shutil.copy2(authorized_keys.path,
                      os.path.join(self.path, 'root/.ssh/authorized_keys'))
 
-__all__ = ('BtrfsVolume', 'ContainerImage', 'SetupTaskMixin',
+__all__ = ('BtrfsVolume', 'ContainerImage', 'DebianContainerImage',
+           'SetupTaskMixin',
            'SkipSetupTask',
            'ImageVolume',
            'SshAuthorizedKeyCustomizations')
