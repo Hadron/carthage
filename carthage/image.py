@@ -14,7 +14,7 @@ from . import sh
 from .utils import possibly_async
 from .setup_tasks import setup_task, SkipSetupTask, SetupTaskMixin
 import carthage
-from .machine import ContainerCustomization
+from .machine import ContainerCustomization, customization_task
 
 
 
@@ -57,6 +57,8 @@ class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
             for vol in reversed(subvols):
                 sh.btrfs('subvolume', 'delete', vol, )
         self.closed = True
+        super().close(canceled_futures)
+
 
     def __del__(self):
         self.close()
@@ -134,6 +136,14 @@ class ContainerImage(BtrfsVolume):
                   os.path.join(self.path, "sbin/init"))
         except FileNotFoundError: pass
 
+class DebianContainerCustomizations(ContainerCustomization):
+
+    description = "Set up Debian for Carthage"
+    
+    @setup_task("Turn on networkd")
+    async def turn_on_networkd(self):
+        await self.container_command("systemctl", "enable", "systemd-networkd")
+
 
 class DebianContainerImage(ContainerImage):
 
@@ -153,7 +163,9 @@ class DebianContainerImage(ContainerImage):
                              self.path, self.mirror,
                              _bg = True,
                              _bg_exc = False)
-        
+
+    debian_customizations = customization_task(DebianContainerCustomizations)
+    
 
 
 
