@@ -70,6 +70,10 @@ class Injectable:
                 raise TypeError(f'The following extra arguments were specified: {list(kwargs.keys())}')
             raise
 
+    def close(self, canceled_futures = None):
+        if hasattr(self, 'injector'):
+            self.injector.close(canceled_futures)
+        
     @classmethod
     def supplementary_injection_keys(cls, k):
         for c in cls.__mro__:
@@ -564,7 +568,7 @@ Return the first injector in our parent chain containing *k* or None if there is
         '''
         Close all subinjectors or providers
 
-        For every provider registered with this injector, call :meth:`close` if it is exists.  Then clear out all providers.  Note that this will also close sub-injectors.
+        For every provider registered with this injector, call :meth:`close` if it is exists.  Then clear out all providers.  Note that this will also close sub-injectors of providers.
 
         If using `AsyncInjector`, it is better to call :func:`shutdown_injector` to cancel any running asynchronous tasks.
 

@@ -1,0 +1,5 @@
+- hosts: test-container
+  remote_user: root
+  tasks:
+    - debug: msg=success
+    

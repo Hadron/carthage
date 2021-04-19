@@ -1,10 +1,10 @@
 import asyncio, pytest
-from carthage.image import image_factory, ImageVolume
+from carthage.image import image_factory, ImageVolume, SshAuthorizedKeyCustomizations
 from carthage.hadron.images import HadronVmImage
 from carthage.vm import InstallQemuAgent
-from carthage import base_injector, ConfigLayout, ssh
+from carthage import base_injector, ConfigLayout, ssh, shutdown_injector
 from carthage.dependency_injection import AsyncInjector, DependencyProvider, InjectionKey
-from carthage.image import ContainerImage
+from carthage.image import ContainerImage, DebianContainerImage
 from carthage.network import Network
 from carthage.machine import ssh_origin
 from carthage.container import Container, container_image
@@ -14,18 +14,24 @@ from carthage.pytest import *
 pytest_plugins = ('carthage.pytest_plugin',)
 
 @pytest.fixture(scope = 'session')
-@async_test
-async def test_ainjector(loop):
+
+def test_ainjector(loop):
     if posix.geteuid() != 0:
         pytest.skip("Not running as root; volume tests skipped", )
-    ainjector = base_injector.claim()(AsyncInjector)
-    config = await ainjector(ConfigLayout)
-    config.delete_volumes = True
-    vol = await ainjector(ContainerImage, name = "base")
-    base_injector.replace_provider(container_image, vol)
-    base_injector.replace_provider(await ainjector(Network,'brint', vlan_id = 0))
-    ainjector.replace_provider(ssh_origin, DependencyProvider(None))
-    return ainjector
+    try:
+        ainjector = base_injector.claim()(AsyncInjector)
+        config = loop.run_until_complete( ainjector(ConfigLayout))
+        config.delete_volumes = True
+        vol = loop.run_until_complete( ainjector(DebianContainerImage, name = "base-debian"))
+        vol.config_layout.delete_volumes = False
+        loop.run_until_complete(vol.apply_customization(SshAuthorizedKeyCustomizations))
+        ainjector.replace_provider(container_image, vol)
+        ainjector.replace_provider(loop.run_until_complete( ainjector(Network,'brint', vlan_id = 0)))
+        ainjector.replace_provider(ssh_origin, DependencyProvider(None))
+        yield ainjector
+    finally:
+        loop.run_until_complete(shutdown_injector(ainjector))
+    
 
 
 
