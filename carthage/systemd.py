@@ -44,7 +44,7 @@ class NotNeeded(Exception):
         pass
         
 @inject(config_layout = ConfigLayout)
-class SystemdNetworkModelMixin(SetupTaskMixin):
+class SystemdNetworkModelMixin(SetupTaskMixin, AsyncInjectable):
 
     def __init__(self, **kwargs):
         from .machine import AbstractMachineModel
