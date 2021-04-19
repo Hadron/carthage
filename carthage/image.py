@@ -144,6 +144,11 @@ class DebianContainerCustomizations(ContainerCustomization):
     async def turn_on_networkd(self):
         await self.container_command("systemctl", "enable", "systemd-networkd")
 
+    @setup_task("Install python")
+    async def install_python(self):
+        await self.container_command("apt", "update")
+        await self.container_command("apt-get", "-y", "install", "python3")
+        
 
 class DebianContainerImage(ContainerImage):
 
