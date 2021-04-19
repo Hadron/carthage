@@ -116,6 +116,9 @@ class AnsibleInventory(AsyncInjectable):
                 except:
                     logger.exception( f"Error getting variables for {machine_name} from {p.name} plugin:")
                     raise
+            if 'ansible_host' not in var_dict:
+                try: var_dict['ansible_host'] = m.ip_address
+                except: pass
             hosts_dict[machine_name] = var_dict
             groups = []
             for p in self.group_plugins:
