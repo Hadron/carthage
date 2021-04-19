@@ -44,7 +44,7 @@ class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
         return "<BtrfsVolume path={}{}>".format(self._path,
                                                  " closed" if self.closed else "")
 
-    def close(self):
+    def close(self, canceled_futures = None):
         if self.closed: return
         if self.config_layout.delete_volumes:
             subvols = [self._path]
@@ -210,9 +210,10 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
     def stamp_path(self):
         return self.path+'.stamps'
 
-    def close(self):
+    def close(self, canceled_futures = None):
         if self.config_layout.delete_volumes:
             self.delete_volume()
+        super().close(canceled_futures)
 
     def __del__(self):
         self.close()
@@ -313,9 +314,10 @@ self.path)
             os.unlink(self.path)
         except FileNotFoundError: pass
 
-    def close(self):
+    def close(self, canceled_futures = None):
         if self.config_layout.delete_volumes:
             self.delete_volume()
+        super().close(canceled_futures)
 
 @inject_autokwargs(config_layout = ConfigLayout)
 class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
