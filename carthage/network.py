@@ -423,6 +423,7 @@ class NetworkLink:
     machine: object
     mtu: typing.Optional[int]
     local_type: typing.Optional[str]
+    v4_config: typing.Optional[dict]
 
     def __new__(cls, connection, interface, args):
         if 'local_type' in args:
@@ -521,6 +522,19 @@ class NetworkLink:
             except KeyError:
                 raise KeyError( f'{l} interface not found on {self.machine}') from None
         return tuple(res)
+
+
+    def _merge(self, a):
+        res = {}
+        if hasattr(self.net, a):
+            res.update(getattr(net, a))
+        if hasattr(self, a):
+            res.update(getattr(self, a))
+        return res
+
+    @memoproperty
+    def merged_v4_config(self):
+        return self._merge('v4_config')
     
             
         
