@@ -136,6 +136,7 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass = ModelingContainer
     def close(self, canceled_futures = None):
         try: del self.resolved_networking_models
         except: pass
+        super().close(canceled_futures)
         
         
     async def generate(self):
