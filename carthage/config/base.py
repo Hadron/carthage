@@ -10,6 +10,12 @@ from .schema import ConfigSchema
 from .types import ConfigPath
 
 class BaseSchema(ConfigSchema, prefix = ""):
+
+    #: A path containing authorized keys to use in images.  If the
+    #path starts with a | symbol, then the output of the given command
+    #will be used.
+    authorized_keys: ConfigPath = "|{hadron_operations}/scripts/authorized_keys"
+    
     base_dir: ConfigPath = "/srv/images/test"
     output_dir: ConfigPath = "{base_dir}/output"
     image_dir:ConfigPath = "{base_dir}"

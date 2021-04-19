@@ -13,6 +13,7 @@ from .config import ConfigLayout
 from .setup_tasks import SetupTaskMixin, setup_task
 from . import sh, machine
 from .utils import memoproperty, when_needed
+from pathlib import Path
 
 
 @dataclasses.dataclass
@@ -127,15 +128,19 @@ class AuthorizedKeysFile(Injectable):
 
     def __init__(self, config_layout, ssh_key):
         self.path = config_layout.state_dir+'/authorized_keys'
-        environ = os.environ.copy()
-        environ['PYTHONPATH'] = config_layout.hadron_operations
-        sh.python3('-mhadron.inventory.config.default_keys',
-                   _env = environ,
-                   _out = config_layout.hadron_operations + '/ansible/output/authorized_keys.default')
-        with open(config_layout.hadron_operations+"/ansible/output/authorized_keys.default", "rt") as in_keys:
-            with open(self.path, "wt") as f:
-                f.write(in_keys.read())
-                f.write(ssh_key.pubkey_contents)
+        authorized_keys = config_layout.authorized_keys
+        if authorized_keys.startswith('|'):
+            authorized_keys = authorized_keys[1:]
+            keys_in = str(sh("sh", "-c",
+                         authorized_keys,
+                         _encoding = 'utf-8'))
+        else:
+            if not authorized_keys: keys_in = ""
+            else:
+                keys_in = Path(authorized_keys).read_text()
+        with open(self.path, "wt") as f:
+            f.write(keys_in)
+            f.write(ssh_key.pubkey_contents)
                 
 
 @inject(
