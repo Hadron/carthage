@@ -29,14 +29,15 @@ __all__ += [ 'ConfigLayout', 'config_key', 'ConfigSchema' ]
 from .network import Network, NetworkConfig
 __all__ += [ 'Network', 'NetworkConfig' ]
 
-from .machine import Machine
+from .machine import Machine, AbstractMachineModel, MachineCustomization, customization_task
 import carthage.ssh # ssh import must come after machine
 import carthage.pki
 
 
 from .files import rsync_git_tree
 
-__all__ += [ 'Machine',  'rsync_git_tree']
+__all__ += [ 'Machine',  'rsync_git_tree',
+             'AbstractMachineModel', 'MachineCustomization', 'customization_task']
 
 import carthage.container
 import carthage.hadron
@@ -83,3 +84,4 @@ def __done():
     gc.collect()
     
     
+
