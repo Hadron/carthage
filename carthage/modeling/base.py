@@ -242,6 +242,7 @@ class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metac
             customization = self.injector.get_instance(carthage.machine.BaseCustomization)
             res.model_customization = carthage.machine.customization_task(customization)
         except KeyError: pass
+        res.model = self
         return res
 
     @memoproperty
