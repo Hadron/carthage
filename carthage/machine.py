@@ -197,7 +197,7 @@ class Machine(AsyncInjectable, SshMixin):
         self.sshfs_count = 0
         self.sshfs_lock = asyncio.Lock()
         self.injector.add_provider(InjectionKey(Machine), self)
-        self.model = None
+        if not hasattr(self, 'model'): self.model = None
 
     def machine_running(self, **kwargs):
         '''Returns a asynchronous context manager; within the context manager, the machine is expected to be running unless :meth:`stop_machine` is explicitly called.
@@ -357,6 +357,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
     def __getattr__(self, a):
         if a in ('ssh', 'ip_address', 'start_machine', 'stop_machine',
                  "filesystem_access",
+                 'model',
                  'name', 'ansible_inventory_name',
                  'machine_running', 'running',
                  'name', 'full_name',
