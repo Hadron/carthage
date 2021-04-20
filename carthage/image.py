@@ -9,7 +9,7 @@
 import contextlib, os, os.path, pkg_resources, shutil, sys, time
 from tempfile import TemporaryDirectory
 from .dependency_injection import *
-from .config import ConfigLayout
+from .config import ConfigLayout, config_key
 from . import sh
 from .utils import possibly_async
 from .setup_tasks import setup_task, SkipSetupTask, SetupTaskMixin
@@ -20,12 +20,12 @@ from .machine import ContainerCustomization, customization_task
 
 
 
-@inject(config_layout = ConfigLayout)
+@inject_autokwargs(config_layout = ConfigLayout)
 class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
 
-    def __init__(self, config_layout, name, clone_from = None, **kwargs):
+    def __init__(self,  name, clone_from = None, **kwargs):
         super().__init__(**kwargs)
-        self.config_layout = config_layout
+        config_layout = self.config_layout
         self._name = name
         self._path = os.path.join(config_layout.image_dir, name)
         self.clone_from = clone_from
@@ -96,11 +96,8 @@ class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
 
 
 
-@inject(config_layout = ConfigLayout)
-class ContainerImage(BtrfsVolume):
 
-    def __init__(self, name, config_layout, **kwargs):
-        super().__init__(config_layout = config_layout, name = name, **kwargs)
+class ContainerImage(BtrfsVolume):
 
     async def apply_customization(self, cust_class, method = 'apply'):
         from .container import container_image, container_volume, Container
@@ -135,42 +132,7 @@ class ContainerImage(BtrfsVolume):
         try: os.rename(os.path.join(self.path, "sbin/init.dist"),
                   os.path.join(self.path, "sbin/init"))
         except FileNotFoundError: pass
-
-class DebianContainerCustomizations(ContainerCustomization):
-
-    description = "Set up Debian for Carthage"
-    
-    @setup_task("Turn on networkd")
-    async def turn_on_networkd(self):
-        await self.container_command("systemctl", "enable", "systemd-networkd")
-
-    @setup_task("Install python")
-    async def install_python(self):
-        await self.container_command("apt", "update")
-        await self.container_command("apt-get", "-y", "install", "python3")
-        
-
-class DebianContainerImage(ContainerImage):
-
-    mirror: str = "https://deb.debian.org/debian"
-    distribution: str = "bullseye"
-
-    def __init__(self, name:str = "base-debian",
-                 mirror: str = None, distribution: str = None, **kwargs):
-        if mirror: self.mirror = mirror
-        if distribution: self.distribution = distribution
-        super().__init__(name, **kwargs)
-
-    @setup_task("unpack")
-    async def unpack_container_image(self):
-        await sh.debootstrap('--include=openssh-server',
-                             self.distribution,
-                             self.path, self.mirror,
-                             _bg = True,
-                             _bg_exc = False)
-
-    debian_customizations = customization_task(DebianContainerCustomizations)
-    
+            
 
 
 
@@ -405,7 +367,7 @@ class SshAuthorizedKeyCustomizations(ContainerCustomization):
         shutil.copy2(authorized_keys.path,
                      os.path.join(self.path, 'root/.ssh/authorized_keys'))
 
-__all__ = ('BtrfsVolume', 'ContainerImage', 'DebianContainerImage',
+__all__ = ('BtrfsVolume', 'ContainerImage',
            'SetupTaskMixin',
            'SkipSetupTask',
            'ImageVolume',

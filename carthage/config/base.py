@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 from .schema import ConfigSchema
-from .types import ConfigPath
+from .types import ConfigPath, ConfigString
 
 class BaseSchema(ConfigSchema, prefix = ""):
 
@@ -52,3 +52,11 @@ class TasksConfig(ConfigSchema, prefix = "tasks"):
     dry_run: bool = False
 
 
+class DebianConfig(ConfigSchema, prefix = "debian"):
+    mirror: ConfigString = "http://deb.debian.org/debian"
+
+    #: The mirror to use when running debootstrap. May be a file mirror for example to be used on the machine that will eventually be a mirror server.
+    stage1_mirror:ConfigString = "{debian.mirror}"
+
+    distribution:ConfigString = "bullseye"
+    
