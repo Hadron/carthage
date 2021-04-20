@@ -129,15 +129,14 @@ class TaskWrapper:
             return (True, dependency_last_run)
         logger.debug(f"Task {self.description} last run for {obj} at {_iso_time(last_run)}")
         if self.invalidator_func:
-            if not await ainjector(self.invalidator_func, obj):
+            if not await ainjector(self.invalidator_func, obj, last_run = last_run):
                 logger.info(f"Task {self.description} invalidated for {obj}; last run {_iso_time(last_run)}")
                 return (True, time.time())
         return (False, last_run)
     
 
     def invalidator(self, slow = False):
-        '''
-        Decorator to indicate  an invalidation function for a :func:`setup_task`
+        '''Decorator to indicate  an invalidation function for a :func:`setup_task`
 
         This decorator indicates a function that will validate whether some setup_task has successfully been created.  As an example, if a setup_task creates a VM, an invalidator could invalidate the task if the VM no longer exists.  Invalidators work as an additional check along side the existing mechanisms to track which setup_tasks are run.  Even if an invalidator  would not invalidate a task, the task would still be performed if its stamp does not exist.  Compare :meth:`check_completed` for a mechanism to exert direct control over whether a task is run.
 
@@ -152,8 +151,15 @@ class TaskWrapper:
             async def create_vm(self):
                 # ...
             @create_vm.invalidator()
-            async def create_vm(self):
+            async def create_vm(self, **kwargs):
                 # if VM exists return true else false
+
+        The invalidator receives the following keyword arguments;
+        invalidators should be prepared to receive unknown arguments:
+
+        last_run
+            The time at which the task was last successfully run
+
 
         '''
         def wrap(f):

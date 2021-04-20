@@ -59,7 +59,7 @@ class VmwareAuthorizationRole(VmwareStampable, kind='authorization_role'):
                 am.UpdateAuthorizationRole(roleId=role.roleId, newName=self.name, privIds=self.privIds)
 
     @create.invalidator()
-    async def create(self):
+    async def create(self, **kwargs):
 
         def lists_equal(a, b):
             return list_is_subset(a, b) and list_is_subset(b, a)

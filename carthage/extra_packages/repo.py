@@ -47,7 +47,7 @@ Components: {config.extra_packages.components}
                 _cwd  = repo_dir)
 
     @add_packages.invalidator()
-    def add_packages(self):
+    def add_packages(self, **kwargs):
         last_run = self.check_stamp(self.__class__.add_packages.stamp)
         if not last_run: return False
         packages_dir = self.config.extra_packages.packages_dir
