@@ -84,7 +84,7 @@ async def test_invalidator(ainjector):
             nonlocal called
             called += 1
         @setup_invalidator.invalidator()
-        def setup_invalidator(self):
+        def setup_invalidator(self, **kwargs):
             return False
     assert not c.check_stamp(c, "setup_invalidator")
     await ainjector(c)

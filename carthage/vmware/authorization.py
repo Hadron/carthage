@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -67,7 +67,7 @@ class VmwareAuthorizationRole(VmwareStampable, kind='authorization_role'):
                 am.UpdateAuthorizationRole(roleId=role.roleId, newName=self.name, privIds=self.privIds)
 
     @create.invalidator()
-    async def create(self):
+    async def create(self, **kwargs):
 
         def lists_equal(a, b):
             return list_is_subset(a, b) and list_is_subset(b, a)
