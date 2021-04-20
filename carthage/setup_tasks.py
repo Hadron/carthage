@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, dataclasses, datetime, logging, os, os.path, time, typing, sys, weakref
+import asyncio, dataclasses, datetime, logging, os, os.path, time, typing, sys, shutil, weakref
 import importlib.resources
 from pathlib import Path
 import carthage
@@ -9,7 +9,8 @@ from carthage.utils import memoproperty
 import collections.abc
 
 __all__ = [ 'logger', 'TaskWrapper', 'TaskMethod', 'setup_task', 'SkipSetupTask', 'SetupTaskMixin',
-            'mako_task']
+            'mako_task',
+            "install_mako_task"]
 
 logger = logging.getLogger('carthage.setup_tasks')
 
@@ -381,6 +382,7 @@ class cross_object_dependency(TaskWrapper):
 class mako_task(TaskWrapper):
 
     template: str
+    output: str
 
     extra_attributes = frozenset({'template', 'output',
                                   })
@@ -425,5 +427,46 @@ class mako_task(TaskWrapper):
             f.write(template.render(
                 instance = instance,
                                     **kwargs))
-            
+
+def find_mako_tasks(tasks):
+    for t in tasks:
+        if isinstance(t, mako_task): yield t
         
+def install_mako_task(relationship, cross_dependency = True):
+
+    '''
+:param relationship: The name of an attribute property containing :class:`mako_tasks <mako_task>` in its :meth:`~SetupTaskMixin.setup_tasks`.
+
+    :param cross_dependency: If true (the default), rerun the installation whenever any of the underlying mako_tasks change.
+
+    This task is generally associated on a machine to install mako templates rendered on the model.  Typical usage might look like::
+
+        install_mako = install_mako_task('model')
+
+    '''
+    @setup_task("Install mako templates")
+    async def install(self):
+        async with self.filesystem_access() as fspath:
+            related = getattr(self, relationship)
+            base = Path(related.stamp_path)
+            path = Path(fspath)
+            for mt in find_mako_tasks(related.setup_tasks):
+                if os.path.isabs(mt.output):
+                    logger.warn(f'{mt} has absolute path; skipping install')
+                    continue
+                src = base/mt.output
+                dest = path/mt.output
+                os.makedirs(dest.parent, exist_ok = True)
+                shutil.copy2(src, dest)
+    if cross_dependency:
+        @install.invalidator()
+        @inject(ainjector = AsyncInjector)
+        async def install(self, ainjector, last_run, **kwargs):
+            related = getattr(self, relationship)
+            last = 0.0
+            for mt in find_mako_tasks(related.setup_tasks):
+                run, last = await mt.should_run_task(related, dependency_last_run = last, ainjector = ainjector)
+                if run: return False
+                if last > last_run: return False
+            return True
+    return install
