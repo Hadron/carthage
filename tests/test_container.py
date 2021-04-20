@@ -1,5 +1,6 @@
 import logging, time
-from carthage.image import ContainerImage, DebianContainerImage
+from carthage.debian import  DebianContainerImage
+from carthage.image import ContainerImage
 from carthage.network import Network
 from carthage.container import Container, container_image
 from carthage.utils import when_needed

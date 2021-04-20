@@ -38,6 +38,11 @@ import carthage.pki
 
 import carthage.vm
 
+import carthage.debian
+from .debian import DebianContainerImage
+
+__all__ += ['DebianContainerImage']
+
 base_injector = carthage.dependency_injection.Injector()
 base_injector.claim("base injector")
 carthage.config.inject_config(base_injector)
@@ -76,4 +81,3 @@ def __done():
     gc.collect()
     
     
-

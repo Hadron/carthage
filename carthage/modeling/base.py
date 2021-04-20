@@ -20,7 +20,7 @@ def dependency_quote_class(c: type):
 
 __all__ += ['dependency_quote_class']
 
-dependency_quote_class(carthage.machine.MachineCustomization)
+dependency_quote_class(carthage.machine.BaseCustomization)
 
 
 @inject_autokwargs(injector = Injector)
@@ -167,7 +167,7 @@ __all__ += [ 'machine_implementation_key']
 
 class MachineModelType(ModelingContainer):
 
-    classes_to_inject = (carthage.machine.MachineCustomization,)
+    classes_to_inject = (carthage.machine.BaseCustomization,)
     
     def __new__(cls, name, bases, ns, **kwargs):
         if 'name' not in ns:
@@ -225,7 +225,7 @@ class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metac
             
 
     machine = injector_access(InjectionKey(carthage.machine.Machine))
-    classes_to_inject = (carthage.machine.MachineCustomization,)
+
 
     #: Sequence of classes to be mixed into the resulting machine implementation
     machine_mixins = tuple()
@@ -239,7 +239,7 @@ class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metac
             assert isinstance(b, type) or hasattr(b, '__mro_entries__'), f'{b} is not a type; did you forget a dependency_quote'
         res =  types.new_class("MachineImplementation", tuple(bases))
         try:
-            customization = self.injector.get_instance(carthage.machine.MachineCustomization)
+            customization = self.injector.get_instance(carthage.machine.BaseCustomization)
             res.model_customization = carthage.machine.customization_task(customization)
         except KeyError: pass
         return res
