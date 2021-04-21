@@ -387,10 +387,17 @@ class mako_task(TaskWrapper):
     extra_attributes = frozenset({'template', 'output',
                                   })
 
-    def __init__(self, template, output = None, **kwargs):
-        injections = getattr(self, '_injection_dependencies', {})
+    def __init__(self, template, output = None, **injections):
+        kwargs = {}
+        # Split kwargs; Leading _ is left as arguments to setup_task,
+        # others are injections.
+        for k in kwargs:
+            if k.startswith(_):
+                kwargs[k[1:]] = injections.pop(k)
+                
         #A separate function so that injection works; consider
         #TaskMethod.__setattr__ to understand.
+        @inject(**injections)
         def func(*args, **kwargs):
             return self.render(*args, **kwargs)
         self.template = template
