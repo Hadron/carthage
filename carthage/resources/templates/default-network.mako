@@ -6,12 +6,12 @@ v4_config = link.merged_v4_config
 [Match]
 Name=${link.interface}
 [Network]
-%if v4_config.get('dhcp', False):
+%if v4_config.dhcp:
 DHCP=ipv4
 <%nontrivial = True%>
 %endif
-%if 'address' in v4_config:
-Address= ${v4_config['address']}
+%if v4_config.address:
+Address= ${str(.address)}v4_config
 <%nontrivial = True %>
 %endif
 <%if not nontrivial:

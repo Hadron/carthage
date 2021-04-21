@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -8,11 +8,13 @@
 
 from __future__ import annotations
 import asyncio, dataclasses, logging, re, typing, weakref
-from . import sh
-from .dependency_injection import inject, AsyncInjectable, Injector, AsyncInjector, InjectionKey, Injectable
-from .config import ConfigLayout
-from .utils import permute_identifier, when_needed, memoproperty
-from .machine import ssh_origin, ssh_origin_vrf, Machine, AbstractMachineModel
+from .. import sh
+from ..dependency_injection import *
+from ..config import ConfigLayout
+from ..utils import permute_identifier, when_needed, memoproperty
+from ..machine import ssh_origin, ssh_origin_vrf, Machine, AbstractMachineModel
+from .config import V4Config
+
 logger = logging.getLogger('carthage.network')
 
 _cleanup_substitutions = [
@@ -431,7 +433,7 @@ class NetworkLink:
     machine: object
     mtu: typing.Optional[int]
     local_type: typing.Optional[str]
-    v4_config: typing.Optional[dict]
+    v4_config: typing.Optional[V4Config]
 
     def __new__(cls, connection, interface, args):
         if 'local_type' in args:
@@ -542,10 +544,11 @@ class NetworkLink:
 
     @memoproperty
     def merged_v4_config(self):
-        return self._merge('v4_config')
+        if self.v4_config:
+            return self.v4_config.merge(getattr(net, 'v4_config', None))
+        return getattr(self.net, 'v4_config', V4Config())
     
             
-        
     def close(self):
         if self.net:
             try: self.net.network_links.remove(self)
@@ -649,6 +652,9 @@ def access_ssh_origin( ssh_origin, ssh_origin_vrf, extra_nsenter = []):
 __all__ = r'''Network TechnologySpecificNetwork BridgeNetwork 
     external_network_key HostMapEntry mac_from_host_map host_map_key
 access_ssh_origin
+NetworkConfig NetworkLink
+this_network
     '''.split()
 
-from . import network_links
+from . import links as network_links
+
