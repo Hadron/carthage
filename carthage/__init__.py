@@ -26,8 +26,8 @@ __all__ += carthage.dependency_injection.__all__
 from .config import ConfigLayout, config_key, ConfigSchema
 __all__ += [ 'ConfigLayout', 'config_key', 'ConfigSchema' ]
 
-from .network import Network, NetworkConfig
-__all__ += [ 'Network', 'NetworkConfig' ]
+from .network import Network, NetworkConfig, MacStore
+__all__ += [ 'Network', 'NetworkConfig' , 'MacStore']
 
 from .machine import Machine, AbstractMachineModel, MachineCustomization, customization_task
 import carthage.ssh # ssh import must come after machine
@@ -56,8 +56,8 @@ base_injector.claim("base injector")
 carthage.config.inject_config(base_injector)
 base_injector.add_provider(ssh.SshKey)
 base_injector.add_provider(ssh.AuthorizedKeysFile)
-base_injector.add_provider(carthage.network.Network)
 base_injector.add_provider(asyncio.get_event_loop(), close = False)
+base_injector.add_provider(MacStore)
 base_injector.add_provider(carthage.hadron_layout.fake_internet)
 base_injector.add_provider(carthage.network.external_network)
 base_injector.add_provider(carthage.hadron_layout.services_vlan_key, carthage.hadron_layout.services_vlan)

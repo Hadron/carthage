@@ -123,7 +123,7 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass = ModelingContainer
                 await asyncio.gather(*futures)
         models = await self.all_models(ready = False)
         with self.injector.event_listener_context(
-                InjectionKey(carthage.network.NetworkConfig), "other-link-futures",
+                InjectionKey(carthage.network.NetworkConfig), "resolved",
                 await_futures) as event_futures:
             resolve_networking_futures = []
             for m in models:

@@ -415,12 +415,12 @@ class NetworkConfig:
             l.member_links
             
         ainjector.emit_event(InjectionKey(NetworkConfig),
-                             "other-link-futures", self,
+                             "resolved", self,
                              other_futures,
                              machine = connection,
                              adl_keys = self.supplementary_injection_keys(InjectionKey(NetworkConfig)))
         del other_futures
-                             
+        
         return result
 
 @dataclasses.dataclass
