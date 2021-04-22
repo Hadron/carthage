@@ -217,6 +217,7 @@ class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metac
         super().__init__(**kwargs)
         self.network_links = {}
         self.injector.add_provider(InjectionKey(MachineModel), dependency_quote(self))
+        self.injector.add_provider(InjectionKey(carthage.machine.AbstractMachineModel), dependency_quote(self))
         machine_key = InjectionKey(carthage.machine.Machine, host = self.name)
         if machine_key in self.__class__.__initial_injections__: # not transcluded
             self.injector.add_provider(InjectionKey(carthage.machine.Machine), MachineImplementation)
