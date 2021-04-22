@@ -62,8 +62,11 @@ __all__ = [
     'combine_mro_mapping'
     ]
 
-def setattr_default(obj, a:str, default):
-    if not hasattr(obj, a):
+def setattr_default(obj, a:str, default, inherited_ok = False):
+    if inherited_ok:
+        has_attr =  hasattr(obj,a)
+    else: has_attr = a in obj.__dict__
+    if not has_attr:
         setattr(obj, a, default)
 
 __all__ += ['setattr_default']
