@@ -165,6 +165,8 @@ def globally_unique_key(
         nonlocal key
         if callable(key):
             key = key(val)
+        elif isinstance(key, str):
+            key = InjectionKey(key)
         val.__globally_unique_key__ = key
         #Make sure we're providing the key as well.
         setattr_default(val, '__provides_dependencies_for__', [])
