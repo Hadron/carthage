@@ -30,7 +30,7 @@ class MacStore(Injectable, dict):
         state_dir = Path(self.config_layout.state_dir)
         self.path = state_dir/"macs.yml"
         self.load()
-        self.injector.add_event_listener(InjectionKey(NetworkConfig),
+        self.injector.parent_injector.add_event_listener(InjectionKey(NetworkConfig),
                                          "resolved", self._resolved_event)
 
     def _resolved_event(self, key, event, target, *args, **kwargs):

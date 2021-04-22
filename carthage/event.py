@@ -130,7 +130,7 @@ class EventScope:
             except KeyError: continue
             for callback, (events, futures) in d.items():
                 if event in events:
-                    future = loop.create_task(possibly_async(callback( event=event, target = target, *args, **kwargs)))
+                    future = loop.create_task(possibly_async(callback( key = ck, event=event, target = target, *args, **kwargs)))
                     result_futures.append(future)
                     futures.add(future)
                     future.add_done_callback(gen_callback(futures))
@@ -174,7 +174,7 @@ class EventListener:
 
         :param callback: A callable that will be called as::
 
-            callback(key, event, target *event_args, **event_kwargs)
+            callback(key, event, target, *event_args, **event_kwargs)
 
         The *callback* may be asynchronous.
         '''
