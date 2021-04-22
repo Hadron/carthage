@@ -9,6 +9,7 @@ class L3ConfigMixin:
         'dhcp_ranges',
         'address',
         'network',
+        'gateway',
         "dns_servers", "domains",
         })
     
@@ -56,6 +57,7 @@ class V4Config(L3ConfigMixin):
     dhcp: bool = None
     dhcp_ranges: list = None
     address: IPv4Address = None
+    gateway: IPv4Address = None
     masquerade: bool = False
 
     _attributes = L3ConfigMixin._attributes | {'masquerade'}
@@ -67,6 +69,7 @@ class V4Config(L3ConfigMixin):
         for k, func in dict(
                 address = IPv4Address,
                 network = IPv4Network,
+                gateway = IPv4Address,
                 dhcp_ranges= self._handle_dhcp_ranges(IPv4Address)).items():
             val = getattr(self,k)
             if val is not None:
