@@ -9,7 +9,7 @@
 import logging, time
 from carthage.debian import  DebianContainerImage
 from carthage.image import ContainerImage
-from carthage.network import Network
+from carthage.network import Network, V4Config
 from carthage.container import Container, container_image
 from carthage.utils import when_needed
 from carthage.pytest import *
@@ -57,7 +57,8 @@ class LayoutTest(ModelGroup):
 
     class net_config(NetworkConfigModel):
         add('eth0', mac = None, net = InjectionKey("test_net", _ready = True),
-            v4_config = dict(address = "10.2.0.2/24"))
+            v4_config = V4Config(address = "10.2.0.2",
+                                 network  = "10.2.0.0/24"))
 
 
     add_provider(machine_implementation_key, dependency_quote(Container))
