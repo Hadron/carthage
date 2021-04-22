@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -10,10 +10,10 @@ from carthage import *
 import carthage
 from carthage import sh, ssh
 config = base_injector(ConfigLayout)
-from carthage.hadron_layout import database_key
-db = base_injector.get_instance(database_key)
-ssh_key = base_injector.get_instance(ssh.SshKey)
-tmux = sh.tmux.bake( 'new-window', _env = ssh_key.agent.agent_environ)
+async def async_setup():
+    global ssh_key, tmux
+    ssh_key = await ainjector.get_instance_async(ssh.SshKey)
+    tmux = sh.tmux.bake( 'new-window', _env = ssh_key.agent.agent_environ)
 
 def unbake(cmd):
     "Helper to split out the arguments of a baked sh command"

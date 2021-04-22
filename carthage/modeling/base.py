@@ -296,6 +296,21 @@ class MachineImplementation(AsyncInjectable):
 
 __all__ += ['MachineModel']
 
+class CarthageLayout(ModelGroup):
+
+    @classmethod
+    def supplementary_injection_keys(cls, k):
+        yield InjectionKey(cls, name=cls.name)
+        yield InjectionKey(CarthageLayout, name = cls.name)
+        yield InjectionKey(cls)
+        yield InjectionKey(CarthageLayout)
+
+    @property
+    def name(self):
+        raise NotImplementedError("You must specify a name on a layout")
+
+    __all__ += ['CarthageLayout']
+    
 @inject(injector = Injector)
 def model_bases(typ: type, host: str, *bases,
                    injector):

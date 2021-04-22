@@ -9,86 +9,80 @@
 
 import argparse, os, sys, gc, traceback, yaml
 import asyncio, logging
-import carthage.vmware, carthage.console
-from carthage.hadron_layout import database_key
+import  carthage.console
 from carthage.dependency_injection import AsyncInjector, InjectionKey, shutdown_injector
 from carthage import base_injector, sh, ssh
 from carthage.network import Network, BridgeNetwork, external_network_key
-from carthage.container import container_image, Container
-from carthage.hadron.database import RemotePostgres, HadronNetwork, only_permitted_vms
-from carthage.hadron import build_database
-from sqlalchemy.orm import Session
 from carthage.machine import Machine
 import carthage.ssh
+from carthage.modeling import CarthageLayout
 
 logger = logging.getLogger('carthage')
 
 machines = []
-
-async def load_layout(layout_file):
-    layout = yaml.load(layout_file)
-    for m in layout['machines']:
-        machine_queue.put_nowait(m)
-    ainjector = base_injector(AsyncInjector)
-    external_network = await ainjector.get_instance_async(external_network_key)
-    brint = await external_network.access_by(BridgeNetwork)
-    for n in layout.get('expose_networks', []):
-        n = int(n)
-        net = await ainjector.get_instance_async(InjectionKey(HadronNetwork, netid=n))
-        vlanid = 1000+n
-        iface = brint.expose_vlan(vlanid)
-        net = await net.access_by(BridgeNetwork)
-        net.add_member(iface)
-
-    permitted_vms = layout.get('permitted_vms', [])
-    await ainjector(only_permitted_vms, permitted_vms)
-    
         
 async def queue_worker():
     global machines
     while True:
-        name = await machine_queue.get()
+        name, action = await machine_queue.get()
         try:
             m_new = await ainjector.get_instance_async(InjectionKey(Machine, host = name))
-            await m_new.start_machine()
-            machines.append(m_new)
+            if action == 'start':
+                await m_new.start_machine()
+                machines.append(m_new)
+            elif action == 'stop':
+                await m_new.stop_machine()
         except Exception:
             print('Error Creating {}'.format(name))
             traceback.print_exc()
-        
+
+async def queue_explicit(l, action):
+    for m in l:
+        machine_queue.put_nowait((m, action))
+
+async def queue_all(action):
+    for m in ainjector.filter(Machine, ['host'], stop_at = ainjector.injector):
+        machine_queue.put_nowait((m.host, action))
         
 async def run():
-    container, pg = await ainjector(build_database.provide_world)
-    async with container.container_running():
-        try:
-            await load_layout(args.layout)
-            if args.make_update:
-                await container.make_update()
+    global ainjector, layout
+    layout = await ainjector.get_instance_async(CarthageLayout)
+    ainjector = layout.ainjector
+    if 'generate' in args.actions:
+        await layout.generate()
+    if 'start' in args.actions and args.start:
+        await queue_explicit(args.start, 'start')
+    elif 'start' in args.actions:
+        await queue_all('start')
+    if 'stop' in args.actions and args.stop:
+        await queue_explicit(args.stop, 'stop')
+    elif 'stop' in args.actions:
+        await queue_all('stop')
 
-            queue_workers.append(loop.create_task(queue_worker()))
-            queue_workers.append(loop.create_task(queue_worker()))
-            try:
-                console.locals['db'] = container
-                console.locals['ainjector'] = ainjector
-                console.locals['pg'] = pg
-                console.locals['in_tmux'] = 'TMUX' in os.environ
-                console.exec_resource('carthage', 'resources/runner_console.py')
-                await loop.run_in_executor(None, console.interact)
-            except Exception:
-                logger.exception('console failed:')
-        finally:
-            pg.close()
-            del pg
+    queue_workers.append(loop.create_task(queue_worker()))
+    queue_workers.append(loop.create_task(queue_worker()))
+    try:
+        console.locals['ainjector'] = ainjector
+        console.locals['layout'] = layout
+        console.locals['in_tmux'] = 'TMUX' in os.environ
+        console.exec_resource('carthage', 'resources/runner_console.py')
+        if 'async_setup' in console.locals:
+            await console.locals['async_setup']();
+            del console.locals['async_setup']
+        await loop.run_in_executor(None, console.interact)
+    except Exception:
+        logger.exception('console failed:')
+    finally:
             
         global machines
         futures = []
         for m in machines:
             if m.running:
                 futures.append(loop.create_task(m.stop_machine()))
-        await asyncio.wait(futures, timeout = 10)
-        for m in machines:
-            m.close()
-    del machines
+                await asyncio.wait(futures, timeout = 10)
+                for m in machines:
+                    m.close()
+                    del machines
             
 
     
@@ -98,15 +92,22 @@ loop = asyncio.get_event_loop()
 machine_queue = asyncio.Queue()
 
 parser = carthage.utils.carthage_main_argparser()
-parser.add_argument("layout",
-                         metavar = "layout_file",
-                         type = argparse.FileType('rt'),
-                         help = "Layout YAML configuration")
-parser.add_argument('--vmware', action='store_true',
-                    help = 'Use VmWare for virtualization')
-parser.add_argument('--make-update', '-m',
-                    help = "Run make update in /hadron-operations on test-database",
-                    action = 'store_true')
+parser.add_argument('--generate',
+                    help = "Generate configuration for the layout",
+                    dest = 'actions',
+                    action = 'append_const',
+                    const = 'generate',
+                    default = [])
+parser.add_argument("--start",
+                    nargs = "*",
+                    metavar = "machine",
+                    help = "Start machines",
+                    )
+parser.add_argument(
+    '--stop', nargs = '*',
+    metavar = 'machines',
+    help = "Stop already running machines",
+)
 parser.add_argument('--no-tmux', action = 'store_false',
                     dest = 'tmux', default = True,
                     help = "Do not start a tmux for the console")
@@ -123,13 +124,15 @@ if 'TMUX' not in os.environ and  args.tmux:
     os.execvp("tmux", ["tmux", "new-session", "-A", "-scarthage",
                        ]+sys.argv)
 
+if args.start is not None:
+    args.actions.append('start')
+if args.stop is not None:
+    args.actions.append('stop')
+if not args.actions:
+    args.actions = ['generate', 'start']
+    
 
 console.process_arguments(args)
-if args.vmware:
-    from carthage import vmware
-    import carthage.hadron.build_database, carthage.hadron.vmware
-    base_injector.add_provider(InjectionKey(vmware.VmTemplate), carthage.hadron.vmware.aces_vm_template)
-    carthage.hadron.build_database.vm_class = vmware.Vm
 
 
 
