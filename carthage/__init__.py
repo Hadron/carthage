@@ -40,6 +40,10 @@ __all__ += [ 'Machine',  'rsync_git_tree',
              'AbstractMachineModel', 'MachineCustomization', 'customization_task']
 
 import carthage.container
+import carthage.local
+from .local import LocalMachine
+__all__ += ['LocalMachine']
+
 import carthage.hadron
 import carthage.hadron_layout
 import carthage.pki
