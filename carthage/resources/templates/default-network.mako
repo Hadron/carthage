@@ -11,7 +11,7 @@ DHCP=ipv4
 <%nontrivial = True%>
 %endif
 %if v4_config.address:
-Address= ${str(.address)}v4_config
+Address=${str(v4_config.address)}
 <%nontrivial = True %>
 %endif
 <%if not nontrivial:
