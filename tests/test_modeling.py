@@ -210,7 +210,7 @@ async def test_generate_and_network(ainjector):
                 nonlocal stuff_generated
                 stuff_generated = True
             @generate_stuff.invalidator()
-            def generate_stuff(self):
+            def generate_stuff(self, **kwargs):
                 return False
             
                 
