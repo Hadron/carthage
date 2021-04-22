@@ -545,7 +545,7 @@ class NetworkLink:
     @memoproperty
     def merged_v4_config(self):
         if self.v4_config:
-            return self.v4_config.merge(getattr(net, 'v4_config', None))
+            return self.v4_config.merge(getattr(self.net, 'v4_config', None))
         return getattr(self.net, 'v4_config', V4Config())
     
             
