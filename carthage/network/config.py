@@ -2,14 +2,19 @@ import copy, dataclasses
 from ipaddress import *
 from ..dependency_injection import *
 
+@dataclasses.dataclass()
 class L3ConfigMixin:
     _attributes = frozenset({
         'dhcp',
         'dhcp_ranges',
         'address',
         'network',
+        "dns_servers", "domains",
         })
     
+    dns_servers: list = tuple()
+    domains: str = None
+
     def __post_init__(self):
         if self.dhcp_ranges:
             for l,h in self.dhcp_ranges:
@@ -36,6 +41,7 @@ class L3ConfigMixin:
 
 '''
         res = copy.copy(self)
+        if merge_from is None: return res
         for a in self._attributes:
             if getattr(res,a) is None:
                 setattr(res, a, getattr(merge_from, a))
@@ -50,7 +56,11 @@ class V4Config(L3ConfigMixin):
     dhcp: bool = None
     dhcp_ranges: list = None
     address: IPv4Address = None
+    masquerade: bool = False
 
+    _attributes = L3ConfigMixin._attributes | {'masquerade'}
+    
+        
     def __post_init__(self):
         # The following depends on iteration happening in dictionary
         # order such that network is processed before dhcp_ranges

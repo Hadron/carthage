@@ -6,6 +6,7 @@ from .setup_tasks import *
 from .config import ConfigLayout
 from .image import ContainerImage, ContainerCustomization
 from .machine import customization_task
+from . import sh
 
 logger = logging.getLogger('carthage')
 

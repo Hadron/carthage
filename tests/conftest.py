@@ -4,7 +4,8 @@ from carthage.hadron.images import HadronVmImage
 from carthage.vm import InstallQemuAgent
 from carthage import base_injector, ConfigLayout, ssh, shutdown_injector
 from carthage.dependency_injection import AsyncInjector, DependencyProvider, InjectionKey
-from carthage.image import ContainerImage, DebianContainerImage
+from carthage.debian import  DebianContainerImage
+from carthage.image import ContainerImage
 from carthage.network import Network
 from carthage.machine import ssh_origin
 from carthage.container import Container, container_image
