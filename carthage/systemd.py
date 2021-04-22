@@ -11,6 +11,10 @@ local_type_map = dict(
     bond = dict(
         netdev = "bond-netdev.mako",
         member_network = "bond-network.mako"),
+    bridge = dict(
+        netdev = "bridge-netdev.mako",
+        member_network = "bridge-network.mako",
+),
     physical = dict(
         link = "physical-link.mako",
     ),

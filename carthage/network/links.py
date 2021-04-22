@@ -7,3 +7,8 @@ class BondLink(NetworkLink):
 
     local_type = "bond"
     
+
+class BridgeLink(NetworkLink):
+
+    local_type  = "bridge"
+    
