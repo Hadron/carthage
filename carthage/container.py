@@ -121,6 +121,8 @@ class Container(Machine, SetupTaskMixin):
             logger.info("Starting container {}: {}".format(
                 self.name,
                 " ".join(args)))
+            if hasattr(self, 'model') and hasattr(self.model, 'container_args'):
+                net_args = self.model.container_args+net_args
             #Move systemd options forward
             to_delete = 0
             for a in args:
