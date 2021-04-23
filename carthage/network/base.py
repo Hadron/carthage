@@ -408,7 +408,7 @@ class NetworkConfig:
             
         ainjector.emit_event(InjectionKey(NetworkConfig),
                              "resolved", self,
-                             other_futures,
+                             pending_futures = other_futures,
                              machine = connection,
                              adl_keys = self.supplementary_injection_keys(InjectionKey(NetworkConfig)))
         del other_futures
