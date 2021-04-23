@@ -39,21 +39,21 @@ class DebianContainerCustomizations(ContainerCustomization):
     async def turn_on_networkd(self):
         await self.container_command("systemctl", "enable", "systemd-networkd")
 
-    @setup_task("Install python")
+    @setup_task("Install python and dbus")
     async def install_python(self):
         bind_args = bind_args_for_mirror(self.config_layout.debian.stage1_mirror)
         if bind_args:
             # debootstrap apparently drops sources.list for file sources
             sources_list = Path(self.path)/"etc/apt/sources.list"
             with sources_list.open("wt") as f:
-                mirror = self.config_layout.debian.mirror
+                mirror = self.config_layout.debian.stage1_mirror
                 distribution = self.config_layout.debian.distribution
                 f.write(f'deb {mirror} {distribution} main contrib non-free')
                 
         await self.container_command(*bind_args,
                                      "apt", "update")
         await self.container_command(*bind_args,
-                                     "apt-get", "-y", "install", "python3")
+                                     "apt-get", "-y", "install", "python3", "dbus")
         
 
 class DebianContainerImage(ContainerImage):
@@ -76,6 +76,9 @@ class DebianContainerImage(ContainerImage):
                              self.path, self.mirror,
                              _bg = True,
                              _bg_exc = False)
+        path = Path(self.path)
+        try: os.unlink(path/"etc/hostname")
+        except FileNotFoundError: pass
 
     debian_customizations = customization_task(DebianContainerCustomizations)
 
