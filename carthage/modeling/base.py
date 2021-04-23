@@ -118,9 +118,9 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass = ModelingContainer
     async def resolve_networking(self, force = False):
         if hasattr(self, 'resolve_networking_models'):
             return self.resolve_networking_models
-        async def await_futures(futures, event, target, **kwargs):
-            if futures:
-                await asyncio.gather(*futures)
+        async def await_futures(pending_futures, event, target, **kwargs):
+            if pending_futures:
+                await asyncio.gather(*pending_futures)
         models = await self.all_models(ready = False)
         with self.injector.event_listener_context(
                 InjectionKey(carthage.network.NetworkConfig), "resolved",
