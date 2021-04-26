@@ -60,6 +60,13 @@ class SshMixin:
         def __get__(self, instance, owner):
             if instance is None: return self
             raise NotImplementedError
+
+
+    #: The ip_address at which management can be performed.  This may
+    #be a hostname, assuming that this host name can be resolved both
+    #inside and outside any virtual environment.  In most cases where
+    #Carthage controls the environment, an IP address is preferable
+    #for robustness.
     ip_address = ip_address()
     ssh_options = ('-oStrictHostKeyChecking=no', )
 
