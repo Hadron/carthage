@@ -67,26 +67,26 @@ def load_plugin(spec: str,
             raise ValueError(f'metadata must contain a name when loading plugin from path')
         try:
             python_path = metadata['python']
-            python_path = path.joinpath(python_path)
+            python_path = str(path.joinpath(python_path))
             if python_path not in sys.path: sys.path.append(python_path)
         except KeyError: pass
         if 'package' in metadata:
-            package = importlib.import_module(package)
+            package = importlib.import_module(metadata['package'])
         else:
             package_path = path.joinpath("carthage_plugin.py")
             name = metadata['name']
             if '.' not in name:
                 name = "carthage.carthage_plugins."+name
             if package_path.exists():
-                spec = spec_from_file_location(
+                module_spec = spec_from_file_location(
                     name, location = package_path,
                     submodule_search_locations = [str(path/"python")]
                 )
-            else: spec = None
-            if spec:
-                package = module_from_spec(spec)
+            else: module_spec = None
+            if module_spec:
+                package = module_from_spec(module_spec)
                 sys.modules[name] = package
-                spec.loader.exec_module(package)
+                module_spec.loader.exec_module(package)
             else:
                 package = None
     else: #spec is a package
