@@ -29,23 +29,16 @@ class DebianContainerCustomizations(ContainerCustomization):
     
     @setup_task("Turn on networkd")
     async def turn_on_networkd(self):
-        await self.container_command("systemctl", "enable", "systemd-networkd")
+        await self.container_command("systemctl", "enable", "systemd-networkd", "systemd-resolved")
 
     @setup_task("Install python and dbus")
     async def install_python(self):
         bind_args = bind_args_for_mirror(self.config_layout.debian.stage1_mirror)
-        if bind_args:
-            # debootstrap apparently drops sources.list for file sources
-            sources_list = Path(self.path)/"etc/apt/sources.list"
-            with sources_list.open("wt") as f:
-                mirror = self.config_layout.debian.stage1_mirror
-                distribution = self.config_layout.debian.distribution
-                f.write(f'deb {mirror} {distribution} main contrib non-free')
-                
-        await self.container_command(*bind_args,
-                                     "apt", "update")
-        await self.container_command(*bind_args,
-                                     "apt-get", "-y", "install", "python3", "dbus")
+        async with use_stage1_mirror(self):
+            await self.container_command(*bind_args,
+                                         "apt", "update")
+            await self.container_command(*bind_args,
+                                         "apt-get", "-y", "install", "python3", "dbus")
         
 
 class DebianContainerImage(ContainerImage):
@@ -54,18 +47,24 @@ class DebianContainerImage(ContainerImage):
     distribution: str
 
     def __init__(self, name:str = "base-debian",
-                 mirror: str = None, distribution: str = None, **kwargs):
+                 mirror: str = None, distribution: str = None,
+                 stage1_mirror: str = None,
+                 **kwargs):
         super().__init__(name = name, **kwargs)
-        self.mirror = self.config_layout.debian.stage1_mirror
+        self.mirror = self.config_layout.debian.mirror
+        self.stage1_mirror = self.config_layout.debian.stage1_mirror
         self.distribution = self.config_layout.debian.distribution
-        if mirror: self.mirror = mirror
+        if mirror:
+            self.mirror = mirror
+            if not stage1_mirror: self.stage1_mirror = mirror
         if distribution: self.distribution = distribution
+        if stage1_mirror: self.stage1_mirror = stage1_mirror
 
     @setup_task("unpack")
     async def unpack_container_image(self):
         await sh.debootstrap('--include=openssh-server',
                              self.distribution,
-                             self.path, self.mirror,
+                             self.path, self.stage1_mirror,
                              _bg = True,
                              _bg_exc = False)
         path = Path(self.path)
