@@ -144,6 +144,8 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass = ModelingContainer
             if not isinstance(m, AsyncInjectable): continue
             futures.append(asyncio.ensure_future(cb(m)))
         if futures: await asyncio.gather(*futures)
+        if hasattr(super(), 'generate'):
+            await super().generate()
         
             
     
