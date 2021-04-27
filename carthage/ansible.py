@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 import contextlib, dataclasses, json, os, os.path, tempfile, typing, yaml
+import importlib.resources
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -20,7 +21,7 @@ from .utils import validate_shell_safe
 from types import SimpleNamespace
 from .network import access_ssh_origin
 from . import setup_tasks
-
+from .plugins import CarthagePlugin
 import logging
 
 logger = logging.getLogger("carthage")
@@ -45,10 +46,22 @@ ansible_log = InjectionKey("ansible/log")
 
 __all__ += ['ansible_origin', "ansible_log"]
 
-class AnsibleConfig:
-    '''This is a stub for now.  Long term it should help manage  library path, role path, etc.
-'''
-    pass
+@inject(injector = Injector)
+class AnsibleConfig(Injectable):
+    '''
+    Capture carthage plugins providing ansible resources etc.
+    '''
+
+    def __init__(self, injector):
+        # If this class is ever modified to store the injector, then it should be passed into the superclass so it can be claimed.
+        super().__init__
+        roles = []
+        for k, pl in injector.filter_instantiate(CarthagePlugin, ['name']):
+            roles_path = pl.resource_dir/"ansible/roles"
+            if roles_path.exists():
+                roles += [str(roles_path)]
+        self.roles = roles
+
 __all__ += ['AnsibleConfig']
 
 @dataclasses.dataclass
@@ -209,6 +222,7 @@ __all__ += ['AnsibleInventory', 'AnsibleGroupPlugin', 'AnsibleHostPlugin']
         inventory = AnsibleInventory,
         log = InjectionKey(ansible_log, optional = True),
         ainjector = AsyncInjector,
+        ansible_config = AnsibleConfig,
         config = ConfigLayout,
         )
 async def run_playbook(hosts,
@@ -218,7 +232,7 @@ async def run_playbook(hosts,
                        *,
                        extra_args = [],
                        raise_on_failure: bool = True,
-                       ansible_config = AnsibleConfig(),
+                       ansible_config,
                        ainjector,
                        config,
                        origin = None,
@@ -395,6 +409,7 @@ def write_config(config_dir, inventory,
         f.write(f'''\
 {stdout_str}
 retry_files_enabled = false
+roles_path={":".join(ansible_config.roles)}
 {private_key}
 
 ''')
@@ -518,6 +533,8 @@ class ansible_task(setup_tasks.TaskWrapper):
     def __set_name__(self, owner, name):
         import sys
         module = sys.modules[owner.__module__]
-        self.dir = Path(module.__file__).parent
+        try:self.dir = importlib.resources.files(module.__package__)
+        except AttributeError:
+            self.dir = Path(module.__file__).parent
         
 __all__ += ['ansible_task']
