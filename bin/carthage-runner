@@ -7,6 +7,7 @@ from carthage import base_injector, sh, ssh
 from carthage.network import Network, BridgeNetwork, external_network_key
 from carthage.machine import Machine
 import carthage.ssh
+from carthage.local import LocalMachine
 from carthage.modeling import CarthageLayout
 
 logger = logging.getLogger('carthage')
@@ -19,6 +20,7 @@ async def queue_worker():
         name, action = await machine_queue.get()
         try:
             m_new = await ainjector.get_instance_async(InjectionKey(Machine, host = name))
+            if isinstance(m_new, LocalMachine): continue
             if action == 'start':
                 await m_new.start_machine()
                 machines.append(m_new)
@@ -74,7 +76,7 @@ async def run():
                 await asyncio.wait(futures, timeout = 10)
                 for m in machines:
                     m.close()
-                    del machines
+
             
 
     
