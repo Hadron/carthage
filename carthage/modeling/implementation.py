@@ -326,6 +326,11 @@ class InjectableModelType(ModelingBase):
             ns.to_propagate[k] = ns.to_inject[k]
 
     @modelmethod
+    def disable_system_dependency(cls, ns, dependency):
+        ns.to_inject[dependency.default_instance_injection_key()] = (
+            None, dict(close = False, allow_multiple = False))
+
+    @modelmethod
     def self_provider(cls, ns, k: InjectionKey):
         def callback(inst):
             inst.injector.add_provider(k, dependency_quote(inst))
