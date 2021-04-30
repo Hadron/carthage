@@ -73,3 +73,9 @@ class MachineDependency(SystemDependency):
 
 __all__ += ['MachineDependency']
 
+
+def disable_system_dependency(injector, dependency):
+    "Mask out *dependency* in the scope of *injector*"
+    injector.add_provider(dependency.default_instance_injection_key(), None)
+
+__all__ += ['disable_system_dependency']
