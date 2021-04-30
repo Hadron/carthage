@@ -228,7 +228,7 @@ class Machine(AsyncInjectable, SshMixin):
     async def start_dependencies(self):
         '''Interface point that should be called by :meth:`start_machine` to start any dependent machines such as routers needed by this machine.
 
-         Default behavior is provided for machines with :class:`AbstractMachineModels` attached to the *model* property.  In this case,  any providers of ``InjectionKey(SystemDependency)`` with a name constraint are collected.  These objects are called  with an AsyncInjector.  For example :class:`carthage.system_dependency.MachineDependency` will start some other machine and optionally wait for it to become online.
+         Default behavior is provided for machines with :class:`AbstractMachineModels` attached to thennn *model* property.  In this case,  any providers of ``InjectionKey(SystemDependency)`` with a name constraint are collected.  These objects are called  with an AsyncInjector.  For example :class:`carthage.system_dependency.MachineDependency` will start some other machine and optionally wait for it to become online.
 
         In typical usage, the *Machine* is contained in the injector
         context of its model.  Dependencies for the current machine
@@ -242,21 +242,21 @@ class Machine(AsyncInjectable, SshMixin):
 
         But in such a situation, the router itself should not depend on itself.  Two approaches are possible.  The first is to mask out the dependency in the router's model::
 
-            network.router_model.injector.add_provider(InjectionKey(SystemDependency, name = "router.network"), None)
+            ignore_system_dependency(network.router_model.injector, MachineDependency("router.network"))
 
-        Aneother mechanism is required: the *override_dependencies* property of :class:`AbstractMachineModel`.  This property controls how far up the injector chain to look for dependencies:
+        Another mechanism is available: the *override_dependencies* property of :class:`AbstractMachineModel`.  This property controls how far up the injector chain to look for dependencies:
 
         true
             Only consider dependencies directly defined on the model or the Machine.  Does not work correctly if the *self.injector* is not in the injector context of *self.model.injector*.
 
         an :class:`~Injector`
-            Only consider dependencies declared on the injector or its children injection contexts
+            Filter out dependencies declared between the parent of the model injector and the provided injector, inclusive.  So, consider a machine in a network in an enclave.  If the enclave's injector is provided, then injectors declared on the enclave and network will be ignored, but dependencies declared at a level larger than the enclave will still be started.
 
         an :class:`~Injectable`
-            Only consider dependencies contained in the injector of the Injectable
+            Filter out dependencies between the machine model and the injector contained in the Injectable inclusive.
 
         an :class:`~InjectionKey`
-            Instantiate the key, and assume it is an Injectable.  Only consider dependencies declared  in injections contexts contained within the injector of the Injectable.
+            Instantiate the key, and assume it is an Injectable.  Treat as that injectable 
 
         For finer grain control, implementations can override this method.
 
@@ -270,22 +270,33 @@ class Machine(AsyncInjectable, SshMixin):
                     logger.exception(f"Error resolving {d}:")
             return cb
 
+        def filter_dependencies(k):
+            if 'name' not in k.constraints: return False
+            if k in filter_keys: return False
+            return True
         if not hasattr(self, 'model'): return
+        logger.debug(f'Starting dependencies for {self.name}')
         stop_at = None
         model = self.model
-        if model.override_dependencies is True:
+        override_dependencies = model.override_dependencies
+        if override_dependencies is True:
             stop_at = model.injector
-        elif not model.override_dependencies:
-            stop_at = None
+            filter_keys = tuple()
+        elif not override_dependencies:
+            filter_keys = tuple()
         else:
-            stop_at =model.override_dependencies
-            if isinstance(stop_at,InjectionKey):
-                stop_at = await self.ainjector.get_instance_async(InjectionKey(stop_at, _ready = False))
-            if isinstance(stop_at, Injectable):
-                stop_at = stop_at.injector
-            if not isinstance(stop_at, Injector):
+            if isinstance(override_dependencies,InjectionKey):
+                override_dependencies = await self.ainjector.get_instance_async(InjectionKey(override_dependencies, _ready = False))
+            if isinstance(override_dependencies, Injectable):
+                override_dependencies = override_dependencies.injector
+            if not isinstance(override_dependencies, Injector):
                 raise TypeError("override_dependencies must be boolean, an InjectionKey resolving to an INjectable, an Injectable, or an injector")
-        results = await self.ainjector.filter_instantiate_async(SystemDependency, ['name'], ready = True, stop_at = stop_at)
+            filter_keys = model.injector.parent_injector.filter(
+                SystemDependency, ['name'],
+                stop_at = override_dependencies)
+            logger.debug("Ignoring dependencies: %s", " ".join([k.name for k in filter_keys]))
+                         
+        results = await self.ainjector.filter_instantiate_async(SystemDependency, filter_dependencies, ready = True, stop_at = stop_at)
         futures = []
         for k,d in results:
             future = asyncio.ensure_future(d(self.ainjector))
