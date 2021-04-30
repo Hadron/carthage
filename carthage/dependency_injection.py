@@ -83,7 +83,12 @@ class Injectable:
             self.injector.close(canceled_futures)
         
     @classmethod
-    def supplementary_injection_keys(cls, k):
+    def supplementary_injection_keys(cls, k: InjectionKey):
+        '''
+        Returns  an iteration of :class:`InjectionKeys <InjectionKey>` that should be added  to an injector when this class is added.  The current injection key is taken as an argument so that constraints applied can modify what keys are added.
+
+
+        '''
         for c in cls.__mro__:
             if c in (Injectable, AsyncInjectable): continue
             if issubclass(c,Injectable) and c != k.target:
@@ -98,6 +103,16 @@ class Injectable:
         if isinstance(k.target, (str, tuple)): return True
         return k in cls.supplementary_injection_keys(k)
 
+    @classmethod
+    def default_class_injection_key(cls):
+        '''Called by :meth:`Injector.add_provider()` in the single argument form to get the injection key to use when this class is added to provide a dependency.'''
+        return InjectionKey(cls)
+
+    def default_instance_injection_key(self):
+        "Called when an instance of an injectable is used to add a dependency provider bby the single argument form of :meth:`Injectable.add_provider()`"
+        return InjectionKey(self.__class__)
+    
+    
 class DependencyProvider:
     __slots__ = ('provider',
                  'allow_multiple',
@@ -202,7 +217,7 @@ class Injector(Injectable, event.EventListener):
 
         Either called as ``add_provider(provider)`` or
         ``add_provider(injection_key, provider)``\ .  In the first form, a key is
-        automatically constructed.
+        automatically constructed.  For :class:`Injectable` objects, see :meth:`Injectable.default_instance_injection_key()`.  For *Injectable* types, see :meth:`Injectable.default_class_injection_key()`.  For other objects, the unconstrained injection key for types (or for the type of the object) is used.
 
         :param allow_multiple: If true, then this provider may be instantiated multiple times in sub-injectors.  If false (the default) then the provider will be instantiated on the injector where it is added and used by all sub-injectors.
 
@@ -216,7 +231,16 @@ class Injector(Injectable, event.EventListener):
 
         if k is None:
             if isinstance(p, DependencyProvider): raise NotImplementedError
-            k = InjectionKey(p if isinstance(p,type) else p.__class__)
+            if (isinstance(p, type) and issubclass(p, Injectable)):
+                k = p.default_class_injection_key()
+            elif isinstance(p, Injectable):
+                k = p.default_instance_injection_key()
+            elif isinstance(p, type):
+                k = InjectionKey(p)
+            else:
+                # not a type and not an Injectable
+                k = InjectionKey(p.__class__)
+
         if not isinstance(p, DependencyProvider):
             p = DependencyProvider(p, allow_multiple = allow_multiple, close = close)
         assert isinstance(k,InjectionKey)
