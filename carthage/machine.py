@@ -7,6 +7,8 @@ from .utils import memoproperty
 from . import sh
 import carthage.ssh
 from .setup_tasks import SetupTaskMixin, setup_task
+import logging
+logger = logging.getLogger("carthage")
 
 class MachineRunning:
 
@@ -146,6 +148,8 @@ class AbstractMachineModel(Injectable):
     network_links: typing.Mapping[str, carthage.network.NetworkLink]
     name: str
 
+    #: If True, :meth:`Machine.start_dependencies()` will stop collecting dependencies at the injector of this model.  In the normal situation where the :class:`Machine` is instantiated within the model's dependency context, what this means is that  only system dependencies declared on the model will be started.  This may also be an :class:`InjectionKey`, an :class:`Injector`, or an :class:`Injectable`.  Se the documentation of :meth:`Machine.start_dependencies()`.
+    override_dependencies: typing.Union[bool, Injector, Injectable, InjectionKey] = False
     async def resolve_networking(self, force: bool = False):
         '''
             Adds all :class:`carthage.network.NetworkLink` objects specified in the :class:`carthage.network.NetworkConfig`  to the network_links property.
@@ -213,12 +217,78 @@ class Machine(AsyncInjectable, SshMixin):
         if self.model: return self.model.network_links
         return {}
 
-    async def start_dependencies(*args, **kwargs):
-        '''Interface point that should be called by :meth:`start_machine` to start any dependent machines such as routers needed by this machine.'''
-        pass
+    async def start_dependencies(self):
+        '''Interface point that should be called by :meth:`start_machine` to start any dependent machines such as routers needed by this machine.
+
+         Default behavior is provided for machines with :class:`AbstractMachineModels` attached to the *model* property.  In this case,  any providers of ``InjectionKey(SystemDependency)`` with a name constraint are collected.  These objects are called  with an AsyncInjector.  For example :class:`carthage.system_dependency.MachineDependency` will start some other machine and optionally wait for it to become online.
+
+        In typical usage, the *Machine* is contained in the injector
+        context of its model.  Dependencies for the current machine
+        may be added directly to its model's injector.  Dependencies
+        shared among a group of machines may be added to injector
+        contexts that contain the model.  For example::
+
+            network.injector.add_provider(MachineDependency("router.network"))
+            # But the fileserver also needs the domain controller
+            network.fileserver_model.injector.add_provider(MachineDependency("domain-controller.network"))
+
+        But in such a situation, the router itself should not depend on itself.  Two approaches are possible.  The first is to mask out the dependency in the router's model::
+
+            network.router_model.injector.add_provider(InjectionKey(SystemDependency, name = "router.network"), None)
+
+        Aneother mechanism is required: the *override_dependencies* property of :class:`AbstractMachineModel`.  This property controls how far up the injector chain to look for dependencies:
+
+        true
+            Only consider dependencies directly defined on the model or the Machine.  Does not work correctly if the *self.injector* is not in the injector context of *self.model.injector*.
+
+        an :class:`~Injector`
+            Only consider dependencies declared on the injector or its children injection contexts
+
+        an :class:`~Injectable`
+            Only consider dependencies contained in the injector of the Injectable
+
+        an :class:`~InjectionKey`
+            Instantiate the key, and assume it is an Injectable.  Only consider dependencies declared  in injections contexts contained within the injector of the Injectable.
+
+        For finer grain control, implementations can override this method.
+
+        '''
+        from carthage.system_dependency import MachineDependency, SystemDependency
+        def callback(d):
+            def cb(future):
+                try:
+                    future.result()
+                except:
+                    logger.exception(f"Error resolving {d}:")
+            return cb
+
+        if not hasattr(self, 'model'): return
+        stop_at = None
+        model = self.model
+        if model.override_dependencies is True:
+            stop_at = model.injector
+        elif not model.override_dependencies:
+            stop_at = None
+        else:
+            stop_at =model.override_dependencies
+            if isinstance(stop_at,InjectionKey):
+                stop_at = await self.ainjector.get_instance_async(InjectionKey(stop_at, _ready = False))
+            if isinstance(stop_at, Injectable):
+                stop_at = stop_at.injector
+            if not isinstance(stop_at, Injector):
+                raise TypeError("override_dependencies must be boolean, an InjectionKey resolving to an INjectable, an Injectable, or an injector")
+        results = await self.ainjector.filter_instantiate_async(SystemDependency, ['name'], ready = True, stop_at = stop_at)
+        futures = []
+        for k,d in results:
+            future = asyncio.ensure_future(d(self.ainjector))
+            future.add_done_callback(callback(d))
+            futures.append(future)
+        await asyncio.gather(*futures)
+
 
 
     def start_machine(self):
+
         '''
         Must be overridden.  Start the machine.
         '''
