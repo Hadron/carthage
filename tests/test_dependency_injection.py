@@ -393,3 +393,11 @@ def test_injector_xref(injector):
     res = injector.get_instance(InjectionKey("target"))
     assert isinstance(res, Target)
     
+def test_system_dependency_injection_keys(injector):
+    "Test that SystemDependencies inject with a name"
+    from carthage.system_dependency import MachineDependency, SystemDependency
+    md = MachineDependency("foo.com")
+    injector.add_provider(md)
+    md2 = injector.get_instance(InjectionKey(SystemDependency, name = "foo.com"))
+    assert md is md2
+    

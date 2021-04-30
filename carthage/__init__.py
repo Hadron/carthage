@@ -40,6 +40,10 @@ from .files import rsync_git_tree
 __all__ += [ 'Machine',  'rsync_git_tree',
              'AbstractMachineModel', 'MachineCustomization', 'customization_task']
 
+from .system_dependency import MachineDependency, SystemDependency
+
+__all__ += ['MachineDependency', 'SystemDependency']
+
 import carthage.container
 import carthage.local
 from .local import LocalMachine
