@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -20,6 +20,7 @@ class PortReservation:
     __slots__ = ('port', '__weakref__')
 
     def __init__(self, config_layout):
+        super().__init__()
         found = False
         for i in range(config_layout.min_port, config_layout.min_port+config_layout.num_ports+1):
             self.port = i
