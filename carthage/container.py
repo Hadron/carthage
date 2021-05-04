@@ -87,11 +87,7 @@ class Container(Machine, SetupTaskMixin):
             os.chmod(self.volume.path+"/network-script.sh", 0o755)
             return interfaces
         else:
-            try: os.unlink(os.path.join(self.volume.path, "etc/resolv.conf"))
-            except FileNotFoundError: pass
-            shutil.copyfile("/etc/resolv.conf",
-                            os.path.join(self.volume.path, "etc/resolv.conf"))
-            return []
+            return ["--resolv-conf=bind-host"]
     
     async def run_container(self, *args, raise_on_running = True,
                             networking = False,
