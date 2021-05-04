@@ -592,13 +592,14 @@ class ExternalNetwork(Network):
 
     def __init__(self, config_layout, injector):
         vlan_id = config_layout.external_vlan_id
+        external_bridge_name = config_layout.external_bridge_name
         kwargs = {}
         if vlan_id:
             kwargs['vlan_id'] = vlan_id
         super().__init__(name = "external network", injector = injector,
                          **kwargs)
         self.ainjector.add_provider(InjectionKey(BridgeNetwork),
-                                   when_needed(BridgeNetwork, bridge_name = "brint", delete_bridge = False))
+                                   when_needed(BridgeNetwork, bridge_name = external_bridge_name, delete_bridge = False))
 
     @classmethod
     def supplementary_injection_keys(cls, k):
