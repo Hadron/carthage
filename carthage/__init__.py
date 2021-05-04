@@ -40,9 +40,9 @@ from .files import rsync_git_tree
 __all__ += [ 'Machine',  'rsync_git_tree',
              'AbstractMachineModel', 'MachineCustomization', 'customization_task']
 
-from .system_dependency import MachineDependency, SystemDependency
+from .system_dependency import MachineDependency, SystemDependency, disable_system_dependency
 
-__all__ += ['MachineDependency', 'SystemDependency']
+__all__ += ['MachineDependency', 'SystemDependency', 'disable_system_dependency']
 
 import carthage.container
 import carthage.local
