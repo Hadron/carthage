@@ -54,7 +54,7 @@ class MachineDependency(SystemDependency):
             self.key = InjectionKey(Machine, host = m.name, _ready = True)
         else: raise ValueError
         self.online = online
-        if name: self.name = name
+        if name: self._name = name
         
 
     async def __call__(self, ainjector):
@@ -65,6 +65,7 @@ class MachineDependency(SystemDependency):
 
     @property
     def name(self):
+        if hasattr(self, '_name'): return self._name
         return self.key.constraints['host']
 
     def __repr__(self):
