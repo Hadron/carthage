@@ -83,6 +83,7 @@ class VM(Machine, SetupTaskMixin):
         async with self._operation_lock:
             if self.running is True: return
             await self.start_dependencies()
+            await super().start_machine()
             await self.write_config()
             await sh.virsh('create',
                       self.config_path,
@@ -102,6 +103,7 @@ class VM(Machine, SetupTaskMixin):
         async with self._operation_lock:
             if not self.running:
                 return
+
             await sh.virsh("shutdown", self.full_name,
                        _bg = True,
                        _bg_exc = False)
@@ -117,6 +119,7 @@ class VM(Machine, SetupTaskMixin):
                     sh.virsh('destroy', self.full_name)
                 except sh.ErrorReturnCode: pass
                 self.running = False
+                await super().stop_machine()
 
     stop_machine = stop_vm
 

@@ -23,7 +23,6 @@ async def queue_worker():
             if isinstance(m_new, LocalMachine): continue
             if action == 'start':
                 await m_new.start_machine()
-                machines.append(m_new)
             elif action == 'stop':
                 await m_new.stop_machine()
         except Exception:
@@ -37,6 +36,10 @@ async def queue_explicit(l, action):
 async def queue_all(action):
     for m in ainjector.filter(Machine, ['host'], stop_at = ainjector.injector):
         machine_queue.put_nowait((m.host, action))
+
+def start_machine_cb(target, *args, **kwargs):
+    if target not in machines:
+        machines.append(target)
         
 async def run():
     global ainjector, layout
@@ -47,6 +50,7 @@ async def run():
     else:
         layout = await ainjector.get_instance_async(CarthageLayout)
     ainjector = layout.ainjector
+    ainjector.add_event_listener(InjectionKey(Machine), ['start_machine'], start_machine_cb)
     if 'generate' in args.actions:
         await layout.generate()
     if 'start' in args.actions and args.start:

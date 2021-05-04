@@ -298,17 +298,25 @@ class Machine(AsyncInjectable, SshMixin):
 
 
 
-    def start_machine(self):
+    async def start_machine(self):
 
         '''
         Must be overridden.  Start the machine.
         '''
-        raise NotImplementedError
+        self.injector.emit_event(InjectionKey(Machine),
+                        "start_machine", self,
+                        adl_keys   = {InjectionKey(Machine,  host = self.name)} |
+                        set(self.supplementary_injection_keys(InjectionKey(Machine, host = self.name))))
+        
 
-    def stop_machine(self):
+    async def stop_machine(self):
         ''' Must be overridden; stop the machine.
         '''
-        raise NotImplementedError
+        self.injector.emit_event(InjectionKey(Machine),
+                        "stop_machine", self,
+                        adl_keys   = {InjectionKey(Machine,  host = self.name)} |
+                        set(self.supplementary_injection_keys(InjectionKey(Machine, host = self.name))))
+
 
     def __repr__(self):
         res =  f"<{self.__class__.__name__} name:{self.name} "
