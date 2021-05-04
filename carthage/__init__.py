@@ -49,8 +49,6 @@ import carthage.local
 from .local import LocalMachine
 __all__ += ['LocalMachine']
 
-import carthage.hadron
-import carthage.hadron_layout
 import carthage.pki
 
 import carthage.vm
@@ -68,22 +66,9 @@ base_injector.add_provider(ssh.AuthorizedKeysFile)
 base_injector.add_provider(asyncio.get_event_loop(), close = False)
 base_injector.add_provider(MacStore)
 base_injector.add_provider(ansible.AnsibleConfig)
-base_injector.add_provider(carthage.hadron_layout.fake_internet)
 base_injector.add_provider(carthage.network.external_network)
-base_injector.add_provider(carthage.hadron_layout.services_vlan_key, carthage.hadron_layout.services_vlan)
 base_injector.add_provider(carthage.network.BridgeNetwork, allow_multiple = True)
-base_injector.add_provider(carthage.hadron_layout.database_key, carthage.hadron_layout.test_database_container)
-base_injector.add_provider(carthage.network.host_map_key, carthage.hadron_layout.hadron_host_map)
-try:
-    import carthage.hadron.database
-    base_injector.add_provider(hadron.database.RemotePostgres)
-except ImportError: pass
-base_injector.add_provider(carthage.container.ssh_origin, carthage.hadron_layout.test_database_container)
-base_injector.add_provider(carthage.machine.ssh_origin_vrf, "vrf-internet")
-base_injector.add_provider(carthage.hadron.hadron_vault_key, carthage.hadron_layout.hadron_vault_container)
 
-base_injector.add_provider(carthage.container.container_image, carthage.hadron.hadron_container_image)
-base_injector.add_provider(carthage.vm.vm_image, carthage.hadron.hadron_vm_image)
 base_injector.add_provider(InjectionKey(carthage.ssh.SshAgent), carthage.ssh.ssh_agent)
 base_injector.add_provider(carthage.pki.PkiManager)
 
