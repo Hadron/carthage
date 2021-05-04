@@ -44,12 +44,12 @@ import uuid
     <controller type='scsi' model='virtio-scsi' />
     %for i, link in links.items():
         <interface type='bridge'>
-%if mac is not None:
-      <mac address='${mac}'/>
+%if link.mac is not None:
+      <mac address='${link.mac}'/>
       % endif
       <source bridge='${link.net_instance.bridge_name}'/>
       <model type='virtio'/>
-      <target dev="${if_name(net)}" />
+      <target dev="${if_name(link.net)}" />
     </interface>
 % endfor
 <serial type='pty'>

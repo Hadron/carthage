@@ -55,6 +55,7 @@ class VM(Machine, SetupTaskMixin):
         await self.resolve_networking()
         for i, link in self.network_links.items():
             await link.instantiate(carthage.network.BridgeNetwork)
+            await self.image.async_become_ready()
         self.gen_volume()
         with open(self.config_path, 'wt') as f:
             f.write(template.render(
@@ -62,7 +63,7 @@ class VM(Machine, SetupTaskMixin):
                 console_port = self.console_port.port if self.console_needed else None,
                 name =self.full_name,
                 links = self.network_links,
-                if_name = lambda n: carthage.network.if_name("vn", self.config_layout.container_prefix, n.name, self.name),
+                if_name = lambda n: carthage.network.base.if_name("vn", self.config_layout.container_prefix, n.name, self.name),
                 volume = self.volume))
             if self.console_needed:
                 with open(self.console_json_path, "wt") as f:
