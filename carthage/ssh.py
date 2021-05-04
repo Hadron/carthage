@@ -123,7 +123,7 @@ class AuthorizedKeysFile(Injectable):
         authorized_keys = config_layout.authorized_keys
         if authorized_keys.startswith('|'):
             authorized_keys = authorized_keys[1:]
-            keys_in = str(sh("sh", "-c",
+            keys_in = str(sh.sh( "-c",
                          authorized_keys,
                          _encoding = 'utf-8'))
         else:
