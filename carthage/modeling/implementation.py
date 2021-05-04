@@ -8,7 +8,8 @@
 
 from __future__ import annotations
 import enum, functools, inspect, threading, typing
-from carthage.dependency_injection import * # type: ignore
+from carthage.dependency_injection import *
+from carthage.dependency_injection import default_injection_key # not part of public api
 from carthage.dependency_injection import InjectorXrefMarker
 from .utils import *
 from carthage.network import NetworkConfig
@@ -316,12 +317,14 @@ class InjectableModelType(ModelingBase):
 
     @modelmethod
     def add_provider(cls, ns, k:InjectionKey,
-                     v: typing.Any,
+                     v: typing.Any = None,
                      close = True,
                      allow_multiple = False, globally_unique = False,
                      propagate = False,
                      transclusion_overrides = False):
-        assert isinstance(k, InjectionKey)
+        if not isinstance(k, InjectionKey) and v is None:
+            v = k
+            k = default_injection_key(k)
         if transclusion_overrides:
             ns.transclusions.add((k,k))
         ns.to_inject[k] = (v, dict(
