@@ -12,6 +12,7 @@ class PortReservation:
     __slots__ = ('port', '__weakref__')
 
     def __init__(self, config_layout):
+        super().__init__()
         found = False
         for i in range(config_layout.min_port, config_layout.min_port+config_layout.num_ports+1):
             self.port = i
