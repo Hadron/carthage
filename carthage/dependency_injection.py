@@ -21,6 +21,21 @@ class ReadyState(enum.Enum):
 
 instantiate_to_ready = contextvars.ContextVar('instantiate_to_ready', default = True)
 
+# While this is needed by InjectableModelType's add_provider, it is
+# not part of the public api
+def default_injection_key(p):
+    if isinstance(p, DependencyProvider): raise NotImplementedError
+    if (isinstance(p, type) and issubclass(p, Injectable)):
+        k = p.default_class_injection_key()
+    elif isinstance(p, Injectable):
+        k = p.default_instance_injection_key()
+    elif isinstance(p, type):
+        k = InjectionKey(p)
+    else:
+        # not a type and not an Injectable
+        k = InjectionKey(p.__class__)
+    return k
+
 class Injectable:
 
     '''Represents a class that has dependencies injected into it. By default, the :meth:`__init__` will:
@@ -222,17 +237,7 @@ class Injector(Injectable, event.EventListener):
             p,k = k,p #swap; we construct the key later
 
         if k is None:
-            if isinstance(p, DependencyProvider): raise NotImplementedError
-            if (isinstance(p, type) and issubclass(p, Injectable)):
-                k = p.default_class_injection_key()
-            elif isinstance(p, Injectable):
-                k = p.default_instance_injection_key()
-            elif isinstance(p, type):
-                k = InjectionKey(p)
-            else:
-                # not a type and not an Injectable
-                k = InjectionKey(p.__class__)
-
+            k = default_injection_key(p)
         if not isinstance(p, DependencyProvider):
             p = DependencyProvider(p, allow_multiple = allow_multiple, close = close)
         assert isinstance(k,InjectionKey)
