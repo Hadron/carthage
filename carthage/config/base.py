@@ -3,10 +3,12 @@ from .types import ConfigPath, ConfigString
 
 class BaseSchema(ConfigSchema, prefix = ""):
 
+    #: Name of layout to instantiate by default
+    layout_name: str
     #: A path containing authorized keys to use in images.  If the
     #path starts with a | symbol, then the output of the given command
     #will be used.
-    authorized_keys: ConfigPath = "|{hadron_operations}/scripts/authorized_keys"
+    authorized_keys: ConfigPath = "|{hadron_operations}/hadron/inventory/config/default_keys.py"
     
     base_dir: ConfigPath = "/srv/images/test"
     output_dir: ConfigPath = "{base_dir}/output"
@@ -35,6 +37,7 @@ class BaseSchema(ConfigSchema, prefix = ""):
     #: Set of IP addresses for which we will route to the outside world rather than internally.
     expose_routes: list = []
     external_vlan_id: int = 0
+    external_bridge_name:str = "brint"
     vlan_min:int = 1
     vlan_max:int = 4094
 

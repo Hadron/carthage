@@ -40,7 +40,12 @@ async def queue_all(action):
         
 async def run():
     global ainjector, layout
-    layout = await ainjector.get_instance_async(CarthageLayout)
+    config = await ainjector(carthage.config.ConfigLayout)
+    layout_name = config.layout_name
+    if layout_name:
+        layout = await ainjector.get_instance_async(InjectionKey(CarthageLayout, layout_name = layout_name))
+    else:
+        layout = await ainjector.get_instance_async(CarthageLayout)
     ainjector = layout.ainjector
     if 'generate' in args.actions:
         await layout.generate()

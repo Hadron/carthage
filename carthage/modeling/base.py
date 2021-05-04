@@ -293,14 +293,14 @@ __all__ += ['MachineModel']
 class CarthageLayout(ModelGroup):
 
     @classmethod
-    def supplementary_injection_keys(cls, k):
-        yield InjectionKey(cls, name=cls.name)
-        yield InjectionKey(CarthageLayout, name = cls.name)
-        yield InjectionKey(cls)
-        yield InjectionKey(CarthageLayout)
+    def default_class_injection_key(cls):
+        if cls.layout_name:
+            return InjectionKey(CarthageLayout, layout_name = cls.layout_name)
+        else: return InjectionKey(CarthageLayout)
+        
 
     @property
-    def name(self):
+    def layout_name(self):
         raise NotImplementedError("You must specify a name on a layout")
 
     __all__ += ['CarthageLayout']
