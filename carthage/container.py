@@ -152,11 +152,13 @@ class Container(Machine, SetupTaskMixin):
     async def stop_container(self):
         async with self._operation_lock:
             if not self.running:
+                await super().stop_machine()
                 return
             self.process.terminate()
             process = self.process
             self.process = None
             await process
+            await super().stop_machine()
 
     stop_machine = stop_container
     
@@ -218,6 +220,8 @@ class Container(Machine, SetupTaskMixin):
         if self.running: return
         started_future = self.loop.create_future()
         self.find_output(r'\].*Reached target.*Basic System', started_callback, True)
+        # run_container calls start_dependencies
+        await super().start_machine()
         await self.run_container("--kill-signal=SIGRTMIN+3", *args, "/bin/systemd",
                                  networking = True, as_pid2 = False,
                                  raise_on_running = False)
@@ -252,6 +256,7 @@ class Container(Machine, SetupTaskMixin):
             try: self.process.terminate()
             except Exception: pass
             self.process = None
+            self.running = False
         if hasattr(self, 'volume'):
             if self.close_volume: self.volume.close()
             del self.volume
