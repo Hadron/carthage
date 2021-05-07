@@ -41,7 +41,7 @@ class Container(Machine, SetupTaskMixin):
         self._out_selectors = []
         self._done_waiters = []
         self.container_running = self.machine_running
-        self.network_interfaces = []
+        self.network_namespace = None
         self.close_volume = True
         self.cleanup_future = None
 
@@ -60,10 +60,16 @@ class Container(Machine, SetupTaskMixin):
             self.injector.add_provider(container_volume, vol)
         self.volume = vol
         await self.resolve_networking()
+        await self._check_running()
         await self.run_setup_tasks()
-            
         return await super().async_ready()
 
+    async def _check_running(self):
+        try:
+            self.container_leader
+            self.running = True
+        except sh.ErrorReturnCode_1: pass
+        
     @memoproperty
     def stamp_path(self):
         if self.volume is None:
@@ -73,27 +79,15 @@ class Container(Machine, SetupTaskMixin):
 
     async def do_network_config(self, networking):
         if networking and self.network_links:
-            interfaces = []
-            network_script = ""
-            self.network_interfaces = []
-            for interface, link  in self.network_links.items():
-                net = await link.instantiate(carthage.network.BridgeNetwork)
-                mac = link.mac
-                veth= net.add_veth(self.name)
-                interfaces.append("--network-interface={}".format(veth.ifname))
-                network_script += "ip link set {i1} {mac} name {i2}\n".format(
-                    i1 = veth.ifname,
-                    mac = "address "+mac if mac else "",
-                    i2 = interface)
-                self.network_interfaces.append(veth)
-                
-            interfaces.append("/network-script.sh")
-            with open(self.volume.path+"/network-script.sh", "wt") as f:
-                f.write("#!/bin/sh\n")
-                f.write(network_script)
-                f.write('exec "$@"\n')
-            os.chmod(self.volume.path+"/network-script.sh", 0o755)
-            return interfaces
+            namespace = carthage.network.NetworkNamespace(self.full_name, self.network_links)
+            try:
+                await namespace.start_networking()
+                self.network_namespace = namespace
+                return ["--network-namespace-path=/run/netns/"+namespace.name,
+                        "--capability=CAP_NET_ADMIN"]
+            except:
+                namespace.close()
+                raise
         else:
             return ["--resolv-conf=bind-host"]
     
@@ -141,9 +135,6 @@ class Container(Machine, SetupTaskMixin):
                                              _in = "/dev/null",
                                              _encoding = 'utf-8',
                                              _new_session = False,
-                                             # systemd-nspawn fails to rename interfaces back because we rename them.
-                                             # A better solution would be to explicitly construct namespaces and to use the --network-namespace-path with sufficiently new systemd-nspawn.
-                                             _ok_code = [0,1] if networking else 0
                                              )
             
             self.running = True
@@ -152,12 +143,16 @@ class Container(Machine, SetupTaskMixin):
     async def stop_container(self):
         async with self._operation_lock:
             if not self.running:
-                await super().stop_machine()
                 return
-            self.process.terminate()
-            process = self.process
-            self.process = None
-            await process
+            if self.process is not None:
+                self.process.terminate()
+                process = self.process
+                self.process = None
+                await process
+            else:
+                await sh.machinectl("stop", self.full_name,
+                                    _bg  = True, _bg_exc = False)
+                self._done_cb(code = 0, success = True, cmd = None)
             await super().stop_machine()
 
     stop_machine = stop_container
@@ -171,10 +166,9 @@ class Container(Machine, SetupTaskMixin):
                 if not f.cancelled():
                     f.set_result(0 if success else code)
             self._done_waiters = []
-            for i in self.network_interfaces:
-                i.close()
-            self.network_interfaces = []
-
+            if self.network_namespace:
+                self.network_namespace.close()
+            self.network_namespace = None
         logger.info("Container {} exited with code {}".format(
             self.name, code))
         for k in ('shell', 'container_leader'):
@@ -252,11 +246,6 @@ class Container(Machine, SetupTaskMixin):
         return await process
     
     def close(self, canceled_futures = None):
-        if self.process is not None:
-            try: self.process.terminate()
-            except Exception: pass
-            self.process = None
-            self.running = False
         if hasattr(self, 'volume'):
             if self.close_volume: self.volume.close()
             del self.volume

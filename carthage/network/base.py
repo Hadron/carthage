@@ -54,46 +54,40 @@ def if_name(type_prefix, layout, net, host = ""):
     assert False # never should be reached
     
 
+@dataclasses.dataclass
 class NetworkInterface:
 
-    def __init__(self, network, ifname):
-        self.ifname = ifname
-        self.network = network
+    network: object
+    ifname: str
+    delete_interface: bool = True
+    closed: bool = dataclasses.field(init = False, default = False)
+    
+    def __del__(self):
+        self.close()
 
+    def close(self):
+        if self.closed: return
+        if self.delete_interface: self.delete_networking()
+        self.closed = True
+        
+
+    def delete_networking():
+        try:
+            sh.ip("link", "del", self.ifname)
+        except sh.ErrorReturnCode: pass
+        self.closed = True
+
+@dataclasses.dataclass
 class VlanInterface(NetworkInterface):
 
-    def __init__(self, id, network: BridgeNetwork):
+    vlan_id: int = 0
+
+    def __init__(self, id, network: BridgeNetwork, **kwargs):
         super().__init__(ifname = "{}.{}".format(
-            network.bridge_name, id), network = network)
+            network.bridge_name, id), network = network, **kwargs)
         self.vlan_id = id
         self.closed = False
-
-    def close(self):
-        if self.closed: return
-        sh.ip("link", "del", self.ifname)
-        self.closed = True
-
-    def __del__(self):
-        self.close()
         
-
-        
-class VethInterface(NetworkInterface):
-
-    def __init__(self, network:BridgeNetwork, ifname, bridge_member_name):
-        super().__init__(network, ifname)
-        self.bridge_member_name = bridge_member_name
-        self.closed = False
-
-    def close(self):
-        if self.closed: return
-        try: sh.ip('link', 'del', self.bridge_member_name)
-        except sh.ErrorReturnCode: pass
-        del self.network.interfaces[self.bridge_member_name]
-        self.closed = True
-
-    def __del__(self):
-        self.close()
 
 class TechnologySpecificNetwork(AsyncInjectable):
 
@@ -189,16 +183,24 @@ this_network = InjectionKey(Network, role = "this_network")
 class BridgeNetwork(TechnologySpecificNetwork):
 
     def __init__(self, net, *, bridge_name = None,
-                 delete_bridge = True, **kwargs):
+                 delete_bridge = True,
+                 delete_interfaces = None, **kwargs):
         super().__init__(**kwargs)
-        self.name = net.name
+        if delete_bridge is None:
+            delete_bridge = not self.config_layout.persist_local_networking
         self.delete_bridge = delete_bridge
+        self.name = net.name
         self.interfaces = weakref.WeakValueDictionary()
         if bridge_name is None:
             self.bridge_name = if_name('br', self.config_layout.container_prefix, self.name)
         else: self.bridge_name = bridge_name
         self.closed = False
         self.members = []
+        if delete_interfaces is None and delete_bridge:
+            delete_interfaces = True
+        if delete_interfaces is None:
+            delete_interfaces = not self.config_layout.persist_local_networking
+        self.delete_interfaces = delete_interfaces
 
     async def async_ready(self):
         try:
@@ -214,6 +216,12 @@ class BridgeNetwork(TechnologySpecificNetwork):
     def close(self):
         if self.closed: return
         self.members.clear()
+        if self.delete_interfaces:
+            self.delete_networking()
+        self.closed = True
+        self.interfaces.clear()
+
+    def delete_networking(self):
         # Copy the list because we will mutate
         for i in list(self.interfaces.values()):
             try: i.close()
@@ -237,20 +245,28 @@ class BridgeNetwork(TechnologySpecificNetwork):
         # We also keep a reference so that if it is a weak interface off another object it is not GC'd
         self.members.append(interface)
         
-    def add_veth(self, container_name):
-        bridge_member = if_name('ci', self.config_layout.container_prefix, self.name, container_name)
-        veth_name = if_name('ve', self.config_layout.container_prefix, self.name, container_name)
-        logger.debug('Network {} creating virtual ethernet for {}'.format(self.name, container_name))
+    def add_veth(self, link, namespace):
+        bridge_member = if_name('ci', self.config_layout.container_prefix, self.name, link.machine.name)
+        args = []
+        if link.mtu:
+            args.extend(['mtu', link.mtu])
+        args.append('peer')
+        if link.mac:
+            args.extend(['address', str(link.mac)])
+        args.extend(['name', link.interface])
+        args.extend(['netns', namespace.name])
+        logger.debug('Network {} creating virtual ethernet for {}'.format(self.name, link.machine.name))
         try:
             sh.ip('link', 'add', 'dev', bridge_member,
-              'type', 'veth', 'peer', 'name', veth_name)
+                  'type', 'veth',
+                   *args)
         except sh.ErrorReturnCode_2:
             logger.warn("Network {}: {} appears to exist; deleting".format(self.name, bridge_member))
             sh.ip('link', 'del', bridge_member)
             sh.ip('link', 'add', 'dev', bridge_member,
-              'type', 'veth', 'peer', 'name', veth_name)
+                  'type', 'veth', *args)
         sh.ip('link', 'set', bridge_member, 'master', self.bridge_name, 'up')
-        ve = VethInterface(self, veth_name, bridge_member)
+        ve = VethInterface(network = self, ifname = bridge_member, internal_name = link.interface, delete_interface = False)
         self.interfaces[bridge_member] = ve
         return ve
 
@@ -267,6 +283,17 @@ class BridgeNetwork(TechnologySpecificNetwork):
             logger.warn("{} appears to already exist".format(ifname))
         self.interfaces[ifname] = iface
         return iface
+
+@dataclasses.dataclass
+class VethInterface(NetworkInterface):
+
+    internal_name: str = ""
+
+    def close(self):
+        if self.closed: return
+        try: del self.network.interfaces[self.ifname]
+        except KeyError: pass
+        super().close()
 
 class NetworkConfig:
 
