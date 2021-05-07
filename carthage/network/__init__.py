@@ -7,5 +7,8 @@ from .mac import random_mac_addr, MacStore, persistent_random_mac
 
 __all__ += ['random_mac_addr', 'MacStore', 'persistent_random_mac']
 
+from .namespace import NetworkNamespace
+__all__ += ['NetworkNamespace']
+
 from .config import V4Config
 __all__ += ['V4Config']

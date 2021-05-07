@@ -51,6 +51,8 @@ async def run():
         layout = await ainjector.get_instance_async(CarthageLayout)
     ainjector = layout.ainjector
     ainjector.add_event_listener(InjectionKey(Machine), ['start_machine'], start_machine_cb)
+    if args.keep_machines:
+        config.persist_local_networking = True
     if 'generate' in args.actions:
         await layout.generate()
     if 'start' in args.actions and args.start:
@@ -79,12 +81,14 @@ async def run():
             
         global machines
         futures = []
+        if not args.keep_machines:
+            for m in machines:
+                if m.running:
+                    futures.append(loop.create_task(m.stop_machine()))
+        if futures:
+            await asyncio.wait(futures, timeout = 10)
         for m in machines:
-            if m.running:
-                futures.append(loop.create_task(m.stop_machine()))
-                await asyncio.wait(futures, timeout = 10)
-                for m in machines:
-                    m.close()
+            m.close()
 
             
 
@@ -114,6 +118,12 @@ parser.add_argument(
 parser.add_argument('--no-tmux', action = 'store_false',
                     dest = 'tmux', default = True,
                     help = "Do not start a tmux for the console")
+parser.add_argument(
+    '--keep', '--keep-machines',
+                    help = "Keep machines running on exit",
+                    action='store_true',
+                    dest ='keep_machines')
+
 
 
 console = carthage.console.CarthageConsole()

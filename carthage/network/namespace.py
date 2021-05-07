@@ -1,0 +1,36 @@
+from __future__ import annotations
+import dataclasses, typing
+from ..dependency_injection import *
+from .base import NetworkInterface, logger, NetworkLink, BridgeNetwork, VethInterface
+from .. import sh
+
+
+@dataclasses.dataclass
+class NetworkNamespace:
+
+    name: str
+    network_links: typing.Dict[str, NetworkLink]
+
+    def __post_init__(self):
+        logger.debug("Bringing up network namespace for %s", self.name)
+        try: sh.ip(
+                "netns", "add",
+                self.name)
+        except sh.ErrorReturnCode_1: #link exists
+            sh.ip("netns", "delete", self.name)
+            sh.ip("netns", "add", self.name)
+        self.closed = False
+
+    async def start_networking(self):
+        for interface, link  in self.network_links.items():
+            net = await link.instantiate(BridgeNetwork)
+            veth= net.add_veth(link, self)
+
+    def close(self):
+        if self.closed: return
+        self.closed = True
+        logger.info("Deleting network namespace %s", self.name)
+        try: sh.ip("netns", "delete", self.name)
+        except sh.ErrorReturnCode:
+            logger.exception("Error deleting network namespace")
+
