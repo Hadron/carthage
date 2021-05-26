@@ -1,20 +1,11 @@
+<%inherit file="network-base.mako" />
+
+<%block name="network">
 <%
 from carthage.systemd import NotNeeded
-nontrivial = False
 v4_config = link.merged_v4_config
-driver = "ether"
-if link.local_type == "bridge":
-    driver = "bridge"
-
 %>
-[Match]
-%if link.mac:
-Type=${driver}
-MACAddress=${link.mac}
-%else:
-Name=${link.interface}
-%endif
-[Network]
+<% nontrivial = False %>
 %if v4_config.dhcp:
 DHCP=ipv4
 <%nontrivial = True%>
@@ -38,3 +29,4 @@ Gateway=${v4_config.gateway}
 <%if not nontrivial:
     raise NotNeeded
 %>
+</%block>
