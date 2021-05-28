@@ -186,6 +186,7 @@ class ModelingNamespace(dict):
         parent_qualname_count = len(parent_qualname.split("."))
         self.context_imported = True
         if not (our_qualname.startswith(parent_qualname) and our_qualname_count == parent_qualname_count+1):
+            self.parent_context = None #Also break injection key lookups at this point
             return
         for k in parent.keys():
             if k in self: continue
@@ -195,6 +196,16 @@ class ModelingNamespace(dict):
 
     def update_context(self):
         thread_local.current_context = self
+
+    def get_injected(self, key):
+        parent = self
+        while parent is not None:
+            if key in parent.to_inject:
+                res =  parent.to_inject[key][0]
+                if isinstance(res, dependency_quote): res = res.value
+                return res
+            parent = parent.parent_context
+        raise KeyError
 
 class modelmethod:
 
@@ -480,7 +491,7 @@ class ModelingContainer(InjectableModelType):
             # decorators ourselves
             if (not close) or allow_multiple:
                 raise TypeError('If using dynamic_name, use decorators to adjust close and allow_multple')
-            ns[dynamic_name] = obj
+            ns[fixup_dynamic_name(dynamic_name)] = obj
             return
         ModelingContainer._integrate_containment(cls, ns, obj.__name__, state)
         # Since we're not able to use ns.__setitem__, do the injection key stuff ourself.

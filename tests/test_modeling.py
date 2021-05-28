@@ -159,7 +159,7 @@ def test_transclusion(injector):
         class moo(MachineModel):
             name = "moo.com"
 
-        class mar(*injector(model_bases, MachineModel, "mar.com")):
+        class mar(*injector(model_bases, "mar.com", MachineModel)):
             name = "mar.com"
             
 
@@ -225,3 +225,14 @@ def test_implicit_customization(injector):
     injector.add_provider(machine_implementation_key, dependency_quote(Machine))
     assert hasattr(l.foo.machine_type, 'model_customization')
     
+def test_model_mixin(injector):
+    class layout(CarthageLayout):
+
+        @model_mixin_for(host = "foo.com")
+        class foomixin:
+            bar = 42
+
+        class foo(MachineModel):
+            name = "foo.com"
+
+    assert layout.foo.bar == 42

@@ -1,6 +1,6 @@
 from carthage.dependency_injection import Injector, InjectionKey, inject_autokwargs, dependency_quote
 from .implementation import ModelingBase, InjectableModelType, ModelingContainer, NSFlags, handle_transclusions
-from .utils import setattr_default
+from .utils import setattr_default, fixup_dynamic_name
 import typing
 from ..dependency_injection import InjectionKey
 
@@ -145,6 +145,7 @@ def dynamic_name(name):
 
     Will define threevariables i1 through i3, with values of squares (i1 = 0, i2 =1, i3 = 4).
     '''
+    name = fixup_dynamic_name(name)
     def wrapper(val):
         return DynamicNameDecorator(val, name)
     return wrapper
@@ -327,12 +328,32 @@ def transclude_injector(injector):
 
 def model_mixin_for(**constraints):
     '''
-    Indicate that a given model supplements a model declared automatically.  Only works if the automatic model uses :func:`~carthage.modeling.base.model_bases` to construct bases.  Must be used in a layout that provides a transcluding injector for the automatic model.
+    Indicate that a given model supplements a model declared automatically.    The simplest usage looks like::
+
+        @model_mixin_for(host = "foo.com")
+        class foomixin(MachineModel):
+            # stuff added to foo.com
+
+        class foo(MachineModel):
+            name = "foo.com"
+            # Also inherits from foomixin
+
+    In the above example it would be simply to list *foomixin* as a base for *foo*.  However when a loop instantiates a number of models with a dynamic name, *model_mixin_for* provides value::
+
+        for c in ('foo', 'bar', 'baz'):
+            @dynamic_name(c)
+            class model(MachineModel):
+                name = c+".com"
+
+    In the above usage, the loop would need to get more complicated to only add *foomixin* to the dynamically generated class for the ``foo.com`` model.  In this case *model_mixin_for* provides value.
+
+    IN a more complex usage, *model_mixin_for* can be used in a layout that will transclude a model using :func:`carthage.modeling.base.model_bases`.  This is similar to :func:`transclude_overrides` except that rather than entirely replacing the model, *model_mixin_for* simply adds a base.
+
     '''
-    from .base import MachineModel
+    from .base import MachineModelMixin
     def wrap(val):
         return provides(InjectionKey(
-            MachineModel, **constraints, role = "mixin"))(dependency_quote(val))
+            MachineModelMixin, **constraints))(dependency_quote(val))
     return wrap
 
 

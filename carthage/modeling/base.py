@@ -170,16 +170,52 @@ __all__ += [ 'machine_implementation_key']
 class MachineModelType(ModelingContainer):
 
     classes_to_inject = (carthage.machine.BaseCustomization,)
-    
-    def __new__(cls, name, bases, ns, **kwargs):
-        if 'name' not in ns:
-            ns['name'] = name.lower()
-        if '.' not in ns['name']:
+
+
+    @staticmethod
+    def calc_mixin_key(class_name, ns, bases):
+        # if we had the class instantiated, we'd just look at
+        # self.name, and make up a name from self.__name__ if
+        # self.name is not set.  We have to manually traverse the
+        # bases (and thus the mro) since we need to perform this
+        # before the class is instantiated.
+        name = None
+        if 'name' in ns:
+            name = ns['name']
+        else:
+            for b in bases:
+                if hasattr(b, 'name'):
+                    name = b.name
+                    break
+        if not name:
+            name = class_name.lower()
+        if '.' not in name:
             try:
-                ns['name'] = ns['name'] + '.' + ns['domain']
+                if ns['domain']: name += '.'+ns['domain']
             except KeyError: pass
+            
+        return InjectionKey(MachineModelMixin, host=name)
+
+
+    def __new__(cls, name, bases, ns, mixin_key = None, **kwargs):
         bases = adjust_bases_for_tasks(bases, ns)
-        return super().__new__(cls, name, bases, ns, **kwargs)
+        template = kwargs.get('template', False)
+        if not template:
+            if mixin_key is None: mixin_key = cls.calc_mixin_key(name, ns, bases)
+            try:
+                if mixin_key:
+                    mixin = ns.get_injected(mixin_key)
+                    bases += (mixin,)
+            except KeyError: pass
+        domain = ns.get('domain', None)
+        self =  super().__new__(cls, name, bases, ns, **kwargs)
+        if not template:
+            if not hasattr(self, 'name'):
+                self.name = self.__name__.lower()
+            if domain and not '.' in self.name:
+                self.name += '.'+domain
+        return self
+
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -197,12 +233,36 @@ class MachineModelType(ModelingContainer):
             self.__container_propagations__[machine_key] = \
                 self.__initial_injections__[machine_key]
 
+class MachineModelMixin: pass
 
 @inject_autokwargs(config_layout = ConfigLayout)
 class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metaclass = MachineModelType, template = True):
 
+    '''
+
+    Represents the aspects of a :class:`~carthage.machine.Machine` that are independent of the implementation of that machine.  Typically includes things like:
+
+    * Network configuration (:class:`~carthage.network.NetworkConfig`
+
+    * Configuration for devops tools like Ansible
+
+    * Selecting the target implementation (whether the machine will be a VM, container, or hosted on real hardware)
+
+    Applications that want to reason about the abstract environment typically only need to instantiate models.  Applications that want to build VMs or effect changes to real hardware instantiate the machine implementations.  This class is the modeling extensions to :class:`carthage.machine.AbstractMachineModel`.
+
+    If a *MachineModel* contains reference to :func:`setup_tasks <carthage.setup_task.setup_task>`, then it will automatically gain :class:`~carthage.setup_task.SetupTaskMixin` as a base class.  Similarly, if :func:`~carthage.modeling.decorators.model_mixin_for` is used to decorate a class in the same :class:`CarthageLayout` encountered before the *MachineModel*, then that class will be added as an implicit base class of the model.
+
+    Class Parameters passed in as keywords on the class statement:
+
+    :param template: True if this class represents a base class or mixin rather than a actual model of a specific machine.
+
+    :param mixin_key: The :class:`InjectionKey` to use to search for mixins.
+
+    '''
+    
     @classmethod
     def our_key(cls):
+        "Returns the globally unique InjectionKey by which this model is known."
         return InjectionKey(MachineModel, host = cls.name)
 
 
@@ -288,7 +348,7 @@ class MachineImplementation(AsyncInjectable):
         return self.prep(await self.ainjector(self.res, name = self.name), self.model)
 
 
-__all__ += ['MachineModel']
+__all__ += ['MachineModel', 'MachineModelMixin']
 
 class CarthageLayout(ModelGroup):
 
@@ -306,14 +366,14 @@ class CarthageLayout(ModelGroup):
     __all__ += ['CarthageLayout']
     
 @inject(injector = Injector)
-def model_bases(typ: type, host: str, *bases,
+def model_bases(host: str, *bases,
                    injector):
     '''
 
     One common modeling pattern is to automatically generate  :class:`MachineModel`s for a number of systems from some sort of inventory database.  However, it is often desirable to add a override mechanism so that customizations can be added for a specific model.  This function adds a modeling mixin if one is registered in the injector.  In the automated code it is used like::
 
         @dynamic_name(inventory.name)
-        class model( *injector(model_bases, MachineModel, inventory.fqdn)):
+        class model( *injector(model_bases,   inventory.fqdn, MachineModel)):
             name = inventory.fqdn
 
     And then to add an override somewhere in an injector that :func:`transcludes <transclude_injector>` the model::
@@ -325,13 +385,16 @@ def model_bases(typ: type, host: str, *bases,
     Compare and contrast with using :func:`transclude_overrides` which will replace the overridden model rather than augmenting it with a mixin.
 
     '''
-    bases = list(bases)
+    new_bases = list(bases)
     try:
         new_base = injector.get_instance(
-            InjectionKey(typ, host = host, role = "mixin"))
-        bases.append(new_base)
+            InjectionKey(MachineModelMixin, host = host, ))
+        if issubclass(new_base, bases):
+            new_bases.insert(0, new_base)
+        else:
+            new_bases.append(new_base)
     except KeyError: pass
-    return bases
+    return tuple(new_bases)
 
 __all__ += ['model_bases']
 
