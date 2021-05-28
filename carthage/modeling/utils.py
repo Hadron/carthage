@@ -99,3 +99,8 @@ def key_from_injector_access(*accesses):
     return result
 
 __all__ += ['key_from_injector_access']
+
+def fixup_dynamic_name(n):
+    return n.replace('-', '_')
+
+__all__ += ['fixup_dynamic_name']
