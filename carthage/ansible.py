@@ -526,7 +526,7 @@ class ansible_task(setup_tasks.TaskWrapper):
         import sys
         module = sys.modules[owner.__module__]
         try:self.dir = importlib.resources.files(module.__package__)
-        except AttributeError:
+        except (AttributeError, ValueError):
             self.dir = Path(module.__file__).parent
         
 __all__ += ['ansible_task']
