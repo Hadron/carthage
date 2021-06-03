@@ -1,5 +1,5 @@
-import logging, time
-from carthage.debian import  DebianContainerImage
+import logging, tempfile, time
+from carthage.debian import  debian_container_to_vm
 from carthage.image import ContainerImage
 from carthage.network import Network, V4Config
 from carthage.container import Container, container_image
@@ -75,4 +75,16 @@ async def test_ansible_and_modeling(test_ainjector, config):
     await ainjector.get_instance_async(carthage.ssh.SshKey)
     await layout.generate()
     await layout.test_container.machine.async_become_ready()
+    
+
+@async_test
+async def test_container_to_vm(test_ainjector):
+    ainjector = test_ainjector
+    image = await ainjector.get_instance_async(container_image)
+    with tempfile.TemporaryDirectory() as tmp:
+        await ainjector(
+            debian_container_to_vm,
+            volume = image,
+            output = os.path.join(tmp,"container_to_vm.raw"),
+        size = "4G")
     

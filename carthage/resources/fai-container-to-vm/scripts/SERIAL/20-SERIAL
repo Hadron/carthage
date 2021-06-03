@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -e
+ainsl /etc/default/grub '^GRUB_TERMINAL=console'
+$ROOTCMD update-grub

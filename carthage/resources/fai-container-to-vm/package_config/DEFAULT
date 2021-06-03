@@ -1,0 +1,3 @@
+PACKAGES install
+grub-efi-amd64
+linux-image-amd64

@@ -133,23 +133,32 @@ class ContainerImage(BtrfsVolume):
 class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
     def __init__(self, name, path = None, create_size = None,
+                 unpack = "create",
+                 remove_stamps = False,
                  **kwargs):
         super().__init__(**kwargs)
+        name = str(name) #in case it's a Path
         if path is None: path = self.config_layout.vm_image_dir
         self.name = name
         if name.startswith('/'):
             self.path = name
         else: self.path = os.path.join(path, name+'.raw')
 
-        if not os.path.exists(self.path):
+        if  os.path.exists(self.path):
+            if unpack == "create": unpack = False
+        else:
             os.makedirs(os.path.dirname(self.path), exist_ok = True)
+            remove_stamps = True
             if create_size is None:
                 raise RuntimeError("{} not found and creation disabled".format(path))
             with open(self.path, "w") as f:
                 try: sh.chattr("+C", self.path)
                 except sh.ErrorReturnCode_1: pass
                 self.create_size = create_size
-                os.makedirs(self.stamp_path)
+        if remove_stamps:
+            shutil.rmtree(self.stamp_path, ignore_errors = True)
+        os.makedirs(self.stamp_path, exist_ok = True)
+        self.unpack = unpack
 
     def __repr__(self):
         return f"<ImageVolume path={self.path}>"
@@ -179,6 +188,8 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
     @setup_task('unpack')
     async def unpack_installed_system(self):
+        if not self.unpack: return #mark as succeeded rather than skipped
+        #We never want to unpack later after we've decided not to
         await sh.gzip('-d', '-c',
                       self.config_layout.base_vm_image,
                       _out = self.path,

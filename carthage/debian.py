@@ -1,10 +1,11 @@
 from __future__ import annotations
-import contextlib, logging , os, re
+import contextlib, logging , os, re, tempfile
+import importlib.resources
 from pathlib import Path
 from .dependency_injection import *
 from .setup_tasks import *
 from .config import ConfigLayout
-from .image import ContainerImage, ContainerCustomization
+from .image import ContainerImage, ContainerCustomization, BtrfsVolume, ImageVolume
 from .machine import customization_task
 from . import sh
 
@@ -130,3 +131,73 @@ def install_stage1_packages_task(packages):
     return install_task
 
 __all__ += ['install_stage1_packages_task']
+
+@inject(ainjector = AsyncInjector)
+async def debian_container_to_vm(
+        volume: BtrfsVolume,
+        output: str,
+        size: str,
+        classes: str = None,
+        *,
+        image_volume_class = ImageVolume,
+        ainjector):
+    '''
+
+    Use FAI to convert a container image into a VM image.
+
+    :param size: Size of resulting disk; for example ``8g``
+
+    :param classes: The FAI classes to use.  If this starts with a "+", then add to the default classes.  The following classes are available:
+
+        * SERIAL: enable serial console
+
+        * DEFAULT: mandatory behavior
+
+        * GROW: grow the root partition to fill the disk if the disk is expanded
+
+        * GRUB_EFI: Install EFI version of grub.
+
+
+    '''
+    from .container import logger
+    def out_cb(data):
+        data = data.strip()
+        logger.debug("Image Creation: %s", data)
+        
+    default_classes = "DEFAULT,GRUB_EFI"
+    fai_configspace = importlib.resources.files(__package__)/"resources/fai-container-to-vm"
+    if classes is None: classes = default_classes
+    elif classes[0] == "+":
+        classes = default_classes+','+classes[1:]
+    output_path = Path(output)
+    os.makedirs(output_path.parent, exist_ok = True)
+    with tempfile.TemporaryDirectory(dir = output_path.parent,
+                                         prefix = "container-to-vm-") as tmp_d:
+        tmp = Path(tmp_d).absolute()
+        await sh.tar(
+            "-C", volume.path,
+            "--xattrs",
+            "--xattrs-include=*.*",
+            "-czf",
+            str(tmp/"base.tar.gz"),
+            ".",
+            _bg = True,
+            _bg_exc = False)
+        env = os.environ.copy()
+        env['FAI_BASE'] = str(tmp/"base.tar.gz")
+        await sh.fai_diskimage(
+            '-S', size,
+            '-s', str(fai_configspace),
+            '-c', classes,
+            str(tmp/"image.raw"),
+            _env = env,
+            _bg = True,
+            _bg_exc = False,
+            _encoding = 'UTF-8',
+            _out = out_cb)
+        os.rename(tmp/"image.raw", output_path)
+        return await ainjector(image_volume_class, name = output_path.absolute(),
+                               unpack = False,
+                               remove_stamps = True)
+
+__all__ += ['debian_container_to_vm']

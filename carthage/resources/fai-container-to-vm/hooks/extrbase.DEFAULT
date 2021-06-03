@@ -1,0 +1,3 @@
+#!/bin/bash
+
+tar -C $FAI_ROOT --xattrs --xattrs-include=*.* -xzpf $FAI_BASE 
