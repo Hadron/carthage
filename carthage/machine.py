@@ -278,7 +278,7 @@ class Machine(AsyncInjectable, SshMixin):
         logger.debug(f'Starting dependencies for {self.name}')
         stop_at = None
         model = self.model
-        override_dependencies = model.override_dependencies
+        override_dependencies = model and model.override_dependencies
         if override_dependencies is True:
             stop_at = model.injector
             filter_keys = tuple()
