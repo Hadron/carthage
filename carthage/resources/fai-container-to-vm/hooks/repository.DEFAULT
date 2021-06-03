@@ -1,0 +1,4 @@
+#!/bin/bash
+fcopy /etc/resolv.conf
+
+skiptask repository
