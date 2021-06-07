@@ -61,7 +61,7 @@ class DebianContainerImage(ContainerImage):
         if distribution: self.distribution = distribution
         if stage1_mirror: self.stage1_mirror = stage1_mirror
 
-    @setup_task("unpack")
+    @setup_task("unpack using debootstrap")
     async def unpack_container_image(self):
         await sh.debootstrap('--include=openssh-server',
                              self.distribution,
