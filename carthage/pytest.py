@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -120,7 +120,7 @@ async def subtest_controller(request, target, pytest_args,
     json_out = await target.ssh('cat', json_frag)
     report_list = json.loads(json_out.stdout)
     for i in report_list:
-        n = Node(i['nodeid'], parent = request.node)
+        n = Node.from_parent(name = i['nodeid'], parent = request.node)
         i['nodeid'] = n.nodeid
         report = TestReport(**i)
         capmanager = request.config.pluginmanager.getplugin("capturemanager")
