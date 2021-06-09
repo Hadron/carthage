@@ -165,6 +165,7 @@ async def debian_container_to_vm(
         logger.debug("Image Creation: %s", data)
 
     async def unpack_callback():
+        await volume.async_become_ready()
         os.makedirs(output_path.parent, exist_ok = True)
         with tempfile.TemporaryDirectory(dir = output_path.parent,
                                              prefix = "container-to-vm-") as tmp_d:
