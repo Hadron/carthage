@@ -57,12 +57,16 @@ class VM(Machine, SetupTaskMixin):
             await link.instantiate(carthage.network.BridgeNetwork)
             await self.image.async_become_ready()
         self.gen_volume()
+        ci_data = None
+        if self.model and getattr(self.model, 'cloud_init', False):
+            ci_data = await self.ainjector(carthage.cloud_init.generate_cloud_init_cidata)
         with open(self.config_path, 'wt') as f:
             f.write(template.render(
                 console_needed = self.console_needed,
                 console_port = self.console_port.port if self.console_needed else None,
                 name =self.full_name,
                 links = self.network_links,
+                ci_data = ci_data,
                 if_name = lambda n: carthage.network.base.if_name("vn", self.config_layout.container_prefix, n.name, self.name),
                 volume = self.volume))
             if self.console_needed:
@@ -131,7 +135,8 @@ class VM(Machine, SetupTaskMixin):
                 self.running = False
             except Exception: pass
         self.volume.close()
-        try: os.unlink(self.config_path)
+        try:
+            if not self.config_layout.persist_local_networking: os.unlink(self.config_path)
         except FileNotFoundError: pass
         if self.config_layout.delete_volumes:
             try: shutil.rmtree(self.stamp_path)

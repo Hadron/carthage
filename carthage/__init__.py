@@ -17,15 +17,15 @@ __all__ += carthage.dependency_injection.__all__
 
 from .config import ConfigLayout, config_key, ConfigSchema
 __all__ += [ 'ConfigLayout', 'config_key', 'ConfigSchema' ]
-from .network import Network, NetworkConfig, MacStore
+from .network import Network, NetworkConfig, MacStore, V4Config
 
-__all__ += [ 'Network', 'NetworkConfig' , 'MacStore']
+__all__ += [ 'Network', 'NetworkConfig' , 'MacStore', 'V4Config']
 
 from .machine import Machine, AbstractMachineModel, MachineCustomization, customization_task
 import carthage.ssh # ssh import must come after machine
 import carthage.pki
 from . import ansible
-
+from . import cloud_init
 
 from .files import rsync_git_tree
 
@@ -63,6 +63,8 @@ base_injector.add_provider(carthage.network.BridgeNetwork, allow_multiple = True
 
 base_injector.add_provider(InjectionKey(carthage.ssh.SshAgent), carthage.ssh.ssh_agent)
 base_injector.add_provider(carthage.pki.PkiManager)
+base_injector(carthage.cloud_init.enable_cloud_init_plugins)
+
 
 __all__ += [ 'base_injector' ]
 
