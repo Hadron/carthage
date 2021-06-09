@@ -1,10 +1,10 @@
 import asyncio, pytest
-from carthage.image import image_factory, ImageVolume, SshAuthorizedKeyCustomizations
+from carthage.image import  ImageVolume, SshAuthorizedKeyCustomizations
 from carthage.hadron.images import HadronVmImage
 from carthage.vm import InstallQemuAgent
 from carthage import base_injector, ConfigLayout, ssh, shutdown_injector
 from carthage.dependency_injection import AsyncInjector, DependencyProvider, InjectionKey
-from carthage.debian import  DebianContainerImage
+from carthage.debian import  DebianContainerImage, debian_container_to_vm
 from carthage.image import ContainerImage
 from carthage.network import Network
 from carthage.machine import ssh_origin
@@ -15,7 +15,6 @@ from carthage.pytest import *
 pytest_plugins = ('carthage.pytest_plugin',)
 
 @pytest.fixture(scope = 'session')
-
 def test_ainjector(loop):
     if posix.geteuid() != 0:
         pytest.skip("Not running as root; volume tests skipped", )
@@ -42,7 +41,14 @@ def test_ainjector(loop):
 @pytest.fixture(scope = 'session')
 def vm_image( loop, test_ainjector):
     ainjector = test_ainjector
-    image = loop.run_until_complete(ainjector(image_factory, name = "base", image = HadronVmImage))
+    debian_container = loop.run_until_complete(ainjector.get_instance_async(container_image))
+    config = loop.run_until_complete(ainjector(ConfigLayout))
+    image = loop.run_until_complete(ainjector( debian_container_to_vm,
+                                               classes = "+CLOUD_INIT,SERIAL",
+                                               volume = debian_container,
+                                               size = "4G",
+                                               output = config.vm_image_dir+'/cloud-init.raw'))
+    
     loop.run_until_complete(ainjector.get_instance_async(ssh.SshKey))
     loop.run_until_complete(image.apply_customization(InstallQemuAgent))
     image.config_layout.delete_volumes = False
