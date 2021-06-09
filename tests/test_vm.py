@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -47,9 +47,9 @@ async def test_vm_test(request, ainjector, vm_image):
     vm = await ainjector(VM, name = "vm_2", image = vm_image)
     async with vm.machine_running():
         await vm.ssh_online()
-        await ainjector(rsync_git_tree, resource_dir, vm.rsync_path('/carthage'))
         await vm.ssh("apt-get update")
-        await vm.ssh("apt-get -y install python3-pytest")
+        await vm.ssh("apt-get -y install python3-pytest ansible rsync python3-mako")
+        await ainjector(rsync_git_tree, resource_dir, vm.rsync_path('/carthage'))
         await subtest_controller(request, vm, "/carthage/tests/inner_plugin_test.py",
                                  python_path = "/carthage")
         # We also test ansible here because we already have a VM up and running
@@ -57,7 +57,7 @@ async def test_vm_test(request, ainjector, vm_image):
             carthage.ansible.run_playbook,
             ["vm"],
             "/carthage/tests/resources/test_playbook.yml",
-            "/carthage/tests/resources/inventory.txt",
+            inventory = "/carthage/tests/resources/inventory.txt",
             origin = vm)
         
         
