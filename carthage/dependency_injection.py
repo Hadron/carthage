@@ -196,6 +196,7 @@ class Injector(Injectable, event.EventListener):
         self.add_provider(self) #Make sure we can inject an Injector
         self.add_provider(InjectionKey(AsyncInjector ), AsyncInjector, allow_multiple = True)
         self.closed = False
+        self._closing = False
 
 
     def claim(self, claimed_by = True):
@@ -603,13 +604,14 @@ Return the first injector in our parent chain containing *k* or None if there is
 
         If the provider's :meth:`close` method takes an argument called *canceled_futures* then the *canceled_futures* argument will be passed down.
         '''
-
+        
         for f in self._pending:
             try: f.cancel()
             except: pass
         self._pending.clear()
+        if self._closing: return
+        self._closing = True
         providers = list(self._providers.values())
-        self._providers.clear()
         for p in providers:
             if p.provider is self or not p.close: continue
             if hasattr(p.provider, 'close'):
@@ -622,6 +624,9 @@ Return the first injector in our parent chain containing *k* or None if there is
                 if canceled_futures is not None: canceled_futures.append(p.provider)
         self.closed = True
         del providers
+        self._providers.clear()
+        self.parent_injector = None
+
 
     def __del__(self):
         if not self.closed:
