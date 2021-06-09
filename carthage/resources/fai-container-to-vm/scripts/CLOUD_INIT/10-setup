@@ -1,0 +1,7 @@
+#!/bin/bash
+
+error=0; trap 'error=$(($?>$error?$?:$error))' ERR # save maximum error code
+
+fcopy -M /etc/cloud/ds-identify.cfg
+
+exit $error

@@ -1,0 +1,2 @@
+datasource: nocloud
+policy: search,found=all,maybe=none,notfound=enabled
