@@ -52,7 +52,7 @@ def vm_image( loop, test_ainjector):
     debian_container = loop.run_until_complete(ainjector.get_instance_async(container_image))
     config = loop.run_until_complete(ainjector(ConfigLayout))
     image = loop.run_until_complete(ainjector( debian_container_to_vm,
-                                               classes = "+CLOUD_INIT,SERIAL",
+                                               classes = "+CLOUD_INIT,SERIAL,OPENROOT",
                                                volume = debian_container,
                                                size = "4G",
                                                output = config.vm_image_dir+'/cloud-init.raw'))
