@@ -163,41 +163,44 @@ async def debian_container_to_vm(
     def out_cb(data):
         data = data.strip()
         logger.debug("Image Creation: %s", data)
-        
+
+    async def unpack_callback():
+        os.makedirs(output_path.parent, exist_ok = True)
+        with tempfile.TemporaryDirectory(dir = output_path.parent,
+                                             prefix = "container-to-vm-") as tmp_d:
+            tmp = Path(tmp_d).absolute()
+            await sh.tar(
+                "-C", volume.path,
+                "--xattrs",
+                "--xattrs-include=*.*",
+                "-czf",
+                str(tmp/"base.tar.gz"),
+                ".",
+                _bg = True,
+                _bg_exc = False)
+            env = os.environ.copy()
+            env['FAI_BASE'] = str(tmp/"base.tar.gz")
+            await sh.fai_diskimage(
+                '-S', size,
+                '-s', str(fai_configspace),
+                '-c', classes,
+                str(tmp/"image.raw"),
+                _env = env,
+                _bg = True,
+                _bg_exc = False,
+                _encoding = 'UTF-8',
+                _out = out_cb)
+            os.rename(tmp/"image.raw", output_path)
+
     default_classes = "DEFAULT,GRUB_EFI"
     fai_configspace = importlib.resources.files(__package__)/"resources/fai-container-to-vm"
     if classes is None: classes = default_classes
     elif classes[0] == "+":
         classes = default_classes+','+classes[1:]
+
     output_path = Path(output)
-    os.makedirs(output_path.parent, exist_ok = True)
-    with tempfile.TemporaryDirectory(dir = output_path.parent,
-                                         prefix = "container-to-vm-") as tmp_d:
-        tmp = Path(tmp_d).absolute()
-        await sh.tar(
-            "-C", volume.path,
-            "--xattrs",
-            "--xattrs-include=*.*",
-            "-czf",
-            str(tmp/"base.tar.gz"),
-            ".",
-            _bg = True,
-            _bg_exc = False)
-        env = os.environ.copy()
-        env['FAI_BASE'] = str(tmp/"base.tar.gz")
-        await sh.fai_diskimage(
-            '-S', size,
-            '-s', str(fai_configspace),
-            '-c', classes,
-            str(tmp/"image.raw"),
-            _env = env,
-            _bg = True,
-            _bg_exc = False,
-            _encoding = 'UTF-8',
-            _out = out_cb)
-        os.rename(tmp/"image.raw", output_path)
-        return await ainjector(image_volume_class, name = output_path.absolute(),
-                               unpack = False,
-                               remove_stamps = True)
+    return await ainjector(image_volume_class, name = output_path.absolute(),
+                               unpack = unpack_callback,
+                               )
 
 __all__ += ['debian_container_to_vm']
