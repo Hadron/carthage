@@ -41,6 +41,15 @@ import uuid
       <readonly/>
 
     </disk>
+%if ci_data:
+<disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <target  bus='scsi' dev='hdc' />
+      <source file='${ci_data}' />
+      <readonly/>
+
+    </disk>
+%endif
     <controller type='scsi' model='virtio-scsi' />
     %for i, link in links.items():
         <interface type='bridge'>

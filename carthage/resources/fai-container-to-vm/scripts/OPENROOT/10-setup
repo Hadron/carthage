@@ -1,0 +1,3 @@
+#!/bin/bash
+
+$ROOTCMD passwd -d root
