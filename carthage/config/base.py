@@ -9,7 +9,9 @@ class BaseSchema(ConfigSchema, prefix = ""):
     #path starts with a | symbol, then the output of the given command
     #will be used.
     authorized_keys: ConfigPath = "|{hadron_operations}/hadron/inventory/config/default_keys.py"
-    
+
+    #: What resolv option to use when host networking is used with a container.  Likely options include bind-host, bind-stub or bind-uplink
+    host_networking_resolv_conf:str = "bind-host"
     base_dir: ConfigPath = "/srv/images/test"
     output_dir: ConfigPath = "{base_dir}/output"
     image_dir:ConfigPath = "{base_dir}"
@@ -42,6 +44,7 @@ class BaseSchema(ConfigSchema, prefix = ""):
     vlan_min:int = 1
     vlan_max:int = 4094
 
+    
 class TasksConfig(ConfigSchema, prefix = "tasks"):
 
     #: If True, then do not actually execute tasks

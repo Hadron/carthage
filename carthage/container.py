@@ -81,7 +81,7 @@ class Container(Machine, SetupTaskMixin):
                 namespace.close()
                 raise
         else:
-            return ["--resolv-conf=bind-host"]
+            return ["--resolv-conf="+self.config_layout.host_networking_resolv_conf]
     
     async def run_container(self, *args, raise_on_running = True,
                             networking = False,
