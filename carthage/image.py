@@ -157,12 +157,13 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         else:
             os.makedirs(os.path.dirname(self.path), exist_ok = True)
             remove_stamps = True
-            if create_size is None:
+            if create_size is None and not callable(unpack):
                 raise RuntimeError("{} not found and creation disabled".format(path))
-            with open(self.path, "w") as f:
-                try: sh.chattr("+C", self.path)
-                except sh.ErrorReturnCode_1: pass
-                self.create_size = create_size
+            if create_size:
+                with open(self.path, "w") as f:
+                    try: sh.chattr("+C", self.path)
+                    except sh.ErrorReturnCode_1: pass
+            self.create_size = create_size
         if remove_stamps:
             shutil.rmtree(self.stamp_path, ignore_errors = True)
         os.makedirs(self.stamp_path, exist_ok = True)
@@ -197,6 +198,8 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
     @setup_task('unpack')
     async def unpack_installed_system(self):
         if not self.unpack: return #mark as succeeded rather than skipped
+        if callable(self.unpack):
+            return await  self.unpack()
         #We never want to unpack later after we've decided not to
         await sh.gzip('-d', '-c',
                       self.config_layout.base_vm_image,
@@ -295,7 +298,6 @@ self.path)
     def close(self, canceled_futures = None):
         if self.config_layout.delete_volumes:
             self.delete_volume()
-        super().close(canceled_futures)
 
 @inject_autokwargs(config_layout = ConfigLayout)
 class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
