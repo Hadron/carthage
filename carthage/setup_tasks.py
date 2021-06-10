@@ -391,8 +391,8 @@ class mako_task(TaskWrapper):
         kwargs = {}
         # Split kwargs; Leading _ is left as arguments to setup_task,
         # others are injections.
-        for k in kwargs:
-            if k.startswith(_):
+        for k in injections:
+            if k.startswith("_"):
                 kwargs[k[1:]] = injections.pop(k)
                 
         #A separate function so that injection works; consider
