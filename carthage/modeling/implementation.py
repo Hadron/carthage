@@ -265,7 +265,9 @@ class ModelingBase(type):
             try: del namespace[k]
             except Exception: pass
         thread_local.current_context = None
-        return super(ModelingBase, cls).__new__(cls, name, bases, namespace, **kwargs)
+        try: return super(ModelingBase, cls).__new__(cls, name, bases, namespace, **kwargs)
+        except TypeError as e:
+            raise TypeError(f'Error constructing ${name}: {str(e)}') from None
 
     def __init_subclass__(cls, *args):
         if 'namespace_filters' not in cls.__dict__:

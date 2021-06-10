@@ -360,6 +360,9 @@ def model_mixin_for(**constraints):
     '''
     from .base import MachineModelMixin
     def wrap(val):
+        if isinstance(val,ModelingDecoratorWrapper):
+            # Assume it is already a model_mix in_for which we're stacking
+            return provides(InjectionKey(MachineModelMixin, **constraints))(val)
         return provides(InjectionKey(
             MachineModelMixin, **constraints))(dependency_quote(val))
     return wrap
