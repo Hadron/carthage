@@ -113,7 +113,7 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
             path_root = Path(package.__file__).parents[components]
             if path_root.joinpath("carthage_plugin.yml").exists():
                 metadata = yaml.safe_load(path_root.joinpath("carthage_plugin.yml").read_text())
-                if 'resource_dir' not in metadata: metadata['resource_dir'] = root_dir
+                if 'resource_dir' not in metadata: metadata['resource_dir'] = path_root
             else:
                 metadata = {}
                 
