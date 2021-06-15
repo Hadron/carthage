@@ -346,7 +346,7 @@ def model_mixin_for(**constraints):
             name = "foo.com"
             # Also inherits from foomixin
 
-    In the above example it would be simply to list *foomixin* as a base for *foo*.  However when a loop instantiates a number of models with a dynamic name, *model_mixin_for* provides value::
+    In the above example it would be simpler to list *foomixin* as a base for *foo*.  However when a loop instantiates a number of models with a dynamic name, *model_mixin_for* provides value::
 
         for c in ('foo', 'bar', 'baz'):
             @dynamic_name(c)
