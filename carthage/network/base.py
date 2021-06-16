@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, dataclasses, logging, re, typing, weakref
+import asyncio, abc, dataclasses, logging, re, typing, weakref
 from .. import sh
 from ..dependency_injection import *
 from ..config import ConfigLayout
@@ -356,6 +356,8 @@ class NetworkConfig:
                             return
                     link.other = other_link
                     other_link.other = link
+                    other.network_links[other_link.interface] = other_link
+                    other_link.member_of = []
                     other_future.set_result(other_link)
                 finally:
                     if not other_future.done():
@@ -442,6 +444,37 @@ class NetworkConfig:
         
         return result
 
+class VlanList(abc.ABC):
+
+    '''Either an int, sequence of integers, a slice, or a sequence of slices
+'''
+    #This would be better represented as a typing.Union, but
+    #unfortunately the NetworkLink.validate code cannot cope with that
+    #without digging into internals of typing.
+
+    @staticmethod
+    def canonicalize(item: VlanList):
+        result = []
+        if isinstance(item, (int, Network)):
+            item = [item]
+        for i in item:
+            if isinstance(i, Network):
+                if not network.vlan_id:
+                    raise ValueError(f'{i} has no vlan_id set')
+                result.append(i.vlan_id)
+            elif isinstance(i, slice):
+                result.append(i)
+            elif isinstance(i, int):
+                result.append(i)
+            else:
+                raise ValueError(f'{i} is not a valid VlanList member')
+        return tuple(result)
+    
+VlanList.register(int)
+VlanList.register(list)
+VlanList.register(tuple)
+VlanList.register(slice)
+
 @dataclasses.dataclass
 class NetworkLink:
 
@@ -452,6 +485,8 @@ class NetworkLink:
     machine: object
     mtu: typing.Optional[int]
     local_type: typing.Optional[str]
+    untagged_vlan: typing.Optional[int]
+    allowed_vlans: typing.Optional[VlanList]
     v4_config: typing.Optional[V4Config]
 
     def __new__(cls, connection, interface, args):
