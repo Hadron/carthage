@@ -7,3 +7,5 @@ MACAddress=${link.mac}
 %if link.mtu:
 MTUBytes=${link.mtu}
 % endif
+[Bridge]
+VLANFilter=${link.vlan_filter}

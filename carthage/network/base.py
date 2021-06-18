@@ -496,6 +496,8 @@ class NetworkLink:
     untagged_vlan: typing.Optional[int]
     allowed_vlans: typing.Optional[VlanList]
     v4_config: typing.Optional[V4Config]
+    lldp: typing.Optional[bool] = dataclasses.field(default = True, repr = False)
+    
 
     def __new__(cls, connection, interface, args):
         if 'local_type' in args:
@@ -509,7 +511,7 @@ class NetworkLink:
         self.interface = interface
         self.__dict__.update(args)
         self.net.network_links.add(self)
-        for k in self.__class__.__annotations__:
+        for k in NetworkLink.__annotations__:
             if not hasattr(self, k): setattr(self, k, None)
         self.member_of = []
 
