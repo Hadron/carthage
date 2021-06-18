@@ -11,4 +11,5 @@ class BondLink(NetworkLink):
 class BridgeLink(NetworkLink):
 
     local_type  = "bridge"
-    
+
+    vlan_filter: typing.Optional[bool] = True

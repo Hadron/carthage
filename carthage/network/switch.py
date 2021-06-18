@@ -45,6 +45,8 @@ def link_vlan_config(link):
             if member_of_link.local_type == 'bond':
                 try_link(member_of_link)
         if link.other: try_link(link.other)
+        for member_link in link.member_links:
+            try_link(member_link)
     return None
 
 __all__ += ['link_vlan_config']

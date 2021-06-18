@@ -15,7 +15,18 @@ MACAddress=${link.mac}
 %else:
 Name=${link.interface}
 %endif
+[Link]
+%if link.mtu:
+MTUBytes=${link.mtu}
+%endif
 [Network]
+%if driver == 'ether':
+LLDP=yes
+%if link.lldp:
+EmitLLDP=yes
+%endif
+%endif
 <%block name="network">
 # Network block needs to be overridden
 </%block>
+<%block name="trailer" />
