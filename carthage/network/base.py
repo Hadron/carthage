@@ -461,12 +461,15 @@ class VlanList(abc.ABC):
     #without digging into internals of typing.
 
     @staticmethod
-    def canonicalize(item: VlanList):
+    def canonicalize(item: VlanList, link: NetworkLink):
         result = []
-        if isinstance(item, (int, Network)):
+        if isinstance(item, (int, Network, CollectVlansType)):
             item = [item]
         for i in item:
-            if isinstance(i, Network):
+            if isinstance(i, CollectVlansType):
+                from .switch import link_collect_vlans
+                result.extend(link_collect_vlans(link))
+            elif isinstance(i, Network):
                 if not network.vlan_id:
                     raise ValueError(f'{i} has no vlan_id set')
                 result.append(i.vlan_id)
@@ -482,6 +485,10 @@ VlanList.register(int)
 VlanList.register(list)
 VlanList.register(tuple)
 VlanList.register(slice)
+class CollectVlansType: pass
+VlanList.register(CollectVlansType)
+collect_vlans = CollectVlansType()
+
 
 @dataclasses.dataclass
 class NetworkLink:
@@ -711,13 +718,15 @@ def access_ssh_origin( ssh_origin, ssh_origin_vrf, extra_nsenter = []):
     return sh.nsenter.bake( '-t', ssh_origin.container_leader,
                 '-n',
                 *vrf)
-    
+
+
 
 
 __all__ = r'''Network TechnologySpecificNetwork BridgeNetwork 
     external_network_key HostMapEntry mac_from_host_map host_map_key
 access_ssh_origin
 NetworkConfig NetworkLink
+VlanList collect_vlans
 this_network
     '''.split()
 

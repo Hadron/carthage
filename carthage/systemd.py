@@ -26,6 +26,9 @@ local_type_map = dict(
     physical = dict(
         link = "physical-link.mako",
     ),
+    vlan = dict(
+        netdev = "vlan-netdev.mako",
+        member_network = "vlan-network.mako"),
     )
 
 def templates_for_link(l: NetworkLink):
