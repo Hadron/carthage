@@ -38,18 +38,38 @@ def link_vlan_config(link):
     while to_try:
         link = to_try.pop(0)
         already_tried.add(link)
-        if link.allowed_vlans or link.untagged_vlan:
-            link.allowed_vlans = VlanList.canonicalize(link.allowed_vlans)
+        if link.allowed_vlans:
+            link.allowed_vlans = VlanList.canonicalize(link.allowed_vlans, link)
+            if link.untagged_vlan is None and link.net.vlan_id:
+                link.untagged_vlan = link.net.vlan_id
             return link
         for member_of_link in link.member_of_links:
             if member_of_link.local_type == 'bond':
                 try_link(member_of_link)
         if link.other: try_link(link.other)
-        for member_link in link.member_links:
-            try_link(member_link)
     return None
 
 __all__ += ['link_vlan_config']
+
+def link_collect_nets(link):
+    def try_link(l):
+        if l in links: return
+        to_try.append(l)
+    to_try = [link]
+    links = set()
+    nets = set()
+    while to_try:
+        link = to_try.pop(0)
+        if link.net not in nets:
+            yield link.net
+            nets.add(link.net)
+        for l in link.member_of_links:
+            try_link(l)
+        if link.other: try_link(link.other)
+
+def link_collect_vlans(link):
+    return {net.vlan_id for net in link_collect_nets(link) if net.vlan_id is not None}
+
 
 def cisco_vlan_list(vlan_list):
     result = []
