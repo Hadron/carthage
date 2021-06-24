@@ -546,9 +546,34 @@ def customization_task    (c: BaseCustomization, order: int = None,
         return await machine.apply_customization(c, method = "last_run")
     return do_task
 
+class BareMetalMachine(Machine):
+
+    '''Represents physical hardware that Carthage cannot start or stop
+    '''
+
+    async def start_machine(self):
+        if self.running: return
+        await self.start_dependencies()
+        await super().start_machine()
+        await self.ssh_online()
+        self.running = True
+
+    async def stop_machine(self):
+        await super().stop_machine()
+        self.running = False
+
+    async def async_ready(self):
+        await self.resolve_networking()
+        await self.run_setup_tasks()
+        await super().async_ready()
+
+    @memoproperty
+    def stamp_path(self):
+        return f'{self.config_layout.state_dir}/machines/{self.name}'
+    
 
 
-
-__all__ = ['Machine', 'MachineRunning', 'SshMixin', 'BaseCustomization', 'ContainerCustomization',
+__all__ = ['Machine', 'MachineRunning', 'BareMetalMachine',
+           'SshMixin', 'BaseCustomization', 'ContainerCustomization',
            'FilesystemCustomization',
            'MachineCustomization']
