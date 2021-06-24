@@ -372,6 +372,8 @@ class NetworkConfig:
                         other_future.set_result(None)
                     
             other_interface = other_args.pop('other_interface')
+            if 'other_member_of' in other_args:
+                raise ValueError('You cannot set member_of on the other side of a link.')
             for k in list(other_args):
                 k_new = k[6:]
                 other_args[k_new] = other_args.pop(k)
@@ -380,6 +382,14 @@ class NetworkConfig:
         d = {}
         futures = []
         other_futures = []
+        # For most of the machinery we want to define link memberships
+        # in one direction: links have a members attribute that points
+        # to their members and the rest is just memoized computation.
+        # However, when specifying a configuration it is often
+        # valuable (for example when specifying vlan links) to specify
+        # things in the other direction.  So, we pull member_of off
+        # the arguments and handle it later.
+        members_of: dict[str, list] = {}
         for i, link_spec in self.link_specs.items():
             link_args = {}
             for k,v in link_spec.items():
@@ -388,6 +398,12 @@ class NetworkConfig:
                     if k != 'other' and (callable(v) or isinstance(v, InjectionKey)):
                         futures.append(asyncio.ensure_future(resolve1(v, i, link_args['_other'], k)))
                     else: link_args['_other'][k] = v
+                    continue
+                if k == 'member_of':
+                    if callable(v) or isinstance(v, InjectionKey):
+                        futures.append(asyncio.ensure_future(resolve1(v,i,members_of, i)))
+                    else:
+                        members_of[i] = v
                     continue
                 if callable(v) or isinstance(v, InjectionKey):
                     futures.append(asyncio.ensure_future(resolve1(v, i, link_args, k)))
@@ -431,6 +447,13 @@ class NetworkConfig:
                     other_target_future.set_result(other_target)
                 # We don't wait on other_target_future because it's quite possible that the other side of the link will not resolve until after we resolve.
                 other_target_future.add_done_callback(other_callback)
+        # Now handle member_of and turn into members
+        for i, member_of in members_of.items():
+            for member in member_of:
+                if member not in result:
+                    raise ValueError(f'{i} has {member} in member_of, but {member} is not a link on {connection}')
+                result[member].members.append(i)
+
         for k, link in result.items():
             if k in connection.network_links:
                 connection.network_links[k].close()
@@ -441,6 +464,7 @@ class NetworkConfig:
             except: pass
             try: del l.member_of_links
             except: pass
+        for l in connection.network_links.values():
             l.member_links
             
         ainjector.emit_event(InjectionKey(NetworkConfig),
@@ -616,7 +640,10 @@ class NetworkLink:
     @memoproperty
     def merged_v4_config(self):
         if self.v4_config:
-            return self.v4_config.merge(getattr(self.net, 'v4_config', None))
+            merged =  self.v4_config.merge(getattr(self.net, 'v4_config', None))
+            if merged.address == merged.gateway:
+                merged.gateway = None
+            return merged
         return getattr(self.net, 'v4_config', V4Config())
     
             
