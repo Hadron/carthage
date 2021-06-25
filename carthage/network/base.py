@@ -526,8 +526,9 @@ class NetworkLink:
     local_type: typing.Optional[str]
     untagged_vlan: typing.Optional[int]
     allowed_vlans: typing.Optional[VlanList]
-    v4_config: typing.Optional[V4Config]
+    v4_config: typing.Optional[V4Config] = None
     lldp: typing.Optional[bool] = dataclasses.field(default = True, repr = False)
+    required: typing.Optional[bool] = dataclasses.field(default = True, repr = False)
     
 
     def __new__(cls, connection, interface, args):
@@ -544,6 +545,8 @@ class NetworkLink:
         self.net.network_links.add(self)
         for k in NetworkLink.__annotations__:
             if not hasattr(self, k): setattr(self, k, None)
+        if self.mtu is None and getattr(self.net, 'mtu', None):
+            self.mtu = self.net.mtu
         self.member_of = []
 
     def __hash__(self):
