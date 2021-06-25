@@ -16,9 +16,14 @@ MACAddress=${link.mac}
 Name=${link.interface}
 %endif
 [Link]
+<%block name="link_block">
 %if link.mtu:
 MTUBytes=${link.mtu}
 %endif
+%if link.required is False:
+RequiredForOnline=no
+%endif
+</%block>
 [Network]
 %if driver == 'ether':
 LLDP=yes
