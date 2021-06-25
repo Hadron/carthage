@@ -10,4 +10,4 @@ MACAddress=${link.mac}
 MTUBytes=${link.mtu}
 % endif
 [VLAN]
-ID=${link.vlan_id}
+Id=${link.vlan_id}

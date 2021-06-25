@@ -8,4 +8,4 @@ MACAddress=${link.mac}
 MTUBytes=${link.mtu}
 % endif
 [Bridge]
-VLANFilter=${link.vlan_filter}
+VLANFiltering=${link.vlan_filter}
