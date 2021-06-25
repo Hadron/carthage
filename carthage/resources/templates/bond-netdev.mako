@@ -1,5 +1,5 @@
 [NetDev]
-name=${link.interface}
+Name=${link.interface}
 Kind=bond
 %if link.mtu:
 MTUBytes=${link.mtu}
