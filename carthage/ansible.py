@@ -163,7 +163,8 @@ class AnsibleInventory(AsyncInjectable):
         from . import ssh
         with contextlib.ExitStack() as stack:
             if not isinstance(destination, ssh.RsyncPath):
-                local_path = destination
+                local_path = Path(destination)
+                os.makedirs(local_path.parent, exist_ok = True)
             else:
                 dir = stack.enter_context(TemporaryDirectory( dir = self.config_layout.state_dir, prefix = "ansible-inventory"))
                 local_path = os.path.join(dir, "hosts.yml")
@@ -357,7 +358,6 @@ async def run_play(hosts, play,
     **If you are considering loading a YAML file, parsing it, and calling this function, you are almost certainly better served by :func:`run_playbook`.**
 '''
     with tempfile.TemporaryDirectory() as ansible_dir:
-        config = AnsibleConfig()
         with open(os.path.join(ansible_dir,
                                "playbook.yml"), "wt") as f:
             if isinstance(play, dict): play = [play]
@@ -379,8 +379,7 @@ async def run_play(hosts, play,
         return await ainjector(run_playbook,
                                hosts,
                                ansible_dir+"/playbook.yml",
-                               ansible_dir+"/inventory.txt",
-                               ansible_config = config,
+                               inventory = ansible_dir+"/inventory.txt",
                                origin = None,
                                raise_on_failure = raise_on_failure,
                                log = log)
