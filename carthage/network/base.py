@@ -3,7 +3,7 @@ import asyncio, abc, dataclasses, logging, re, typing, weakref
 from .. import sh
 from ..dependency_injection import *
 from ..config import ConfigLayout
-from ..utils import permute_identifier, when_needed, memoproperty
+from ..utils import permute_identifier, when_needed, memoproperty, is_optional_type, get_type_args
 from ..machine import ssh_origin, ssh_origin_vrf, Machine, AbstractMachineModel
 from .config import V4Config
 
@@ -580,15 +580,11 @@ class NetworkLink:
                 if k in args:
                     raise TypeError( f'{k} cannot be specified directly')
                 continue
-            # don't know how to do this without accessing internals
-            if t.__class__ == typing._UnionGenericAlias:
-                t = typing.get_args(t)
-                if type(None) in t: optional = True
-                else: optional = False
-            elif t.__class__ == typing._GenericAlias:
+            optional = is_optional_type(t)
+            if (not optional) and  t.__class__ == typing._GenericAlias:
                 continue
-            else: #not a generic union alias
-                optional = False
+            if optional:
+                t = get_type_args(t)[0]
             if k not in args:
                 if not optional:
                     raise TypeError(f'{k} is required')

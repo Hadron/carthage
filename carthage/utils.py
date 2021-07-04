@@ -1,4 +1,4 @@
-import argparse, asyncio, contextlib, functools, logging, os, re, weakref
+import argparse, asyncio, contextlib, functools, logging, os, re, typing, weakref
 import importlib.resources
 import mako.lookup
 
@@ -250,10 +250,28 @@ def TemporaryMountPoint(**kwargs):
 mako_lookup = mako.lookup.TemplateLookup([importlib.resources.files(__package__)/"resources/templates"],
                                          strict_undefined = True)
 
+def is_optional_type(t):
+    # support both python 3.7 and python 3.9
+    # As of python 3.9 there is not a way to do this without using internals
+    try:
+        if t.__class__ == typing._UnionGenericAlias:
+            t = typing.get_args(t)
+            if type(None) in t:  return True
+    except AttributeError:
+        if t.__class__ is typing._GenericAlias:
+            if type(None) in t.__args__: return True
+    return False
+
+def get_type_args(t):
+    try: return typing.get_type_args(t)
+    except AttributeError: return t.__args__
+    
+    
 __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
            'add_carthage_arguments', 'carthage_main_argparser',
            'carthage_main_setup', 'carthage_main_run',
                    'validate_shell_safe',
+           'is_optional_type',
                    'TemporaryMountPoint',
                    'mako_lookup',
                    ]
