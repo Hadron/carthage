@@ -4,13 +4,13 @@ Priority: optional
 Maintainer: Sam Hartman <sam.hartman@hadronindustries.com>
 Build-Depends: debhelper (>= 9), dh-python, python3-all (>= 3.5), python3-openssl, python3-sqlalchemy, python3-setuptools, python3-pytest, python3-mako, python3-yaml, python3-pyvmomi
 Standards-Version: 3.9.6
-X-Python3-Version: >= 3.5
+X-Python3-Version: >= 3.7
 
 
 Package: python3-carthage
 Architecture: all
 Multi-Arch: foreign
-Depends: ${misc:Depends}, ${python3:Depends}, socat, systemd-container,  python3-hadron-inventory-admin, socat, libvirt-clients, hadron-entanglement-cli (>= 0.10~), hadron-ansible, qemu-utils, python3-mako, bridge-utils, python3-yaml, python3-pyvmomi
+Depends: ${misc:Depends}, ${python3:Depends}, socat, systemd-container,  python3-hadron-inventory-admin, socat, libvirt-clients, hadron-entanglement-cli (>= 0.10~), qemu-utils, python3-mako, bridge-utils, python3-yaml, python3-pyvmomi, fai-setupstorage, 
 Description: Burn it to the ground and Rebuild it Framework
 
 Package: hadron-carthage-cli

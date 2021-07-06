@@ -1,3 +1,9 @@
+hadron-carthage (0.9) unstable; urgency=medium
+
+  * Modeling branch merged to master
+
+ -- Sam Hartman <hartmans@debian.org>  Tue, 06 Jul 2021 11:23:04 -0600
+
 hadron-carthage (0.6) UNRELEASED; urgency=medium
 
   * Support injector claiming and clean up management of injectors in kwargs
