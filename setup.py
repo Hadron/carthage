@@ -10,6 +10,7 @@ setup(
     url = "http://www.hadronindustries.com/",
     packages = ["carthage", "carthage.hadron",
                 'carthage.config',
+                'carthage.network',
                 'carthage.extra_packages',
                 "carthage.vmware"],
     install_requires = ['pytest', ],
@@ -17,9 +18,10 @@ setup(
                'bin/carthage-console',
                'bin/carthage-vault-tool',
                'bin/btrfs-rmrf'],
-    package_data = {'carthage': ['resources/templates/*'],
+    package_data = {'carthage': ['resources/templates/*',
+                                 'resources/*',],
                     'carthage.extra_packages': ['resources/*'],
     },
-    version = "0.6",
+    version = "0.9",
 )
 
