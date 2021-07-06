@@ -120,8 +120,11 @@ async def subtest_controller(request, target, pytest_args,
     json_out = await target.ssh('cat', json_frag)
     report_list = json.loads(json_out.stdout)
     for i in report_list:
-        n = Node.from_parent(name = i['nodeid'], parent = request.node)
-        i['nodeid'] = n.nodeid
+        try:
+            n = Node.from_parent(name = i['nodeid'], parent = request.node)
+        except AttributeError:
+            n = Node(name = i['nodeid'], parent = request.node)
+            i['nodeid'] = n.nodeid
         report = TestReport(**i)
         capmanager = request.config.pluginmanager.getplugin("capturemanager")
         with capmanager.global_and_fixture_disabled():
