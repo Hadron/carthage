@@ -1,6 +1,6 @@
 from __future__ import annotations
 import contextlib, logging , os, re, tempfile
-import importlib.resources
+from .utils import import_resources_files
 from pathlib import Path
 from .dependency_injection import *
 from .setup_tasks import *
@@ -197,7 +197,7 @@ async def debian_container_to_vm(
             os.rename(tmp/"image.raw", output_path)
 
     default_classes = "DEFAULT,GRUB_EFI"
-    fai_configspace = importlib.resources.files(__package__)/"resources/fai-container-to-vm"
+    fai_configspace = import_resources_files(__package__)/"resources/fai-container-to-vm"
     if classes is None: classes = default_classes
     elif classes[0] == "+":
         classes = default_classes+','+classes[1:]
