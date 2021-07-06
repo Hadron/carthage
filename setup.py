@@ -12,7 +12,9 @@ from setuptools import setup
 
 setup(
     name = "carthage",
+    setup_requires = ['setuptools_scm'],
     license = "proprietary",
+    include_package_data = True,
     maintainer = "Sam Hartman",
     maintainer_email = "sam.hartman@hadronindustries.com",
     url = "http://www.hadronindustries.com/",
