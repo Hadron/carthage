@@ -10,7 +10,7 @@ X-Python3-Version: >= 3.7
 Package: python3-carthage
 Architecture: all
 Multi-Arch: foreign
-Depends: ${misc:Depends}, ${python3:Depends}, socat, systemd-container,  python3-hadron-inventory-admin, socat, libvirt-clients, hadron-entanglement-cli (>= 0.10~), qemu-utils, python3-mako, bridge-utils, python3-yaml, python3-pyvmomi, fai-setupstorage, 
+Depends: ${misc:Depends}, ${python3:Depends}, socat, systemd-container,  python3-hadron-inventory-admin, socat, libvirt-clients, hadron-entanglement-cli (>= 0.10~), qemu-utils, python3-mako, bridge-utils, python3-yaml, python3-pyvmomi, fai-setup-storage, 
 Description: Burn it to the ground and Rebuild it Framework
 
 Package: hadron-carthage-cli
