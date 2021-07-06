@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import argparse, asyncio, contextlib, functools, logging, os, re, typing, weakref
+import argparse, asyncio, contextlib, functools, logging, os, pathlib, re, typing, weakref
 import importlib.resources
 import mako.lookup
 
@@ -255,7 +255,17 @@ def TemporaryMountPoint(**kwargs):
     finally:
         os.rmdir(dir)
 
-mako_lookup = mako.lookup.TemplateLookup([importlib.resources.files(__package__)/"resources/templates"],
+
+def import_resources_files(package):
+    "stub for importlib.resources.files"
+    try:
+        return importlib.resources.files(package)
+    except AttributeError:
+        if isinstance(package, str):
+            return pathlib.Path(importlib.import_module(package).__path__[0])
+        else: return pathlib.Path(package.__path__[0])
+
+mako_lookup = mako.lookup.TemplateLookup([import_resources_files(__package__)/"resources/templates"],
                                          strict_undefined = True)
 
 def is_optional_type(t):
@@ -281,5 +291,6 @@ __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty'
                    'validate_shell_safe',
            'is_optional_type',
                    'TemporaryMountPoint',
+           'import_resources_files',
                    'mako_lookup',
                    ]
