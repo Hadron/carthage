@@ -60,6 +60,7 @@ def link_collect_nets(link):
     nets = set()
     while to_try:
         link = to_try.pop(0)
+        links.add(link)
         if link.net not in nets:
             yield link.net
             nets.add(link.net)
