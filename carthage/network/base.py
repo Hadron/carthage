@@ -592,7 +592,7 @@ class NetworkLink:
             if (not optional) and  t.__class__ == typing._GenericAlias:
                 continue
             if optional:
-                t = get_type_args(t)[0]
+                t = get_type_args(t)
             if k not in args:
                 if not optional:
                     raise TypeError(f'{k} is required')
