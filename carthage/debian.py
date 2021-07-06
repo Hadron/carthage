@@ -140,13 +140,14 @@ def install_stage1_packages_task(packages):
 
 __all__ += ['install_stage1_packages_task']
 
-@inject(ainjector = AsyncInjector)
+@inject(ainjector = AsyncInjector, config = ConfigLayout)
 async def debian_container_to_vm(
         volume: BtrfsVolume,
         output: str,
         size: str,
         classes: str = None,
         *,
+        config,
         image_volume_class = ImageVolume,
         ainjector):
     '''
@@ -164,6 +165,8 @@ async def debian_container_to_vm(
         * GROW: grow the root partition to fill the disk if the disk is expanded
 
         * GRUB_EFI: Install EFI version of grub.
+
+        * CLOUD_INIT: Enable cloud-init
 
 
     '''
@@ -207,7 +210,7 @@ async def debian_container_to_vm(
     elif classes[0] == "+":
         classes = default_classes+','+classes[1:]
 
-    output_path = Path(output)
+    output_path = Path(config.vm_image_dir).joinpath(output)
     return await ainjector(image_volume_class, name = output_path.absolute(),
                                unpack = unpack_callback,
                                )
