@@ -546,7 +546,7 @@ def customization_task    (c: BaseCustomization, order: int = None,
         return await machine.apply_customization(c, method = "last_run")
     return do_task
 
-class BareMetalMachine(Machine):
+class BareMetalMachine(Machine, SetupTaskMixin):
 
     '''Represents physical hardware that Carthage cannot start or stop
     '''
