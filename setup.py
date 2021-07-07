@@ -12,7 +12,6 @@ from setuptools import setup
 
 setup(
     name = "carthage",
-    setup_requires = ['setuptools_scm'],
     license = "proprietary",
     include_package_data = True,
     maintainer = "Sam Hartman",
@@ -28,7 +27,7 @@ setup(
                'bin/carthage-console',
                'bin/carthage-vault-tool',
                'bin/btrfs-rmrf'],
-    package_data = {'carthage': ['resources/templates/*',
+    package_data = {'carthage': ['resources/templates/**',
                                  'resources/*',],
                     'carthage.extra_packages': ['resources/*'],
     },
