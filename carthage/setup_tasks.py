@@ -127,19 +127,19 @@ class TaskWrapper:
         if self.check_completed_func:
             last_run =  await ainjector(self.check_completed_func, obj)
             if last_run is True:
-                logger.debug(f"Task {self.description} for {obj} run without providing timing information")
+                obj.logger_for().debug(f"Task {self.description} for {obj} run without providing timing information")
                 return (False, dependency_last_run)
         else: last_run  = obj.check_stamp(self.stamp)
         if last_run is False:
-            logger.debug(f"Task {self.description} never run for {obj}")
+            obj.logger_for().debug(f"Task {self.description} never run for {obj}")
             return (True, dependency_last_run)
         if last_run < dependency_last_run:
-            logger.debug(f"Task {self.description} last run {_iso_time(last_run)}, but dependency run more recently at {_iso_time(dependency_last_run)}")
+            obj.logger_for().debug(f"Task {self.description} last run {_iso_time(last_run)}, but dependency run more recently at {_iso_time(dependency_last_run)}")
             return (True, dependency_last_run)
-        logger.debug(f"Task {self.description} last run for {obj} at {_iso_time(last_run)}")
+        obj.logger_for().debug(f"Task {self.description} last run for {obj} at {_iso_time(last_run)}")
         if self.invalidator_func:
             if not await ainjector(self.invalidator_func, obj, last_run = last_run):
-                logger.info(f"Task {self.description} invalidated for {obj}; last run {_iso_time(last_run)}")
+                obj.logger_for().info(f"Task {self.description} invalidated for {obj}; last run {_iso_time(last_run)}")
                 return (True, time.time())
         return (False, last_run)
     
