@@ -7,6 +7,7 @@
 # LICENSE for details.
 
 import contextlib, os, os.path, pkg_resources, shutil, sys, time
+from subprocess import check_call, check_output, call
 from tempfile import TemporaryDirectory
 from .dependency_injection import *
 from .config import ConfigLayout, config_key
@@ -235,7 +236,6 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
     @contextlib.contextmanager
     def image_mounted(self):
-        from hadron.allspark.imagelib import image_mounted
         with image_mounted(self.path, mount = False) as i:
             with TemporaryDirectory() as d:
                 sh.mount('-osubvol=@',
@@ -379,6 +379,84 @@ class SshAuthorizedKeyCustomizations(ContainerCustomization):
         os.makedirs(os.path.join(self.path, "root/.ssh"), exist_ok = True)
         shutil.copy2(authorized_keys.path,
                      os.path.join(self.path, 'root/.ssh/authorized_keys'))
+
+class image_mounted(object):
+
+    '''A contextmanager for mounting and image'''
+
+    def __init__(self, image = None, mount = True, extra_dirs = [],
+                 subvol = "@", rootdir = None):
+        self.image = image
+        self.mount  = mount
+        self.mount_dirs = "dev proc sys dev/pts".split()
+        self.mount_dirs.extend(extra_dirs)
+        self.rootdir = rootdir
+        if rootdir and image: raise RuntimeError("Do not specify both image and rootdir")
+        self.loopdev = None
+        self.subvol = subvol
+
+    def __enter__(self):
+        if self.image:
+            self.clear_existing_loops(self.image)
+            if self.image.startswith('/dev'):
+                #This technically won't work for an lvm image unless the
+                #calling user calls kpartx themselves, but it will work
+                #for an actual disk.  Detecting the LVM case is kind of
+                #tricky.
+                if os.path.exists(self.image + '2'):
+                    self.rootdev = self.image + '2'
+                else: self.rootdev = self.image
+            else:
+                mappings = str(check_output(['kpartx',
+                                             '-asv', self.image]), 'utf8').split("\n")
+                partitions = list(map(lambda x: x.split()[2], filter(lambda x: x,mappings)))
+                self.loopdev = re.match( r'^(loop[0-9]+)', partitions[0]).group(1)
+                self.loopdev = "/dev/"+self.loopdev
+                partitions = list(map( lambda x: "/dev/mapper/"+x, partitions))
+                self.rootdev = partitions[1]
+        try:
+            self.rootdir = tempfile.mkdtemp()
+            if self.mount:
+                options = []
+                if self.subvol: options.append('-osubvol='+self.subvol)
+                check_call(['mount'] + options + [self.rootdev, self.rootdir])
+                for dir in self.mount_dirs:
+                    check_call(['mount', '-obind', '/'+dir,
+                                os.path.join(self.rootdir, dir)])
+        except Exception as e:
+            self.__exit__(type(e), e, None)
+            raise e
+        return self
+
+    def clear_existing_loops(self, image):
+        lines = str(check_output(['losetup', '-j', image]), 'utf-8').split("\n")
+        if not lines:  return
+        for line in lines:
+            (loopdev, *rest) = line.split(':')
+            if not loopdev.startswith('/dev'): continue
+            call(['kpartx', '-ds', loopdev])
+            call(['losetup', '-d', loopdev])
+        call(['kpartx', '-d', self.image])
+        
+    def __exit__(self, *excinfo):
+        if self.rootdir and self.mount:
+            for dir in reversed(self.mount_dirs):
+                call(['umount',
+                      os.path.join(self.rootdir, dir)])
+            call(['umount', self.rootdir])
+            os.rmdir(self.rootdir)
+        if self.loopdev:
+            check_call(['kpartx', '-d', self.loopdev])
+            call(['losetup', '-d', self.loopdev])
+        return False
+
+
+    def chroot(self, command, *args):
+        if isinstance(command, str):
+            command = [command]
+        command.extend(args)
+        command = ['chroot', self.rootdir] + command
+        check_call(command)
 
 __all__ = ('BtrfsVolume', 'ContainerImage',
            'SetupTaskMixin',
