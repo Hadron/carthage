@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import collections
+import collections.abc
 import weakref
 from ..dependency_injection import *
 from . import inventory
@@ -72,7 +72,7 @@ class ConfigSpecStage(metaclass = ConfigSpecMeta):
         cls.order = order
         if stage_for is None: return
         cls.mode = mode
-        if isinstance(stage_for, collections.Sequence):
+        if isinstance(stage_for, collections.abc.Sequence):
             cls.stage_for = [ weakref.proxy(sf) for sf in stage_for ]
         else:
             cls.stage_for = [ weakref.proxy(stage_for) ]
