@@ -556,7 +556,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                 if placement: placement(res)
             except asyncio.CancelledError:
                 done_future.cancel()
-            except Exception as e:
+            except BaseException as e:
                 tb_utils.filter_chatty_modules(e, _chatty_modules, 3)
                 done_future.set_exception(e)
 
