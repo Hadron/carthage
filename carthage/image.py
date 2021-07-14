@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import contextlib, os, os.path, pkg_resources, shutil, sys, time
+import contextlib, os, os.path, pkg_resources, re, shutil, sys, tempfile, time
 from subprocess import check_call, check_output, call
 from tempfile import TemporaryDirectory
 from .dependency_injection import *
