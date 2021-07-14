@@ -8,7 +8,6 @@
 
 import asyncio, pytest
 from carthage.image import  ImageVolume, SshAuthorizedKeyCustomizations
-from carthage.hadron.images import HadronVmImage
 from carthage.vm import InstallQemuAgent
 from carthage import base_injector, ConfigLayout, ssh, shutdown_injector
 from carthage.dependency_injection import AsyncInjector, DependencyProvider, InjectionKey
@@ -63,8 +62,3 @@ def vm_image( loop, test_ainjector):
     yield image
     image.close()
     
-
-                
-
-        
-            
