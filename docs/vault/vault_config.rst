@@ -1,4 +1,5 @@
-.. _vault:config
+.. _vault:config:
+
 Configuring Vault
 =================
 

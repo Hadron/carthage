@@ -5,4 +5,4 @@ Carthage Core Documentation
    :maxdepth: 3
 
    api/index
-   
+   vault/vault_config

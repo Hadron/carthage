@@ -115,7 +115,7 @@ class Network(AsyncInjectable):
     '''
     Represents a network that VMs and containers can connect to.  In Carthage, networks are identified by a name and a VLAN identifier.  
 
-    How networks are accessed depends on the underlying technology.  The base Network class maintains an `.Injector` so that only one instance of a technology-specific network is made for each logical network.
+    How networks are accessed depends on the underlying technology.  The base Network class maintains an :class:`.Injector` so that only one instance of a technology-specific network is made for each logical network.
 
     .. seealso:
 

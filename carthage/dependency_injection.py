@@ -312,11 +312,12 @@ Return the first injector in our parent chain containing *k* or None if there is
                target: type,
                predicate: typing.Union[list, typing.Callable] = None,
                stop_at: Injector = None):
-        ''':return: Set of :class:`InjectionKey`s with target type of
-        *target* and satisfying *predicate* in the current injector
-        and its parents.
+        '''
+        :return: Set of :class:`InjectionKey` with target type of
+            *target* and satisfying *predicate* in the current injector
+            and its parents.
 
-:param predicate: A list of constraints that must all be present in the key, or a callable that returns true if the key should be included.
+        :param predicate: A list of constraints that must all be present in the key, or a callable that returns true if the key should be included.
 
         :param target: A target type to filter against.
 
@@ -378,10 +379,10 @@ Return the first injector in our parent chain containing *k* or None if there is
         Get an instance satisfying a given :class:`InjectionKey`.
 
         :param loop: An asyncio loop.  If provided, then asynchronous activities  can take place.
-:param placement: A function taking one argument.  Once the dependency is resolved, this function will be called with the result.  More convenient for asyncronous  operations.
+        :param placement: A function taking one argument.  Once the dependency is resolved, this function will be called with the result.  More convenient for asyncronous  operations.
         :param futures: If the result cannot be determined immediately, then a future will be added to this list.
 
-        Note that If any of *loop* or *futures*,  provided, both must be provided.  If *loop* is provided, then the return may be a future.
+        Note that If any of *loop* or *futures*,  are provided, both must be provided.  If *loop* is provided, then the return may be a future.
 
         '''
         if loop:
@@ -1101,7 +1102,9 @@ def injector_xref(injectable_key: InjectionKey,
                   target_key: InjectionKey,
                   ):
 
-    '''Request that one injector look up a target in another injector.  Typical usage::
+    '''
+
+    Request that one injector look up a target in another injector.  Typical usage::
 
         base_injector.add_provider(target_key,
             injector_xref(sub_injector_key, target_key))
