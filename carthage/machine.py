@@ -574,7 +574,8 @@ class BareMetalMachine(Machine, SetupTaskMixin):
     
 
 
-__all__ = ['Machine', 'MachineRunning', 'BareMetalMachine',
+__all__ = ['AbstractMachineModel',
+'Machine', 'MachineRunning', 'BareMetalMachine',
            'SshMixin', 'BaseCustomization', 'ContainerCustomization',
            'FilesystemCustomization',
            'MachineCustomization']

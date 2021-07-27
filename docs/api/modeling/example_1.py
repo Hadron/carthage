@@ -10,8 +10,7 @@ from carthage.modeling import *
 
 class layout(CarthageLayout):
 
-    layout_name =
-    "example_1"
+    layout_name = "example_1"
 
     class foo(MachineModel):
 

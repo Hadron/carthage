@@ -9,6 +9,7 @@ Classes like :class:`carthage.Network` and :class:`carthage.machine.AbstractMach
 
 The modeling layer provides a generally declarative interface for defining and configuring such models.
 The modeling layer provides a domain-specific language for describing models.  Python metaclasses are used to modify Python's behavior in a number of ways to provide a more concise language for describing models.
+
 A Simple Model
 **************
 
@@ -81,13 +82,14 @@ Model classes sometimes involve a new construct called a **modelmethod**.  Unlik
 
     .. method:: add_provider(key:InjectionKey, value, **options)
 
-        Adds *key* to the set of keys that will be registered with an instante's injector when the model is instantiated.  Eventually, in class initialization, code similar to the following will be called::
+        Adds *key* to the set of keys that will be registered with an instance's injector when the model is instantiated.  Eventually, in class initialization, code similar to the following will be called::
 
           self.injector.add_provider(key, value, **options)
 
 .. class:: ModelingContainer
 
 Blah
+
 Base Models
 ***********
 
