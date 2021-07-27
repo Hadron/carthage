@@ -282,16 +282,17 @@ class TranscludeOverrideDecorator(ModelingDecoratorWrapper):
         
 def transclude_overrides(injector:Injector = None,
                          key:InjectionKey = None):
-    '''Decorator indicating that the decorated item should be overridden by one from the injector against which the containing layout is eventually instantiated.
+    '''
+    Decorator indicating that the decorated item should be overridden by one from the injector against which the containing layout is eventually instantiated.
 
     :param key: If supplied, is the key expected to be registered with the transcluding injector to override  this object.  If not supplied, the object must have a globally unique key.
 
     :param injector: If supplied, and the key exists in the injector
-    or its parents, then replace this object at modeling time with the
-    uninstantiated provider of  the key from *injector*.  This does not
-    affect which object is chosen at run time, but rather affects
-    which object is used for class attribute access on the resulting
-    modeling class.
+      or its parents, then replace this object at modeling time with the
+      uninstantiated provider of  the key from *injector*.  This does not
+      affect which object is chosen at run time, but rather affects
+      which object is used for class attribute access on the resulting
+      modeling class.
 
     Ultimately the key will be looked up in the injector supplied as a dependency to the instantiated class.  Whether the transclusion happens is entirely dependent on what keys are in the injector at modeling time.
 

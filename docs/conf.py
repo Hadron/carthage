@@ -58,6 +58,10 @@ source_suffix = ['.rst', '.md']
 master_doc = 'index'
 
 autodoc_mock_imports = r'iso8601 OpenSSL'.split()
+autodoc_default_options = dict(
+    members = True,
+    show_inheritance = True)
+
 # General information about the project.
 project = 'Carthage Core'
 copyright = '2018-2019, Hadron Industries'

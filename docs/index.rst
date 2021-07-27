@@ -6,4 +6,5 @@ Carthage Core Documentation
 
    intro
    api/index
+   api/modeling
    vault/vault_config

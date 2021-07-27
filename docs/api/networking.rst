@@ -5,6 +5,8 @@ Networking Documentation
 
 .. autoclass:: carthage.network.NetworkConfig
 
+.. autoclass:: carthage.network.NetworkLink
+               
 .. autoclass:: carthage.network.BridgeNetwork
 
 

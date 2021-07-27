@@ -2,7 +2,7 @@ Introduction
 ============
 
 Carthage is an **Infrastructure as Code (IAC)** framework.
-Carthage provides models for infrastructure concepts such as :class:`machines <carthage.machine.AbstractMachineModel`, :class:`networks <carthage.network.Network>`, and domains or groups of machines.  There are concrete implementations of these models including containers and virtual machines.
+Carthage provides models for infrastructure concepts such as :class:`machines <carthage.machine.AbstractMachineModel`, :class:`networks <carthage.Network>`, and domains or groups of machines.  There are concrete implementations of these models including containers and virtual machines.
 
 Carthage allows experts to quickly construct infrastructure from a Carthage layout.  Infrastructure can be real, virtual, or a mixture.  Often the same layout is used to produce both real and virtual infrastructure.  In the core of Carthage, when we have had to choose between power and efficiency for experts or making things easy for beginners, we have chosen to empower experts.  Carthage evolved in part out of frustrations with other IAC frameworks.  On the surface these other frameworks were easy to understand, but they lacked the power to express real world environments.  We found ourselves writing a framework to compile domain-specific models into inputs for these other frameworks.  Rather than combining the complexity of our precompiler with the limitations emposed by other systems, we focus on providing a flexible, powerful framework.
 

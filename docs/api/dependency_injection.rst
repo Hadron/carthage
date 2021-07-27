@@ -28,7 +28,7 @@ Doing so requires the caller to provide all the dependencies.  Instead, it is mo
 
   injector(build_workstation, name = "ws1")
 
-The :meth:`injector <Injector.__call__>` injects (supplies values for) the dependencies.  The *name* argument of *build_workstation* needed to be supplied by the caller, because it was not marked as an injected dependency.  However, *connect_to* can be injected by the injector if the injector or one of its parents provides a dependency for :class:`~carthage.network.Network`.  An injector can be instantiated with such dependencies::
+The :meth:`injector <Injector.__call__>` injects (supplies values for) the dependencies.  The *name* argument of *build_workstation* needed to be supplied by the caller, because it was not marked as an injected dependency.  However, *connect_to* can be injected by the injector if the injector or one of its parents provides a dependency for :class:`~carthage.Network`.  An injector can be instantiated with such dependencies::
 
   injector = Injector(parent)
   injector.add_provider(some_network)
