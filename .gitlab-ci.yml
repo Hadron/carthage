@@ -43,4 +43,16 @@ install_test:
     - schroot -e -c install_test_${CI_BUILD_ID} || true
   tags:
     - debian
+pages:
+    script:
+        - hadron-build-docs
+        - mkdir public
+        - cp -a built_docs/* public
+    artifacts:
+        paths:
+        - public
+    allow_failure: true
+    stage: build
+    only:
+        - master
     
