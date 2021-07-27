@@ -58,9 +58,7 @@ source_suffix = ['.rst', '.md']
 master_doc = 'index'
 
 autodoc_mock_imports = r'iso8601 OpenSSL'.split()
-autodoc_default_options = dict(
-    members = True,
-    show_inheritance = True)
+autodoc_default_flags = ['members', 'show-inheritance']
 
 # General information about the project.
 project = 'Carthage Core'
