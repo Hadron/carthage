@@ -17,7 +17,7 @@ setup(
     maintainer = "Sam Hartman",
     maintainer_email = "sam.hartman@hadronindustries.com",
     url = "http://www.hadronindustries.com/",
-    packages = ["carthage", ,
+    packages = ["carthage",
                 'carthage.config',
                 'carthage.network',
                 'carthage.extra_packages',
