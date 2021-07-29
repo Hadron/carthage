@@ -94,7 +94,7 @@ Model classes sometimes involve a new construct called a **modelmethod**.  Unlik
 
       This makes it very convenient to refer to networks and to construct instances that need to be constructed in an asynchronous context.  Ideally there would be a decorator to turn this behavior off for a particular assignment, but currently there is not.
 
-    * By default, any attribute in the class body assigned  a value that is a type or that has a :func:`transclusion key <transclude_overrides>` will be transformed into an :func:`injector_access`.  When accessed through the class, the *injector_access* will act as a class property returning the value originally assigned to the attribute.  That is, class access generally works as if no transformation had taken place.  However, when accessed as an instance property, the *get_instance* method on the Injector will be used to instantiate the class.  See the :ref:`first example <modeling:example_1>` for an example. If this transformation is not desired use the :func:`no_instantiate` decorator.
+    * By default, any attribute in the class body assigned  a value that is a type (or that has a :func:`transclusion key <transclude_overrides>`) will be transformed into an :func:`injector_access`.  When accessed through the class, the *injector_access* will act as a class property returning the value originally assigned to the attribute.  That is, class access generally works as if no transformation had taken place.  However, when accessed as an instance property, the *get_instance* method on the Injector will be used to instantiate the class.  See the :ref:`first example <modeling:example_1>` for an example. If this transformation is not desired use the :func:`no_instantiate` decorator.
 
       Currently, when accessed in a class body, the raw injector_access is used.  To get the  targeted type, use the *target* attribute.  This behavior is probably a bug and likely to change::
 
@@ -119,7 +119,7 @@ Model classes sometimes involve a new construct called a **modelmethod**.  Unlik
 
     The :func:`dynamic_name` decorator is powerful when used with *InjectableModel*.  As an example, a collection of machines can be created:
 
-      .. code-block::
+      .. code-block:: python
 
         class machine_enclave(Enclave):
 
@@ -174,11 +174,13 @@ Model classes sometimes involve a new construct called a **modelmethod**.  Unlik
         # Or all the machines in the entire layout
         l.injector.filter(MachineModel, ['host'], stop_at = l.injector)
 
-    For these calls to work, upward propagation is required: entries
-    registered in ``l.it_com.injector`` need to be available in
-    ``l.injector``.  That's the opposite direction of how injectors
-    normally work.  :class:`ModelingContainer` provides this upward
-    propagation.  Upward propagation is only at model definition time; the set of items to be propagated are collected statically as the class is defined.  Items added to injectors at runtime are not automatically propagated up.
+Modeling containers provide upward propagation so these calls work:
+    entries registered in ``l.it_com.injector`` are propagated so they
+    are available in ``l.injector``.  That's the opposite direction of
+    how injectors normally work.  Upward propagation is only at model
+    definition time; the set of items to be propagated are collected
+    statically as the class is defined.  Items added to injectors at
+    runtime are not automatically propagated up.
 
 
     .. method: our_key()
