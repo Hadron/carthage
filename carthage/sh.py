@@ -23,6 +23,10 @@ http://amoffat.github.io/sh/
 # THE SOFTWARE.
 #===============================================================================
 
+# This version of sh has been modified to support async __await__.  Sh
+# still uses threads, but it can be used in an application that uses
+# asyncio for managing concurrency within the app.
+
 
 __version__ = "1.12.14"
 __project_url__ = "https://github.com/amoffat/sh"
