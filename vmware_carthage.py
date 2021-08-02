@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -7,6 +7,10 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+
+# This code is outdated and will not run as is Provided for historical
+# context, and because there's nothing current that replaces the
+# functionality.
 
 import asyncio, carthage, carthage.utils
 from carthage import base_injector, inject, AsyncInjector, ConfigLayout, Injector, partial_with_dependencies
