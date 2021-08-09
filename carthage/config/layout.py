@@ -7,17 +7,13 @@
 # LICENSE for details.
 
 import importlib, yaml
+from pathlib import Path
 from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies
 
 
 from .schema import config_key, ConfigAccessor, ConfigSchema
 
 
-
-
-    
-
-                
 @inject(injector = Injector)
 class ConfigLayout(ConfigAccessor, Injectable):
 
@@ -78,10 +74,12 @@ class ConfigLayout(ConfigAccessor, Injectable):
 
     def load_yaml(self, y, *, injector = None):
         if injector is None: injector = self._injector
+        base_path = Path(y.name).parent
         d = yaml.safe_load(y)
         assert isinstance(d,dict)
         if 'plugins' in d:
             for p in d['plugins']:
+                if p == '.' or '/' in p: p = base_path.joinpath(p)
                 enable_plugin(p)
             del d['plugins']
         self._load(d, injector, self._schema, "")
