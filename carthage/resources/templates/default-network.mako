@@ -1,6 +1,6 @@
 <%inherit file="network-base.mako" />
 
-<%block name="network">
+<%block name="network" args="link">
 <%
 from carthage.systemd import NotNeeded
 v4_config = link.merged_v4_config

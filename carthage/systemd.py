@@ -14,6 +14,9 @@ from carthage.setup_tasks import *
 from .network import NetworkLink
 from .utils import mako_lookup
 from carthage import ConfigLayout, sh
+import logging
+
+logger = logging.getLogger('carthage.network')
 
 local_type_map = dict(
     bond = dict(
@@ -78,7 +81,8 @@ class SystemdNetworkModelMixin(SetupTaskMixin, AsyncInjectable):
             try:
                 rendering = template.render(
                     link = link,
-                    NotNeeded = NotNeeded
+                    logger = logger,
+                                        NotNeeded = NotNeeded
                 )
                 output_fn = dir.joinpath( f"10-carthage-{link.interface}.{ext}")
                 with output_fn.open("wt") as f:
