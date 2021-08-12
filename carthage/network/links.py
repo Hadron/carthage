@@ -20,7 +20,7 @@ class BridgeLink(NetworkLink):
 
     local_type  = "bridge"
 
-    vlan_filter: typing.Optional[bool] = True
+    vlan_filter: typing.Optional[bool] = False
 
 @dataclasses.dataclass(eq = False)
 class VlanLink(NetworkLink):
