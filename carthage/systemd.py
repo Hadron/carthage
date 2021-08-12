@@ -32,6 +32,7 @@ local_type_map = dict(
     vlan = dict(
         netdev = "vlan-netdev.mako",
         member_network = "vlan-network.mako"),
+    none = dict(network = None)
     )
 
 def templates_for_link(l: NetworkLink):
@@ -77,6 +78,7 @@ class SystemdNetworkModelMixin(SetupTaskMixin, AsyncInjectable):
         templates = templates_for_link(link)
         for ext, template_name in templates.items():
             if ext.startswith('member_'): continue
+            if template_name is None: continue
             template = mako_lookup.get_template(template_name)
             try:
                 rendering = template.render(

@@ -40,3 +40,6 @@ class VlanLink(NetworkLink):
             args['vlan_id'] = args['net'].vlan_id
         super().__init__(connection, interface, args)
         
+class NoLocalLink(NetworkLink):
+    local_type = 'none'
+    
