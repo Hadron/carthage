@@ -473,9 +473,18 @@ class NetworkConfig:
                              machine = connection,
                              )
         del other_futures
+        self._handle_deferred_macs(result)
+        
         
         return result
 
+    @staticmethod
+    def _handle_deferred_macs(links: dict):
+        from .mac import find_mac_first_member
+        for l in links.values():
+            if l.mac == 'inherit':
+                l.mac = find_mac_first_member(l)
+                
 class VlanList(abc.ABC):
 
     '''Either an int, sequence of integers, a slice, or a sequence of slices

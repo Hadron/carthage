@@ -80,3 +80,17 @@ def persistent_random_mac(interface, model, store):
     return store[(model.name, interface)]
 
 __all__ += ['persistent_random_mac']
+
+def find_mac_first_member(link):
+    '''Return the MAC Address of the first member of this link. Typically this function is not called directly but instead is called when a bridge, bond or VLAN link's *mac* property is set to ``inherit``.
+'''
+    if link.mac != 'inherit':
+        raise ValueError("Intended to be used on alink whose MAC is inherit")
+    orig_link = link
+    while link:
+        if not link.member_links:
+            raise ValueError(f"Could not find MAC for {orig_link}")
+        link = link.member_links[0]
+        if link.mac != 'inherit': return link.mac
+        
+__all__ += ['find_mac_first_member']
