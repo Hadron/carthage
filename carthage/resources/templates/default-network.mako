@@ -4,13 +4,13 @@
 <%
 from carthage.systemd import NotNeeded
 v4_config = link.merged_v4_config
-%>
-<% nontrivial = False %>
+%>\
+<% nontrivial = False %>\
 %if v4_config.dhcp:
 DHCP=ipv4
-<%nontrivial = True%>
+<%nontrivial = True%>\
 %endif
-%if v4_config.address:
+%if v4_config.address and not v4_config.dhcp:
 Address=${str(v4_config.address)}/${v4_config.network.prefixlen}
 <%nontrivial = True %>
 %endif

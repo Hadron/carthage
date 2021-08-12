@@ -8,7 +8,9 @@ vlan_link = link_vlan_config(link)
 native_link = None
 %>\
 %for v in link.member_of_links:
-<%if v.local_type != "vlan":
+<%
+if v.local_type == 'none': continue
+if v.local_type != "vlan":
     raise ValueError("Cannot mix vlan and other links")
 %>\
 %if vlan_link and (getattr(v, 'vlan_id', 'notequal') ==  vlan_link.untagged_vlan):
