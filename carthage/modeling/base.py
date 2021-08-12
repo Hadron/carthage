@@ -89,13 +89,17 @@ __all__ += ['NetworkModel']
 class NetworkConfigModelType(InjectableModelType):
 
     @modelmethod
-    def add(cls, ns, interface, **kwargs):
+    def add(cls, ns, interface, *, mac, **kwargs):
+        kwargs['mac'] = mac
         def callback(inst):
             nonlocal kwargs
             keys = kwargs.keys()
             values = key_from_injector_access(*kwargs.values())
             kwargs = {k:v for k,v in zip(keys, values)}
-            inst.add(interface, **kwargs)
+            try:
+                inst.add(interface, **kwargs)
+            except TypeError as e:
+                raise TypeError(f'Error constructing {interface} with arguments {kwargs}') from e
         cls._add_callback(ns, callback)
 
 class NetworkConfigModel(InjectableModel,
