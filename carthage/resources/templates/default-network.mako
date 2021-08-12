@@ -23,7 +23,7 @@ DNS=${" ".join(v4_config.dns_servers)}
 %if v4_config.masquerade:
 IPMasquerade=yes
 %endif
-%if v4_config.gateway:
+%if v4_config.gateway and not v4_config.dhcp:
 Gateway=${v4_config.gateway}
 %endif
 <%if not nontrivial:
