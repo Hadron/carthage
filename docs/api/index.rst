@@ -7,6 +7,7 @@ API Documentation
    setup
    networking
    machines
+   images
    ssh
    files
 

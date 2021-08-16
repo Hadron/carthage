@@ -34,11 +34,16 @@ import carthage.ssh # ssh import must come after machine
 import carthage.pki
 from . import ansible
 from . import cloud_init
-
 from .files import rsync_git_tree
 
 __all__ += [ 'Machine',  'rsync_git_tree',
              'AbstractMachineModel', 'MachineCustomization', 'customization_task']
+
+from . import image
+from .image import  ContainerVolume, wrap_container_customization
+
+__all__ += ['ContainerVolume', 'wrap_container_customization']
+
 
 from .system_dependency import MachineDependency, SystemDependency, disable_system_dependency
 

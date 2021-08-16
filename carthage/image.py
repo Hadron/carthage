@@ -14,7 +14,7 @@ from .dependency_injection import *
 from .config import ConfigLayout, config_key
 from . import sh
 from .utils import possibly_async
-from .setup_tasks import setup_task, SkipSetupTask, SetupTaskMixin
+from .setup_tasks import setup_task, SkipSetupTask, SetupTaskMixin, TaskWrapper
 import carthage
 from .machine import ContainerCustomization, customization_task
 
@@ -217,7 +217,22 @@ class ContainerImage(ContainerVolume):
         try: os.rename(os.path.join(self.path, "sbin/init.dist"),
                   os.path.join(self.path, "sbin/init"))
         except FileNotFoundError: pass
-            
+
+def wrap_container_customization(task: TaskWrapper):
+    '''
+Takes a :func:`setup_task` and wraps it in a :class:`ContainerCustomization` so that it can be used in a :class:`ContainerVolume`.  Consider the following::
+
+        @setup_task("frob the filesystem")
+        async def frob_filesystem(self):
+            async with self.filesystem_access() as path: # ...
+
+    Such a setup task cannot be directly applied to a :class:`ContainerVolume` because ContainerVolume does not have *filesystem_access* or any of the other customization methods.  *wrap_container_customization* wraps such a setup_task in a :class:`ContainerCustomization` so that it can be applied to a volume.
+    '''
+    class cust(ContainerCustomization):
+        description = task.description
+        task_to_run = task
+    return cust
+
 
 
 
@@ -543,6 +558,7 @@ class image_mounted(object):
         check_call(command)
 
 __all__ = ('ContainerVolume', 'ContainerImage',
+           "wrap_container_customization",
            'SetupTaskMixin',
            'SkipSetupTask',
            'ImageVolume',
