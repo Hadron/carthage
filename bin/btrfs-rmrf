@@ -13,7 +13,7 @@ import argparse
 
 from carthage import base_injector, AsyncInjector
 from carthage.config import ConfigLayout
-from carthage.image import BtrfsVolume
+from carthage.image import BtrfsVolume, ContainerVolume
 
 async def run(volumes):
     ainjector = base_injector.claim()(AsyncInjector)
@@ -21,7 +21,7 @@ async def run(volumes):
     config_layout.delete_volumes = True
     ainjector.add_provider(config_layout)
     for v in volumes:
-        vol = await ainjector(BtrfsVolume, name =v)
+        vol = await ainjector(ContainerVolume, implementation=BtrfsVolume, name =v)
         vol.close()
         
 if __name__ == '__main__':

@@ -6,6 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+from pathlib import Path
 import contextlib, os, os.path, pkg_resources, re, shutil, sys, tempfile, time
 from subprocess import check_call, check_output, call
 from tempfile import TemporaryDirectory
@@ -18,20 +19,19 @@ import carthage
 from .machine import ContainerCustomization, customization_task
 
 
-
-
-
 @inject_autokwargs(config_layout = ConfigLayout)
-class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
+class ContainerVolumeImplementation(AsyncInjectable, SetupTaskMixin):
 
-    def __init__(self,  name, clone_from = None, **kwargs):
-        super().__init__(**kwargs)
-        config_layout = self.config_layout
-        self._name = name
-        self._path = os.path.join(config_layout.image_dir, name)
-        self.clone_from = clone_from
-        self.closed = False
+    def __init__(self,  name, path, clone_from = None, **kwargs):
+            super().__init__(**kwargs)
+            self._path = path
+            self._name = name
+            self.clone_from = clone_from
+            self.closed = False
 
+
+
+    
     @property
     def name(self): return self._name
 
@@ -41,15 +41,28 @@ class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
             raise RuntimeError("This volume is closed")
         return self._path
 
+    def __del__(self):
+        self.close()
+
+        
+        
+
+
+
+@inject_autokwargs(config_layout = ConfigLayout)
+class BtrfsVolume(ContainerVolumeImplementation):
+
+
+
     def __repr__(self):
-        return "<BtrfsVolume path={}{}>".format(self._path,
+        return "<BtrfsVolume path={}{}>".format(str(self._path),
                                                  " closed" if self.closed else "")
 
     def close(self, canceled_futures = None):
         if self.closed: return
         if self.config_layout.delete_volumes:
-            subvols = [self._path]
-            for root,dirs, files in os.walk(self._path, topdown = True):
+            subvols = [str(self._path)]
+            for root,dirs, files in os.walk(str(self._path), topdown = True):
                 device = os.stat(root).st_dev
                 for d in dirs:
                     dir = os.path.join(root, d)
@@ -61,44 +74,115 @@ class BtrfsVolume(AsyncInjectable, SetupTaskMixin):
         super().close(canceled_futures)
 
 
-    def __del__(self):
-        self.close()
 
     async def async_ready(self):
         try:
             if os.path.exists(self.path):
-                try: sh.btrfs("subvolume", "show", self.path)
+                try: sh.btrfs("subvolume", "show", str(self.path))
                 except sh.ErrorReturnCode:
                     raise RuntimeError("{} is not a btrfs subvolume but already exists".format(self.path))
                 # If we're here it is a btrfs subvolume
-                await possibly_async(self.populate_volume())
                 return await super().async_ready()
             # directory does not exist
             os.makedirs(os.path.dirname(self.path), exist_ok = True)
             if not self.clone_from:
                 await sh.btrfs('subvolume', 'create',
-                               self.path,
+                               str(self.path),
                                _bg = True, _bg_exc = False)
             else:
-                await sh.btrfs('subvolume', 'snapshot', self.clone_from.path, self.path,
+                await sh.btrfs('subvolume', 'snapshot', str(self.clone_from.path), str(self.path),
                                _bg = True, _bg_exc = False)
-            await possibly_async(self.populate_volume())
             return await super().async_ready()
         except:
             self.close()
             raise
 
 
+
+
+
+class ReflinkVolume(ContainerVolumeImplementation):
+
+    async def async_ready(self):
+        if self.path.exists():
+            return await super().async_ready()
+        os.makedirs(self.path.parent, exist_ok = True)
+        if self.clone_from:
+            await sh.cp(
+            "-a", "--reflink=auto",
+                str(self.clone_from.path),
+                self.path,
+                _bg = True, _bg_exc = False)
+        else:
+            os.mkdir(self.path)
+        return await super().async_ready()
+
+    def close(self, canceled_futures = None):
+        if self.closed: return
+        try:
+            shutil.rmtree(self.path)
+        except: pass
+        self.closed = true
+        super().close(canceled_futures)
+
+@inject(config_layout = ConfigLayout)
+class ContainerVolume(AsyncInjectable, SetupTaskMixin):
+
+    def __init__(self, name, *,
+                 clone_from = None,
+                 implementation = None,
+                 config_layout,
+                 **kwargs):
+        super().__init__(**kwargs)
+        path  = Path(config_layout.image_dir).joinpath(name)
+        os.makedirs(path.parent, exist_ok = True)
+        if implementation is None:
+            try:
+                sh.btrfs(
+                    "filesystem", "df", str(path.parent),
+)
+                implementation = BtrfsVolume
+            except sh.ErrorReturnCode:
+                implementation = ReflinkVolume
+        self.impl = implementation(name = name,
+                                   path = path,
+                                   injector = self.injector,
+                                   config_layout = config_layout,
+                                   clone_from = clone_from)
+
+    async def async_ready(self):
+        await self.impl.async_ready()
+        await self.populate_volume()
+        await super().async_ready()
+
     async def populate_volume(self):
-        "Populate a new volume; called both for cloned and non-cloned volumes"
-        await self.run_setup_tasks()
-    stamp_path = path
+        "Populate the container volume; called for volumes that exist or are empty"
+        return await self.run_setup_tasks()
+
+    @property
+    def path(self):
+        return self.impl.path
+
+    @property
+    def name(self):
+        return self.impl.name
+
+    @property
+    def config_layout(self): return self.impl.config_layout
+
+    @property
+    def stamp_path(self): return self.impl.path
+    def __repr__(self):
+        return f"<Container {self.impl.__class__.__name__} path:{self.impl.path}>"
+
+    def close(self, canceled_futures = None):
+        return self.impl.close(canceled_futures)
+    
 
 
 
 
-
-class ContainerImage(BtrfsVolume):
+class ContainerImage(ContainerVolume):
 
     async def apply_customization(self, cust_class, method = 'apply'):
         from .container import container_image, container_volume, Container
@@ -458,7 +542,7 @@ class image_mounted(object):
         command = ['chroot', self.rootdir] + command
         check_call(command)
 
-__all__ = ('BtrfsVolume', 'ContainerImage',
+__all__ = ('ContainerVolume', 'ContainerImage',
            'SetupTaskMixin',
            'SkipSetupTask',
            'ImageVolume',

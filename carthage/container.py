@@ -8,7 +8,7 @@
 
 import asyncio, contextlib, logging, os, re, shutil, sys
 from .dependency_injection import *
-from .image import  SetupTaskMixin, setup_task, SkipSetupTask, BtrfsVolume
+from .image import  SetupTaskMixin, setup_task, SkipSetupTask, ContainerVolume
 from . import sh, ConfigLayout
 from .utils import memoproperty
 from .machine import MachineRunning, Machine, SshMixin, ssh_origin
@@ -54,7 +54,7 @@ class Container(Machine, SetupTaskMixin):
             self.close_volume = False
         except KeyError:
             await self.image.async_become_ready()
-            vol = await self.ainjector(BtrfsVolume,
+            vol = await self.ainjector(ContainerVolume,
                               clone_from = self.image,
                               name = "containers/"+self.name)
             self.injector.add_provider(container_volume, vol)
@@ -121,7 +121,7 @@ class Container(Machine, SetupTaskMixin):
                     net_args.insert(0,a)
                 else: break
             args = args[to_delete:]
-            self.process = sh.systemd_nspawn("--directory="+self.volume.path,
+            self.process = sh.systemd_nspawn("--directory="+str(self.volume.path),
                                              '--machine='+self.full_name,
                                              "--setenv=DEBIAN_FRONTEND=noninteractive",
                                              *net_args,
@@ -283,5 +283,5 @@ class Container(Machine, SetupTaskMixin):
 
     @contextlib.asynccontextmanager
     async def filesystem_access(self):
-        yield self.volume.path
+        yield str(self.volume.path)
 

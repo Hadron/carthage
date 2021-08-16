@@ -13,7 +13,7 @@ from pathlib import Path
 from .dependency_injection import *
 from .setup_tasks import *
 from .config import ConfigLayout
-from .image import ContainerImage, ContainerCustomization, BtrfsVolume, ImageVolume
+from .image import ContainerImage, ContainerCustomization, ContainerVolume, ImageVolume
 from .machine import customization_task
 from . import sh
 
@@ -142,7 +142,7 @@ __all__ += ['install_stage1_packages_task']
 
 @inject(ainjector = AsyncInjector, config = ConfigLayout)
 async def debian_container_to_vm(
-        volume: BtrfsVolume,
+        volume: ContainerVolume,
         output: str,
         size: str,
         classes: str = None,
@@ -182,7 +182,7 @@ async def debian_container_to_vm(
                                              prefix = "container-to-vm-") as tmp_d:
             tmp = Path(tmp_d).absolute()
             await sh.tar(
-                "-C", volume.path,
+                "-C", str(volume.path),
                 "--xattrs",
                 "--xattrs-include=*.*",
                 "-czf",
