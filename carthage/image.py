@@ -370,7 +370,7 @@ class QcowCloneVolume:
             sh.qemu_img(
                 'create', '-fqcow2',
                 '-obacking_file='+volume.path,
-self.path)
+str(self.path))
         self.config_layout = config_layout
 
 
