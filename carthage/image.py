@@ -122,7 +122,7 @@ class ReflinkVolume(ContainerVolumeImplementation):
         try:
             shutil.rmtree(self.path)
         except: pass
-        self.closed = true
+        self.closed = True
         super().close(canceled_futures)
 
 @inject(config_layout = ConfigLayout)
