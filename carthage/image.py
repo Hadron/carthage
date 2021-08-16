@@ -120,7 +120,7 @@ class ReflinkVolume(ContainerVolumeImplementation):
     def close(self, canceled_futures = None):
         if self.closed: return
         try:
-            shutil.rmtree(self.path)
+            if self.config_layout.delete_volumes: shutil.rmtree(self.path)
         except: pass
         self.closed = True
         super().close(canceled_futures)
