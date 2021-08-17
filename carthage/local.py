@@ -10,8 +10,10 @@ import contextlib
 from .machine import Machine
 from .dependency_injection import *
 from . import sh
-from .utils import memoproperty
+from .utils import memoproperty, when_needed
 from .setup_tasks import SetupTaskMixin
+from .network import NetworkLink, BridgeNetwork
+
 
 class LocalMachine(Machine, SetupTaskMixin):
 
@@ -49,5 +51,25 @@ class LocalMachine(Machine, SetupTaskMixin):
     @memoproperty
     def stamp_path(self):
         return self.config_layout.state_dir+"/localhost"
-    
-__all__ = ['LocalMachine']
+
+def process_local_network_config(model):
+    '''
+    Carthage uses :class:`~BridgeNetwork` to connecgt VMs and containers to networking on the local system.  When a network is contained entirely within one hypervisor, things are easy.  However, if the network configuration interacts with the :class:`~carthage.network.NetworkConfig` of the hypervisor, it's important that networks in NetworkConfigs of VMs on containers match up with networks in the hypervisor's network config.  
+
+    One approach to accomplish this is to set the :obj:`~carthage.modeling.NetworkMobdel.bridge_name` property in the :class:`carthage.model.NetworkModel`.
+
+However if Carthage is configuring the local networking on the hypervisor, then the information is already encoded in the :class:`~NetworkLink` for the hypervisor.  This function finds bridge links in a NetworkConfig corresponding to the machine on which Carthage is running and sets the bridge names that will be used so that Carthage uses the right local bridges.
+
+    '''
+    def associate_bridge(net, bridge_name):
+        if hasattr(net, 'bridge_name'): return
+        net.bridge_name = bridge_name
+        net.ainjector.add_provider(InjectionKey(BridgeNetwork),
+                                   when_needed(BridgeNetwork, bridge_name = bridge_name, delete_bridge = False))
+
+    from carthage.network.links import BridgeLink
+    for l in model.network_links.values():
+        if not isinstance(l, BridgeLink): continue
+        associate_bridge(l.net, l.interface)
+        
+__all__ = ['LocalMachine', 'process_local_network_config']

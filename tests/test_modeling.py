@@ -11,7 +11,7 @@ from pathlib import Path
 
 from carthage.pytest import *
 from carthage.dependency_injection import *
-from carthage import base_injector, Machine, setup_task, ConfigLayout
+from carthage import base_injector, Machine, setup_task, ConfigLayout, LocalMachine
 from carthage.modeling.base import *
 from carthage.modeling.implementation import ModelingContainer
 from carthage.modeling.decorators import *
@@ -244,3 +244,23 @@ def test_model_mixin(injector):
             name = "foo.com"
 
     assert layout.foo.bar == 42
+@async_test
+async def test_local_networking(ainjector):
+    class layout(ModelGroup):
+        class net1(NetworkModel): pass
+        class local(MachineModel):
+            add_provider(machine_implementation_key, dependency_quote(LocalMachine))
+
+            class nc(NetworkConfigModel):
+                add('eth0', mac = None,
+                    net = net1)
+                add('br_net1', net = net1,
+                    member = 'eth0',
+                    local_type = 'bridge',
+                    mac = None,
+                    )
+
+    l = await ainjector(layout)
+    await l.generate()
+    assert getattr(l.net1, 'bridge_name', None) == "br_net1"
+    

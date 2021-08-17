@@ -325,6 +325,22 @@ class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metac
         path = self.config_layout.output_dir+ f"/hosts/{self.name}"
         os.makedirs(path, exist_ok = True)
         return path
+
+    async def resolve_networking(self, *args, **kwargs):
+        '''
+        See :meth:`~carthage.machine.AbstractMachineModel.resolve_networking` for documentation.
+
+        In adition to the standard behavior, if  :meth:`machine_type` is an instance of :class:`~carthage.local.LocalMachine`,
+then call :func:`carthage.local.process_local_network_config` to learn about local bridges.
+        '''
+        res = await super().resolve_networking(*args, **kwargs)
+        from carthage.local import LocalMachine, process_local_network_config
+        try:
+            if issubclass(self.machine_type, LocalMachine):
+                process_local_network_config(self)
+        except KeyError: pass #no machine_implementation_key
+        return res
+
     
 
 @inject(injector = Injector,
