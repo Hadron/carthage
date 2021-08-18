@@ -44,6 +44,6 @@ def test_list_in_yaml(ainjector):
     assert tuple(cl.l) == (2,3)
     cl.load_yaml(yaml.dump( dict(
         l = [9,10],
-        )))
+        )), path = ".")
     assert tuple(cl.l) == (9,10)
     

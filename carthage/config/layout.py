@@ -72,9 +72,11 @@ class ConfigLayout(ConfigAccessor, Injectable):
 
         
 
-    def load_yaml(self, y, *, injector = None):
+    def load_yaml(self, y, *, injector = None, path = None):
         if injector is None: injector = self._injector
-        base_path = Path(y.name).parent
+        if path:
+            base_path = Path(path).parent
+        else: base_path = Path(y.name).parent
         d = yaml.safe_load(y)
         assert isinstance(d,dict)
         if 'plugins' in d:
