@@ -7,15 +7,15 @@ Images are handled for :class:`containers <.container.Container>`  by :class:`.i
 
 .. py:module:: carthage.image
 
-   .. autoclass:: ContainerVolume
+.. autoclass:: ContainerVolume
 
-   .. autofunc:: wrap_container_customization
+.. autofunc:: wrap_container_customization
 
-   .. autoclass:: ImageVolume
+.. autoclass:: ImageVolume
 
 .. py:module:: carthage.debian
 
-   .. autoclass:: DebianContainerImage
+.. autoclass:: DebianContainerImage
 
-   .. autofunc:: debian_container_to_vm
-                 
+.. autofunc:: debian_container_to_vm
+
