@@ -84,7 +84,8 @@ class Container(Machine, SetupTaskMixin):
                 await namespace.start_networking()
                 self.network_namespace = namespace
                 return ["--network-namespace-path=/run/netns/"+namespace.name,
-                        "--capability=CAP_NET_ADMIN"]
+                        "--capability=CAP_NET_ADMIN",
+                        "--resolv-conf=off"]
             except:
                 namespace.close()
                 raise
