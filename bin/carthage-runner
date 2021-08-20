@@ -63,6 +63,9 @@ async def run():
         config.persist_local_networking = True
     if 'generate' in args.actions:
         await layout.generate()
+    else:
+        #We at least need to resolve network across the entire layout
+        await layout.resolve_networking()
     if 'start' in args.actions and args.start:
         await queue_explicit(args.start, 'start')
     elif 'start' in args.actions:
