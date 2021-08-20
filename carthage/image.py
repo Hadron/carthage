@@ -170,6 +170,12 @@ class ContainerVolume(AsyncInjectable, SetupTaskMixin):
     @property
     def config_layout(self): return self.impl.config_layout
 
+    @config_layout.setter
+    def config_layout(self, cfg):
+        self.impl.config_layout = cfg
+        return cfg
+
+
     @property
     def stamp_path(self): return self.impl.path
     def __repr__(self):
