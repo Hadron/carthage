@@ -101,12 +101,14 @@ class VM(Machine, SetupTaskMixin):
                       self.config_path,
                       _bg = True, _bg_exc = False)
             if self.__class__.ip_address is Machine.ip_address:
-                try:
-                    await self._find_ip_address()
-                except:
-                    sh.virsh("destroy", self.full_name,
-                             _bg = True, _bg_exc = False)
-                    raise
+                try: self.ip_address
+                except NotImplementedError:
+                    try:
+                        await self._find_ip_address()
+                    except e:
+                        sh.virsh("destroy", self.full_name,
+                                 _bg = True, _bg_exc = False)
+                        raise e from None
             self.running = True
 
     start_machine = start_vm

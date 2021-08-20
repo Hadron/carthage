@@ -366,8 +366,6 @@ class MachineImplementation(AsyncInjectable):
     @staticmethod
     def prep(implementation: carthage.machine.Machine, model: MachineModel):
         implementation.model = model
-        try: implementation.ip_address = model.ip_address
-        except AttributeError: pass
         try: implementation.short_name = model.short_name
         except AttributeError: pass
         return implementation
