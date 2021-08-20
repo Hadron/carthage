@@ -224,7 +224,7 @@ class ContainerImage(ContainerVolume):
                   os.path.join(self.path, "sbin/init"))
         except FileNotFoundError: pass
 
-def wrap_container_customization(task: TaskWrapper):
+def wrap_container_customization(task: TaskWrapper, **kwargs):
     '''
 Takes a :func:`setup_task` and wraps it in a :class:`ContainerCustomization` so that it can be used in a :class:`ContainerVolume`.  Consider the following::
 
@@ -237,7 +237,7 @@ Takes a :func:`setup_task` and wraps it in a :class:`ContainerCustomization` so 
     class cust(ContainerCustomization):
         description = task.description
         task_to_run = task
-    return cust
+    return carthage.machine.customization_task(cust, **kwargs)
 
 
 
