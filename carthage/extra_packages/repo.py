@@ -56,7 +56,7 @@ Components: {config.extra_packages.components}
 
     @add_packages.invalidator()
     def add_packages(self, **kwargs):
-        last_run = self.check_stamp(self.__class__.add_packages.stamp)
+        last_run = self.check_stamp(self.__class__.add_packages.stamp)[0]
         if not last_run: return False
         packages_dir = self.config.extra_packages.packages_dir
         for c in glob(os.path.join(packages_dir, "*.changes")):

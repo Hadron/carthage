@@ -33,7 +33,7 @@ class  Stampable(SetupTaskMixin, AsyncInjectable):
 
     def __repr__(self):
         return f"<setup_test object for {self.name} test>"
-    
+
     def __init_subclass__(cls):
         super().__init_subclass__()
         cls.stamp_path = state_dir.joinpath(str(id(cls)))
@@ -41,21 +41,21 @@ class  Stampable(SetupTaskMixin, AsyncInjectable):
 @async_test
 async def test_basic_setup(ainjector):
     called = 0
-    
+
     class c(Stampable):
         @setup_task("test_stamp")
         def test_stamp_task(self):
             nonlocal called
             called += 1
     assert called == 0
-    assert not c.check_stamp( c, "test_stamp_task")
+    assert not c.check_stamp( c, "test_stamp_task")[0]
     c_obj = await ainjector(c)
     assert called == 1
-    assert c_obj.check_stamp( "test_stamp_task")
+    assert c_obj.check_stamp( "test_stamp_task")[0]
     c_obj2 = await ainjector(c)
     assert c_obj is not c_obj2
     assert called == 1
-    
+
 @async_test
 async def test_check_completed(ainjector):
     called = 0
@@ -73,8 +73,8 @@ async def test_check_completed(ainjector):
     is_completed = False
     c_2 = await ainjector(c)
     assert called == 1
-    assert not c_1.check_stamp("check_completed")
-    
+    assert not c_1.check_stamp("check_completed")[0]
+
 @async_test
 async def test_invalidator(ainjector):
     called = 0
@@ -86,13 +86,13 @@ async def test_invalidator(ainjector):
         @setup_invalidator.invalidator()
         def setup_invalidator(self, **kwargs):
             return False
-    assert not c.check_stamp(c, "setup_invalidator")
+    assert not c.check_stamp(c, "setup_invalidator")[0]
     await ainjector(c)
     assert called == 1
-    assert c.check_stamp( c, "setup_invalidator")
+    assert c.check_stamp( c, "setup_invalidator")[0]
     await ainjector(c)
     assert called == 2
-    
+
 
 @async_test
 async def test_failure_forces_rerun(ainjector):
@@ -106,8 +106,8 @@ async def test_failure_forces_rerun(ainjector):
             called += 1
             if should_fail:
                 raise RuntimeError
-            
-    assert not c.check_stamp( c, "setup_test_error_explicit")
+
+    assert not c.check_stamp( c, "setup_test_error_explicit")[0]
     await ainjector(c)
     assert called == 1
     should_fail = True
@@ -119,14 +119,14 @@ async def test_failure_forces_rerun(ainjector):
     should_fail = False
     await ainjector(c)
     assert called == 3
-    
+
 @async_test
 async def test_order_override(ainjector):
     two_called = False
     class c (Stampable):
         @setup_task("one")
         def one(self): pass
-        
+
         @setup_task("foo", order = 9200)
         def two(self):
             nonlocal two_called
@@ -144,7 +144,7 @@ async def test_order_override(ainjector):
     assert c.before_two.order < c.two.order
     assert c.three.order > c.two.order
     await ainjector(c)
-    
+
 
 @async_test
 async def test_mako_task(ainjector):
@@ -154,11 +154,34 @@ async def test_mako_task(ainjector):
 
         template_2 = inject(name = InjectionKey("name")) \
             (mako_task("template-2.mako"))
-            
+
     ainjector.add_provider(InjectionKey("name"), "the name")
     res = await ainjector(bar)
     template_2 = res.stamp_path.joinpath("template-2").read_text()
     template_2_expected = state_dir.parent.joinpath("template-2.expected").read_text()
     assert template_2 == template_2_expected
-    
-                                      
+
+
+@async_test
+async def test_hash_func(ainjector):
+    fake_hash = "30"
+    test_hash_run = 0
+    class c(Stampable):
+
+        @setup_task("Test hash")
+        def test_hash(self):
+            nonlocal test_hash_run
+            test_hash_run +=1
+
+        @test_hash.hash()
+        def test_hash(self):
+            return fake_hash
+    o = await ainjector(c)
+    test_hash_run = 0
+    o.test_hash()
+    assert test_hash_run == 1
+    await o.run_setup_tasks()
+    assert test_hash_run == 1
+    fake_hash = "45"
+    await o.run_setup_tasks()
+    assert test_hash_run == 2

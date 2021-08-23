@@ -39,6 +39,7 @@ class TaskWrapper:
     order: int = dataclasses.field(default_factory = _inc_task_order)
     invalidator_func = None
     check_completed_func = None
+    hash_func = staticmethod(lambda self: "")
 
     @memoproperty
     def stamp(self):
@@ -58,7 +59,7 @@ class TaskWrapper:
 
     def __setattr__(self, a, v):
         if a in ('func', 'stamp', 'order',
-                 'invalidator_func', 'check_completed_func') or a in self.__class__.extra_attributes:
+                 'invalidator_func', 'check_completed_func', 'hash_func') or a in self.__class__.extra_attributes:
             return super().__setattr__(a, v)
         else:
             return setattr(self.func, a, v)
@@ -68,7 +69,8 @@ class TaskWrapper:
             try:
                 res = fut.result()
                 if not self.check_completed_func:
-                    instance.create_stamp(self.stamp)
+                    hash_contents = instance.injector(self.hash_func, instance)
+                    instance.create_stamp(self.stamp, hash_contents)
             except SkipSetupTask: pass
             except Exception:
                 if not self.check_completed_func:
@@ -78,14 +80,14 @@ class TaskWrapper:
         try:
             res = self.func(instance, *args, **kwargs)
             if isinstance(res, collections.abc.Coroutine):
-                res = asyncio.ensure_future(res)
+                res = instance.loop.create_task(res)
                 res.add_done_callback(callback)
                 if hasattr(instance,'name'):
                     res.purpose = f'setup task: {self.stamp} for {instance.name}'
                 return res
             else:
                 if not self.check_completed_func:
-                    instance.create_stamp(self.stamp)
+                    instance.create_stamp(self.stamp, instance.injector(self.hash_func, instance))
         except SkipSetupTask:
             raise
         except Exception:
@@ -103,8 +105,7 @@ class TaskWrapper:
                               *, ainjector:AsyncInjector):
 
 
-        ''' 
-        Indicate whether this task should be run for *obj*.
+        '''Indicate whether this task should be run for *obj*.
 
         :returns: Tuple of whether the task should be run and when the task was last run if ever.
 
@@ -115,6 +116,10 @@ class TaskWrapper:
         * If there is a :meth:`invalidator`, then this task should run if the invalidator returns falsy.
 
         * This task should run if any dependencies have run more recently than the stamp
+
+        * If there is a nontrivial hash_func, then the hash contents
+          stored in the stamp are compared to the results of the
+          hash_func.  If the Contents differ, this task should run.
 
         * Otherwise this task should not run.
 
@@ -129,7 +134,7 @@ class TaskWrapper:
             if last_run is True:
                 obj.logger_for().debug(f"Task {self.description} for {obj} run without providing timing information")
                 return (False, dependency_last_run)
-        else: last_run  = obj.check_stamp(self.stamp)
+        else: last_run, hash_contents  = obj.check_stamp(self.stamp)
         if last_run is False:
             obj.logger_for().debug(f"Task {self.description} never run for {obj}")
             return (True, dependency_last_run)
@@ -137,6 +142,10 @@ class TaskWrapper:
             obj.logger_for().debug(f"Task {self.description} last run {_iso_time(last_run)}, but dependency run more recently at {_iso_time(dependency_last_run)}")
             return (True, dependency_last_run)
         obj.logger_for().debug(f"Task {self.description} last run for {obj} at {_iso_time(last_run)}")
+        actual_hash_contents = ainjector.injector(self.hash_func, obj)
+        if actual_hash_contents != hash_contents:
+                obj.logger_for().debug(f'Task {self.description} old_hash: `{hash_contents}`, new_hash: `{actual_hash_contents}`')
+                return (True, dependency_last_run)
         if self.invalidator_func:
             if not await ainjector(self.invalidator_func, obj, last_run = last_run):
                 obj.logger_for().info(f"Task {self.description} invalidated for {obj}; last run {_iso_time(last_run)}")
@@ -176,6 +185,30 @@ class TaskWrapper:
             return self
         return wrap
 
+    def hash(self):
+        '''Provides a mechanism for rerunning setup_tasks when inputs have changed.  Usage::
+
+            @setup_task("do something")
+            def do_something(self):
+                # do stuff
+
+            @do_something.hash()
+            do_something(self):
+                # return a rapid hash of the major inputs on which the do_something tasks varies
+
+        Hash functions are entirely ignored when *check_completed* is
+        used.  The hash function is called every time Carthage wishes
+        to know whether the task has completed, so it needs to be fast
+        to compute.  The result of the hash function is stored in the
+        completion stamp on successful completion.  On later runs, the
+        result of the hash function is checked against the completion
+        stamp.  If these two results differ, the task is rerun.
+        '''
+        def wrap(func):
+            self.hash_func = func
+            return self
+        return wrap
+    
     def check_completed(self):
 
         '''Decorator to provide function indicating whether a task has already been done
@@ -313,14 +346,14 @@ class SetupTaskMixin:
         await self.run_setup_tasks()
         return await super().async_ready()
 
-    def create_stamp(self, stamp):
+    def create_stamp(self, stamp, contents):
         try:
-            with open(os.path.join(self.stamp_path, ".stamp-"+stamp), "w") as f:
-                pass
+            with open(os.path.join(self.stamp_path, ".stamp-"+stamp), "wt") as f:
+                if contents: f.write(contents)
         except FileNotFoundError:
             os.makedirs(self.stamp_path, exist_ok = True)
-            with open(os.path.join(self.stamp_path, ".stamp-"+stamp), "w") as f:
-                pass
+            with open(os.path.join(self.stamp_path, ".stamp-"+stamp), "wt") as f:
+                if contents: f.write(contents)
 
     def delete_stamp(self, stamp):
         try:
@@ -329,16 +362,17 @@ class SetupTaskMixin:
 
     def check_stamp(self, stamp, raise_on_error = False):
         '''
-        :returns: False if the stamp is not present and *raise_on_error* is False else the unix time of the stamp.
+        :returns: a tuple containing the unix time of the stamp and the tex t contents of the stamp.  The first element of the tuple is False if the stamp does not exist
         '''
         if raise_on_error not in (True,False):
             raise SyntaxError(f'raise_on_error must be a boolean. current value: {raise_on_error}')
         try:
-            res = os.stat(os.path.join(self.stamp_path, ".stamp-"+stamp))
+            path = Path(self.stamp_path)/f'.stamp-{stamp}'
+            res = os.stat(path)
         except FileNotFoundError:
             if raise_on_error: raise RuntimeError(f"stamp directory '{self.stamp_path}' did not exist") from None
-            return False
-        return res.st_mtime
+            return (False, "")
+        return res.st_mtime, path.read_text()
 
     def logger_for(self):
         try:
