@@ -39,7 +39,7 @@ class TaskWrapper:
     order: int = dataclasses.field(default_factory = _inc_task_order)
     invalidator_func = None
     check_completed_func = None
-    hash_func = staticmethod(lambda self: "")
+    hash_func:typing.Callable = staticmethod(lambda self: "")
 
     @memoproperty
     def stamp(self):
@@ -423,6 +423,18 @@ class cross_object_dependency(TaskWrapper):
 
 class mako_task(TaskWrapper):
 
+    '''
+    Usage::
+
+        dnsmasq_task = mako_task('dnsmasq.conf.mako',
+            network = InjectionKey("some_network"))
+
+    Typically used in a :class:`~carthage.modeling.MachineModel`.  Introduces a setup task to render a mako template.  Extra keyword arguments can be :class:`InjectionKey` in which case they are instantiated in the context of the injector of the object to which the setup task is attached.  These arguments are made available in the mako template context.  The *instance* template context argument is introduced and points to  the object on which the setup task is run.
+
+If the template has a def called *hash*, this def will be rendered with the same arguments as the main template bod.  This value will be stored in the completion stamp; if the hash changes, the template will be re-rendered.  For performance reasons, try to keep the hash easy to compute.
+
+    '''
+    
     template: str
     output: str
 
@@ -442,6 +454,13 @@ class mako_task(TaskWrapper):
         @inject(**injections)
         def func(*args, **kwargs):
             return self.render(*args, **kwargs)
+        @inject(**injections)
+        def hash_func(instance, **kwargs):
+            template = self.lookup.get_template(self.template)
+            if template.has_def('hash'):
+                hash_template = template.get_def("hash")
+                return hash_template.render(instance = instance, **kwargs)
+            else: return ""
         self.template = template
         if output is None:
             output = template
@@ -449,6 +468,7 @@ class mako_task(TaskWrapper):
         self.output = output
         super().__init__(func = func, 
                          description = f'Render {self.template} template',
+                         hash_func = hash_func,
                          **kwargs)
 
     def __set_name__(self, owner, name):

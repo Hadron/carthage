@@ -185,3 +185,27 @@ async def test_hash_func(ainjector):
     fake_hash = "45"
     await o.run_setup_tasks()
     assert test_hash_run == 2
+@async_test
+async def test_mako_hash(ainjector):
+    class c(Stampable):
+
+        mt = mako_task("test_hash.mako",
+                       fake_hash = InjectionKey("fake_hash"),
+                       real_value = InjectionKey("real_value"))
+
+    def get_fake_hash(): return fake_hash
+    def get_real_value(): return real_value
+    ainjector.add_provider(InjectionKey("fake_hash"), get_fake_hash)
+    ainjector.add_provider(InjectionKey("real_value"), get_real_value)
+    real_value = "foo"
+    fake_hash = "30"
+    o = await ainjector(c)
+    def output():
+        return Path(o.stamp_path).joinpath("test_hash").read_text()
+    assert output() == "foo"
+    real_value = "bar"
+    await o.run_setup_tasks()
+    assert output() == "foo"
+    fake_hash = "90"
+    await o.run_setup_tasks()
+    assert output() == "bar"
