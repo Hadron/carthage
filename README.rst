@@ -19,8 +19,8 @@ Installing Carthage
 
 Carthage typically requires  a container environment as well as a virtualization requirement.  On Debian or Ubuntu systems, install the following::
 
-  apt install socat systemd-containerlibvirt-clientsqemu-utils bridge-utilsfai-setup-storage
-  apt install --no-install-recommends fai-server
+  apt install socat systemd-container libvirt-clients qemu-utils bridge-utils fai-setup-storage
+  apt install --no-install-recommends fai-server dosfstools
   
 You may also want either ``python3-pyvmomi`` or ``libvirt-daemon-system``.
 
