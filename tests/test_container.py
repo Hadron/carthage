@@ -71,8 +71,9 @@ class LayoutTest(ModelGroup):
 
                 
 
-            do_something = ansible_task("resources/test_ansible.yml")
-
+            do_something = ansible_playbook_task("resources/test_ansible.yml")
+            do_roles = ansible_role_task(os.path.dirname(__file__)+"/resources/test_ansible_role")
+            
 @async_test
 @inject(config = ConfigLayout)
 async def test_ansible_and_modeling(test_ainjector, config):

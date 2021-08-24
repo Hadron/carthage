@@ -1,0 +1,5 @@
+- copy:
+    content: This is a file
+    dest: /root/file
+    mode: 0640
+    

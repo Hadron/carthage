@@ -344,13 +344,15 @@ __all__ += ['run_playbook']
 
 
 @inject(ainjector = AsyncInjector,
-        ssh_key = SshKey)
+        inventory = InjectionKey(AnsibleInventory, _optional = True),
+        log = InjectionKey(ansible_log, _optional = True),
+        )
 async def run_play(hosts, play,
-                   raise_on_failure = True,
+                   *,           raise_on_failure = True,
                    gather_facts = False,
-                   *,
+                   vars = None, inventory = None,
                    log = None,
-                   ssh_key, ainjector):
+ ainjector):
     '''
     Run a single Ansible play, specified as a python dictionary.
     The typical usage of this function is for cases where code wants to use an Ansible module to access some resource, especially when the results need to be programatically examined.  As an example, this can be used to examine the output of Ansible modules that gather facts.
@@ -366,21 +368,22 @@ async def run_play(hosts, play,
                 'remote_user': 'root',
                 'gather_facts': gather_facts,
                 'tasks': play}]
+            if vars: pb['vars'] = vars
             f.write(yaml.dump(pb, default_flow_style = False))
-        with open(os.path.join(ansible_dir,
+        if inventory is None:
+            with open(os.path.join(ansible_dir,
                                "inventory.txt"), "wt") as f:
-
-            f.write("[hosts]\n")
-            for h in hosts:
-                try:
-                    f.write(h.ansible_inventory_line()+"\n")
-                except AttributeError:
-                    f.write(f'{h.name} ansible_ip={h.ip_address}\n')
+                f.write("[hosts]\n")
+                for h in hosts:
+                    try:
+                        f.write(h.ansible_inventory_line()+"\n")
+                    except AttributeError:
+                        f.write(f'{h.name} ansible_ip={h.ip_address}\n')
+            inventory = os.path.join(ansible_dir, "inventory.txt")
         return await ainjector(run_playbook,
                                hosts,
                                ansible_dir+"/playbook.yml",
-                               inventory = ansible_dir+"/inventory.txt",
-                               origin = None,
+                               inventory = inventory,
                                raise_on_failure = raise_on_failure,
                                log = log)
 
@@ -514,7 +517,7 @@ __all__ += ['AnsibleResult']
 
 
 
-class ansible_task(setup_tasks.TaskWrapper):
+class ansible_playbook_task(setup_tasks.TaskWrapper):
 
     extra_attributes = frozenset({'dir', 'playbook'})
 
@@ -536,4 +539,34 @@ class ansible_task(setup_tasks.TaskWrapper):
         except (AttributeError, ValueError):
             self.dir = Path(module.__file__).parent
         
-__all__ += ['ansible_task']
+__all__ += ['ansible_playbook_task']
+
+def ansible_role_task(roles, vars = None):
+    '''
+    A :func:`setup_task` to apply one or more ansible roles to a machine.
+
+    :param roles: A single role (as a string) or list of roles to include
+
+    :param vars: An optional dictionary of ansible variable assignments.
+
+    '''
+    @setup_tasks.setup_task(f'Apply {roles} ansible roles')
+    @inject(ainjector = AsyncInjector)
+    async def apply_roles(self, ainjector):
+        if not isinstance(self, Machine) and hasattr(self, 'host'):
+            self = self.host
+        play = []
+        for r in roles:
+            play.append(dict(
+                include_role = dict(name = r)))
+        
+        return await ainjector(
+            run_play,
+            hosts = [self],
+            play = play,
+        vars = vars
+            )
+    if isinstance(roles, str): roles = [roles]
+    return apply_roles
+
+__all__ += ['ansible_role_task']
