@@ -80,7 +80,7 @@ class TaskWrapper:
         try:
             res = self.func(instance, *args, **kwargs)
             if isinstance(res, collections.abc.Coroutine):
-                res = instance.loop.create_task(res)
+                res = instance.ainjector.loop.create_task(res)
                 res.add_done_callback(callback)
                 if hasattr(instance,'name'):
                     res.purpose = f'setup task: {self.stamp} for {instance.name}'
