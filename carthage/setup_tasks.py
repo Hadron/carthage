@@ -131,6 +131,7 @@ class TaskWrapper:
             dependency_last_run = 0.0
         if self.check_completed_func:
             last_run =  await ainjector(self.check_completed_func, obj)
+            hash_contents = ""
             if last_run is True:
                 obj.logger_for().debug(f"Task {self.description} for {obj} run without providing timing information")
                 return (False, dependency_last_run)
@@ -142,8 +143,9 @@ class TaskWrapper:
             obj.logger_for().debug(f"Task {self.description} last run {_iso_time(last_run)}, but dependency run more recently at {_iso_time(dependency_last_run)}")
             return (True, dependency_last_run)
         obj.logger_for().debug(f"Task {self.description} last run for {obj} at {_iso_time(last_run)}")
-        actual_hash_contents = ainjector.injector(self.hash_func, obj)
-        if actual_hash_contents != hash_contents:
+        if not self.check_completed_func:
+            actual_hash_contents = ainjector.injector(self.hash_func, obj)
+            if actual_hash_contents != hash_contents:
                 obj.logger_for().debug(f'Task {self.description} old_hash: `{hash_contents}`, new_hash: `{actual_hash_contents}`')
                 return (True, dependency_last_run)
         if self.invalidator_func:
