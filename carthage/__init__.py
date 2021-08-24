@@ -31,12 +31,14 @@ __all__ += [ 'Network', 'NetworkConfig' , 'MacStore', 'V4Config']
 
 from .machine import Machine, AbstractMachineModel, MachineCustomization, customization_task
 import carthage.ssh # ssh import must come after machine
+from .ssh import RsyncPath
 import carthage.pki
 from . import ansible
 from . import cloud_init
 from .files import rsync_git_tree
 
 __all__ += [ 'Machine',  'rsync_git_tree',
+             'RsyncPath',
              'AbstractMachineModel', 'MachineCustomization', 'customization_task']
 
 from . import image
