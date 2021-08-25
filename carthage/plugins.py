@@ -56,7 +56,7 @@ class CarthagePlugin(Injectable):
 def load_plugin(spec: str,
                 *, injector):
     if hasattr(spec, "__fspath__") or '/' in spec:
-        path = Path(spec)
+        path = Path(spec).resolve()
         metadata_path = path/"carthage_plugin.yml"
         if not metadata_path.exists():
             raise FileNotFoundError(f'{metadata_path} not found')
