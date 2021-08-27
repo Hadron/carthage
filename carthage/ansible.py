@@ -558,7 +558,7 @@ def ansible_role_task(roles, vars = None):
         play = []
         for r in roles:
             play.append(dict(
-                include_role = dict(name = r)))
+                import_role = dict(name = r)))
         
         return await ainjector(
             run_play,
