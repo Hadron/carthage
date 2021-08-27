@@ -401,3 +401,33 @@ def test_system_dependency_injection_keys(injector):
     md2 = injector.get_instance(InjectionKey(SystemDependency, name = "foo.com"))
     assert md is md2
     
+@async_test
+async def test_concurrent_resolution(a_injector, loop):
+    "Test that if a  get_instance has already recorded a partial future, kwarg placement ends up working"
+    ainjector = a_injector
+    fut_inprogress = loop.create_future()
+    fut_unblock = loop.create_future()
+    async def block_for_a_while():
+        fut_inprogress.set_result(True)
+        await fut_unblock
+        return 333
+
+    key = InjectionKey("async_function")
+    ainjector.add_provider(key, block_for_a_while)
+    @inject(foo = key)
+    async def wait_for_foo(foo):
+        assert foo == 333
+        return True
+
+    fut_key = loop.create_task(ainjector.get_instance_async(key))
+    # at this point we've requested key to be resolved, but probably block_for_a_while has not even started
+    await fut_inprogress
+    # At this point block_for_a_while is running, and that future has been recorded as the provider for key
+    fut_wait_for_foo = loop.create_task(ainjector(wait_for_foo))
+    # Now wait a bit so that wait_for_foo is blocking on the result of key
+    # If the time becomes a problem we could probably have a second dependency for wait_for_foo that sets its own future and wait for that here
+    await asyncio.sleep(0.2)
+    fut_unblock.set_result(True)
+    assert await fut_wait_for_foo is True
+    await fut_key
+    

@@ -393,6 +393,12 @@ Return the first injector in our parent chain containing *k* or None if there is
         def do_interim_place(res):
             provider.record_instantiation(res, k, satisfy_against, final = False)
 
+        def future_resolved(fut):
+            #our caller handles exceptions
+            try:
+                placement(fut.result())
+            except BaseException: pass
+
         logger.debug("Looking up provider for {}".format(k))
 
 
@@ -417,7 +423,10 @@ Return the first injector in our parent chain containing *k* or None if there is
                 if placement: placement(result.value)
                 return result.value
             elif isinstance(result, asyncio.Future):
-                pass
+                #If we have a future that already exists, we need to
+                #arrange for placement to be called just as
+                #_instantiate does for futures it generates.
+                if placement: result.add_done_callback(future_resolved)
             elif provider.is_factory:
                 result = satisfy_against._instantiate(
                     result,
