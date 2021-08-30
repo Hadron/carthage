@@ -79,6 +79,9 @@ class DebianContainerImage(ContainerImage):
         path = Path(self.path)
         try: os.unlink(path/"etc/hostname")
         except FileNotFoundError: pass
+        with path.joinpath("etc/ssh/sshd_config").open("at") as f:
+            f.write("PasswordAuthentication no")
+        
 
     debian_customizations = customization_task(DebianContainerCustomizations)
 
