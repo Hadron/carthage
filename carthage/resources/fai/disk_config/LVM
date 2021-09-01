@@ -1,0 +1,14 @@
+# config for a disk image for a Hadron Machine
+#
+# <type> <mountpoint> <size>   <fs type> <mount options> <misc options>
+
+disk_config disk1 disklabel:gpt bootable:1  fstabkey:uuid align-at:1M
+
+primary	/boot/efi 300	 vfat  defaults
+primary       -	  300-       - -
+
+
+disk_config lvm
+
+vg rootvg   disk1.2
+rootvg-root /   3G-20G  xfs   rw,noatime
