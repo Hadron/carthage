@@ -208,7 +208,7 @@ async def debian_container_to_vm(
             os.rename(tmp/"image.raw", output_path)
 
     default_classes = "DEFAULT,GRUB_EFI"
-    fai_configspace = import_resources_files(__package__)/"resources/fai-container-to-vm"
+    fai_configspace = import_resources_files(__package__)/"resources/fai"
     if classes is None: classes = default_classes
     elif classes[0] == "+":
         classes = default_classes+','+classes[1:]
