@@ -52,13 +52,13 @@ if [[ $BOOT_DEVICE =~ '/dev/md' ]]; then
 
 elif [[ $BOOT_DEVICE =~ '/dev/loop' ]]; then
     # do not update vmram when using a loop device
-    $ROOTCMD grub-install --no-floppy --force-extra-removable --modules=part_gpt --no-nvram $BOOT_DEVICE
+    $ROOTCMD grub-install --no-floppy --target x86_64-efi --force-extra-removable --modules=part_gpt --no-nvram $BOOT_DEVICE
     if [ $? -eq 0 ]; then
         echo "Grub installed on hostdisk $BOOT_DEVICE"
     fi
 
 else
-    $ROOTCMD grub-install --no-floppy --modules=part_gpt "$GROOT"
+    $ROOTCMD grub-install --target x86_64-efi --no-floppy --modules=part_gpt "$GROOT"
     if [ $? -eq 0 ]; then
         echo "Grub installed on $BOOT_DEVICE = $GROOT"
     fi

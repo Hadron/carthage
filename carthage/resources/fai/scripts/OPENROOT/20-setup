@@ -1,0 +1,3 @@
+#!/bin/bash
+set -e
+fcopy /etc/pam.d/su
