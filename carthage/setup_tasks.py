@@ -351,10 +351,13 @@ class SetupTaskMixin:
     def create_stamp(self, stamp, contents):
         try:
             with open(os.path.join(self.stamp_path, ".stamp-"+stamp), "wt") as f:
+                # on NFS, opening a zero-length file even for truncate does not reset the utime
+                os.utime(f.fileno())
                 if contents: f.write(contents)
         except FileNotFoundError:
             os.makedirs(self.stamp_path, exist_ok = True)
             with open(os.path.join(self.stamp_path, ".stamp-"+stamp), "wt") as f:
+                os.utime(f.fileno())
                 if contents: f.write(contents)
 
     def delete_stamp(self, stamp):
