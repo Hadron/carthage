@@ -113,7 +113,7 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
 
     async def ssh_online(self):
         online = False
-        for i in range(30):
+        for i in range(60):
             try: await self.ssh('date',
                                 _bg = True, _bg_exc = False,
                                 _timeout = 5)
@@ -168,6 +168,7 @@ class AbstractMachineModel(Injectable):
             else: ainjector = self.injector(AsyncInjector)
             network_config = await ainjector.get_instance_async(NetworkConfig)
         except KeyError: return
+        if network_config is None: return
         result = await ainjector(network_config.resolve,  self)
 
 
@@ -340,6 +341,7 @@ class Machine(AsyncInjectable, SshMixin):
         if not force and self.network_links: return
         try: network_config = await self.ainjector.get_instance_async(NetworkConfig)
         except KeyError: return
+        if network_config is None: return
         result = await self.ainjector(network_config.resolve, self.model or self)
 
 
