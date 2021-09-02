@@ -45,6 +45,7 @@ class VM(Machine, SetupTaskMixin):
         if self.console_needed:
             self.console_port = injector(PortReservation)
         self.running = False
+        self.closed = False
         self.volume = None
         self.vm_running = self.machine_running
         self._operation_lock = asyncio.Lock()
@@ -139,19 +140,21 @@ class VM(Machine, SetupTaskMixin):
 
 
     def close(self, canceled_futures = None):
-        if self.running:
-            try:
-                sh.virsh("destroy", self.full_name)
-                self.running = False
-            except Exception: pass
-        self.volume.close()
-        try:
-            if not self.config_layout.persist_local_networking: os.unlink(self.config_path)
-        except FileNotFoundError: pass
+        if self.closed: return
+        if ( not self.config_layout.persist_local_networking) or self.config_layout.delete_volumes:
+            if self.running:
+                try:
+                    sh.virsh("destroy", self.full_name)
+                    self.running = False
+                except Exception: pass
+            try: os.unlink(self.config_path)
+            except FileNotFoundError: pass
         if self.config_layout.delete_volumes:
             try: shutil.rmtree(self.stamp_path)
             except FileNotFoundError: pass
+        self.volume.close()
         self.injector.close(canceled_futures = canceled_futures)
+        self.closed = True
 
     def __del__(self):
         self.close()
@@ -165,6 +168,8 @@ class VM(Machine, SetupTaskMixin):
             self.running = True
         except sh.ErrorReturnCode_1: pass
         if self.running and ( self.__class__.ip_address is Machine.ip_address):
+            try: self.ip_address
+            except NotImplementedError:
                 await self._find_ip_address()
 
         await self.run_setup_tasks(context = self.machine_running(ssh_online = True))
