@@ -264,3 +264,24 @@ async def test_local_networking(ainjector):
     await l.generate()
     assert getattr(l.net1, 'bridge_name', None) == "br_net1"
     
+@async_test
+async def test_model_tasks(ainjector):
+    class Layout(ModelGroup):
+        class tasks(ModelTasks):
+
+            @setup_task("frob stuff")
+            def frob_stuff(self):
+                nonlocal frobbed
+                frobbed = True
+
+            @frob_stuff.check_completed()
+            def frob_stuff(self):
+                return False
+
+
+    frobbed = False
+    l = await ainjector(Layout)
+    assert frobbed is False
+    await l.generate()
+    assert frobbed is True
+    

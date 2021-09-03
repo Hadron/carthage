@@ -11,8 +11,9 @@ from .implementation import *
 from .decorators import *
 from carthage.dependency_injection import * #type: ignore
 from carthage.utils import when_needed, memoproperty
-from carthage import ConfigLayout
+from carthage import ConfigLayout, SetupTaskMixin
 import typing
+from pathlib import Path
 import carthage.network
 import carthage.machine
 from .utils import *
@@ -125,6 +126,11 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass = ModelingContainer
         async def await_futures(pending_futures, event, target, **kwargs):
             if pending_futures:
                 await asyncio.gather(*pending_futures)
+        if not hasattr(self, 'all_model_tasks'):
+            model_tasks = await self.ainjector.filter_instantiate_async(
+                ModelTasks, ['name'],
+                ready = False)
+            self.all_model_tasks = [m[1] for m in model_tasks]
         models = await self.all_models(ready = False)
         with self.injector.event_listener_context(
                 InjectionKey(carthage.network.NetworkConfig), "resolved",
@@ -151,6 +157,7 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass = ModelingContainer
                 logger.exception(f"Error generating for {repr(m)}")
                 raise
         models = await self.resolve_networking()
+        models += self.all_model_tasks
         futures = []
         for m in models:
             if not isinstance(m, AsyncInjectable): continue
@@ -424,3 +431,36 @@ def model_bases(host: str, *bases,
 
 __all__ += ['model_bases']
 
+
+@inject(config_layout = ConfigLayout)
+class ModelTasks(InjectableModel,  SetupTaskMixin, AsyncInjectable, metaclass=ModelingContainer):
+
+    '''
+    A grouping of tasks that will be run at generate time in a :class:`CarthageLayout`.  As part of :meth:`ModelGroup.generate`, the layout searches for any :class:`ModelTasks` provided by its injector and instantiates them.  This causes any setup_tasks to be run.
+
+    All :class:`ModelTasks` have a name, which forms part of their key.  If there needs to be an ordering between tasks, the tasks can inject a dependency on other ModelTasks.
+
+    Example usage::
+
+        class layout(CarthageLayout):
+
+            class mt1(ModelTasks):
+
+                @setup_task("some task")
+                def some_task(self): # do stuff
+
+    The *async_ready* method will only be called during generate.  However :class:`ModelTasks` will be instantiated whenever at least :meth:`resolve_networking` is called.
+
+    '''
+
+    @classmethod
+    def our_key(cls):
+        name = getattr(cls, 'name', cls.__name__)
+        return InjectionKey(ModelTasks, name = name)
+
+    @memoproperty
+    def stamp_path(self):
+        name = getattr(self.__class__, 'name', self.__class__.__name__)
+        return Path(self.config_layout.output_dir)/name
+
+__all__ += ['ModelTasks']

@@ -222,6 +222,9 @@ Base Models
 
 .. autoclass:: CarthageLayout
 
+.. autoclass:: ModelTasks
+
+
 .. _modeling:decorators:
 
 Decorators
