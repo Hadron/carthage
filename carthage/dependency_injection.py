@@ -954,11 +954,17 @@ class AsyncInjectable(Injectable):
         '''Returns None or an object that should replace *self* in providing dependencies.'''
         return None
 
-    async def async_become_ready(self):
+    async def async_become_ready(self, cycle_set = None):
+
+        '''
+        Interface point to request that a dependency be fully ready (:meth:`async_ready` is called exactly once).  This function manages tracking to make sure that async_ready is called once, and waits for that call if needed.
+        This method also makes sure that dependencies registered with :func:`.inject` are made ready before :meth:`async_ready` is called.
+        Subclasses should not override this method but instead should override :meth:`async_ready`.
+        '''
         if self._async_ready_state == ReadyState.NOT_READY:
             raise RuntimeError("Resolution should have already happened")
         elif self._async_ready_state == ReadyState.RESOLVED:
-            self._ready_future = asyncio.ensure_future(self.async_ready())
+            self._ready_future = asyncio.ensure_future(_handle_async_deps(self, cycle_set))
             self._async_ready_state = ReadyState.READY_PENDING
             try:
                 return await self._ready_future
@@ -1059,6 +1065,25 @@ class AsyncInjector(Injectable):
         results = await asyncio.gather(*results)
         zipped = zip(result_keys, results)
         return [z for z in zipped if z[1] is not None]
+
+
+async def _handle_async_deps(obj, cycle_set):
+    if cycle_set is None: cycle_set = set()
+    futures = []
+    for attr, dep in obj.__class__._injection_dependencies.items():
+        if dep.ready is False: continue
+        val = getattr(obj, attr, None)
+        if val is None: continue
+        if not isinstance(val, AsyncInjectable): continue
+        if id(val) in cycle_set:
+            import warnings
+            warnings.warn(f'{obj}.async_become_ready: @inject({attr}={dep}) produced dependency cycle with {val}')
+            continue
+        cycle_set.add(id(val))
+        futures.append(asyncio.ensure_future(val.async_become_ready(cycle_set = cycle_set)))
+
+    await asyncio.gather(*futures)
+    return await obj.async_ready()
 
 
 

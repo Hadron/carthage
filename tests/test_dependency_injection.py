@@ -431,3 +431,28 @@ async def test_concurrent_resolution(a_injector, loop):
     assert await fut_wait_for_foo is True
     await fut_key
     
+@async_test
+async def test_async_become_ready_handles_dependencies(a_injector):
+    ainjector = a_injector
+    @inject(bar = InjectionKey("bar"))
+    class Foo(AsyncInjectable):
+
+        async def async_ready(self):
+            assert self.bar.ready is True
+            return await super().async_ready()
+
+    class Bar(AsyncInjectable):
+
+        ready = False
+
+        async def async_ready(self):
+            self.ready = True
+            return await super().async_ready()
+
+    ainjector.add_provider(InjectionKey("bar"), Bar)
+    ainjector.add_provider(Foo)
+    foo = await ainjector.get_instance_async(InjectionKey(Foo, _ready = False))
+    assert foo.bar.ready is False
+    await foo.async_become_ready()
+    assert foo.bar.ready is True
+                           
