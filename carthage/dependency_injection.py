@@ -441,12 +441,17 @@ Return the first injector in our parent chain containing *k* or None if there is
                 return result
             elif to_ready and isinstance(result,AsyncInjectable) \
                      and result._async_ready_state != ReadyState.READY:
-                    if not loop:
-                        raise AsyncRequired(f"Requesting instantiation of {result} to ready, outside of async context")
-                    if placement: placement(result)
-                    future = loop.create_task(self._handle_async_injectable(result, resolv = False))
-                    futures.append(future)
-                    return future
+                # This happens if an AsyncInjectable was previously
+                # instantiated in _ready = False state but now we are
+                # requesting that object in _ready = True.  In this
+                # case if we were the ones calling _instantiate, we
+                # would already have a future.
+                if not loop:
+                    raise AsyncRequired(f"Requesting instantiation of {result} to ready, outside of async context")
+                # We pass in placement not do_place because the item has already been recorded.
+                future = loop.create_task(self._handle_async_injectable(result, resolv = False, placement = placement))
+                futures.append(future)
+                return future
 
         finally:
             if ready_reset is not None:
@@ -573,9 +578,9 @@ Return the first injector in our parent chain containing *k* or None if there is
         if not hasattr(self, 'loop'):
             self.loop = loop
         if isinstance(p, collections.abc.Coroutine):
-            fut = asyncio.ensure_future(p, loop = loop)
+            fut = asyncio.ensure_future(p)
         elif  isinstance(p, AsyncInjectable):
-            fut =  asyncio.ensure_future(self._handle_async_injectable(p), loop = loop)
+            fut =  asyncio.ensure_future(self._handle_async_injectable(p, placement = placement))
         elif isinstance(p, asyncio.Future):
             fut = p
         else:
@@ -585,7 +590,7 @@ Return the first injector in our parent chain containing *k* or None if there is
 
         if interim_placement: interim_placement(done_future)
 
-    async def _handle_async_injectable(self, obj, resolv = True):
+    async def _handle_async_injectable(self, obj, placement, resolv = True):
         try:
             #Don't bother running the resolve protocol for the base case
             if resolv and (obj._async_ready_state == ReadyState.NOT_READY):
@@ -596,12 +601,13 @@ Return the first injector in our parent chain containing *k* or None if there is
                     res = obj
                 if self._is_async(res):
                     future = self.loop.create_future()
-                    self._handle_async(res, done_future = future, placement = None,
+                    self._handle_async(res, done_future = future, placement = placement,
                                        interim_placement = None, loop = self.loop)
                     return await future
                 else: return res
             else: # no resolution required
                 if instantiate_to_ready.get():
+                    if placement: placement(obj)
                     await obj.async_become_ready()
                     if not obj._async_ready_state == ReadyState.READY:
                         raise RuntimeError(f"async_ready for {obj.__class__.__name__} must chain back to AsyncInjectable.async_ready.")

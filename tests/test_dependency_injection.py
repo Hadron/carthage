@@ -456,3 +456,18 @@ async def test_async_become_ready_handles_dependencies(a_injector):
     await foo.async_become_ready()
     assert foo.bar.ready is True
                            
+@async_test
+async def test_notready_cycles_okay(a_injector):
+    ainjector = a_injector
+    class Cycle(AsyncInjectable):
+
+        async def async_ready(self):
+            # If things fail this will hang
+            res = await self.ainjector.filter_instantiate_async(Cycle, ['name'], ready = False)
+            assert res[0][1] is self
+            return await super().async_ready()
+
+    foo_key = InjectionKey(Cycle, name = "foo")
+    ainjector.add_provider(foo_key, Cycle)
+    await ainjector.get_instance_async(foo_key)
+    
