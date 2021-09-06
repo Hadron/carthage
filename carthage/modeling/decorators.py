@@ -12,6 +12,7 @@ from carthage.dependency_injection import Injector, InjectionKey, inject_autokwa
 from .implementation import ModelingBase, InjectableModelType, ModelingContainer, NSFlags, handle_transclusions
 from .utils import setattr_default, fixup_dynamic_name
 from ..dependency_injection import InjectionKey
+import carthage.machine
 
 
 class ModelingDecoratorWrapper:
