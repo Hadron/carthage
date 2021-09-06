@@ -29,7 +29,7 @@ def dependency_quote_class(c: type):
 
 __all__ += ['dependency_quote_class']
 
-dependency_quote_class(carthage.machine.BaseCustomization)
+
 
 
 @inject_autokwargs(injector = Injector)
@@ -184,6 +184,7 @@ machine_implementation_key = InjectionKey(carthage.machine.Machine, role = "impl
 
 __all__ += [ 'machine_implementation_key']
 
+dependency_quote_class(carthage.machine.BaseCustomization)
 
 
 class MachineModelType(ModelingContainer):
@@ -191,6 +192,8 @@ class MachineModelType(ModelingContainer):
     classes_to_inject = (carthage.machine.BaseCustomization,)
 
 
+    namespace_filters = [_handle_base_customization]
+    
     @staticmethod
     def calc_mixin_key(class_name, ns, bases):
         # if we had the class instantiated, we'd just look at
@@ -277,6 +280,28 @@ class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metac
 
     :param mixin_key: The :class:`InjectionKey` to use to search for mixins.
 
+
+    Any :class:`carthage.network.NetworkConfig` present in the *MachineModel* will be used as the network configuration.
+
+Every :class:`carthage.machine.BaseCustomization` (including MachineCustomization, FilesystemCustomization and ContainerCustomization) will be integrated into the resulting machine:
+
+    * If the customization is called *cust*, then a method will be added to the machine *cust_task* which is a :func:`carthage.machine.customization_task` to run the customization.
+
+    * On the model, *cust*  will become a  method that will produce an instance of the customization applied to the machine.
+
+    For example::
+
+        class server(MachineModel):
+
+            class install_software(MachineCustomization):
+
+                webserver_role = ansible_role_task('webserver')
+
+                database_role = ansible_role_task('database')
+
+
+    Then *server.machine* will have a method *install_software_task* which will run both ansible roles assuming they have not already been run.  *model.install_software* will produce an instance of the customization applied to *model.machine*.  *model.install_software.database_role()* is a method that will force the database_role to run even if it appears up to date.
+
     '''
     
     @classmethod
@@ -320,10 +345,9 @@ class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metac
         for b in bases:
             assert isinstance(b, type) or hasattr(b, '__mro_entries__'), f'{b} is not a type; did you forget a dependency_quote'
         res =  types.new_class("MachineImplementation", tuple(bases))
-        try:
-            customization = self.injector.get_instance(carthage.machine.BaseCustomization)
-            res.model_customization = carthage.machine.customization_task(customization)
-        except KeyError: pass
+        for k, customization in self.injector.filter_instantiate(carthage.machine.BaseCustomization, ['description'], stop_at = self.injector):
+            name = customization.__name__
+            setattr(res, f'{name}_task', carthage.machine.customization_task(customization))
         res.model = self
         return res
 

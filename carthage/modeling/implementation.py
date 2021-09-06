@@ -13,6 +13,7 @@ from carthage.dependency_injection import default_injection_key # not part of pu
 from carthage.dependency_injection import InjectorXrefMarker
 from .utils import *
 from carthage.network import NetworkConfig
+import carthage.machine
 # There is a circular import of decorators at the end.
 
 thread_local = threading.local()
@@ -133,7 +134,11 @@ class ModelingNamespace(dict):
         if isinstance(state.value, type) and (state.flags & NSFlags.inject_by_class):
             for b in state.value.__mro__:
                 if b in self.classes_to_inject:
-                    yield InjectionKey(b), (val(InjectionKey(b)), options)
+                    try: class_key = state.value.default_class_injection_key()
+                    except AttributeError:
+                        class_key = InjectionKey(b)
+                    class_key = InjectionKey(b, **class_key.constraints)
+                    yield class_key, (val(class_key), options)
         try:
             global_key = state.value.__globally_unique_key__
             global_options = state.injection_options
@@ -538,5 +543,19 @@ If the namespace includes any setup_tasks, then add SetupTaskMixin to the basese
 
 
 __all__ += ['adjust_bases_for_tasks']
+
+def _handle_base_customization(target_cls, ns, k, state):
+    val = state.value
+    if not state.flags & NSFlags.instantiate_on_access: return
+    if not isinstance(val, type): return
+    if not issubclass(val,carthage.machine.BaseCustomization): return
+    if state.flags & NSFlags.inject_by_class:
+        key = val.default_class_injection_key()
+        key = InjectionKey(carthage.machine.BaseCustomization, **key.constraints)
+        ns.to_inject[key] = dependency_quote(val), state.injection_options
+    state.flags &= ~(NSFlags.inject_by_class | NSFlags.instantiate_on_access)
+    state.value = decorators.wrap_base_customization(val)
+
+__all__ += ['_handle_base_customization']
 
 from . import decorators

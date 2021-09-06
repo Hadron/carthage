@@ -6,10 +6,11 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import functools
+import typing
 from carthage.dependency_injection import Injector, InjectionKey, inject_autokwargs, dependency_quote
 from .implementation import ModelingBase, InjectableModelType, ModelingContainer, NSFlags, handle_transclusions
 from .utils import setattr_default, fixup_dynamic_name
-import typing
 from ..dependency_injection import InjectionKey
 
 
@@ -368,6 +369,18 @@ def model_mixin_for(**constraints):
             MachineModelMixin, **constraints))(dependency_quote(val))
     return wrap
 
+class wrap_base_customization:
+
+    def __init__(self, val):
+        functools.wraps(val)(self)
+        self.value = val
+
+    def __get__(self, instance, owner):
+        if instance is None: return self.value
+        machine = instance.injector.get_instance(InjectionKey(carthage.machine.Machine, _ready = False))
+        return instance.injector(self.value, apply_to = machine)
+
+    
 
 __all__ = ["ModelingDecoratorWrapper", "provides", 'dynamic_name',
            'injector_access', 'no_instantiate',
