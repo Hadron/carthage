@@ -419,8 +419,14 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
     def __init__(self, apply_to: Machine,
                   **kwargs):
         self.host = apply_to
+        if not self.description: self.description = self.__class__.__name__
         super().__init__(**kwargs)
 
+    @classmethod
+    def default_class_injection_key(cls):
+        description = cls.description or cls.__name__
+        return InjectionKey(cls, description = description)
+    
     async def async_ready(self):
         # We do not run setup tasks on construction.
         return await AsyncInjectable.async_ready(self)
@@ -531,7 +537,6 @@ def customization_task    (c: BaseCustomization, order: int = None,
         add_packages = customization_task(AddOurPackagesCustomization)
 
     '''
-
     @setup_task(c.description, order = order, before = before)
     @inject(ainjector = AsyncInjector)
     async def do_task(machine, ainjector):
