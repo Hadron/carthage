@@ -23,7 +23,7 @@ container_image = InjectionKey('container-image')
 container_volume = InjectionKey('container-volume')
 
 
-@inject(image = container_image,
+@inject(image = InjectionKey(container_image, _ready = False),
         loop = asyncio.AbstractEventLoop,
         config_layout = ConfigLayout,
         network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),

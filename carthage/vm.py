@@ -31,7 +31,7 @@ vm_image = InjectionKey('vm-image')
 @inject(
     config_layout = ConfigLayout,
     injector = Injector,
-    image = vm_image,
+    image = InjectionKey(vm_image, _ready = False),
     network_config = carthage.network.NetworkConfig
     )
 class VM(Machine, SetupTaskMixin):
