@@ -545,7 +545,7 @@ def ansible_role_task(roles, vars = None):
     '''
     A :func:`setup_task` to apply one or more ansible roles to a machine.
 
-    :param roles: A single role (as a string) or list of roles to include
+    :param roles: A single role (as a string) or list of roles to include.  Roles can also be a list of dictionaries containing argumens to *import_role*.
 
     :param vars: An optional dictionary of ansible variable assignments.
 
@@ -557,8 +557,10 @@ def ansible_role_task(roles, vars = None):
             self = self.host
         play = []
         for r in roles:
+            if isinstance(r,dict): r_dict = r
+            else: r_dict=dict(name = r)
             play.append(dict(
-                import_role = dict(name = r)))
+                import_role = r_dict))
         
         return await ainjector(
             run_play,
@@ -566,7 +568,7 @@ def ansible_role_task(roles, vars = None):
             play = play,
         vars = vars
             )
-    if isinstance(roles, str): roles = [roles]
+    if isinstance(roles, (str,dict)): roles = [roles]
     return apply_roles
 
 __all__ += ['ansible_role_task']
