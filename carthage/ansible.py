@@ -54,7 +54,7 @@ class AnsibleConfig(Injectable):
 
     def __init__(self, injector):
         # If this class is ever modified to store the injector, then it should be passed into the superclass so it can be claimed.
-        super().__init__
+        super().__init__()
         roles = []
         for k, pl in injector.filter_instantiate(CarthagePlugin, ['name']):
             roles_path = pl.resource_dir/"ansible/roles"
