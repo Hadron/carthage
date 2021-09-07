@@ -250,7 +250,7 @@ class BridgeNetwork(TechnologySpecificNetwork):
         args = []
         if link.mtu:
             args.extend(['mtu', link.mtu])
-        args.append('peer')
+        args.extend(['type', 'veth', 'peer'])
         if link.mac:
             args.extend(['address', str(link.mac)])
         args.extend(['name', link.interface])
@@ -258,13 +258,12 @@ class BridgeNetwork(TechnologySpecificNetwork):
         logger.debug('Network {} creating virtual ethernet for {}'.format(self.name, link.machine.name))
         try:
             sh.ip('link', 'add', 'dev', bridge_member,
-                  'type', 'veth',
                    *args)
         except sh.ErrorReturnCode_2:
             logger.warn("Network {}: {} appears to exist; deleting".format(self.name, bridge_member))
             sh.ip('link', 'del', bridge_member)
             sh.ip('link', 'add', 'dev', bridge_member,
-                  'type', 'veth', *args)
+                  *args)
         sh.ip('link', 'set', bridge_member, 'master', self.bridge_name, 'up')
         ve = VethInterface(network = self, ifname = bridge_member, internal_name = link.interface, delete_interface = False)
         self.interfaces[bridge_member] = ve
