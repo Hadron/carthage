@@ -16,7 +16,7 @@ from carthage.modeling.base import *
 from carthage.modeling.implementation import ModelingContainer
 from carthage.modeling.decorators import *
 from carthage.network import NetworkConfig, Network
-from carthage.machine import MachineCustomization
+from carthage.machine import MachineCustomization, BaseCustomization
 @pytest.fixture()
 def injector():
     injector = base_injector(Injector)
@@ -231,7 +231,7 @@ def test_implicit_customization(injector):
 
     l = injector(Layout)
     injector.add_provider(machine_implementation_key, dependency_quote(Machine))
-    assert hasattr(l.foo.machine_type, 'model_customization')
+    assert hasattr(l.foo.machine_type, 'cust_task') 
     
 def test_model_mixin(injector):
     class layout(CarthageLayout):
@@ -285,3 +285,38 @@ async def test_model_tasks(ainjector):
     await l.generate()
     assert frobbed is True
     
+@async_test
+async def test_tasks_inherit(ainjector):
+    class template(MachineModel, template = True):
+
+        class cust1(BaseCustomization):
+            @setup_task("Task a")
+            def task_1(self):
+                nonlocal task_1_run
+                task_1_run = True
+            @task_1.check_completed()
+            def task_1(self):
+                return False
+
+    class layout(ModelGroup):
+        add_provider(machine_implementation_key, dependency_quote(LocalMachine))
+
+        class local(template, MachineModel):
+
+            class cust2(BaseCustomization):
+                @setup_task("task 2")
+                def task_2(self):
+                    nonlocal task_2_run
+                    task_2_run = True
+                @task_2.check_completed()
+                def task_2(self):
+                    return False
+
+    task_1_run = False
+    task_2_run = False
+    l = await ainjector(layout)
+    l.local.machine
+    assert task_2_run is False
+    await     l.local.machine.async_become_ready()
+    assert task_2_run
+    assert task_1_run
