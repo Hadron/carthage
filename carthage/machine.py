@@ -427,10 +427,8 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
         description = cls.description or cls.__name__
         return InjectionKey(cls, description = description)
     
-    async def async_ready(self):
-        # We do not run setup tasks on construction.
-        return await AsyncInjectable.async_ready(self)
-
+    # We do not run setup_tasks on construction
+    async_ready = AsyncInjectable.async_ready
     #:Can be overridden; a context manager in which customization tasks should be run
     customization_context = None
 

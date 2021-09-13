@@ -320,3 +320,5 @@ async def test_tasks_inherit(ainjector):
     await     l.local.machine.async_become_ready()
     assert task_2_run
     assert task_1_run
+    assert l.local.cust2.task_2
+    
