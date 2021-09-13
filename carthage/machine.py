@@ -553,6 +553,8 @@ class BareMetalMachine(Machine, SetupTaskMixin):
     '''Represents physical hardware that Carthage cannot start or stop
     '''
 
+    running = False
+
     async def start_machine(self):
         if self.running: return
         await self.start_dependencies()
