@@ -104,7 +104,8 @@ class SystemdNetworkInstallMixin(SetupTaskMixin):
             if not networking_dir.exists(): raise SkipSetupTask
             await sh.rsync(
                 "-a", "--delete",
-                "--include=10-carthage-*",
+                "--filter=include 10-carthage-*",
+                "--filter=exclude,! 10-carthage-*",
                 str(networking_dir)+"/",
                 Path(path)/"etc/systemd/network",
                 _bg = True,
