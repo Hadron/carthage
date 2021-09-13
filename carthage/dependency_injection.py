@@ -313,7 +313,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                predicate: typing.Union[list, typing.Callable] = None,
                stop_at: Injector = None):
         '''
-        :return: Set of :class:`InjectionKey` with target type of
+        :return: list of :class:`InjectionKey` with target type of
             *target* and satisfying *predicate* in the current injector
             and its parents.
 
@@ -334,13 +334,15 @@ Return the first injector in our parent chain containing *k* or None if there is
         if isinstance(predicate, list):
             constraints = predicate
             predicate = filter_for_constraints
-        result = set(filter(lambda k: k.target is target and predicate(k), self._providers.keys()))
         if stop_at and not self.parent_injector:
             raise ValueError( f'{stop_at} was not in the parent chain')
-        elif stop_at == self: pass# stop here
+        elif stop_at == self: result = {}# stop here
         elif self.parent_injector:
-            result |= self.parent_injector.filter(target, predicate, stop_at = stop_at)
-        return result
+            result = {k:True for k in  self.parent_injector.filter(target, predicate, stop_at = stop_at)}
+        else: # no stop_at; ended chain
+            result = {}
+        result.update({k: True for k in self._providers.keys() if k.target is target and predicate(k)})
+        return list(result.keys())
 
     def filter_instantiate(self, target, predicate, *, stop_at = None, ready = False):
         '''
