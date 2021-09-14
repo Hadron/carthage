@@ -203,8 +203,8 @@ class AnsibleGroupPlugin(Injectable, ABC):
         raise NotImplementedError
     
     @classmethod
-    def supplementary_injection_keys(self, k):
-        yield InjectionKey(AnsibleGroupPlugin, name=self.name)
+    def default_class_injection_key(self):
+        return InjectionKey(AnsibleGroupPlugin, name=self.name)
 
         
 class AnsibleHostPlugin(AsyncInjectable, ABC):
@@ -214,8 +214,8 @@ class AnsibleHostPlugin(AsyncInjectable, ABC):
         raise NotImplementedError
 
     @classmethod
-    def supplementary_injection_keys(self, k:InjectionKey):
-        yield InjectionKey(AnsibleHostPlugin, name = self.name)
+    def default_class_injection_key(self):
+        return  InjectionKey(AnsibleHostPlugin, name = self.name)
 
 __all__ += ['AnsibleInventory', 'AnsibleGroupPlugin', 'AnsibleHostPlugin']
 
