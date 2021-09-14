@@ -4,6 +4,7 @@ model = model_in or object()
 memory_mb = getattr(model, 'memory_mb', 8192)
 cpus = getattr(model, 'cpus', 1)
 nested_virt = getattr(model, 'nested_virt', False)
+disk_cache = getattr(model, 'disk_cache', 'writethrough')
 %>
 <domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
   <name>${name}</name>
@@ -38,7 +39,7 @@ nested_virt = getattr(model, 'nested_virt', False)
   <devices>
     <emulator>/usr/bin/kvm</emulator>
     <disk type='file' device='disk'>
-      <driver name='qemu' type='qcow2'/>
+      <driver name='qemu' type='qcow2' cache='${disk_cache}'/>
       <source file='${volume.path}'/>
       <target dev='hda' bus='scsi'/>
       <boot order='1'/>
