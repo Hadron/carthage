@@ -1,3 +1,9 @@
+hadron-carthage (0.10) unstable; urgency=medium
+
+  * Significant updates to get a version that works with h-o from packages
+
+ -- Sam Hartman <hartmans@debian.org>  Tue, 14 Sep 2021 13:15:11 -0600
+
 hadron-carthage (0.9) unstable; urgency=medium
 
   * Modeling branch merged to master
