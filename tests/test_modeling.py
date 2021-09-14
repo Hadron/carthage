@@ -7,6 +7,7 @@
 # LICENSE for details.
 
 import pytest
+import asyncio
 from pathlib import Path
 
 from carthage.pytest import *
@@ -321,4 +322,29 @@ async def test_tasks_inherit(ainjector):
     assert task_2_run
     assert task_1_run
     assert l.local.cust2.task_2
+    
+
+@async_test
+async def test_injector_xref_no_cycle(ainjector):
+    class layout(ModelGroup):
+        class local(MachineModel):
+            add_provider(machine_implementation_key, dependency_quote(LocalMachine))
+
+            class cust(BaseCustomization):
+
+                async def async_ready(self):
+                    await wait_future
+                    return await super().async_ready()
+                
+
+    l = await ainjector(layout)
+    wait_future = ainjector.loop.create_future()
+    machine_key = InjectionKey("machine")
+    l.injector.add_provider(machine_key, injector_xref(InjectionKey(MachineModel, host = "local"), InjectionKey(Machine)))
+    instantiation_future = ainjector.loop.create_task(l.ainjector.get_instance_async(machine_key))
+    await asyncio.sleep(0.2)
+    assert instantiation_future.done() is False
+    l.local.machine
+    wait_future.set_result(True)
+    await instantiation_future
     

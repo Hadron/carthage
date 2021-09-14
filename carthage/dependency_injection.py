@@ -438,6 +438,8 @@ Return the first injector in our parent chain containing *k* or None if there is
                     _interim_placement = do_interim_place,
 )
             if isinstance(result, asyncio.Future):
+                if loop is None:
+                    raise AsyncRequired(f'{k} requires asynchronous instantiation')
                 futures.append(result)
                 provider.record_instantiation(result, k, satisfy_against, final = False)
                 return result
@@ -1161,7 +1163,17 @@ def injector_xref(injectable_key: InjectionKey,
     can happen otherwise.
 
     '''
-    tkey = target_key
+    # If we return an AsyncInjectable that needs to be ready, our
+    # caller will handle calling async_become_reeady.  We want to
+    # requesta not_ready object to avoid cycles.  If asynchronous is
+    # called, we'll hold with an interim future providing the
+    # dependency while InjectorXrefMarker's async_resolve runs.
+    # That's necessary.  If we don't explicitly request _ready=False,
+    # we will also hold with an interim future while the inner
+    # async_become_ready is called.  In cases like AnsibleInventory
+    # where someone asks for _ready=False while async_become_ready is
+    # running, this creates a cycle.
+    tkey = InjectionKey(target_key, _ready=False)
     ikey = injectable_key
     @inject(injectable = injectable_key,
             injector = None)
