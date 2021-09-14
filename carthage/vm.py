@@ -71,10 +71,11 @@ class VM(Machine, SetupTaskMixin):
             ci_data = await self.ainjector(carthage.cloud_init.generate_cloud_init_cidata)
         with open(self.config_path, 'wt') as f:
             f.write(template.render(
-                console_needed = self.console_needed,
-                console_port = self.console_port.port if self.console_needed else None,
-                name =self.full_name,
-                links = self.network_links,
+                console_needed=self.console_needed,
+                console_port=self.console_port.port if self.console_needed else None,
+                name=self.full_name,
+                links=self.network_links,
+                model_in=self.model,
                 ci_data = ci_data,
                 if_name = lambda n: carthage.network.base.if_name("vn", self.config_layout.container_prefix, n.name, self.name),
                 volume = self.volume))
@@ -152,7 +153,7 @@ class VM(Machine, SetupTaskMixin):
         if self.config_layout.delete_volumes:
             try: shutil.rmtree(self.stamp_path)
             except FileNotFoundError: pass
-        self.volume.close()
+        if self.volume: self.volume.close()
         self.injector.close(canceled_futures = canceled_futures)
         self.closed = True
 

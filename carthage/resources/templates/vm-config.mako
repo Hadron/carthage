@@ -1,13 +1,22 @@
 <%
 import uuid
+model = model_in or object()
+memory_mb = getattr(model, 'memory_mb', 8192)
+cpus = getattr(model, 'cpus', 1)
+nested_virt = getattr(model, 'nested_virt', False)
 %>
 <domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
   <name>${name}</name>
   <uuid>${uuid.uuid4()}</uuid>
-  <memory unit='KiB'>8388608</memory>
+  <memory unit='KiB'>${memory_mb*1024}</memory>
 
-  <vcpu >4</vcpu>
-  <os>
+  <vcpu >${cpus}</vcpu>
+<cpu mode='host-model'>
+     %if nested_virt:
+     <feature policy='require' name='vmx' />
+     %endif
+</cpu>
+<os>
     <type arch='x86_64' machine='pc-i440fx-2.6'>hvm</type>
     <loader type='pflash' readonly='yes'>/usr/share/OVMF/OVMF_CODE.fd</loader>                         
 <nvram template='/usr/share/OVMF/OVMF_VARS.fd' />
