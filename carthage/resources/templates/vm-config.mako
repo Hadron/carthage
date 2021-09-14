@@ -61,6 +61,7 @@ nested_virt = getattr(model, 'nested_virt', False)
 %endif
     <controller type='scsi' model='virtio-scsi' />
     %for i, link in links.items():
+    <% if link.local_type: continue %>\
         <interface type='bridge'>
 %if link.mac is not None:
       <mac address='${link.mac}'/>
