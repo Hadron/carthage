@@ -136,6 +136,7 @@ class Container(Machine, SetupTaskMixin):
                                              _in = "/dev/null",
                                              _encoding = 'utf-8',
                                              _new_session = False,
+                                             _env = self._environment(networking),
                                              )
             
             self.running = True
@@ -277,9 +278,11 @@ class Container(Machine, SetupTaskMixin):
         return sh.nsenter.bake( "-t"+self.container_leader, "-C", "-m", "-n", "-u", "-i", "-p",
                                 _env = self._environment())
 
-    def _environment(self):
+    def _environment(self, networking = False):
         env = os.environ.copy()
         env['DEBIAN_FRONTEND'] = 'noninteractive'
+        if networking:
+            env['SYSTEMD_NSPAWN_API_VFS_WRITABLE'] = 'network'
         return env
 
     @contextlib.asynccontextmanager
