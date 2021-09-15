@@ -386,6 +386,7 @@ async def run_play(hosts, play,
                 'remote_user': 'root',
                 'gather_facts': gather_facts,
                 'tasks': play}]
+            if callable(vars): vars = await ainjector(vars)
             if vars: pb[0]['vars'] = vars
             f.write(yaml.dump(pb, default_flow_style = False))
         if inventory is None:
