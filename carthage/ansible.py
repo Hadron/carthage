@@ -240,7 +240,7 @@ async def run_playbook(hosts,
                        ):
 
     '''
-    Run an ansible playbook against a set of hosts.  If *origin* is ``None``, then ``ansible-playbook`` is run locally, otherwise it is run via ``ssh`` to ``origin``.
+    Run an ansible playbook against a set of hosts.  
     A new ansible configuration is created for each run of ansible.
     if *log* is ``None`` then ansible output is parsed and an :class:`AnsibleResult` is returned.  Otherwise ``True`` is returned on a successful ansible run.
 
@@ -249,6 +249,17 @@ async def run_playbook(hosts,
     :param hosts: A list of hosts to run the play against.  Hosts can be strings, or :class:`Machine` objects.  For machine objects, *ansible_inventory_name* will be tried before :meth:`Machine.name`.
 
 :param log: A local path where a log of output and errors should be created or ``None`` to parse the ansible result programatically after ansible completes.  It is not possible to produce human readable output and a result that can be parsed at the same time without writing a custom ansible callback plugin.
+
+:param origin: Controls where the playbook is run:
+
+    None
+        Run locally
+
+    A :class:`~carthage.machine.Machine`
+        If the origin is a :class:`Container` that is not running, run ansible-playbook directly in the namespace of the container.  Otherwise ssh into the machine and run ansible-playbook.
+
+    NetworkNamespaceOrigin
+        Use the local filesystem but the network namespace of the referenced container.
 
     '''
     injector = ainjector.injector
@@ -282,6 +293,10 @@ async def run_playbook(hosts,
         else:
             config_dir = config.state_dir
             config_inner = config.state_dir
+        if isinstance(origin, Container) and not origin.running:
+                # This may not be strictly true, but we definitely
+                # cannot get access to the json
+                log = "container.log"
         with await ainjector(
                 write_config, config_dir,
                 [inventory],
@@ -306,7 +321,10 @@ async def run_playbook(hosts,
                 if vrf:
                     ansible_command = ansible_command.replace("ansible-playbook",
                                             f'ip vrf exec {vrf} ansible-playbook')
-                cmd = origin.ssh( "-A", ansible_command,
+                if isinstance(origin,Container) and not origin.running:
+                    cmd = origin.container_command("sh", "-c", ansible_command)
+                else:
+                    cmd = origin.ssh( "-A", ansible_command,
                                  _bg = True,
                                  _bg_exc = False,
                                  **log_args)
@@ -515,16 +533,23 @@ plays:[{[k for k in self.tasks.keys()]}]"
 
 __all__ += ['AnsibleResult']
 
-
+def _handle_host_origin(host):
+    if not isinstance(host, Machine) and hasattr(host, 'host'):
+        host = host.host
+    if isinstance(host, Container) and not host.running:
+        return localhost_machine, {'origin': dependency_quote(host)}
+    return host, {}
 
 class ansible_playbook_task(setup_tasks.TaskWrapper):
 
     extra_attributes = frozenset({'dir', 'playbook'})
 
+
+
     def __init__(self, playbook, **kwargs):
         async def func(inst):
-            async with inst.machine_running(ssh_online = True):
-                return             await inst.ainjector(run_playbook, inst, self.dir.joinpath(self.playbook))
+            host, extra_args = _handle_host_origin(inst)
+            return             await inst.ainjector(run_playbook, host, self.dir.joinpath(self.playbook), **extra_args)
         super().__init__(
             func = func,
             description = f'Run {playbook} playbook',
@@ -553,8 +578,7 @@ def ansible_role_task(roles, vars = None):
     @setup_tasks.setup_task(f'Apply {roles} ansible roles')
     @inject(ainjector = AsyncInjector)
     async def apply_roles(self, ainjector):
-        if not isinstance(self, Machine) and hasattr(self, 'host'):
-            self = self.host
+        host, extra_args = _handle_host_origin(self)
         play = []
         for r in roles:
             if isinstance(r,dict): r_dict = r
@@ -564,9 +588,10 @@ def ansible_role_task(roles, vars = None):
         
         return await ainjector(
             run_play,
-            hosts = [self],
+            hosts = [host],
             play = play,
-        vars = vars
+            vars = vars,
+            **extra_args
             )
     if isinstance(roles, (str,dict)): roles = [roles]
     return apply_roles

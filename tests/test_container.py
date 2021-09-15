@@ -7,14 +7,15 @@
 # LICENSE for details.
 
 import logging, tempfile, time
-from carthage.debian import  debian_container_to_vm
+from carthage.debian import  debian_container_to_vm, install_stage1_packages_task
 from carthage.image import ContainerImage
 from carthage.network import Network, V4Config
 from carthage.container import Container, container_image
 from carthage.utils import when_needed
 from carthage.pytest import *
 import os.path, pytest, posix
-from carthage import base_injector, AsyncInjector, sh, MachineCustomization, customization_task, ConfigLayout
+from pathlib import Path
+from carthage import base_injector, AsyncInjector, sh, MachineCustomization, customization_task, ConfigLayout, ContainerCustomization
 from carthage.dependency_injection import *
 from carthage.systemd import SystemdNetworkModelMixin
 from carthage.modeling import *
@@ -22,6 +23,7 @@ from carthage.ansible import *
 from carthage.setup_tasks import *
 import carthage.ssh
 
+_resource_dir = Path(__file__).parent.joinpath("resources")
 
 @pytest.fixture()
 def container(test_ainjector, loop):
@@ -67,6 +69,17 @@ class LayoutTest(ModelGroup):
         name = "test-container"
 
         ip_address = "10.2.0.2"
+
+        class test_local_ansible(ContainerCustomization):
+
+            install_ansible = install_stage1_packages_task(["ansible"])
+            @setup_task("Copy in playbook")
+            def copy_in_playbook(self):
+                with open(Path(self.path)/"local_playbook.yml", "wt") as f:
+                    f.write(_resource_dir.joinpath("local_playbook.yml").read_text())
+                    
+            local_play = ansible_playbook_task("/local_playbook.yml")
+            
         class cust(MachineCustomization):
 
                 
