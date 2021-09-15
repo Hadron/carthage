@@ -114,6 +114,8 @@ class Container(Machine, SetupTaskMixin):
                 " ".join(args)))
             if hasattr(self, 'model') and hasattr(self.model, 'container_args'):
                 net_args = self.model.container_args+net_args
+            if hasattr(self, 'container_args'):
+                net_args = self.container_args + net_args
             #Move systemd options forward
             to_delete = 0
             for a in args:

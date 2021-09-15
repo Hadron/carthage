@@ -199,6 +199,7 @@ class ContainerImage(ContainerVolume):
             injector.add_provider(container_volume, dependency_quote(self), close = False)
             container = await ainjector(Container, name = os.path.basename(self.name), skip_ssh_keygen = True, network_config = None)
             customization = await ainjector(cust_class, apply_to = container)
+            if hasattr(customization, 'container_args'): container.container_args = customization.container_args
             meth = getattr(customization, method)
             return await meth()
         finally:
@@ -329,6 +330,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
             injector.add_provider(container_volume, image_mount)
             container = await ainjector(Container, name = os.path.basename(self.name), skip_ssh_keygen = True, network_config = None)
             customization = await ainjector(cust_class, apply_to = container)
+            if hasattr(customization, 'container_args'): container.container_args = customization.container_args
             meth = getattr(customization, method)
             return await meth()
         finally:
