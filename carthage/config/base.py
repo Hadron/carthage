@@ -34,19 +34,10 @@ class BaseSchema(ConfigSchema, prefix = ""):
 
     #: Path to  a checkout of hadron_operations
     hadron_operations: ConfigPath
-    hadron_release: str = "unstable"
-
-    #: If set, then when database.hadronindustries.com is generated, force every slot in the database to this value
-    force_hadron_release: str = None
     delete_volumes: bool = False
     persist_local_networking: bool = False
 
-    #: If set, override all hadron systems to use this mirror.  Add a route so that this mirror is assumed to be external to the virtual environment.
-    aces_mirror: str = "apt-server.aces-aoe.net"
 
-
-    #: Set of IP addresses for which we will route to the outside world rather than internally.
-    expose_routes: list = []
     external_vlan_id: int = 0
     external_bridge_name:str = "brint"
     vlan_min:int = 1
