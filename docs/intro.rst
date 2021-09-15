@@ -104,4 +104,4 @@ Producing ranges using an IAC strategy has a number of benefits:
 * Over time the fidelity of the range improves as more IAC components become available.
   
 
-Cyber training requires relatively -fidelity simulation of the defended system.  Using micro services and containers in a simulation is desirable if that is what the actual defended system uses.  But for many defended systems, a mix of virtual machines is required.  For some attacks such as attacks on firmware, even normal virtual machines may not provide an accurate enough simulation.  Carthage has not yet been used heavily in such environments.
+Cyber training requires relatively high-fidelity simulation of the defended system.  Using micro services and containers in a simulation is desirable if that is what the actual defended system uses.  But for many defended systems, a mix of virtual machines is required.  For some attacks such as attacks on firmware, even normal virtual machines may not provide an accurate enough simulation.  Carthage has not yet been used heavily in such environments.
