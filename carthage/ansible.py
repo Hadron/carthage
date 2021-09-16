@@ -363,6 +363,7 @@ __all__ += ['run_playbook']
 
 @inject(ainjector = AsyncInjector,
         inventory = InjectionKey(AnsibleInventory, _optional = True),
+        origin=InjectionKey(ansible_origin, _optional=True),
         log = InjectionKey(ansible_log, _optional = True),
         )
 async def run_play(hosts, play,
@@ -370,6 +371,7 @@ async def run_play(hosts, play,
                    gather_facts = False,
                    vars = None, inventory = None,
                    log = None,
+                   origin=None,
  ainjector):
     '''
     Run a single Ansible play, specified as a python dictionary.
@@ -377,7 +379,14 @@ async def run_play(hosts, play,
 
     **If you are considering loading a YAML file, parsing it, and calling this function, you are almost certainly better served by :func:`run_playbook`.**
 '''
-    with tempfile.TemporaryDirectory() as ansible_dir:
+    async with contextlib.AsyncExitStack() as stack:
+        if origin and not isinstance(origin, NetworkNamespaceOrigin):
+            root_path = await stack.enter_async_context(origin.filesystem_access())
+            ansible_dir = stack.enter_context(tempfile.TemporaryDirectory(dir = root_path, prefix="ansible-"))
+        else:
+            ansible_dir = stack.enter_context(tempfile.TemporaryDirectory())
+            root_path = "/"
+        ansible_dir = Path(ansible_dir)
         with open(os.path.join(ansible_dir,
                                "playbook.yml"), "wt") as f:
             if isinstance(play, dict): play = [play]
@@ -398,13 +407,14 @@ async def run_play(hosts, play,
                         f.write(h.ansible_inventory_line()+"\n")
                     except AttributeError:
                         f.write(f'{h.name} ansible_ip={h.ip_address}\n')
-            inventory = os.path.join(ansible_dir, "inventory.txt")
+            inventory = f'/{ansible_dir.relative_to(root_path)}/inventory.txt'
         return await ainjector(run_playbook,
                                hosts,
-                               ansible_dir+"/playbook.yml",
+                               f'/{ansible_dir.relative_to(root_path)}/playbook.yml',
                                inventory = inventory,
                                raise_on_failure = raise_on_failure,
-                               log = log)
+                               log = log,
+                               origin=dependency_quote(origin))
 
 __all__ += ['run_play']
 
