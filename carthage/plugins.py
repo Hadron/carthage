@@ -7,12 +7,17 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import importlib, types, typing, sys
+import importlib, logging, types, typing, sys
 import yaml
 from pathlib import Path
 from importlib.util import spec_from_file_location, module_from_spec
+from urllib.parse import urlparse
 from .dependency_injection import *
+from .config import ConfigLayout
+from .files import checkout_git_repo
 
+
+logger = logging.getLogger('carthage.plugins')
 
 class CarthagePlugin(Injectable):
 
@@ -55,6 +60,8 @@ class CarthagePlugin(Injectable):
 @inject(injector = Injector)
 def load_plugin(spec: str,
                 *, injector):
+    if ':' in str(spec):
+        spec =handle_plugin_url(str(spec), injector)
     if hasattr(spec, "__fspath__") or '/' in spec:
         path = Path(spec).resolve()
         metadata_path = path/"carthage_plugin.yml"
@@ -65,10 +72,17 @@ def load_plugin(spec: str,
             metadata['resource_dir'] = path
         if 'name' not in metadata:
             raise ValueError(f'metadata must contain a name when loading plugin from path')
+        # Stop early if already loaded
+        try:
+            injector.get_instance(InjectionKey(CarthagePlugin, name=metadata['name']))
+            logger.debug(f'Plugin {metadata["name"]} already loaded')
+            return
+        except KeyError: pass
+        _handle_plugin_config(injector, metadata, metadata_path)
         try:
             python_path = metadata['python']
             python_path = str(path.joinpath(python_path))
-            if python_path not in sys.path: sys.path.append(python_path)
+            if python_path not in sys.path: sys.path.insert(0,python_path)
         except KeyError: pass
         if 'package' in metadata:
             package = importlib.import_module(metadata['package'])
@@ -94,17 +108,37 @@ def load_plugin(spec: str,
         metadata = None
     return injector(load_plugin_from_package, package, metadata)
 
+def handle_plugin_url(url, injector):
+    parsed = urlparse(url)
+    if parsed.scheme in ('https', 'git+ssh'):
+        return handle_git_url(parsed, injector)
+    else:
+        raise NotImplementedError(f"Don't know how to handle {scheme} URL")
+
+def handle_git_url(parsed, injector):
+    config = injector(ConfigLayout)
+    stem = Path(parsed.path).name
+    dest = Path(config.checkout_dir)/stem
+    if dest.exists(): return dest
+    logger.info(f'Checking out {parsed.geturl()}')
+    injector(checkout_git_repo, parsed.geturl(), dest).wait()
+    return dest
 
 @inject(injector = Injector)
 def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
                              metadata: dict = None,
                              *, injector):
+    if metadata:
+        if 'resource_dir' in metadata:
+            metadata_path = Path(metadata['resource_dir'])/"carthage_plugin.yml"
+        else: metadata_path = Path(package.__file__)
     if (not metadata) and (not package):
         raise RuntimeError('Either package or metadata must be supplied')
     if not metadata:
         try:
             metadata = yaml.safe_load(importlib.resources.read_text(
                 package, "carthage_plugin.yml"))
+            metadata_path = package.__file__
         except (FileNotFoundError, ImportError):
             # consider the case of hadron-operations
             # plugin is hadron.carthage
@@ -113,11 +147,14 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
             path_root = Path(package.__file__).parents[components]
             if path_root.joinpath("carthage_plugin.yml").exists():
                 metadata = yaml.safe_load(path_root.joinpath("carthage_plugin.yml").read_text())
+                metadata_path = path_root.joinpath('carthage_plugin.yml')
                 if 'resource_dir' not in metadata: metadata['resource_dir'] = path_root
             else:
                 metadata = {}
+                metadata_path = None
                 
                              
+    _handle_plugin_config(injector = injector, metadata = metadata, path = metadata_path)
     try:
         plugin_module = importlib.import_module(".carthage_plugin", package = package.__name__)
     except (ImportError, AttributeError):
@@ -143,3 +180,14 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
         plugin_object)
 
     
+
+def _handle_plugin_config(injector, metadata, path):
+    # we don't want to take a ConfigLayout as a dependency because
+    # that tends to push its instantiation too high in the injector
+    # hierarchy
+    config = injector(ConfigLayout)
+    if 'config' in metadata:
+        config.load_yaml(yaml.dump(metadata['config']), path = path)
+        del metadata['config']
+        
+__all__ = ['load_plugin', 'load_plugin_from_spec']
