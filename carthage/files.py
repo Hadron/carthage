@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -6,11 +6,14 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-from .ssh import RsyncPath, SshKey
+import os.path
+from pathlib import Path
 from tempfile import TemporaryDirectory
 from .dependency_injection import *
 from . import ConfigLayout, sh
+from .ssh import RsyncPath, SshKey
 
+__all__ = []
 
 @inject(config = ConfigLayout,
         ssh_key = SshKey)
@@ -36,5 +39,45 @@ Clone the ``HEAD`` of a Git working copy into a new temporary directory  This pr
     finally:
         dir.cleanup()
 
-__all__ = ('rsync_git_tree',)
+__all__ += ['rsync_git_tree',]
 
+
+def git_checkout_task(url, repo):
+
+    '''Returns a :func:`setup_task` that will checkout a give git repository.
+The resulting setup_task has an attribute *repo_path* which is a function returning the path to the repo
+
+'''
+    @inject(config = ConfigLayout)
+    def repo_path(config):
+        checkouts = Path(config.checkout_dir)
+        return checkouts/repo
+    @setup_task(f"Checkout {repo} repository")
+    @inject(injector=Injector)
+    async def checkout_repo(self, config):
+        return await checkout_git_repo(url, repo, injector = injector)
+    @checkout_repo.invalidator()
+    @inject(injector = Injector)
+    def checkout_repo(self, last_run, injector):
+        path = injector(repo_path)
+        return path.exists()
+    checkout_repo.repo_path = repo_path
+    return checkout_repo
+
+@inject(injector=Injector)
+def checkout_git_repo(url, repo, *, injector  ):
+    config = injector(ConfigLayout)
+    path = Path(config.checkout_dir)/repo
+    os.makedirs(config.checkout_dir, exist_ok = True)
+    if path.exists():
+        return sh.git("pull", "--rebase",
+               _bg = True,
+               _bg_exc = False,
+               _cwd = path)
+    else:
+        return  sh.git("clone",
+                     url, str(path),
+                     _bg = True,
+                     _bg_exc = False)
+
+__all__ += ['git_checkout_task', 'checkout_git_repo']
