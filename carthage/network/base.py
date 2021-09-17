@@ -14,6 +14,7 @@ from ..config import ConfigLayout
 from ..utils import permute_identifier, when_needed, memoproperty, is_optional_type, get_type_args
 from ..machine import ssh_origin, ssh_origin_vrf, Machine, AbstractMachineModel
 from .config import V4Config
+ssh_origin_vrf_key = ssh_origin_vrf
 
 logger = logging.getLogger('carthage.network')
 
@@ -732,8 +733,8 @@ def mac_from_host_map(i, host_map, ainjector):
 
 
 @inject(ssh_origin = ssh_origin,
-        ssh_origin_vrf = InjectionKey(ssh_origin_vrf, optional = True))
-def access_ssh_origin( ssh_origin, ssh_origin_vrf, extra_nsenter = []):
+        )
+def access_ssh_origin( ssh_origin, ssh_origin_vrf=None, extra_nsenter = []):
     '''
         A container can be used as an ssh_origin, using the container as
         an injection point for entering a network under test.  This is
@@ -745,6 +746,9 @@ def access_ssh_origin( ssh_origin, ssh_origin_vrf, extra_nsenter = []):
         :param extra_nsenter: Extra namespaces to enter; something like ``['-p', '-m']``
 
 '''
+    if ssh_origin_vrf is None:
+        try: ssh_origin_vrf = ssh_origin.injector.get_instance(ssh_origin_vrf_key)
+        except KeyError: pass
     vrf = []
     if ssh_origin_vrf:
         vrf = ['ip', 'vrf',
