@@ -59,6 +59,9 @@ class MachineDependency(SystemDependency):
 
     async def __call__(self, ainjector):
         machine = await ainjector.get_instance_async(self.key)
+        if not hasattr(machine, 'start_machine') and hasattr(machine, 'machine'):
+            #Allow a dependency to be set on a MachineModel not just a machine
+            machine = machine.machine
         await machine.start_machine()
         if self.online:
             await getattr(machine, self.online)()
