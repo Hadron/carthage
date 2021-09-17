@@ -543,7 +543,13 @@ def customization_task    (c: BaseCustomization, order: int = None,
     @do_task.check_completed()
     @inject(ainjector = AsyncInjector)
     async def do_task(machine, ainjector):
-        return await machine.apply_customization(c, method = "last_run")
+        res = await machine.apply_customization(c, method = "last_run")
+        # unfortunately if we return a last_run and one of our
+        # dependencies has run more recently, we will continue to
+        # generate unneded task runs because we never inject our
+        # dependency's last run into the customization so we never
+        # update our last_run time.
+        return bool(res)
     return do_task
 
 class BareMetalMachine(Machine, SetupTaskMixin):
