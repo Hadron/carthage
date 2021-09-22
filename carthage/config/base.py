@@ -29,10 +29,14 @@ class BaseSchema(ConfigSchema, prefix = ""):
     vm_image_size:int = 20000000000 #: default size of VM disks in Mb
     base_container_image:str = "/usr/share/hadron-installer/hadron-container-image.tar.gz"
     base_vm_image:str = "/usr/share/hadron-installer/direct-install-efi.raw.gz"
+    #: All containers and VMs are prefixed with this string in their machine names
     container_prefix:str = 'carthage-'
     min_port:int = 9000 #: Minimum port for displays and databases
     num_ports: int = 500
 
+    #: If true, keep the ssh agent in the environment potentially
+    #using production ssh keys rather than starting our own
+    production_ssh_agent:bool = False
     #: Path to  a checkout of hadron_operations
     hadron_operations: ConfigPath
     delete_volumes: bool = False

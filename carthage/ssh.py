@@ -153,11 +153,20 @@ class SshAgent(Injectable):
         auth_sock = os.path.join(state_dir, "ssh_agent")
         try: os.unlink(auth_sock)
         except FileNotFoundError: pass
-        self.process = sh.ssh_agent('-a', auth_sock,
+        if config_layout.production_ssh_agent and 'SSH_AUTH_SOCK' in os.environ:
+            self.auth_sock = os.environ['SSH_AUTH_SOCK']
+            self.process = None
+        else:
+            self.process = sh.ssh_agent('-a', auth_sock,
                                     '-D', _bg = True)
-        self.auth_sock = auth_sock
+            self.auth_sock = auth_sock
         sh.ssh_add(key.key_path, _env = self.agent_environ)
-        
+
+    def close(self):
+        if self.process:
+            try: self.process.terminate()
+            except: pass
+            self.process = None
 
     @memoproperty
     def agent_environ(self):
