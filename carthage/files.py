@@ -12,7 +12,7 @@ from tempfile import TemporaryDirectory
 from .dependency_injection import *
 from . import ConfigLayout, sh
 from .ssh import RsyncPath, SshKey
-
+from .setup_tasks import *
 __all__ = []
 
 @inject(config = ConfigLayout,
@@ -54,8 +54,11 @@ The resulting setup_task has an attribute *repo_path* which is a function return
         return checkouts/repo
     @setup_task(f"Checkout {repo} repository")
     @inject(injector=Injector)
-    async def checkout_repo(self, config):
-        return await checkout_git_repo(url, repo, injector = injector)
+    async def checkout_repo(self, injector):
+        if callable(url):
+            url_resolved = injector(url)
+        else: url_resolved = url
+        return await checkout_git_repo(url_resolved, repo, injector = injector)
     @checkout_repo.invalidator()
     @inject(injector = Injector)
     def checkout_repo(self, last_run, injector):
