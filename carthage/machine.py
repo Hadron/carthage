@@ -70,7 +70,7 @@ class SshMixin:
     def ssh(self):
         from .network import access_ssh_origin
         try:
-            ssh_origin_container = self.injector.get_instance(ssh_origin)
+            ssh_origin_container = self.injector.get_instance(InjectionKey(ssh_origin, _optional=True))
         except InjectionFailed:
             from .container import Container
             ssh_origin_container = self if isinstance(self, Container) else None
