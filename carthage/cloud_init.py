@@ -136,10 +136,18 @@ class AuthorizedKeysPlugin(CloudInitPlugin):
             authorized_keys_file.read_text().split("\n")))
         config.meta_data['public_ssh_keys'] = authorized_keys
 
+class HostnamePlugin(CloudInitPlugin):
+
+    name = "hostname"
+    
+    async def apply(self, config: CloudInitConfig):
+        config.user_data['hostname'] = self.model.name
+        
 @inject(injector = Injector)
 def enable_cloud_init_plugins(injector):
-    injector.add_provider(AuthorizedKeysPlugin, allow_multiple = True)
-    injector.add_provider(NetworkPlugin, allow_multiple = True)
+    injector.add_provider(AuthorizedKeysPlugin, allow_multiple=True)
+    injector.add_provider(NetworkPlugin, allow_multiple=True)
+    injector.add_provider(HostnamePlugin, allow_multiple=True)
 
 __all__ += ['enable_cloud_init_plugins']
     
