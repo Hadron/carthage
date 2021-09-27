@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import asyncio, abc, dataclasses, logging, re, typing, weakref
+import asyncio, abc, copy, dataclasses, logging, re, typing, weakref
 from .. import sh
 from ..dependency_injection import *
 from ..config import ConfigLayout
@@ -538,6 +538,12 @@ class NetworkLink:
     v4_config: typing.Optional[V4Config] = None
     lldp: typing.Optional[bool] = dataclasses.field(default = True, repr = False)
     required: typing.Optional[bool] = dataclasses.field(default = True, repr = False)
+    #: Sometimes it is desirable to have a different dns entry for an
+    #interface than for the host as a whole. If set to a string, this
+    #is the (potentially unqualified) dns name for the interface.  If
+    #set to an empty string, the interface should not be registered in
+    #dns.
+    dns_name:typing.Optional[str] = None
     
 
     def __new__(cls, connection, interface, args):
@@ -557,6 +563,7 @@ class NetworkLink:
         if self.mtu is None and getattr(self.net, 'mtu', None):
             self.mtu = self.net.mtu
         self.member_of = []
+        if self.v4_config: self.v4_config = copy.copy(self.v4_config)
 
     def __hash__(self):
         return id(self)
