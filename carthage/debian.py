@@ -54,11 +54,13 @@ class DebianContainerImage(ContainerImage):
 
     mirror: str
     distribution: str
+    name:str = "base-debian"
 
-    def __init__(self, name:str = "base-debian",
-                 mirror: str = None, distribution: str = None,
-                 stage1_mirror: str = None,
+    def __init__(self, name:str=None,
+                 mirror: str=None, distribution: str=None,
+                 stage1_mirror: str=None,
                  **kwargs):
+        if name is None: name=self.__class__.name
         super().__init__(name = name, **kwargs)
         self.mirror = self.config_layout.debian.mirror
         self.stage1_mirror = self.config_layout.debian.stage1_mirror
