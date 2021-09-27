@@ -19,10 +19,14 @@ class L3ConfigMixin:
         'network',
         'gateway',
         "dns_servers", "domains",
+        'dns_name',
         })
     
+    #: Set of DNS servers that should be made available to this link/network
     dns_servers: list = tuple()
     domains: str = None
+    #: Sometimes it is desirable to have a different dns entry for an interface than for the host as a whole. If set to a string, this is the (potentially unqualified) dns name for the interface.  If set to an empty string, the interface should not be registered in dns.
+    dns_name:str = None
 
     def __post_init__(self):
         if self.dhcp_ranges:
