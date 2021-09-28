@@ -163,7 +163,7 @@ class SshAgent(Injectable):
         sh.ssh_add(key.key_path, _env = self.agent_environ)
 
     def close(self):
-        if self.process:
+        if self.process is not None:
             try: self.process.terminate()
             except: pass
             self.process = None
