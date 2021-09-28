@@ -62,6 +62,9 @@ class DebianContainerImage(ContainerImage):
                  **kwargs):
         if name is None: name=self.__class__.name
         super().__init__(name = name, **kwargs)
+        # Make sure our config layout points to our injector so we can
+        # change things with only local effect.
+        self.config_layout = self.injector(ConfigLayout)
         self.mirror = self.config_layout.debian.mirror
         self.stage1_mirror = self.config_layout.debian.stage1_mirror
         self.distribution = self.config_layout.debian.distribution
@@ -70,6 +73,12 @@ class DebianContainerImage(ContainerImage):
             if not stage1_mirror: self.stage1_mirror = mirror
         if distribution: self.distribution = distribution
         if stage1_mirror: self.stage1_mirror = stage1_mirror
+        # Make sure we save the right items in case a customization ends up calling update_mirror.
+        dc = self.config_layout.debian
+        dc.mirror = self.mirror
+        dc.distribution = self.distribution
+        dc.stage1_mirror = self.stage1_mirror
+        
 
     @setup_task("unpack using debootstrap")
     async def unpack_container_image(self):
