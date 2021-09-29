@@ -92,6 +92,9 @@ class NetworkConfigModelType(InjectableModelType):
     @modelmethod
     def add(cls, ns, interface, *, mac, **kwargs):
         kwargs['mac'] = mac
+        if isinstance(kwargs['net'], type):
+            raise SyntaxError(f'net must be an instance of Network (or InjectionKey) not a {kwargs["net"]}; consider wrapping in injector_access')
+        
         def callback(inst):
             nonlocal kwargs
             keys = kwargs.keys()

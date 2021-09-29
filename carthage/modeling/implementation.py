@@ -96,7 +96,7 @@ class ModelingNamespace(dict):
     #namespace.  Notice that __tranclusions__ in the resulting class
     #has a slightly different format.
     transclusions: typing.Set[typing.Tuple[InjectionKey, InjectionKey]]
-
+    initial: typing.Dict[str, typing.Any]
 
     def __init__(self, cls: type,
                  filters: typing.List[typing.Callable],
@@ -110,13 +110,13 @@ class ModelingNamespace(dict):
         self.to_inject = {}
         self.transclusions = set()
         super().__init__()
+        self.initial = {}
         for k,v in initial.items():
             if isinstance(v, modelmethod):
                 v = functools.partial(v.method, cls, self)
-            super().__setitem__(k, v)
+            self.initial[k] = v
         self.parent_context = thread_local.current_context
         self.context_imported = False
-        self.initially_set = set(self.keys())
         self.setitem('__transclusions__', set())
 
     def keys_for(self, name, state):
@@ -149,6 +149,24 @@ class ModelingNamespace(dict):
             if global_key and (global_key ==k): continue
             yield k, (val(k), options)
 
+    def __getitem__(self, k):
+        # Normally when we set an item we drop it from initial
+        # but there are some cases where we want a value for getitem different than the value that ends up in the eventual class
+        # the obvious case is injector_access from the instantiate flag.
+        # so initial actually takes precidence over our actual values.
+        try: return self.initial[k]
+        except KeyError: return super().__getitem__(k)
+        
+
+
+    def __contains__(self,k):
+        return super().__contains__(k) or k in self.initial
+
+    def __delitem__(self,k):
+        del self[k]
+        try: del self.to_inject[k]
+        except: pass
+        
     def __setitem__(self, k, v):
         if thread_local.current_context is not self:
             self.update_context()
@@ -162,8 +180,16 @@ class ModelingNamespace(dict):
                 k = state.new_name
                 state.new_name = None
         else:
-            if not handled: super().__setitem__(k,state.instantiate_value(k))
-            try: self.initially_set.remove(k)
+            if not handled:
+                iv = state.instantiate_value(k)
+                super().__setitem__(k,iv)
+                if iv is not state.value:
+                    self.initial[k] = state.value
+                else:
+                    try: del self.initial[k]
+                    except KeyError: pass
+        if handled:
+            try: del self.initial[k]
             except KeyError: pass
         if k.startswith('_'):
             if k == "__qualname__": self.import_context()
@@ -182,10 +208,20 @@ class ModelingNamespace(dict):
         '''An override for use in filters to avoid recursive filtering'''
         res = super().__setitem__(k, v)
         if explicit:
-            try: self.initially_set.remove(k)
+            try: del self.initial[k]
             except KeyError: pass
         return res
 
+    def keys(self):
+        yield from super().keys()
+        for k in self.initial.keys():
+            if not  super().__contains__(k): yield k
+
+    def get(self, k, default):
+        try: return self.initial[k]
+        except KeyError:
+            return super().get(k, default)
+        
     def import_context(self):
         # We only want to import the context if our qualname is an
         # extension of their qualname, so we need to wait until the
@@ -204,8 +240,7 @@ class ModelingNamespace(dict):
         for k in parent.keys():
             if k in self: continue
             if k.startswith('_'): continue
-            super().__setitem__(k, parent[k])
-            self.initially_set.add(k)
+            self.initial[k] = parent[k]
 
     def update_context(self):
         thread_local.current_context = self
@@ -266,9 +301,7 @@ class ModelingBase(type):
                                  classes_to_inject = classes_to_inject)
 
     def __new__(cls, name, bases, namespace, **kwargs):
-        for k in namespace.initially_set:
-            try: del namespace[k]
-            except Exception: pass
+        namespace.initial.clear()
         thread_local.current_context = None
         try: return super(ModelingBase, cls).__new__(cls, name, bases, namespace, **kwargs)
         except TypeError as e:

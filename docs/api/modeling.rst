@@ -96,12 +96,6 @@ Model classes sometimes involve a new construct called a **modelmethod**.  Unlik
 
     * By default, any attribute in the class body assigned  a value that is a type (or that has a :func:`transclusion key <transclude_overrides>`) will be transformed into an :func:`injector_access`.  When accessed through the class, the *injector_access* will act as a class property returning the value originally assigned to the attribute.  That is, class access generally works as if no transformation had taken place.  However, when accessed as an instance property, the *get_instance* method on the Injector will be used to instantiate the class.  See the :ref:`first example <modeling:example_1>` for an example. If this transformation is not desired use the :func:`no_instantiate` decorator.
 
-      Currently, when accessed in a class body, the raw injector_access is used.  To get the  targeted type, use the *target* attribute.  This behavior is probably a bug and likely to change::
-
-        class mod(InjectableModel):
-            foo_net = Network
-            # If we want bar_net to also be a network:
-            bar_net = foo_net.target #not just foo_net
 
     * Certain classes such as :class:`carthage.network.NetworkConfig` will automatically be added  to an injector if they are  assigned to an attribute in the class body.
 

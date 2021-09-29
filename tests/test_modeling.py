@@ -190,7 +190,7 @@ async def test_generate_and_network(ainjector):
             
         class nc(NetworkConfigModel):
             other_machine = injector_access("other-machine")
-
+            net = injector_access('net')
             add('eth0', net = net, mac = None,
                 other = other_machine,
                 other_interface = "eth 2/1")
@@ -253,6 +253,8 @@ async def test_local_networking(ainjector):
             add_provider(machine_implementation_key, dependency_quote(LocalMachine))
 
             class nc(NetworkConfigModel):
+                net1 = injector_access('net1')
+                
                 add('eth0', mac = None,
                     net = net1)
                 add('br_net1', net = net1,
@@ -260,6 +262,7 @@ async def test_local_networking(ainjector):
                     local_type = 'bridge',
                     mac = None,
                     )
+
 
     l = await ainjector(layout)
     await l.generate()
