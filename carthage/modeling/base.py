@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
+#../sim Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -92,8 +92,15 @@ class NetworkConfigModelType(InjectableModelType):
     @modelmethod
     def add(cls, ns, interface, *, mac, **kwargs):
         kwargs['mac'] = mac
+        if 'net' not in kwargs:
+            raise SyntaxError('net is required')
         if isinstance(kwargs['net'], type):
-            raise SyntaxError(f'net must be an instance of Network (or InjectionKey) not a {kwargs["net"]}; consider wrapping in injector_access')
+            # see if we can construct an appropriate injector_access
+            net = kwargs['net']
+            if issubclass(net, NetworkModel) and hasattr(net, '__provides_dependencies_for__'):
+                kwargs['net'] = injector_access(net.__provides_dependencies_for__[0])
+            else:
+                raise SyntaxError(f'net must be an instance of Network (or InjectionKey) not a {kwargs["net"]}; consider wrapping in injector_access')
         
         def callback(inst):
             nonlocal kwargs
