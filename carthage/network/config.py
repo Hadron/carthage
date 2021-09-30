@@ -78,11 +78,15 @@ class V4Config(L3ConfigMixin):
         for k, func in dict(
                 address = IPv4Address,
                 network = IPv4Network,
-                gateway = IPv4Address,
+                gateway = ipv4_gateway,
                 dhcp_ranges= self._handle_dhcp_ranges(IPv4Address)).items():
             val = getattr(self,k)
             if val is not None:
                 setattr(self, k, func(val))
 
         super().__post_init__()
-        
+
+def ipv4_gateway(g):
+    if g is False: return False
+    return IPv4Address(g)
+    
