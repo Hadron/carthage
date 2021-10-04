@@ -63,7 +63,7 @@ class AnsibleConfig(Injectable):
                 roles += [str(roles_path)]
             filter_path = pl.resource_dir/"ansible/filter_plugins"
             if filter_path.exists():
-                filters.append(filter_path)
+                filters.append(str(filter_path))
         self.roles = roles
         self.filter_plugins = filters
 
