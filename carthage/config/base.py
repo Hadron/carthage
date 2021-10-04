@@ -62,4 +62,7 @@ class DebianConfig(ConfigSchema, prefix = "debian"):
     stage1_mirror:ConfigString = "{debian.mirror}"
 
     distribution:ConfigString = "bullseye"
+
+    #: Whether to include security.debian.org and the updates source
+    include_security:bool = True
     

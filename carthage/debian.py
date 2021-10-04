@@ -54,11 +54,13 @@ class DebianContainerImage(ContainerImage):
 
     mirror: str
     distribution: str
+    include_security:bool
     name:str = "base-debian"
 
     def __init__(self, name:str=None,
                  mirror: str=None, distribution: str=None,
                  stage1_mirror: str=None,
+                 include_security:bool = None,
                  **kwargs):
         if name is None: name=self.__class__.name
         super().__init__(name = name, **kwargs)
@@ -68,16 +70,19 @@ class DebianContainerImage(ContainerImage):
         self.mirror = self.config_layout.debian.mirror
         self.stage1_mirror = self.config_layout.debian.stage1_mirror
         self.distribution = self.config_layout.debian.distribution
+        self.include_security = self.config_layout.debian.include_security
         if mirror:
             self.mirror = mirror
             if not stage1_mirror: self.stage1_mirror = mirror
         if distribution: self.distribution = distribution
         if stage1_mirror: self.stage1_mirror = stage1_mirror
+        if include_security is not None: self.include_security = include_security
         # Make sure we save the right items in case a customization ends up calling update_mirror.
         dc = self.config_layout.debian
         dc.mirror = self.mirror
         dc.distribution = self.distribution
         dc.stage1_mirror = self.stage1_mirror
+        dc.include_security = self.include_security
         
 
     @setup_task("unpack using debootstrap")
@@ -98,11 +103,11 @@ class DebianContainerImage(ContainerImage):
 
     @setup_task("Update mirror")
     def update_mirror(self):
-        update_mirror(self.path, self.mirror, self.distribution)
+        update_mirror(self.path, self.mirror, self.distribution, self.include_security)
 
 __all__ += ['DebianContainerImage']
 
-def update_mirror(path, mirror, distribution):
+def update_mirror(path, mirror, distribution, include_security):
     etc_apt = Path(path)/"etc/apt"
     sources_list = etc_apt/"sources.list"
     if sources_list.exists():
@@ -114,13 +119,21 @@ def update_mirror(path, mirror, distribution):
 deb {mirror} {distribution} main contrib non-free
 deb-src {mirror} {distribution} main contrib non-free
 ''')
+        if include_security:
+            f.write(f'''
+deb {mirror} {distribution}-updates main contrib non-free
+deb-src {mirror} {distribution}-updates main contrib non-free
+
+deb https://security.debian.org/ {distribution}-security main
+''')
+            
 
 @contextlib.asynccontextmanager
 async def use_stage1_mirror(machine):
     debian = machine.config_layout.debian
     async with machine.filesystem_access() as path:
         try:
-            update_mirror(path, debian.stage1_mirror, debian.distribution)
+            update_mirror(path, debian.stage1_mirror, debian.distribution, (debian.include_security and (debian.mirror == debian.stage1_mirror)))
             if machine.running:
                 await machine.ssh("apt", "update",
                                   _bg = True, _bg_exc = False)
@@ -129,7 +142,7 @@ async def use_stage1_mirror(machine):
                                                 "apt", "update")
             yield
         finally:
-            update_mirror(path, debian.mirror, debian.distribution)
+            update_mirror(path, debian.mirror, debian.distribution, debian.include_security)
             try:
                 if machine.running:
                     await machine.ssh("apt", "update",
@@ -190,6 +203,10 @@ async def debian_container_to_vm(
         logger.debug("Image Creation: %s", data)
 
     async def unpack_callback():
+        nonlocal volume
+        if isinstance(volume, type):
+            #Allow usage specifying volume in a when_needed
+            volume = await ainjector(volume)
         await volume.async_become_ready()
         os.makedirs(output_path.parent, exist_ok = True)
         with tempfile.TemporaryDirectory(dir = output_path.parent,
