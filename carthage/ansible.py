@@ -56,11 +56,16 @@ class AnsibleConfig(Injectable):
         # If this class is ever modified to store the injector, then it should be passed into the superclass so it can be claimed.
         super().__init__()
         roles = []
+        filters=[]
         for k, pl in injector.filter_instantiate(CarthagePlugin, ['name']):
             roles_path = pl.resource_dir/"ansible/roles"
             if roles_path.exists():
                 roles += [str(roles_path)]
+            filter_path = pl.resource_dir/"ansible/filter_plugins"
+            if filter_path.exists():
+                filters.append(filter_path)
         self.roles = roles
+        self.filter_plugins = filters
 
 __all__ += ['AnsibleConfig']
 
@@ -441,6 +446,7 @@ def write_config(config_dir, inventory,
 {stdout_str}
 retry_files_enabled = false
 roles_path={":".join(ansible_config.roles)}
+filter_plugins={":".join(ansible_config.filter_plugins)}
 {private_key}
 
 ''')
