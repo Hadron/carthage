@@ -1,3 +1,22 @@
+hadron-carthage (0.11) unstable; urgency=medium
+
+  * Expose additional exports
+  * Local ansible on non-running containers
+  * Ansible: vars can be deffered
+  * Support container_args in images and container images
+  * Remove some hadron specific config items; a few still remain
+  * Add origin support in ansible.run_play
+  * Add checkout_git_repo and git_checkout_task
+  * Don't return dependency info from customization tasks
+  * cloud_init: set vm hostname
+  * Add dns_name
+  * Fix injector_access inside class bodies
+  * Allow V4Config.gateway to be False (disabled)
+  * Add support for ansible filter_plugins
+  * Add debian.include_security
+
+ -- Sam Hartman <hartmans@debian.org>  Mon, 04 Oct 2021 10:00:01 -0600
+
 hadron-carthage (0.10) unstable; urgency=medium
 
   * Significant updates to get a version that works with h-o from packages
