@@ -196,9 +196,12 @@ class Machine(AsyncInjectable, SshMixin):
     name: str
     network_links: typing.Mapping[str, carthage.network.NetworkLink]
 
-    def __init__(self, name, **kwargs):
+    def __init__(self, name=None, **kwargs):
         super().__init__(**kwargs)
-        self.name = name
+        if name is not None:
+            self.name = name
+        else:
+            if not hasattr(self, 'name'): raise TypeError(f'name must be supplied to constructor or set in the class')
         self.with_running_count = 0
         self.already_running = False
         self.sshfs_count = 0
