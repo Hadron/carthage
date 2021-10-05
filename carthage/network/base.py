@@ -184,7 +184,7 @@ this_network = InjectionKey(Network, role = "this_network")
 class BridgeNetwork(TechnologySpecificNetwork):
 
     def __init__(self, net, *, bridge_name = None,
-                 delete_bridge = True,
+                 delete_bridge = None,
                  delete_interfaces = None, **kwargs):
         super().__init__(**kwargs)
         if delete_bridge is None:
