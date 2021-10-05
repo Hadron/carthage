@@ -10,7 +10,6 @@ from carthage import *
 
 from .inventory import VmwareNamedObject
 
-@inject(**VmwareNamedObject.injects)
 class VmwareDatacenter(VmwareNamedObject, kind='datacenter'):
 
     def __init__(self, *args, config_layout, **kwargs):
@@ -24,11 +23,11 @@ class VmwareDatacenter(VmwareNamedObject, kind='datacenter'):
         from .host import HostFolder
         from .network import NetworkFolder
         from .vm import VmFolder
-        ret = await super().async_ready()
         self.datastore_folder = await self.ainjector(DataStoreFolder, name='datastore', parent=self)
         self.host_folder = await self.ainjector(HostFolder, name='host', parent=self)
         self.network_folder = await self.ainjector(NetworkFolder, name='network', parent=self)
         self.vm_folder = await self.ainjector(VmFolder, name='vm', parent=self)
+        ret = await super().async_ready()
         return ret
 
     async def do_create(self):

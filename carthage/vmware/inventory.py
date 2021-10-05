@@ -20,22 +20,26 @@ __all__ = "VmwareStampable VmwareManagedObject VmwareNamedObject VmwareSpecified
 custom_fields_key = InjectionKey('vmware.custom_fields_key')
 
 
-@inject(config = vmware_config)
+@inject(config = ConfigLayout)
 def vmware_dict(config, **kws):
     '''
 :returns: A dictionary containing vmware common parameters to pass into Ansible
 '''
+    vconfig = config.vmware
     d = dict(
-        datacenter = config.datacenter,
-        username = config.username,
-        hostname = config.hostname,
-        validate_certs = config.validate_certs,
-        password = config.password)
+        datacenter = vconfig.datacenter,
+        username = vconfig.username,
+        hostname = vconfig.hostname,
+        validate_certs = vconfig.validate_certs,
+        password = vconfig.password)
     d.update(kws)
     return d
 
 class NotFound(LookupError): pass
 
+@inject_autokwargs(config_layout = ConfigLayout,
+                   injector = Injector,
+                   connection = VmwareConnection)
 class VmwareStampable(SetupTaskMixin, AsyncInjectable):
 
     def __init_subclass__(cls, *, kind=NotImplemented):
@@ -43,14 +47,8 @@ class VmwareStampable(SetupTaskMixin, AsyncInjectable):
             cls.stamp_type = kind
 
 
-    injects = dict(config_layout = ConfigLayout,
-                   injector = Injector,
-                   connection = VmwareConnection)
 
-    def __init__(self, config_layout, injector, connection, **kwargs):
-        self.injector = injector.claim()
-        self.config_layout = config_layout
-        self.connection = connection
+    def __init__(self, **kwargs):
         super().__init__( **kwargs)
 
     @memoproperty
@@ -257,7 +255,7 @@ class VmwareManagedObject(VmwareStampable):
             else: mob = mob.parent
         return "/"+"/".join(reversed(parts))
     
-@inject(**VmwareManagedObject.injects)
+
 class VmwareNamedObject(VmwareManagedObject):
 
     def __init__(self, name=None, *args, **kwargs):
@@ -292,7 +290,7 @@ class VmwareNamedObject(VmwareManagedObject):
     def __repr__(self):
         return f"<{self.__class__.__name__}: {self.vmware_path}>"
 
-@inject(**VmwareNamedObject.injects)
+
 class VmwareSpecifiedObject(VmwareNamedObject):
 
     #: Class variable containing set of `ConfigSpecStages` for this type of object.  Copied on any subclass that has *ConfigSpecStages*

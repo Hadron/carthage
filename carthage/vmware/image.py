@@ -103,7 +103,7 @@ vm_storage_key = config_key("vmware.datastore")
     storage = vm_storage_key,
     data_center = VmwareDatacenter,
     credentials = vmware_credentials,
-    **VmwareDataStore.injects)
+    )
 class NfsDataStore(VmwareDataStore):
 
     '''
@@ -193,7 +193,7 @@ class NfsDataStore(VmwareDataStore):
     
 
 @inject(storage = vm_storage_key,
-        **VmwareDataStore.injects)
+)
 class VmfsDataStore(VmwareDataStore):
 
     def __init__(self, storage, **kwargs):

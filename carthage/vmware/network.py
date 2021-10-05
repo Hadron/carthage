@@ -26,11 +26,9 @@ class VmwareNetworkConfig(ConfigSchema, prefix = "vmware"):
     distributed_switch: str
     trunk_interface: str
 
-@inject(**VmwareFolder.injects)
 class NetworkFolder(VmwareFolder, kind='network'):
     pass
 
-@inject(**VmwareSpecifiedObject.injects)
 class DvSwitch(VmwareSpecifiedObject):
 
     parent_type = NetworkFolder
@@ -101,21 +99,17 @@ class DvSwitch(VmwareSpecifiedObject):
         task = self.parent.mob.CreateDVS_Task(create)
         await wait_for_task(task)
 
-@inject(**VmwareNamedObject.injects, network=this_network)
+@inject_autokwargs( network=this_network)
 class VmwareNetwork(VmwareNamedObject, TechnologySpecificNetwork):
 
     '''Abstract Base class representing a VmwareNetwork'''
 
-    injects = dict(**VmwareManagedObject.injects, network=this_network)
 
-    def __init__(self, network, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.network = network
 
     def __repr__(self):
         return f"<{self.__class__.__name__} for {self.network.name}: {self.vmware_path}>"
 
-@inject(**VmwareNetwork.injects,
+@inject(
         dvswitch = DvSwitch)
 class DistributedPortgroup(VmwareNetwork):
 

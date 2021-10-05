@@ -41,7 +41,7 @@ class HardwareConfig(ConfigSchema, prefix = "vmware.hardware"):
     
 vmware_config = config_key('vmware')
 
-@inject(**VmwareFolder.injects)
+
 class VmFolder(VmwareFolder, kind='vm'):
 
     def __init__(self, name = None, **kwargs):
@@ -81,36 +81,16 @@ class VmFolder(VmwareFolder, kind='vm'):
     
 
 @inject(config = vmware_config)
-def vmware_dict(config, **kws):
-    '''
-:returns: A dictionary containing vmware common parameters to pass into Ansible
-'''
-    d = dict(
-        datacenter = config.datacenter,
-        username = config.username,
-        hostname = config.hostname,
-        validate_certs = config.validate_certs,
-        password = config.password)
-    d.update(kws)
-    return d
 
-
-class VmwareMachineObject(VmwareSpecifiedObject):
-
-    # We need to disrupt the mro after Machine is done and before calling VmwareManagedObject.__init__ because they have different signatures.
-
-    def __init__(*args, **kwargs):
-        pass
     
 @inject(
-    **VmwareSpecifiedObject.injects,
     storage = VmwareDataStore,
     cluster = VmwareCluster,
     parent = InjectionKey(VmFolder, optional = True),
     network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
     # We add a template VM to the dependencies later avoiding a forward reference
     )
-class Vm(Machine, VmwareMachineObject):
+class Vm(VmwareSpecifiedObject, Machine):
 
     stamp_type = "vm"
     parent_type = VmFolder
@@ -123,9 +103,8 @@ class Vm(Machine, VmwareMachineObject):
                  *args, storage, cluster, network_config = None,
                  console_needed = True, **kwargs):
         kwargs.setdefault('readonly', False)
-        VmwareNamedObject.__init__(self, name = name, **kwargs)
-        Machine.__init__(self, name = name, config_layout = kwargs['config_layout'],
-                         injector = kwargs['injector'])
+        super().__init__(self, name = name, **kwargs)
+
         
         self.cluster = cluster
         self.storage = storage
@@ -215,8 +194,6 @@ class Vm(Machine, VmwareMachineObject):
             self.mob =  self._find_from_path()
         return res
 
-    async def delete_vm(self):
-        return await self.ainjector(self._ansible_op, state = 'absent', force = True)
 
     async def start_machine(self):
         loop = self.injector.get_instance(asyncio.AbstractEventLoop)
@@ -270,12 +247,6 @@ class Vm(Machine, VmwareMachineObject):
         return sn
     
 
-@inject(
-    **VmwareNamedObject.injects,
-    storage = VmwareDataStore,
-    parent = InjectionKey(VmFolder, optional = True),
-    network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
-)
 class VmTemplate(Vm):
 
     clone_from_snapshot = "template_snapshot"

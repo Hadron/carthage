@@ -14,11 +14,11 @@ from carthage.console import *
 from .inventory import VmwareSpecifiedObject
 from .folder import VmwareFolder
 
-@inject(**VmwareFolder.injects)
+
 class DataStoreFolder(VmwareFolder, kind='datastore'):
     pass
 
-@inject(**VmwareSpecifiedObject.injects)
+
 class VmwareDataStoreCluster(VmwareSpecifiedObject, kind='datastore'):
 
     parent_type = DataStoreFolder
@@ -31,7 +31,7 @@ class VmwareDataStoreCluster(VmwareSpecifiedObject, kind='datastore'):
         task = self.mob.Destroy_Task()
         await carthage.vmware.utils.wait_for_task(task)
 
-@inject(**VmwareSpecifiedObject.injects)
+
 class VmwareDataStore(VmwareSpecifiedObject, kind='datastore'):
 
     parent_type = (VmwareDataStoreCluster, DataStoreFolder)

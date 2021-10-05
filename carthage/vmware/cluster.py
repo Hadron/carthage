@@ -11,7 +11,6 @@ from carthage import *
 from .inventory import VmwareNamedObject
 from .folder import HostFolder
 
-@inject(**VmwareNamedObject.injects)
 class VmwareCluster(VmwareNamedObject, kind='cluster'):
 
     parent_type = HostFolder

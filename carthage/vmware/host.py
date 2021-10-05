@@ -16,7 +16,7 @@ from pyVmomi import vim
 
 __all__ = ['VmwareHost']
 
-@inject(**VmwareNamedObject.injects)
+
 class VmwareHost(VmwareNamedObject, kind='host'):
 
     parent_type = (VmwareCluster, HostFolder)
