@@ -6,9 +6,12 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import asyncio
+import requests
+import shutil
+
 from pyVmomi import vim, vmodl
 from pathlib import Path
-import requests
 from carthage import *
 from carthage.console import *
 

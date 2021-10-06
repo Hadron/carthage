@@ -9,8 +9,8 @@
 from carthage import *
 
 import asyncio, logging, time
-
-import carthage.ansible, carthage.network
+from pathlib import Path
+import  carthage.network
 
 from .image import VmwareDataStore, VmdkTemplate, vm_datastore_key
 from .inventory import VmwareNamedObject, VmwareSpecifiedObject
@@ -369,7 +369,7 @@ class DiskSpec(DeviceSpecStage,
         if orig_disk:
             if not isinstance(orig_disk, VmdkTemplate):
                 orig_disk = await self.obj.ainjector(orig_disk)
-            await disk.async_become_ready()
+            await orig_disk.async_become_ready()
             d.backing.fileName = orig_disk.disk_path
         d.capacityInBytes = self.obj.disk_size
         d.capacityInKB = int(d.capacityInBytes/1024)
@@ -468,7 +468,7 @@ class vm_template_from_image(AsyncInjectable):
 
     async def async_resolve(self):
         vmdk = await self.ainjector(VmdkTemplate, image=self.image)
-        return await ainjector(VmTemplate, name=self.image.name+".template", disk=vmdk)
+        return await self.ainjector(VmTemplate, name=(Path(self.image.path).stem)+".template", disk=vmdk)
     
         
 

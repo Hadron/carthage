@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import asyncio, logging, os, os.path, requests
+import asyncio, logging, os, os.path
 from pathlib import Path
 from carthage.image import ImageVolume, SetupTaskMixin, setup_task
 from carthage.utils import memoproperty
@@ -29,7 +29,7 @@ vm_datastore_key = InjectionKey(VmwareDataStore, role='vm')
         config_layout = ConfigLayout,
         store = image_datastore_key
         )
-class VmdkTemplate(AsyncInjectable, SetupTaskMixin):
+class VmdkTemplate(SetupTaskMixin, AsyncInjectable):
 
     '''
     Produce a VMDK from an image that can be loaded as a template VM.
@@ -45,6 +45,7 @@ class VmdkTemplate(AsyncInjectable, SetupTaskMixin):
 '''
 
     def __init__(self, image, dspath=None,
+                 prefix="",
                  **kwargs):
         self.image = image
         self.dspath = dspath
@@ -54,11 +55,10 @@ class VmdkTemplate(AsyncInjectable, SetupTaskMixin):
             if self.dspath and not self.dspath.endswith('/'): self.dspath += '/'
         assert str(image.path).endswith('.raw')
         path = Path(image.path)
-        self.prefix = str(Path(image.name).parent)
-        if self.prefix == '.': self.prefix = ""
-        elif not self.prefix.endswith('/'): self.prefix += '/'
+        self.prefix = prefix
+        if not self.prefix.endswith('/'): self.prefix += '/'
         self.paths = [path.stem+".vmdk", path.stem+"-flat.vmdk"]
-        self.path = path
+        self.path = path.parent
         self.stamp_path = self.image.stamp_path
 
     def __repr__(self):
@@ -95,7 +95,7 @@ class VmdkTemplate(AsyncInjectable, SetupTaskMixin):
 
     @memoproperty
     def disk_path(self):
-        return f'[{self.store.name}]{self.dspath}{self.prefix}{self.image.name}.vmdk'
+        return f'[{self.store.name}]{self.dspath}{self.prefix}{self.paths[0]}'
 
     
 class VmwareDatastoreConfig(ConfigSchema, prefix = "vmware.datastore"):

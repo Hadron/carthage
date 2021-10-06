@@ -35,7 +35,6 @@ class VmwareGroup(VmwarePrincipal):
     @property
     def group(self): return True
 
-@inject(**VmwareStampable.injects)
 class VmwareAuthorizationRole(VmwareStampable, kind='authorization_role'):
 
     def __init__(self, name, privIds=None, *args, **kwargs):
