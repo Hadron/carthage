@@ -369,6 +369,7 @@ class DiskSpec(DeviceSpecStage,
         if orig_disk:
             if not isinstance(orig_disk, VmdkTemplate):
                 orig_disk = await self.obj.ainjector(orig_disk)
+            await disk.async_become_ready()
             d.backing.fileName = orig_disk.disk_path
         d.capacityInBytes = self.obj.disk_size
         d.capacityInKB = int(d.capacityInBytes/1024)
@@ -455,6 +456,21 @@ class VmInventory(Injectable):
 
 #Now mark VM as taking a template A vm can be a template for a vm, but
 # we want to look up with a role for finding in the injector
-inject(template = InjectionKey(Vm, role = 'template', optional = True))(Vm)
+inject(template = InjectionKey(Vm, role = 'template', _optional=True, _ready=False))(Vm)
 
+from carthage.vm import vm_image
+@inject(image=vm_image)
+class vm_template_from_image(AsyncInjectable):
+
+    @classmethod
+    def default_class_injection_key(cls):
+        return InjectionKey(Vm, role='template')
+
+    async def async_resolve(self):
+        vmdk = await self.ainjector(VmdkTemplate, image=self.image)
+        return await ainjector(VmTemplate, name=self.image.name+".template", disk=vmdk)
+    
+        
+
+    
 from . import inventory
