@@ -17,14 +17,14 @@ from .connection import VmwareConnection
 from .network import DistributedPortgroup, vmware_trunk_key, DvSwitch
 from .host import *
 from .folder import *
+from . import image
 
 import carthage.vmware.network as network
 
 @carthage.dependency_injection.inject(
     injector = carthage.dependency_injection.Injector)
 def carthage_plugin(injector):
-    from ..config import ConfigAccessor
-    from ..dependency_injection import partial_with_dependencies
+    from carthage.dependency_injection import partial_with_dependencies
     from ..utils import when_needed
     from . import inventory
     from .datacenter import VmwareDatacenter
@@ -32,11 +32,9 @@ def carthage_plugin(injector):
     injector.add_provider(DistributedPortgroup, allow_multiple = True)
     injector.add_provider(VmFolder)
     injector.add_provider(vmware_trunk_key, network._vmware_trunk)
-    injector.add_provider(VmfsDataStore)
+    injector.add_provider(image.vm_datastore_key, partial_with_dependencies(image.produce_datastore_from_config, "vmware.datastore"), allow_multiple=True)
     injector.add_provider(VmwareDatacenter)
+    injector.add_provider(VmwareCluster)
     injector.add_provider(DvSwitch)
     injector.add_provider(VmwareConnection)
-    image_injector = injector(carthage.dependency_injection.Injector)
-    image_injector.add_provider(vm_storage_key, partial_with_dependencies(ConfigAccessor, prefix="vmware.image_datastore."), allow_multiple = True)
-    injector.add_provider(image_datastore_key, when_needed(NfsDataStore, injector = image_injector))
-    
+    injector.add_provider(image.image_datastore_key, partial_with_dependencies(image.produce_datastore_from_config, "vmware.image_datastore"), allow_multiple=True)

@@ -12,7 +12,7 @@ import asyncio, logging, time
 
 import carthage.ansible, carthage.network
 
-from .image import VmwareDataStore, VmdkTemplate
+from .image import VmwareDataStore, VmdkTemplate, vm_datastore_key
 from .inventory import VmwareNamedObject, VmwareSpecifiedObject
 from .connection import VmwareConnection
 from .folder import VmwareFolder
@@ -80,11 +80,11 @@ class VmFolder(VmwareFolder, kind='vm'):
         return await wait_for_task(self.mob.Destroy())
     
 
-@inject(config = vmware_config)
+
 
     
 @inject(
-    storage = VmwareDataStore,
+    storage = vm_datastore_key,
     cluster = VmwareCluster,
     parent = InjectionKey(VmFolder, optional = True),
     network_config = InjectionKey(carthage.network.NetworkConfig, optional = True),
@@ -100,14 +100,18 @@ class Vm(VmwareSpecifiedObject, Machine):
 
     def __init__(self, name, template,
                  guest_id = "ubuntu64Guest",
-                 *args, storage, cluster, network_config = None,
+                 *, storage, cluster, dspath=None, network_config = None,
                  console_needed = True, **kwargs):
         kwargs.setdefault('readonly', False)
-        super().__init__(self, name = name, **kwargs)
+        super().__init__(name = name, **kwargs)
 
         
         self.cluster = cluster
         self.storage = storage
+        if dspath is None:
+            self.dspath = self.config_layout.vmware.datastore.path
+        else: self.dspath = dspath
+        if self.dspath and not self.dspath.endswith('/'): self.dspath += '/'
         self.running = False
         self.folder = self.parent
         vm_config = self.config_layout.vmware
@@ -285,8 +289,8 @@ class BasicConfig(ConfigSpecStage, stage_for = Vm, order = 20,
         obj = self.obj
         vmc = self.obj.config_layout.vmware
         if not obj.mob:
-            dsname = vmc.datastore.name.rpartition('/')[2]
-            config.files = vim.vm.FileInfo(vmPathName = f'[{dsname}]')
+            dsname = obj.storage.name
+            config.files = vim.vm.FileInfo(vmPathName = f'[{dsname}]{obj.dspath}')
         if self.bag.mode == 'create':
             config.name = obj.full_name
         config.numCPUs = obj.cpus
@@ -394,7 +398,7 @@ class NetSpecStage(DeviceSpecStage,
         if not self.obj.network_links: return []
         self.network_links = list(self.obj.network_links.values())
         for n in self.network_links:
-            await n.instantiate(network.DistributedPortGroup)
+            await n.instantiate(network.DistributedPortgroup)
         await self.obj.ainjector(super().apply_config, config)
         
             

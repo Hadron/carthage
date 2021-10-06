@@ -296,8 +296,8 @@ class VmwareSpecifiedObject(VmwareNamedObject):
     #: Class variable containing set of `ConfigSpecStages` for this type of object.  Copied on any subclass that has *ConfigSpecStages*
     config_stages = []
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     async def build_config(self, mode, oconfig = None):
         ainjector = self.ainjector
