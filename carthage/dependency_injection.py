@@ -585,6 +585,8 @@ Return the first injector in our parent chain containing *k* or None if there is
             fut = asyncio.ensure_future(p)
         elif  isinstance(p, AsyncInjectable):
             fut =  asyncio.ensure_future(self._handle_async_injectable(p, placement = placement))
+            try: fut.set_name(f'Handle ASyncInjectable {repr(p)} ')
+            except Exception: pass
         elif isinstance(p, asyncio.Future):
             fut = p
         else:
@@ -1080,7 +1082,10 @@ class AsyncInjector(Injectable):
 async def _handle_async_deps(obj, cycle_set):
     if cycle_set is None: cycle_set = set()
     futures = []
+    try: repr = repr(obj)
+    except Exception: repr = f"<Error in repr for {obj.__class__.__name__}"
     for attr, dep in obj.__class__._injection_dependencies.items():
+        if dep is None: continue
         if dep.ready is False: continue
         val = getattr(obj, attr, None)
         if val is None: continue
@@ -1090,7 +1095,9 @@ async def _handle_async_deps(obj, cycle_set):
             warnings.warn(f'{obj}.async_become_ready: @inject({attr}={dep}) produced dependency cycle with {val}')
             continue
         cycle_set.add(id(val))
-        futures.append(asyncio.ensure_future(val.async_become_ready(cycle_set = cycle_set)))
+        future = asyncio.ensure_future(val.async_become_ready(cycle_set = cycle_set))
+        future.set_name(f'Dependency become ready for {dep} of {repr}')
+        futures.append(future)
 
     await asyncio.gather(*futures)
     return await obj.async_ready()
