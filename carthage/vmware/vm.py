@@ -165,6 +165,7 @@ class Vm(VmwareSpecifiedObject, Machine):
     async def do_create(self):
         try:
             if self.template:
+                await self.template.async_become_ready()
                 spec = vim.vm.CloneSpec()
                 locspec = vim.vm.RelocateSpec()
                 spec.location = locspec
@@ -214,7 +215,9 @@ class Vm(VmwareSpecifiedObject, Machine):
                         raise RuntimeError(task.info.error)
                 self.running = True
             if self.__class__.ip_address is Machine.ip_address:
-                await loop.run_in_executor(None, self._get_ip_address)
+                try: self.ip_address
+                except NotImplementedError:
+                    await loop.run_in_executor(None, self._get_ip_address)
             return True
 
     async def stop_machine(self):
@@ -251,6 +254,7 @@ class Vm(VmwareSpecifiedObject, Machine):
         return sn
     
 
+@inject(template=None)
 class VmTemplate(Vm):
 
     clone_from_snapshot = "template_snapshot"
