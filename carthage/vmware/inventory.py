@@ -299,12 +299,14 @@ class VmwareSpecifiedObject(VmwareNamedObject):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    async def build_config(self, mode, oconfig = None):
+    async def build_config(self, mode, oconfig = None, stagefilter = None):
+        if stagefilter is None:
+            stagefilter = lambda cs: mode in cs.mode
         ainjector = self.ainjector
         bag = types.SimpleNamespace(mode = mode)
         stages = []
         for cs in self.__class__.config_stages:
-            if mode not in cs.mode: continue
+            if not stagefilter(cs): continue
             stages.append( cs(obj = self, bag = bag))
         config = self.config_spec_class()
         if self.mob:

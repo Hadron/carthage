@@ -152,8 +152,8 @@ class Vm(VmwareSpecifiedObject, Machine):
         self.mob = None
         self.vmware_uuid = None
 
-    async def build_config(self, mode, oconfig = None):
-        config = await super().build_config(mode, oconfig=oconfig)
+    async def build_config(self, mode, oconfig = None, stagefilter = None):
+        config = await super().build_config(mode, oconfig=oconfig, stagefilter=stagefilter)
         cur = -1
         for c in config.deviceChange:
             if c.device.key == 0:

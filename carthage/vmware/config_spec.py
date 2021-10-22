@@ -17,7 +17,7 @@ class ConfigSpecMeta(type):
     def __repr__(self):
         stage = getattr(self, 'stage_for', None)
         if stage is not None:
-            stage = stage.__name__
+            stage = getattr(stage, '__name__', stage)
         else:
             stage = "<abstract>"
             
