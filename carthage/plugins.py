@@ -139,7 +139,7 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
             metadata = yaml.safe_load(importlib.resources.read_text(
                 package, "carthage_plugin.yml"))
             metadata_path = package.__file__
-        except (FileNotFoundError, ImportError):
+        except (FileNotFoundError, ImportError, TypeError):
             # consider the case of hadron-operations
             # plugin is hadron.carthage
             # but when not installed resources live at the top level of the checkout.
