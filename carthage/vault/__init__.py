@@ -9,9 +9,9 @@
 import os
 import os.path
 import hvac
-from .config import ConfigSchema, ConfigLayout
-from .dependency_injection import *
-from .config.types import ConfigString, ConfigPath, ConfigLookupPlugin
+from ..config import ConfigSchema, ConfigLayout
+from ..dependency_injection import *
+from ..config.types import ConfigString, ConfigPath, ConfigLookupPlugin
 
 class VaultError(RuntimeError): pass
 
