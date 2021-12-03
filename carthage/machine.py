@@ -555,6 +555,7 @@ def customization_task    (c: BaseCustomization, order: int = None,
         return bool(res)
     return do_task
 
+@inject_autokwargs(ssh_key =InjectionKey(SshKey, _ready=True))
 class BareMetalMachine(Machine, SetupTaskMixin):
 
     '''Represents physical hardware that Carthage cannot start or stop
