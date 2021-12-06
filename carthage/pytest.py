@@ -55,7 +55,7 @@ def async_test(t):
             if not orig_ainjector:
                 del kwargs['ainjector']
             task = asyncio.ensure_future(ainjector(t, *args, **kwargs), loop = loop)
-        done, pending = loop.run_until_complete(asyncio.wait([task], timeout = 840, loop = loop))
+        done, pending = loop.run_until_complete(asyncio.wait([task], timeout = 840))
         if pending: raise  TimeoutError
         return task.result()
     params = list(sig.parameters.values())
