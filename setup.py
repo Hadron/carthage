@@ -32,6 +32,6 @@ setup(
                                  'resources/*',],
                     'carthage.extra_packages': ['resources/*'],
     },
-    version = "0.11",
+    version = "0.12",
 )
 

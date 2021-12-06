@@ -1,3 +1,10 @@
+hadron-carthage (0.12) unstable; urgency=medium
+
+  * Release a new version internally in Hadron to pick up debian mirror
+    config changes.
+
+ -- Sam Hartman <hartmans@debian.org>  Mon, 06 Dec 2021 13:30:12 -0700
+
 hadron-carthage (0.11) unstable; urgency=medium
 
   * Expose additional exports
