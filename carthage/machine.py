@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 import abc, asyncio, contextlib, os, os.path, tempfile, typing
+from pathlib import Path
+
 from .dependency_injection import *
 from .config import ConfigLayout
 from .ssh import SshKey, SshAgent, RsyncPath
@@ -581,7 +583,7 @@ class BareMetalMachine(Machine, SetupTaskMixin):
 
     @memoproperty
     def stamp_path(self):
-        return f'{self.config_layout.state_dir}/machines/{self.name}'
+        return Path(f'{self.config_layout.state_dir}/machines/{self.name}')
     
 
 

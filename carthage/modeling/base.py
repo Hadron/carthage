@@ -7,13 +7,13 @@
 # LICENSE for details.
 
 import asyncio, logging, os, types
+import typing
+from pathlib import Path
 from .implementation import *
 from .decorators import *
 from carthage.dependency_injection import * #type: ignore
 from carthage.utils import when_needed, memoproperty
 from carthage import ConfigLayout, SetupTaskMixin
-import typing
-from pathlib import Path
 import carthage.network
 import carthage.machine
 from .utils import *
@@ -365,7 +365,7 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
     def stamp_path(self):
         path = self.config_layout.output_dir+ f"/hosts/{self.name}"
         os.makedirs(path, exist_ok = True)
-        return path
+        return Path(path)
 
     async def resolve_networking(self, *args, **kwargs):
         '''

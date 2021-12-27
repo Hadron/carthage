@@ -178,6 +178,7 @@ class ContainerVolume(AsyncInjectable, SetupTaskMixin):
 
     @property
     def stamp_path(self): return self.impl.path
+
     def __repr__(self):
         return f"<Container {self.impl.__class__.__name__} path:{self.impl.path}>"
 
@@ -292,7 +293,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
     @property
     def stamp_path(self):
-        return self.path+'.stamps'
+        return Path(str(self.path)+'.stamps')
 
     def close(self, canceled_futures = None):
         if self.config_layout.delete_volumes:

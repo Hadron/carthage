@@ -8,6 +8,7 @@
 
 import asyncio, json, logging, os, os.path, shutil
 import mako, mako.lookup, mako.template
+from pathlib import Path
 from .dependency_injection import *
 from .utils import when_needed, memoproperty
 from .image import SetupTaskMixin, setup_task, ImageVolume
@@ -201,7 +202,7 @@ class VM(Machine, SetupTaskMixin):
 
     @property
     def stamp_path(self):
-        return self.volume.path+'.stamps'
+        return Path(str(self.volume.path)+'.stamps')
 
     def _console_json(self):
 

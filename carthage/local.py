@@ -7,6 +7,7 @@
 # LICENSE for details.
 
 import contextlib
+from pathlib import Path
 from .machine import Machine
 from .dependency_injection import *
 from . import sh
@@ -50,7 +51,7 @@ class LocalMachine(Machine, SetupTaskMixin):
 
     @memoproperty
     def stamp_path(self):
-        return self.config_layout.state_dir+"/localhost"
+        return Path(self.config_layout.state_dir+"/localhost")
 
 def process_local_network_config(model):
     '''
