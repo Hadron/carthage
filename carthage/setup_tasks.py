@@ -17,6 +17,7 @@ from carthage.utils import memoproperty
 import collections.abc
 
 __all__ = [ 'logger', 'TaskWrapper', 'TaskMethod', 'setup_task', 'SkipSetupTask', 'SetupTaskMixin',
+            'cross_object_dependency',
             'mako_task',
             "install_mako_task"]
 
