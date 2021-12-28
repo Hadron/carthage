@@ -764,6 +764,37 @@ def access_ssh_origin( ssh_origin, ssh_origin_vrf=None, extra_nsenter = []):
                 '-n',
                 *vrf)
 
+def hash_network_links(network_links:dict[str,NetworkLink]):
+    '''
+    Return a hash value suitable for determining whether network_links have changed in setup_tasks.
+'''
+    def hash_subitem(i):
+        result = 0
+        for v in i:
+            if isinstance(v,list): result += hash_subitem(v)
+            elif isinstance(v,dict):
+                result += hash_subitem(v.keys())
+                result += hash_subitem(v.values())
+            elif isinstance(v,str):
+                for ch in v: result += ord(ch)
+            elif isinstance(v, int):
+                result += v
+        return result
+
+    result = hash_subitem(network_links.keys())
+    for v in network_links.values():
+        result += hash_subitem(v.net.name)
+        if v.mac: result += hash_subitem(v.mac)
+        if v.machine: result += hash_subitem(v.machine.name)
+        if v.mtu: result += v.mtu
+        if v.allowed_vlans: result += hash_subitem(VlanList.canonicalize(v.allowed_vlans, v))
+        if v.untagged_vlan: result += v.untagged_vlan
+        if v.v4_config: result += hash_subitem(v.v4_config.__dict__.values())
+        try: result += hash_subitem(v.members)
+        except AttributeError: pass
+    return result
+
+
 
 
 
@@ -772,6 +803,7 @@ __all__ = r'''Network TechnologySpecificNetwork BridgeNetwork
 access_ssh_origin
 NetworkConfig NetworkLink
 VlanList collect_vlans
+hash_network_links
 this_network
     '''.split()
 

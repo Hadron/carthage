@@ -11,7 +11,7 @@ import os, shutil
 from carthage.dependency_injection import *
 from carthage.machine import AbstractMachineModel
 from carthage.setup_tasks import *
-from .network import NetworkLink
+from .network import NetworkLink, hash_network_links
 from .utils import mako_lookup
 from carthage import ConfigLayout, sh
 import logging
@@ -73,6 +73,10 @@ class SystemdNetworkModelMixin(SetupTaskMixin, AsyncInjectable):
         for link in self.network_links.values():
             self._render_network_configuration(link, networking_dir)
 
+    @generate_network_config.hash()
+    def generate_network_config(self):
+        return str(hash_network_links(self.network_links))
+    
 
     def _render_network_configuration(self, link: NetworkLink, dir: Path):
         templates = templates_for_link(link)
@@ -94,6 +98,8 @@ class SystemdNetworkModelMixin(SetupTaskMixin, AsyncInjectable):
 
 class SystemdNetworkInstallMixin(SetupTaskMixin):
 
+
+    generate_config_dependency = cross_object_dependency(SystemdNetworkModelMixin.generate_network_config, 'model')
     
     @setup_task("Install Systemd Networking")
     async def install_systemd_networking(self):

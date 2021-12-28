@@ -15,7 +15,7 @@ from pathlib import Path
 from .setup_tasks import *
 from .dependency_injection import *
 from .config import ConfigLayout
-
+from .network import hash_network_links
 logger = logging.getLogger('carthage.network')
 __all__ = []
 
@@ -91,4 +91,8 @@ A mixin for :class:`AbstractMachineModel` for SONiC network switches.
             f.write(json.dumps(sonic_port_config(self, breakout_config, self.network_links),
                                indent=4))
 
+    @sonic_config.hash()
+    def sonic_config(self):
+        return str(hash_network_links(self.network_links))
+    
 __all__ += ['SonicNetworkModelMixin']
