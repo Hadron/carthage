@@ -33,18 +33,20 @@ def sonic_port_config(model, breakout_config, network_links):
             logger.error(f'{model.name}: {breakout_mode} not valid breakout mode for {link}')
             return
         aliases = breakout_info['breakout_modes'][breakout_mode]
-        current_breakout[link] = breakout_mode
+        current_breakout[link] = dict(brkout_mode=breakout_mode)
         num_ports = len(aliases)
         num_lanes = int(len(lanes)/num_ports)
+        speed = int(speed_re.search(breakout_mode).group(1))*1000
         offset = 0
         portbase= int(port_number_re.match(link).group(2))
         for portnum in range(portbase, portbase+num_ports, 1):
             port_config[f'Ethernet{portnum}'] = dict(
                 admin_status='up',
                 lanes=",".join(lanes[(offset*num_lanes):((offset+1)*num_lanes)]),
-                index=indexes[offset],
+                index=str(indexes[offset]),
                 alias=aliases[offset],
-                mtu=9100,
+                mtu="9100",
+                speed=str(speed),
                 )
             offset += 1
             
@@ -64,6 +66,13 @@ def sonic_port_config(model, breakout_config, network_links):
             continue
         nl = network_links[link]
         if nl.mtu: port_config[link]['mtu'] = str(nl.mtu)
+        # Speed defaults to one specified in breakout mode.  Next
+        # lowest priority is speed from other side of link, then speed
+        # from this side of the link.
+        try: port_config[link]['speed'] = str(nl.other.speed)
+        except AttributeError: pass
+        try: port_config[link]['speed'] = str(nl.speed)
+        except AttributeError: pass
 
     return [
         dict(
