@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -333,7 +333,8 @@ class NetworkConfig:
                 r = await ainjector.get_instance_async(r)
             elif  callable(r):
                 r = await ainjector(r, i)
-            args[k] = r
+            if args is not None: args[k] = r
+            return r
         def handle_other(link, other_args, other_future):
             def callback(future):
                 other_link = None
@@ -392,6 +393,12 @@ class NetworkConfig:
         members_of: dict[str, list] = {}
         for i, link_spec in self.link_specs.items():
             link_args = {}
+            link_args_dict = link_spec.pop('link_args', {})
+            if callable(link_args_dict) or isinstance(link_args_dict, InjectionKey):
+                link_args_dict = await resolve1(link_args_dict, i, None, None)
+                link_spec = dict(link_spec)
+            link_spec.update(link_args_dict)
+            del link_args_dict
             for k,v in link_spec.items():
                 if k == 'other' or k.startswith('other_'):
                     link_args.setdefault('_other', {})
@@ -770,6 +777,7 @@ def hash_network_links(network_links:dict[str,NetworkLink]):
 '''
     def hash_subitem(i):
         result = 0
+        if isinstance(i,int): return i
         for v in i:
             if isinstance(v,list): result += hash_subitem(v)
             elif isinstance(v,dict):
@@ -790,6 +798,8 @@ def hash_network_links(network_links:dict[str,NetworkLink]):
         if v.allowed_vlans: result += hash_subitem(VlanList.canonicalize(v.allowed_vlans, v))
         if v.untagged_vlan: result += v.untagged_vlan
         if v.v4_config: result += hash_subitem(v.v4_config.__dict__.values())
+        for attr in ('speed', 'portchannel_member', 'breakout_mode'):
+            result += hash_subitem(getattr(v, attr, ''))
         try: result += hash_subitem(v.members)
         except AttributeError: pass
     return result
