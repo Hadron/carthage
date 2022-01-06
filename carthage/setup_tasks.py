@@ -251,8 +251,8 @@ class TaskMethod:
     
     
 def setup_task(description, *,
-               order = None,
-               before = None):
+               order=None,
+               before=None):
     '''Mark a method as a setup task.  Describe the task for logging.  Must be in a class that is a subclass of
     SetupTaskMixin.  Usage::
 

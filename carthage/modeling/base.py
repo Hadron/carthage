@@ -1,4 +1,4 @@
-#../sim Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -355,6 +355,7 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
         for b in bases:
             assert isinstance(b, type) or hasattr(b, '__mro_entries__'), f'{b} is not a type; did you forget a dependency_quote'
         res =  types.new_class("MachineImplementation", tuple(bases))
+        inject()(res) #Pick up any injections from extra bases
         for k, customization in self.injector.filter_instantiate(carthage.machine.BaseCustomization, ['description'], stop_at = self.injector):
             name = customization.__name__
             setattr(res, f'{name}_task', carthage.machine.customization_task(customization))
