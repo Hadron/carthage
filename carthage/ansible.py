@@ -583,7 +583,8 @@ class ansible_playbook_task(setup_tasks.TaskWrapper):
         
 __all__ += ['ansible_playbook_task']
 
-def ansible_role_task(roles, vars = None):
+def ansible_role_task(roles, vars = None,
+                      before=None, order=None):
     '''
     A :func:`setup_task` to apply one or more ansible roles to a machine.
 
@@ -592,7 +593,8 @@ def ansible_role_task(roles, vars = None):
     :param vars: An optional dictionary of ansible variable assignments.
 
     '''
-    @setup_tasks.setup_task(f'Apply {roles} ansible roles')
+    @setup_tasks.setup_task(f'Apply {roles} ansible roles',
+                            before=before, order=order)
     @inject(ainjector = AsyncInjector)
     async def apply_roles(self, ainjector):
         host, extra_args = _handle_host_origin(self)
