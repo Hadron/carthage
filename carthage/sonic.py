@@ -1,4 +1,4 @@
-# Copyright (C) 2021, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -94,7 +94,9 @@ A mixin for :class:`AbstractMachineModel` for SONiC network switches.
     @setup_task("Generate SONiC Config patch")
     async def sonic_config(self):
         await self.resolve_networking()
-        breakout_json = self.stamp_path.joinpath("breakout.json").read_text()
+        breakout_json_path = self.stamp_path.joinpath("breakout.json")
+        if not breakout_json_path.exists(): raise SkipSetupTask
+        breakout_json = breakout_json_path.read_text()
         breakout_config = json.loads(breakout_json)
         with self.stamp_path.joinpath("carthage-sonic-config.json").open("wt") as f:
             f.write(json.dumps(sonic_port_config(self, breakout_config, self.network_links),
@@ -103,5 +105,32 @@ A mixin for :class:`AbstractMachineModel` for SONiC network switches.
     @sonic_config.hash()
     def sonic_config(self):
         return str(hash_network_links(self.network_links))
-    
+
+    @sonic_config.invalidator()
+    def sonic_config(self, last_run):
+        breakout_path = self.stamp_path.joinpath("breakout.json")
+        try: stat = breakout_path.stat()
+        except FileNotFoundError: return False
+        return stat.st_mtime > last_run
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from carthage.modeling import MachineMixin
+        self.injector.add_provider(
+            InjectionKey(MachineMixin, name="SonicNetworkInstallMix in"),
+            dependency_quote(SonicNetworkInstallMixin))
+        
+class SonicNetworkInstallMixin(SetupTaskMixin):
+
+    @setup_task("Get breakout config")
+    async def get_sonic_breakout_config(self):
+        breakout = await self.ssh("show interface breakout",
+                                  _bg=True,
+                                  _bg_exc=True,
+                                  )
+        breakout_path = self.model.stamp_path/"breakout.json"
+        with breakout_path.open("wt") as f:
+            f.write(str(breakout.stdout,'UTF-8'))
+        await self.model.ainjector(self.model.sonic_config)
+        
 __all__ += ['SonicNetworkModelMixin']
