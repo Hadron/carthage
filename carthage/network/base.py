@@ -459,6 +459,8 @@ class NetworkConfig:
             for member in member_of:
                 if member not in result:
                     raise ValueError(f'{i} has {member} in member_of, but {member} is not a link on {connection}')
+                if not hasattr(result[member], 'members'):
+                    result[member].members = []
                 result[member].members.append(i)
 
         for k, link in result.items():
