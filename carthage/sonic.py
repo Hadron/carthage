@@ -84,6 +84,34 @@ def sonic_port_config(model, breakout_config, network_links):
             path='/BREAKOUT_CFG',
             value=current_breakout)]
 
+
+def sonic_portchannel_config(model, network_links):
+    def pc(num):
+        return f'PortChannel{num}'
+    
+    portchannels = {}
+    members = {}
+    for l in network_links.values():
+        if l.local_type: continue
+        if not getattr(l, 'portchannel_member', None): continue
+        pc_name = pc(l.portchannel_member)
+        portchannels[pc_name] = dict(
+            admin_status='up',
+            lacp_key='auto',
+            min_links='1',
+            mtu=str(l.mtu or 9100),
+            )
+        members[f'{pc_name}|{l.interface}'] = {}
+    return [
+        dict(op='add',
+             path='/PORTCHANNEL',
+             value=portchannels),
+        dict(
+            op='add',
+            path='/PORTCHANNEL_MEMBER',
+            value=members)]
+
+    
 @inject(config_layout=ConfigLayout)
 class SonicNetworkModelMixin(SetupTaskMixin, AsyncInjectable):
 
@@ -98,8 +126,16 @@ A mixin for :class:`AbstractMachineModel` for SONiC network switches.
         if not breakout_json_path.exists(): raise SkipSetupTask
         breakout_json = breakout_json_path.read_text()
         breakout_config = json.loads(breakout_json)
+        result = sonic_port_config(self, breakout_config, self.network_links)
+        result.extend(sonic_portchannel_config(self, self.network_links))
+        result.extend([
+            dict(op='add',
+                 path='/INTERFACE',
+                 value = dict(Ethernet0={}),
+                 ),
+            ])
         with self.stamp_path.joinpath("carthage-sonic-config.json").open("wt") as f:
-            f.write(json.dumps(sonic_port_config(self, breakout_config, self.network_links),
+            f.write(json.dumps(result,
                                indent=4))
 
     @sonic_config.hash()
@@ -132,5 +168,13 @@ class SonicNetworkInstallMixin(SetupTaskMixin):
         with breakout_path.open("wt") as f:
             f.write(str(breakout.stdout,'UTF-8'))
         await self.model.ainjector(self.model.sonic_config)
+
+    @get_sonic_breakout_config.check_completed()
+    def get_sonic_breakout_config(self):
+        breakout_path = self.model.stamp_path/"breakout.json"
+        try: stat = breakout_path.stat()
+        except FileNotFoundError: return False
+        return stat.st_mtime
+    
         
 __all__ += ['SonicNetworkModelMixin']
