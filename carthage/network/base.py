@@ -344,7 +344,7 @@ class NetworkConfig:
                         logger.exception(f'Error resolving other side of {link.interface} link of {link.machine}')
                         return
                     if not isinstance(other, (Machine, AbstractMachineModel)):
-                        logger.error(f'The other side of the {interface} link to {link.machine} must be an Machine or AbstractMachineModel, not {other}')
+                        logger.error(f'The other side of the {other_interface} link to {link.machine} must be an Machine or AbstractMachineModel, not {other}')
                         return
                     if other_interface in other.network_links:
                         other_link = other.network_links[other_interface]
@@ -510,7 +510,7 @@ class VlanList(abc.ABC):
                 from .switch import link_collect_vlans
                 result.extend(link_collect_vlans(link))
             elif isinstance(i, Network):
-                if not network.vlan_id:
+                if not i.vlan_id:
                     raise ValueError(f'{i} has no vlan_id set')
                 result.append(i.vlan_id)
             elif isinstance(i, slice):

@@ -39,6 +39,18 @@ def sonic_port_config(model, breakout_config, network_links):
         speed = int(speed_re.search(breakout_mode).group(1))*1000
         offset = 0
         portbase= int(port_number_re.match(link).group(2))
+        # At least on some switches, it's mandatory to have all the
+        # breakout ports be the same speed.  Even when not mandatory,
+        # that's probably what you want.  So, see if any speed is
+        # configured by the NetworkConfig, and if so, use the first
+        # such speed as a default.  Later code will allow a link to
+        # override.
+        for portnum in range(portbase, portbase+num_ports, 1):
+            try:
+                speed = network_links['Ethernet'+str(portnum)].speed
+                break
+            except (AttributeError, KeyError): continue
+        
         for portnum in range(portbase, portbase+num_ports, 1):
             port_config[f'Ethernet{portnum}'] = dict(
                 admin_status='up',
@@ -111,6 +123,35 @@ def sonic_portchannel_config(model, network_links):
             path='/PORTCHANNEL_MEMBER',
             value=members)]
 
+def sonic_vlan_config(model, network_links):
+    from carthage.network.switch import link_vlan_config
+    vlans = set()
+    vlan_members = {}
+    for l in network_links.values():
+        if not ( \
+                 l.interface.startswith('Ethernet') \
+                 or l.interface.startswith('PortChannel')): continue
+        interface = l.interface
+        try: interface='PortChannel'+str(l.portchannel_member)
+        except AttributeError: pass
+        vlan_config = link_vlan_config(l)
+        if vlan_config is None or not vlan_config.allowed_vlans: continue
+        for vl in vlan_config.allowed_vlans:
+            vlans.add(vl)
+            vlan_members[f'Vlan{vl}|{interface}'] = dict(
+                tagging_mode=('untagged' if vl == vlan_config.untagged_vlan else 'tagged'))
+
+    return [
+        dict(
+            op='add',
+            path='/VLAN',
+            value={f'Vlan{vl}': dict(vlanid=str(vl)) for vl in vlans}),
+        dict(
+            op='add',
+            path='/VLAN_MEMBER',
+            value=vlan_members),
+        ]
+
     
 @inject(config_layout=ConfigLayout)
 class SonicNetworkModelMixin(SetupTaskMixin, AsyncInjectable):
@@ -128,12 +169,20 @@ A mixin for :class:`AbstractMachineModel` for SONiC network switches.
         breakout_config = json.loads(breakout_json)
         result = sonic_port_config(self, breakout_config, self.network_links)
         result.extend(sonic_portchannel_config(self, self.network_links))
+        result.extend(sonic_vlan_config(self, self.network_links))
         result.extend([
             dict(op='add',
                  path='/INTERFACE',
                  value = dict(Ethernet0={}),
                  ),
             ])
+        for item in result:
+            if not item['op'] == 'add': continue
+            value = item['value']
+            if isinstance(value,dict) and len(value) == 0:
+                item['op'] = 'remove'
+                del item['value']
+                
         with self.stamp_path.joinpath("carthage-sonic-config.json").open("wt") as f:
             f.write(json.dumps(result,
                                indent=4))
@@ -147,7 +196,7 @@ A mixin for :class:`AbstractMachineModel` for SONiC network switches.
         breakout_path = self.stamp_path.joinpath("breakout.json")
         try: stat = breakout_path.stat()
         except FileNotFoundError: return False
-        return stat.st_mtime > last_run
+        return last_run > stat.st_mtime
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
