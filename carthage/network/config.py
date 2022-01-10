@@ -22,7 +22,7 @@ class L3ConfigMixin:
         })
     
     #: Set of DNS servers that should be made available to this link/network
-    dns_servers: list = tuple()
+    dns_servers: list = None
     domains: str = None
 
     def __post_init__(self):
