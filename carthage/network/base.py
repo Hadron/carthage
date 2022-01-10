@@ -779,6 +779,7 @@ def hash_network_links(network_links:dict[str,NetworkLink]):
 '''
     def hash_subitem(i):
         result = 0
+        if i is None: return 0
         if isinstance(i,int): return i
         for v in i:
             if isinstance(v,list): result += hash_subitem(v)
