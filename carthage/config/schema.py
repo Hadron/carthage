@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 import sys
-from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies, InjectorClosed
+from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies, InjectorClosed, InjectionFailed
 
 def config_key(k):
     return InjectionKey("config/"+k)
@@ -190,7 +190,7 @@ class ConfigAccessor:
             def_v = schema_item.default
             try:
                 v = getattr(self, k)
-            except ConfigResolutionFailed:
+            except (ConfigResolutionFailed, InjectionFailed):
                 v = "<resolution failed>"
             if include_defaults or (v != def_v) :
                 for t in (float, int, str):
