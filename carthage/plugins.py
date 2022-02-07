@@ -135,6 +135,8 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
     if (not metadata) and (not package):
         raise RuntimeError('Either package or metadata must be supplied')
     if not metadata:
+        if not package.__spec__.origin:
+            raise SyntaxError(f'{package.__name__} is not a Carthage plugin')
         try:
             metadata = yaml.safe_load(importlib.resources.read_text(
                 package, "carthage_plugin.yml"))
