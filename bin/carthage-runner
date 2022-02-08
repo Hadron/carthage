@@ -7,7 +7,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import argparse, os, sys, gc, traceback, yaml
+import argparse, functools, os, sys, gc, traceback, warnings, yaml
 import asyncio, logging
 import  carthage.console
 from carthage.dependency_injection import AsyncInjector, InjectionKey, shutdown_injector
@@ -53,6 +53,7 @@ async def run():
     global ainjector, layout
     config = await ainjector(carthage.config.ConfigLayout)
     layout_name = config.layout_name
+    if args.warn_dns: warn_on_dns()
     if layout_name:
         layout = await ainjector.get_instance_async(InjectionKey(CarthageLayout, layout_name = layout_name))
     else:
@@ -101,6 +102,17 @@ async def run():
         for m in machines:
             m.close()
 
+def warn_on_dns():
+    import socket
+    def warn_on(f, old):
+        @functools.wraps(old)
+        def func(first, *args, **kwargs):
+            warnings.warn(f'{f} called with first argument ({first})', stacklevel=2)
+            return old(first, *args, **kwargs)
+        return func
+    for f in ('gethostbyname', 'getaddrinfo', 'gethostbyaddr', 'getnameinfo'):
+        old = getattr(socket,f)
+        setattr(socket,f, warn_on(f, old))
             
 
     
@@ -127,13 +139,24 @@ parser.add_argument(
     help = "Stop already running machines",
 )
 parser.add_argument('--no-tmux', action = 'store_false',
-                    dest = 'tmux', default = True,
+                    dest = 'tmux', default = False,
                     help = "Do not start a tmux for the console")
+parser.add_argument('--tmux',
+                    action='store_true',
+                    dest='tmux',
+                    default=False,
+                    help="Start a tmux for the console")
 parser.add_argument(
     '--keep', '--keep-machines',
                     help = "Keep machines running on exit",
                     action='store_true',
                     dest ='keep_machines')
+parser.add_argument('--warn-dns',
+
+                    '--warn-on-dns',
+                    dest='warn_dns',
+                    action='store_true',
+                    help="Warn on any use of dns in layout; testing tool to avoid dns dependencies when the layout will provide dns service")
 
 
 
