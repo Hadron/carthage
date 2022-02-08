@@ -1,0 +1,116 @@
+#!/usr/bin/python3
+
+# Copyright (C) 2022, Hadron Industries, Inc.
+# Carthage is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License version 3
+# as published by the Free Software Foundation. It is distributed
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
+# LICENSE for details.
+
+import asyncio
+import contextlib
+import functools
+import os
+import sys
+from pathlib import Path
+sys.path.extend(["/storage/devstack-carthage/project/carthage",
+"/usr/lib/ocf/lib/heartbeat"])
+import ocf
+from carthage import *
+from carthage.modeling import *
+from carthage.utils import file_locked
+
+
+async def get_layout(config_file):
+    with open(config_file, "rt") as f:
+        config_layout = await ainjector(ConfigLayout)
+        config_layout.load_yaml(f)
+    layout_name = config_layout.layout_name
+    config_layout.persist_local_networking = True
+    if layout_name:
+        return await ainjector.get_instance_async(InjectionKey(CarthageLayout, layout_name=layout_name))
+    else: return await ainjector.get_instance_async(CarthageLayout)
+
+def async_handler(f):
+    @functools.wraps(f)
+    def run_async(*args, **kwargs):
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(f(*args, **kwargs))
+    return run_async
+async def get_machines(layout, machines):
+    machine_list = machines.split()
+    ainjector = layout.ainjector
+    return await asyncio.gather(*[ ainjector.get_instance_async(InjectionKey(MachineModel, host=m, _ready=False)) for m in machine_list])
+
+
+@async_handler
+async def monitor(config, machines):
+    layout = await get_layout(config)
+    models = await get_machines(layout, machines)
+    probe = ocf.is_probe()
+    all_running = True
+    some_running = False
+    for m in models:
+        m.force_locally_hosted = True
+        machine = await m.ainjector.get_instance_async(InjectionKey(Machine, _ready=False))
+        running = await machine.is_machine_running()
+        if running: some_running = True
+        else: all_running = False
+    if probe and some_running: return ocf.OCF_SUCCESS
+    # The following should already be invarient, but in the interest of being defensive
+    if not some_running: all_running = False
+    if all_running: return ocf.OCF_SUCCESS
+    if some_running:
+        ocf.ocf_exit_reason("Some, but not all machines running")
+        return ocf.OCF_ERR_GENERIC
+    return ocf.OCF_NOT_RUNNING
+
+@async_handler
+async def start(config, machines):
+    layout = await get_layout(config)
+    ainjector = layout.ainjector
+    config_layout = await ainjector(ConfigLayout)
+    async with file_locked(Path(config_layout.output_dir)/"generation_lock"):
+        await layout.generate()
+    models = await get_machines(layout, machines)
+    import carthage_base.hosted
+    for m in models:
+        m.force_locally_hosted = True
+        carthage_base.hosted.clear_hosted(m)
+        await m.async_become_ready()
+
+    for m in models:
+        machine = await m.ainjector.get_instance_async(Machine)
+        await machine.start_machine()
+        assert machine.running
+    return ocf.OCF_SUCCESS
+
+@async_handler
+async def stop(config, machines):
+    layout = await get_layout(config)
+    ainjector = layout.ainjector
+    config_layout = await ainjector(ConfigLayout)
+    async with file_locked(Path(config_layout.output_dir)/"generation_lock"):
+        await layout.resolve_networking()
+    models = await get_machines(layout, machines)
+    for m in reversed(models):
+        m.force_locally_hosted = True
+        machine = await m.ainjector.get_instance_async(InjectionKey(Machine, _ready=False))
+        await machine.is_machine_running()
+        await machine.stop_machine()
+        assert not machine.running
+    return ocf.OCF_NOT_RUNNING
+
+
+ainjector = base_injector(AsyncInjector)
+
+agent = ocf.Agent(name="carthage", shortdesc="Manage a set of machines from a Carthage layout",
+                  longdesc=""
+                  )
+agent.add_parameter("config", "Path to the config.yml for the layout", required=True)
+agent.add_parameter("machines", "Space separated list of machines to manage", required=True)
+agent.add_action('start', timeout="180s", handler=start)
+agent.add_action('stop', timeout='220s', handler=stop)
+agent.add_action('monitor', interval='30s', timeout='90s', handler=monitor)
+agent.run()
