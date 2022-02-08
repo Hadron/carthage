@@ -288,7 +288,7 @@ def get_type_args(t):
 async def file_locked(fd: typing.Union[int,str], mode=fcntl.LOCK_EX, unlock=False):
     loop = asyncio.get_event_loop()
     close = False
-    if isinstance(fd, str):
+    if isinstance(fd, str) or hasattr(fd,"__fspath__"):
         fd = os.open(fd, os.O_CREAT|OS.O_CLOEXEC,os.O_RDWR, 0o664)
         close = True
     def lock(m):
