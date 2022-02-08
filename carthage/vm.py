@@ -37,7 +37,7 @@ vm_image = InjectionKey('vm-image')
     )
 class VM(Machine, SetupTaskMixin):
 
-    def __init__(self,  console_needed = False,
+    def __init__(self,  name, *, console_needed = False,
                  **kwargs):
         super().__init__(name=name, **kwargs)
         injector = self.injector
