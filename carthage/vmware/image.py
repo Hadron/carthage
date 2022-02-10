@@ -68,6 +68,7 @@ class VmdkTemplate(SetupTaskMixin, AsyncInjectable):
 
     @setup_task("generate-vmdk")
     async def generate_vmdk(self):
+        await self.image.async_become_ready()
         await sh.qemu_img(
             'convert',
             "-Ovmdk",
