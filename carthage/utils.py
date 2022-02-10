@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import argparse, asyncio, contextlib, functools, logging, os, pathlib, re, typing, weakref
+import argparse, asyncio, contextlib, fcntl, functools, logging, os, pathlib, re, typing, weakref
 import importlib.resources
 import mako.lookup
 
@@ -283,7 +283,24 @@ def is_optional_type(t):
 def get_type_args(t):
     try: return typing.get_type_args(t)
     except AttributeError: return t.__args__
-    
+
+@contextlib.asynccontextmanager
+async def file_locked(fd: typing.Union[int,str], mode=fcntl.LOCK_EX, unlock=False):
+    loop = asyncio.get_event_loop()
+    close = False
+    if isinstance(fd, str) or hasattr(fd,"__fspath__"):
+        fd = os.open(fd, os.O_CREAT|os.O_CLOEXEC|os.O_RDWR, 0o664)
+        close = True
+    def lock(m):
+        fcntl.lockf(fd, m)
+    await loop.run_in_executor(None, lock, mode)
+    try:yield
+    finally:
+        if unlock:
+            await loop.run_in_executor(None, lock, fcntl.LOCK_UN)
+        if close: os.close(fd)
+        
+                
     
 __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
            'add_carthage_arguments', 'carthage_main_argparser',
@@ -293,4 +310,5 @@ __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty'
                    'TemporaryMountPoint',
            'import_resources_files',
                    'mako_lookup',
+           'file_locked',
                    ]

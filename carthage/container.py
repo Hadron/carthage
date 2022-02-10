@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -60,15 +60,16 @@ class Container(Machine, SetupTaskMixin):
             self.injector.add_provider(container_volume, vol)
         self.volume = vol
         await self.resolve_networking()
-        await self._check_running()
+        await self.is_machine_running()
         await self.run_setup_tasks()
         return await super().async_ready()
 
-    async def _check_running(self):
+    async def is_machine_running(self):
         try:
             self.container_leader
             self.running = True
-        except sh.ErrorReturnCode_1: pass
+        except sh.ErrorReturnCode_1: self.running = False
+        return self.running
         
     @memoproperty
     def stamp_path(self):

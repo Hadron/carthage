@@ -483,6 +483,8 @@ Return the first injector in our parent chain containing *k* or None if there is
                     raise TypeError(f'Error constructing {cls}:') from e
                 if self._is_async(res):
                     if not _loop:
+                        if isinstance(res, collections.abc.CoRoutine):
+                            res.close()
                         raise AsyncRequired("Asynchronous dependency injected into non-asynchronous context")
                     if done_future is None: done_future = _loop.create_future()
                     self._handle_async(res, done_future,

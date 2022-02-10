@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -26,6 +26,8 @@ class BaseSchema(ConfigSchema, prefix = ""):
     image_dir:ConfigPath = "{base_dir}"
     vm_image_dir: ConfigPath = "{base_dir}/vm"
     state_dir: ConfigPath = "{base_dir}/state"
+    #: Directory for local ephemeral state like ssh_agent sockets
+    local_run_dir: ConfigPath = "{state_dir}"
     vm_image_size:int = 20000000000 #: default size of VM disks in Mb
     base_container_image:str = "/usr/share/hadron-installer/hadron-container-image.tar.gz"
     base_vm_image:str = "/usr/share/hadron-installer/direct-install-efi.raw.gz"
@@ -48,7 +50,7 @@ class BaseSchema(ConfigSchema, prefix = ""):
     vlan_min:int = 1
     vlan_max:int = 4094
 
-    
+
 class TasksConfig(ConfigSchema, prefix = "tasks"):
 
     #: If True, then do not actually execute tasks
@@ -65,4 +67,3 @@ class DebianConfig(ConfigSchema, prefix = "debian"):
 
     #: Whether to include security.debian.org and the updates source
     include_security:bool = True
-    

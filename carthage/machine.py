@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -327,6 +327,16 @@ class Machine(AsyncInjectable, SshMixin):
                         set(self.supplementary_injection_keys(InjectionKey(Machine, host = self.name))))
 
 
+    async def is_machine_running(self):
+        '''
+:return: Whether the machine is running
+
+        Probe whether the machine is running and set self.running appropriately.  It is most important that running be set accurately when :meth:`start_machine` and :meth:`stop_machine` can start or stop the machine.  For :class:`BareMetalMachine` it is reasonable to assume that the machine is running.  This interface point should not call :meth:`ssh_online` or confirm the machine is on the network.
+        '''
+        raise NotImplementedError
+    
+
+
     def __repr__(self):
         res =  f"<{self.__class__.__name__} name:{self.name} "
         try:
@@ -580,6 +590,9 @@ class BareMetalMachine(Machine, SetupTaskMixin):
         await self.resolve_networking()
         await self.run_setup_tasks()
         await super().async_ready()
+
+    async def is_machine_running(self):
+        return self.running
 
     @memoproperty
     def stamp_path(self):

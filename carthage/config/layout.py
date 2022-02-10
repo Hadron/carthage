@@ -93,6 +93,12 @@ class ConfigLayout(ConfigAccessor, Injectable):
                     p = base_path.joinpath(p)
                 enable_plugin(p)
             del d['plugins']
+        if 'include' in d:
+            for include in d['include']:
+                include = base_path.joinpath(include)
+                with include.open("rt") as include_file:
+                    self.load_yaml(include_file)
+            del d['include']
         self._load(d, injector, self._schema, "")
 
 

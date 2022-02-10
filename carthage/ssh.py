@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -149,8 +149,9 @@ class AuthorizedKeysFile(Injectable):
 class SshAgent(Injectable):
 
     def __init__(self, config_layout, key):
-        state_dir = config_layout.state_dir
-        auth_sock = os.path.join(state_dir, "ssh_agent")
+        run = config_layout.local_run_dir
+        auth_sock = os.path.join(run, "ssh_agent")
+        os.makedirs(run, exist_ok=True)
         try: os.unlink(auth_sock)
         except FileNotFoundError: pass
         if config_layout.production_ssh_agent and 'SSH_AUTH_SOCK' in os.environ:

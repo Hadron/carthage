@@ -1,4 +1,4 @@
-# Copyright (C) 2021, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -49,6 +49,10 @@ class LocalMachine(Machine, SetupTaskMixin):
         # We don't actually need to enter a namespace, but this provides similar semantics to what we get with containers
         return sh.nsenter.bake()
 
+    async def is_machine_running(self):
+        self.running = True
+        return True
+    
     @memoproperty
     def stamp_path(self):
         return Path(self.config_layout.state_dir+"/localhost")

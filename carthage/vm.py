@@ -29,7 +29,7 @@ vm_image = InjectionKey('vm-image')
 # Our capitalization rules are kind of under-sspecified.  We're not
 # upcasing all letters of acronyms in camel-case compounds, but Vm
 # seems strange.  VM is canonical but Vm is an accepted alias.
-@inject(
+@inject_autokwargs(
     config_layout = ConfigLayout,
     injector = Injector,
     image = InjectionKey(vm_image, _ready = False),
@@ -37,11 +37,11 @@ vm_image = InjectionKey('vm-image')
     )
 class VM(Machine, SetupTaskMixin):
 
-    def __init__(self, name, console_needed = False,
-                 *, injector, config_layout, image, network_config):
-        super().__init__(injector = injector, config_layout = config_layout,
-                         name = name)
-        self.image = image
+    def __init__(self,  name, *, console_needed = False,
+                 **kwargs):
+        super().__init__(name=name, **kwargs)
+        injector = self.injector
+        config_layout = self.config_layout
         self.console_needed = console_needed
         if self.console_needed:
             self.console_port = injector(PortReservation)
@@ -165,10 +165,7 @@ class VM(Machine, SetupTaskMixin):
 
     async def async_ready(self):
         await self.write_config()
-        try:
-            sh.virsh('domid', self.full_name)
-            self.running = True
-        except sh.ErrorReturnCode_1: pass
+        await self.is_machine_running()
         if self.running and ( self.__class__.ip_address is Machine.ip_address):
             try: self.ip_address
             except NotImplementedError:
@@ -176,6 +173,13 @@ class VM(Machine, SetupTaskMixin):
 
         await self.run_setup_tasks(context = self.machine_running(ssh_online = True))
         return await super().async_ready()
+
+    async def is_machine_running(self):
+        try:
+            sh.virsh('domid', self.full_name)
+            self.running = True
+        except sh.ErrorReturnCode_1: self.running = False
+        return self.running
 
     async def _find_ip_address(self):
         for i in range(30):
