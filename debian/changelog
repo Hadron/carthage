@@ -1,3 +1,42 @@
+hadron-carthage (0.13) unstable; urgency=medium
+
+  [ Sam Hartman ]
+  * Remove loop argument for python 3.10
+  * stamp_path should be a pathlib.Path
+  * Initial cut at SONic Network Config
+  * Automatically detect network config changes
+  * Export cross_object_dependency
+  * Include additional items in link hash
+  * Ansible: permit before and order on ansible_role_task
+  * Initial SonicNetworkInstallMixin
+  * modeling: recomputed injected dependencies
+  * Configure SONiC PortChannels
+  * SONiC VLAN Config
+  * Fix member_of
+  * Fix systemd templates
+  * Avoid error on unspecified breakout_mode
+  * Merge dns_servers from network into link
+  * InjectionFailed does not cause config.__getstate__ to fail
+  * Better Handling of Empty Plugins
+  * is_machine_running
+  * local_run_dir for ssh_agent socket
+  * file_locked context manager
+  * Also support fspath objects in file_locked
+  * Add include to config
+  * Fix up file_locked after testing
+  * OCF-compatible Resource Agent for Carthage
+  * carthage-runner: add --warn-dns
+  * Do not leak CoRoutine on AsyncRequired
+
+  [ Austin Jones ]
+  * Added await to vmware image creation
+
+  [ Sam Hartman ]
+  * CLOUD_INIT: use netplan
+  * Install carthage-resource-agent
+
+ -- Sam Hartman <hartmans@debian.org>  Mon, 14 Feb 2022 15:09:06 -0700
+
 hadron-carthage (0.12) unstable; urgency=medium
 
   * Release a new version internally in Hadron to pick up debian mirror
