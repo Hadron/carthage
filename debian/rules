@@ -7,3 +7,6 @@ export PYBUILD_TEST_ARGS
 	dh $@ --with python3 --buildsystem=pybuild
 
 
+override_dh_install:
+	dh_install
+	install -m755 carthage-resource-agent debian/hadron-carthage-cli/usr/lib/ocf/hadron
