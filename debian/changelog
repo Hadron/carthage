@@ -1,3 +1,9 @@
+hadron-carthage (0.14) unstable; urgency=medium
+
+  * correctly install carthage-resource-agent
+
+ -- Sam Hartman <hartmans@debian.org>  Fri, 18 Feb 2022 14:06:24 -0700
+
 hadron-carthage (0.13) unstable; urgency=medium
 
   [ Sam Hartman ]
