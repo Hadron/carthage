@@ -22,6 +22,7 @@ setup(
                 'carthage.network',
                 'carthage.extra_packages',
                 "carthage.modeling",
+                'carthage.vault',
                 "carthage.vmware"],
     install_requires = ['pytest', ],
     scripts = ['bin/carthage-runner',
