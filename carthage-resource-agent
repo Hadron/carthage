@@ -13,6 +13,9 @@ import contextlib
 import functools
 import os
 import sys
+# reset basename so ocf doesn't overwrite carthage logger
+sys.argv[0] = 'carthage-agent'
+
 from pathlib import Path
 sys.path.extend(["/storage/devstack-carthage/project/carthage",
 "/usr/lib/ocf/lib/heartbeat"])
@@ -20,8 +23,15 @@ import ocf
 from carthage import *
 from carthage.modeling import *
 from carthage.utils import file_locked
+import carthage, carthage.container, carthage.vm
 
+carthage.sh.logger = ocf.logger
+carthage.container.logger = ocf.logger
+carthage.vm.logger = ocf.logger
+carthage.network.logger = ocf.logger
+carthage.setup_tasks.logger = ocf.logger
 
+        
 async def get_layout(config_file):
     with open(config_file, "rt") as f:
         config_layout = await ainjector(ConfigLayout)
@@ -100,7 +110,7 @@ async def stop(config, machines):
         await machine.is_machine_running()
         await machine.stop_machine()
         assert not machine.running
-    return ocf.OCF_NOT_RUNNING
+    return ocf.OCF_SUCCESS
 
 
 ainjector = base_injector(AsyncInjector)
