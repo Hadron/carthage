@@ -157,6 +157,9 @@ class Container(Machine, SetupTaskMixin):
             else:
                 await sh.machinectl("stop", self.full_name,
                                     _bg  = True, _bg_exc = False)
+                try: await sh.ip("netns", "del", self.full_name,
+                                 _bg=True, _bg_exc=False)
+                except: pass
                 self._done_cb(code = 0, success = True, cmd = None)
             await super().stop_machine()
 
