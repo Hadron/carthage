@@ -94,6 +94,12 @@ async def start(config, machines):
         machine = await m.ainjector.get_instance_async(Machine)
         await machine.start_machine()
         assert machine.running
+    # There is some sort of race condition with closing the read side
+    # of the container's stdout.  If that happens too early, the
+    # container will shutdown.  Not entirely sure what's going on, but
+    # adding a os.close(machine.process.process._stdout_read_fd) just
+    # after start_machine returns definitely triggers the problem.
+    await asyncio.sleep(6)
     return ocf.OCF_SUCCESS
 
 @async_handler
