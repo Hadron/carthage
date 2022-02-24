@@ -354,7 +354,7 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
         bases += self.machine_mixins
         for b in bases:
             assert isinstance(b, type) or hasattr(b, '__mro_entries__'), f'{b} is not a type; did you forget a dependency_quote'
-        res =  types.new_class("MachineImplementation", tuple(bases))
+        res =  types.new_class(implementation.__qualname__, tuple(bases))
         inject()(res) #Pick up any injections from extra bases
         for k, customization in self.injector.filter_instantiate(carthage.machine.BaseCustomization, ['description'], stop_at = self.injector):
             name = customization.__name__
