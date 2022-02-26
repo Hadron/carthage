@@ -78,7 +78,8 @@ async def run():
 
     queue_workers.append(loop.create_task(queue_worker()))
     queue_workers.append(loop.create_task(queue_worker()))
-    try:
+
+    async def run_console():
         console.locals['ainjector'] = ainjector
         console.locals['layout'] = layout
         console.locals['in_tmux'] = 'TMUX' in os.environ
@@ -87,20 +88,25 @@ async def run():
             await console.locals['async_setup']();
             del console.locals['async_setup']
         await loop.run_in_executor(None, console.interact)
-    except Exception:
-        logger.exception('console failed:')
-    finally:
+
+    if args.console:
+        try:
+            await run_console()
+        except Exception:
+            logger.exception('console failed:')
+    else:
+        await asyncio.sleep(2**31)
             
-        global machines
-        futures = []
-        if not args.keep_machines:
-            for m in machines:
-                if m.running:
-                    futures.append(loop.create_task(m.stop_machine()))
-        if futures:
-            await asyncio.wait(futures, timeout = 10)
+    global machines
+    futures = []
+    if not args.keep_machines:
         for m in machines:
-            m.close()
+            if m.running:
+                futures.append(loop.create_task(m.stop_machine()))
+    if futures:
+        await asyncio.wait(futures, timeout = 10)
+    for m in machines:
+        m.close()
 
 def warn_on_dns():
     import socket

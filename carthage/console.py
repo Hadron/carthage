@@ -18,6 +18,12 @@ class CarthageConsole(code.InteractiveConsole):
 
     @staticmethod
     def add_arguments(parser):
+        parser.add_argument('--no-console', action='store_false',
+                            dest = 'console', default=True,
+                            help = "Do not run the console")
+        parser.add_argument('--console', action='store_true',
+                            dest = 'console', default=True,
+                            help = "Run the console")
         parser.add_argument('--rcfile',
                             metavar = "file",
                             default = "~/.carthagerc",
