@@ -202,7 +202,7 @@ A mixin for :class:`AbstractMachineModel` for SONiC network switches.
         super().__init__(**kwargs)
         from carthage.modeling import MachineMixin
         self.injector.add_provider(
-            InjectionKey(MachineMixin, name="SonicNetworkInstallMix in"),
+            InjectionKey(MachineMixin, name="SonicNetworkInstallMixin"),
             dependency_quote(SonicNetworkInstallMixin))
         
 class SonicNetworkInstallMixin(SetupTaskMixin):
