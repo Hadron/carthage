@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 import asyncio, abc, copy, dataclasses, logging, re, typing, weakref
+from ipaddress import IPv4Address
 from .. import sh
 from ..dependency_injection import *
 from ..config import ConfigLayout
@@ -542,11 +543,14 @@ class NetworkLink:
     machine: object
     mtu: typing.Optional[int]
     local_type: typing.Optional[str]
+    #: In NAT situations, the public IPv4 address
     untagged_vlan: typing.Optional[int]
     allowed_vlans: typing.Optional[VlanList]
     v4_config: typing.Optional[V4Config] = None
     lldp: typing.Optional[bool] = dataclasses.field(default = True, repr = False)
     required: typing.Optional[bool] = dataclasses.field(default = True, repr = False)
+    admin_status:typing.Optional[str] = dataclasses.field(default='up', repr=False)
+    public_v4_address: typing.Optional[IPv4Address] = dataclasses.field(default=None, repr=False)
     #: Sometimes it is desirable to have a different dns entry for an
     #interface than for the host as a whole. If set to a string, this
     #is the (potentially unqualified) dns name for the interface.  If
@@ -798,6 +802,7 @@ def hash_network_links(network_links:dict[str,NetworkLink]):
         if v.mac: result += hash_subitem(v.mac)
         if v.machine: result += hash_subitem(v.machine.name)
         if v.mtu: result += v.mtu
+        # Do not include public_v4_address because it tends to change regularly
         if v.allowed_vlans: result += hash_subitem(VlanList.canonicalize(v.allowed_vlans, v))
         if v.untagged_vlan: result += v.untagged_vlan
         if v.v4_config: result += hash_subitem(v.v4_config.__dict__.values())
