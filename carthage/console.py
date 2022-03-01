@@ -8,7 +8,7 @@
 # LICENSE for details.
 
 
-import asyncio, argparse, code, collections.abc
+import asyncio, argparse, code, collections.abc, time
 import pkg_resources, os.path, readline, rlcompleter, sys, traceback
 import carthage, carthage.utils
 from carthage import base_injector, AsyncInjector, ConfigLayout
@@ -18,6 +18,12 @@ class CarthageConsole(code.InteractiveConsole):
 
     @staticmethod
     def add_arguments(parser):
+        parser.add_argument('--no-console', action='store_false',
+                            dest = 'console', default=True,
+                            help = "Do not run the console")
+        parser.add_argument('--console', action='store_true',
+                            dest = 'console', default=True,
+                            help = "Run the console")
         parser.add_argument('--rcfile',
                             metavar = "file",
                             default = "~/.carthagerc",
@@ -37,9 +43,13 @@ class CarthageConsole(code.InteractiveConsole):
 
     @staticmethod
     def default_locals():
+        class sleeper():
+            def __repr__(self):
+                time.sleep(2**31)
         return {
             'injector': base_injector,
             'ainjector': base_injector(AsyncInjector),
+            'sleep': sleeper(),
             'loop': asyncio.get_event_loop(),
             'config': base_injector(ConfigLayout)
         }
