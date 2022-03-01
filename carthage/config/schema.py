@@ -206,6 +206,8 @@ class ConfigAccessor:
                     elif v is None or isinstance(v, bool):
                         #just fine as is
                         pass
+                    elif k == 'vpc_cidr':
+                        continue
                     else:
                         raise TypeError( f'{v} is a {type(v)} which will not work so well saved to YAML')
                     
