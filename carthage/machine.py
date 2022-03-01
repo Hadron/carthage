@@ -66,7 +66,7 @@ class SshMixin:
         except AttributeError: raise NotImplementedError from None
         
 
-    ssh_options = ('-oStrictHostKeyChecking=no', )
+    ssh_options = ('-oStrictHostKeyChecking=no', '-lroot', )
 
     @memoproperty
     def ssh(self):
