@@ -77,7 +77,7 @@ class SshMixin:
             from .container import Container
             ssh_origin_container = self if isinstance(self, Container) else None
         ssh_key = self.injector.get_instance(carthage.ssh.SshKey)
-        options = self.ssh_options + ('-oUserKnownHostsFile='+os.path.join(self.config_layout.state_dir, 'ssh_known_hosts'),)
+        options = self.ssh_options + ('-oUserKnownHostsFile='+os.path.join(self.config_layout.state_dir, 'ssh_known_hosts'), '-lroot')
         if ssh_origin_container is not None:
             ip_address = self.ip_address
             ssh_origin_container.done_future().add_done_callback(self.ssh_recompute)
