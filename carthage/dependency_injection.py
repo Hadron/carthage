@@ -116,7 +116,7 @@ class Injectable:
     def satisfies_injection_key(cls, k):
         if k == InjectionKey(cls): return True
         if isinstance(k.target, (str, tuple)): return True
-        return k in cls.supplementary_injection_keys(k)
+        return issubclass(cls, k.target)
 
     @classmethod
     def default_class_injection_key(cls):
