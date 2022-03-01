@@ -66,7 +66,7 @@ class SshMixin:
         except AttributeError: raise NotImplementedError from None
         
 
-    ssh_options = ('-oStrictHostKeyChecking=no', )
+    ssh_options = ('-oStrictHostKeyChecking=no', '-lroot')
 
     @memoproperty
     def ssh(self):
@@ -77,7 +77,7 @@ class SshMixin:
             from .container import Container
             ssh_origin_container = self if isinstance(self, Container) else None
         ssh_key = self.injector.get_instance(carthage.ssh.SshKey)
-        options = self.ssh_options + ('-oUserKnownHostsFile='+os.path.join(self.config_layout.state_dir, 'ssh_known_hosts'), '-lroot')
+        options = self.ssh_options + ('-oUserKnownHostsFile='+os.path.join(self.config_layout.state_dir, 'ssh_known_hosts'))
         if ssh_origin_container is not None:
             ip_address = self.ip_address
             ssh_origin_container.done_future().add_done_callback(self.ssh_recompute)
