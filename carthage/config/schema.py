@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -7,6 +7,8 @@
 # LICENSE for details.
 
 import sys
+from ipaddress import IPv6Address, IPv4Address, IPv4Network, IPv6Network
+
 from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies, InjectorClosed, InjectionFailed
 
 def config_key(k):
@@ -206,6 +208,8 @@ class ConfigAccessor:
                     elif v is None or isinstance(v, bool):
                         #just fine as is
                         pass
+                    elif isinstance(v, (IPv4Address, IPv4Network, IPv6Address, IPv6Network)):
+                        v = str(v)
                     else:
                         raise TypeError( f'{v} is a {type(v)} which will not work so well saved to YAML')
                     
