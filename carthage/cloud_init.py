@@ -43,6 +43,34 @@ class CloudInitPlugin(Injectable):
         raise NotImplementedError
 
 __all__ += ['CloudInitPlugin']
+@inject(model=AbstractMachineModel,
+        ainjector=AsyncInjector)
+async def generate_cloud_init_cloud_config(*, ainjector, model):
+    '''
+    Generate a :class:`CloudInitConfig` from the model.  The operation is based on the *cloud_init* property in the model:
+
+    * True: Generate cidata based on calling all the :class:`CloudInitPlugins <CloudInitPlugin>` registered with the model's injector.
+
+    * False: return None
+
+    * A :class:`CloudInitConfig` object: use that object without calling plugins.
+
+    '''
+    
+    cloud_init = getattr(model, 'cloud_init', False)
+    if not cloud_init: return
+    if cloud_init is True:
+        config = CloudInitConfig()
+        plugin_data = await ainjector.filter_instantiate_async(CloudInitPlugin, ['name'], ready = True)
+        for plugin_key, plugin in plugin_data:
+            # we apply in order so that plugins can look at previous
+            # results.  We sacrifice parallelism to get this.
+            await plugin.apply(config)
+        if not plugin_data: return
+        return config
+    else: return model.cloud_init
+
+__all__ += ['generate_cloud_init_cloud_config']
 
 @inject(model = AbstractMachineModel, ainjector = AsyncInjector,
         config_layout = ConfigLayout)
@@ -61,16 +89,8 @@ async def generate_cloud_init_cidata(
     :return: Path to an ISO under the *stamp_path* of *model*
 
     '''
-    cloud_init = getattr(model, 'cloud_init', False)
-    if not cloud_init: return
-    if cloud_init is True:
-        config = CloudInitConfig()
-        plugin_data = await ainjector.filter_instantiate_async(CloudInitPlugin, ['name'], ready = True)
-        for plugin_key, plugin in plugin_data:
-            # we apply in order so that plugins can look at previous
-            # results.  We sacrifice parallelism to get this.
-            await plugin.apply(config)
-        if not plugin_data: return
+    config = await generate_cloud_init_cloud_config(ainjector=ainjector, model=model)
+    if not config: return
     with tempfile.TemporaryDirectory(dir = config_layout.state_dir) as tmp_dir:
         tmp = Path(tmp_dir)
         with tmp.joinpath("user-data").open("wt") as f:
