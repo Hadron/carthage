@@ -1,0 +1,19 @@
+name: Test Carthage
+on:
+- push
+- pull_request
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: install dependencies
+        run: |
+          sudo apt -q update
+          sudo apt -y install systemd-container socat qemu-utils fai-setup-storage fai-server python3-mako python3-sh python3-pyvmomi python3-yaml python3-pytest ansible
+
+      - name: run tests
+        run: |
+          sudo PYTHONPATH=. pytest-3 -v --log-cli-level=debug
+          
