@@ -22,7 +22,7 @@ def getattr_path(o, attrs):
     except AttributeError:
         raise AttributeError(f'Unable to find {attrs}') from None
 
-@inject(config = ConfigLayout,
+@inject(
         injector = Injector)
 class ConfigString(str):
 
@@ -82,15 +82,16 @@ class ConfigString(str):
                 raise KeyError( f'Config lookup plugin {plugin} not found') from None
             return plugin(selector)
         
-    def __new__(cls, s, *, config, injector):
+    def __new__(cls, s, *,  injector):
+        config = injector(ConfigLayout)
         return str.__new__(str, cls.parse(s, config, injector))
 
-@inject(config = ConfigLayout,
+@inject(
         injector = Injector)
 class ConfigPath(ConfigString):
 
-    def __new__(cls, s, *, config, injector):
-        return super().__new__(ConfigString, os.path.expanduser(os.path.expandvars(s)), config = config,
+    def __new__(cls, s, *, injector):
+        return super().__new__(ConfigString, os.path.expanduser(os.path.expandvars(s)),
                                injector = injector)
 
 class ConfigBool:

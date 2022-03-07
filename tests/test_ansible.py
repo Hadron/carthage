@@ -18,8 +18,8 @@ state_dir  = os.path.join(os.path.dirname(__file__), "test_state")
 
 @pytest.fixture()
 @async_test
-@inject(config = carthage.ConfigLayout)
-async def configured_ainjector(ainjector, config):
+async def configured_ainjector(ainjector):
+    config = ainjector.injector(carthage.ConfigLayout)
     config.state_dir = state_dir
     ainjector.add_provider(carthage.ssh.SshKey)
     enable_modeling_ansible(ainjector)

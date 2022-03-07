@@ -40,10 +40,14 @@ class RsyncPath:
         from .machine import ssh_origin_vrf
         return self.machine.injector.get_instance(InjectionKey(ssh_origin_vrf, optional = True))
         
-@inject(config_layout = ConfigLayout,
+@inject(
         ainjector = AsyncInjector)
 class SshKey(AsyncInjectable, SetupTaskMixin):
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.config_layout = self.injector(ConfigLayout)
+        
 
     @memoproperty
     def known_hosts(self):
@@ -122,11 +126,13 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
             return f.read()
         
 
-@inject(config_layout = ConfigLayout,
-        ssh_key = SshKey)
+@inject(
+        ssh_key = SshKey,
+    injector=Injector)
 class AuthorizedKeysFile(Injectable):
 
-    def __init__(self, config_layout, ssh_key):
+    def __init__(self,  ssh_key, injector):
+        config_layout = injector(ConfigLayout)
         self.path = config_layout.state_dir+'/authorized_keys'
         authorized_keys = config_layout.authorized_keys
         if authorized_keys.startswith('|'):
@@ -144,11 +150,12 @@ class AuthorizedKeysFile(Injectable):
                 
 
 @inject(
-    config_layout = ConfigLayout,
+    injector=Injector,
     key = SshKey)
 class SshAgent(Injectable):
 
-    def __init__(self, config_layout, key):
+    def __init__(self, injector, key):
+        config_layout = injector(ConfigLayout)
         run = config_layout.local_run_dir
         auth_sock = os.path.join(run, "ssh_agent")
         os.makedirs(run, exist_ok=True)

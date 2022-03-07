@@ -25,7 +25,7 @@ async def test_network_create(injector, loop):
     net = await ainjector(Network, name = "testnet")
     net.close()
     
-
+@pytest.mark.xfail(reason="Needs adjusting for namespace")
 @async_test
 async def test_network_veth(injector, loop):
     ainjector = injector(AsyncInjector)

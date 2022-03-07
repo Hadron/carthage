@@ -25,13 +25,14 @@ class VaultConfig(ConfigSchema, prefix = "vault"):
 
 vault_token_key = InjectionKey('vault.token')
 
-@inject( config = ConfigLayout,
+@inject( 
          injector = Injector,
          token = InjectionKey("vault.token", optional = True),
 )
 class Vault(Injectable):
 
-    def __init__(self, config, injector, token = None):
+    def __init__(self, injector, token = None):
+        config = injector(ConfigLayout)
         self.vault_config = config.vault
         self.injector = injector
         super().__init__()
