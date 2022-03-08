@@ -89,7 +89,7 @@ class ConfigLayout(ConfigAccessor, Injectable):
             if 'checkout_dir' in d:
                 self.checkout_dir = d['checkout_dir']
             for p in d['plugins']:
-                if (not ':' in p) and (p == '.' or '/' in p):
+                if (not ':' in p) and (p == '..' or p == '.' or '/' in p):
                     p = base_path.joinpath(p)
                 enable_plugin(p)
             del d['plugins']
