@@ -84,14 +84,14 @@ class ConfigString(str):
         
     def __new__(cls, s, *,  injector):
         config = injector(ConfigLayout)
-        return str.__new__(str, cls.parse(s, config, injector))
+        return str.__new__(str, cls.parse(os.path.expandvars(s), config, injector))
 
 @inject(
         injector = Injector)
 class ConfigPath(ConfigString):
 
     def __new__(cls, s, *, injector):
-        return super().__new__(ConfigString, os.path.expanduser(os.path.expandvars(s)),
+        return super().__new__(ConfigString, os.path.expanduser(s),
                                injector = injector)
 
 class ConfigBool:
