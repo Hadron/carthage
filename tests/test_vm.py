@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -29,6 +29,8 @@ resource_dir = os.path.dirname(__file__)
 def ainjector():
     if posix.geteuid() != 0:
         pytest.skip("Not running as root; volume tests skipped", )
+        try: sh.virsh
+        except: pytest.skip("libvirt not installed")
     injector = base_injector.claim()(AsyncInjector)
     cl = injector.get_instance(InjectionKey(ConfigLayout))
     cl.delete_volumes = True
@@ -48,6 +50,8 @@ async def test_vm_config(loop, ainjector, vm_image):
 @async_test
 async def test_vm_test(request, ainjector, vm_image):
     vm = await ainjector(VM, name = "vm_2", image = vm_image)
+    vm.ssh_rekeyed()
+    assert vm.config_layout.delete_volumes
     async with vm.machine_running():
         await vm.ssh_online()
         await vm.ssh("apt-get update")
@@ -66,7 +70,11 @@ async def test_vm_test(request, ainjector, vm_image):
         
 @async_test
 async def test_cloud_init(test_ainjector, vm_image):
+    try: sh.virsh
+    except Exception: pytest.skip("libvirt not installed")
     ainjector = test_ainjector
+    config = ainjector.injector(ConfigLayout)
+    assert config.delete_volumes
     class layout(CarthageLayout):
         name = "test_cloud_init"
 
@@ -98,6 +106,7 @@ async def test_cloud_init(test_ainjector, vm_image):
     l = await ainjector.get_instance_async(layout)
     ainjector = l.ainjector
     m = await ainjector.get_instance_async(InjectionKey(Machine, host = "vm-3"))
+    m.ssh_rekeyed()
     async with m.machine_running(ssh_online = True):
         pass
     

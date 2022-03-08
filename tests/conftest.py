@@ -30,6 +30,7 @@ def test_ainjector(loop):
         config = loop.run_until_complete( ainjector(ConfigLayout))
         config.delete_volumes = True
         vol = loop.run_until_complete( ainjector(DebianContainerImage, name = "base-debian"))
+        vol.config_layout = vol.injector(ConfigLayout)
         vol.config_layout.delete_volumes = False
         loop.run_until_complete(vol.apply_customization(SshAuthorizedKeyCustomizations))
         ainjector.replace_provider(container_image, vol)
@@ -58,6 +59,7 @@ def vm_image( loop, test_ainjector):
     
     loop.run_until_complete(ainjector.get_instance_async(ssh.SshKey))
     loop.run_until_complete(image.apply_customization(InstallQemuAgent))
+    image.config_layout = image.injector(ConfigLayout)
     image.config_layout.delete_volumes = False
     yield image
     image.close()
