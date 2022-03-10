@@ -162,6 +162,26 @@ class HostnamePlugin(CloudInitPlugin):
     
     async def apply(self, config: CloudInitConfig):
         config.user_data['hostname'] = self.model.name
+
+        
+@inject_autokwargs(authorized_keys=carthage.ssh.AuthorizedKeysFile)
+class WriteAuthorizedKeysPlugin(CloudInitPlugin):
+
+    '''
+            This plugin uses the write_files module to write out root's authorized keys file.  It is not enabled by default because metadata is better when it is available.  But for example with EC2, this may be desirable to write out the full Carthage authorized_keys file without  dealing with EC2 keypairs.
+    '''
+
+    name = "write_authorized_keys"
+
+    async def apply(self, config):
+        write_files = config.user_data.setdefault('write_files', [])
+        with open(self.authorized_keys.path, 'rt') as f:
+            content = f.read()
+        write_files.append(dict(
+            path="/root/.ssh/authorized_keys",
+            content=content,
+            permissions='0644',
+            owner='root:root'))
         
 @inject(injector = Injector)
 def enable_cloud_init_plugins(injector):
