@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import dataclasses, io, os
+import dataclasses, io, os, time
 from .dependency_injection import inject, AsyncInjector, Injector, AsyncInjectable, Injectable, InjectionKey, dependency_quote
 from .config import ConfigLayout
 from .setup_tasks import SetupTaskMixin, setup_task
@@ -168,8 +168,12 @@ class SshAgent(Injectable):
             self.process = sh.ssh_agent('-a', auth_sock,
                                     '-D', _bg = True)
             self.auth_sock = auth_sock
-        sh.ssh_add(key.key_path, _env = self.agent_environ)
-
+        try:
+            sh.ssh_add(key.key_path, _env = self.agent_environ)
+        except sh.ErrorReturnCode:
+            time.sleep(2)
+            sh.ssh_add(key.key_path, _env = self.agent_environ)
+            
     def close(self):
         if self.process is not None:
             try: self.process.terminate()
