@@ -372,6 +372,16 @@ class Machine(AsyncInjectable, SshMixin):
         meth = getattr(customization, method)
         return await meth()
 
+    async def sshfs_process_factory(self):
+        return sh.sshfs(
+            '-o' 'ssh_command='+" ".join(
+                str(self.ssh).split()[:-1]) ,
+            f'{self.ip_address}:/',
+            self.sshfs_path,
+            '-f',
+            _bg = True,
+            _bg_exc = False)
+
     @contextlib.asynccontextmanager
     async def filesystem_access(self):
         '''
@@ -395,14 +405,7 @@ class Machine(AsyncInjectable, SshMixin):
             async with self.sshfs_lock:
                 if self.sshfs_count == 1:
                     self.sshfs_path = tempfile.mkdtemp(dir = self.config_layout.state_dir, prefix=self.name, suffix = "sshfs")
-                    self.sshfs_process = sh.sshfs(
-                        '-o' 'ssh_command='+" ".join(
-                            str(self.ssh).split()[:-1]) ,
-                        f'{self.ip_address}:/',
-                        self.sshfs_path,
-                        '-f',
-                        _bg = True,
-                        _bg_exc = False)
+                    self.sshfs_process = await self.sshfs_process_factory()
                     for x in range(5):
                         await asyncio.sleep(0.4)
                         if os.path.exists(os.path.join(
