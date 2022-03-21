@@ -191,7 +191,7 @@ class ContainerVolume(AsyncInjectable, SetupTaskMixin):
 
 class ContainerImage(ContainerVolume):
 
-    async def apply_customization(self, cust_class, method = 'apply'):
+    async def apply_customization(self, cust_class, method = 'apply', **kwargs):
         from .container import container_image, container_volume, Container
         injector = self.injector(Injector)
         ainjector = injector(AsyncInjector)
@@ -199,7 +199,7 @@ class ContainerImage(ContainerVolume):
             injector.add_provider(container_image, dependency_quote(self), close = False)
             injector.add_provider(container_volume, dependency_quote(self), close = False)
             container = await ainjector(Container, name = os.path.basename(self.name), skip_ssh_keygen = True, network_config = None)
-            customization = await ainjector(cust_class, apply_to = container)
+            customization = await ainjector(cust_class, apply_to = container, **kwargs)
             if hasattr(customization, 'container_args'): container.container_args = customization.container_args
             meth = getattr(customization, method)
             return await meth()
@@ -321,7 +321,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         if hasattr(self, 'create_size'):
             os.truncate(self.path, self.create_size)
 
-    async def apply_customization(self, cust_class, method = 'apply'):
+    async def apply_customization(self, cust_class, method = 'apply', **kwargs):
         from .container import container_image, container_volume, Container
         injector = self.injector(Injector)
         ainjector = injector(AsyncInjector)
@@ -330,7 +330,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
             injector.add_provider(container_image, image_mount)
             injector.add_provider(container_volume, image_mount)
             container = await ainjector(Container, name = os.path.basename(self.name), skip_ssh_keygen = True, network_config = None)
-            customization = await ainjector(cust_class, apply_to = container)
+            customization = await ainjector(cust_class, apply_to = container, **kwargs)
             if hasattr(customization, 'container_args'): container.container_args = customization.container_args
             meth = getattr(customization, method)
             return await meth()
