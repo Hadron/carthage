@@ -499,7 +499,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
                  'name', 'full_name',
                  'apply_customization'):
             return getattr(self.host, a)
-        raise AttributeError
+        raise AttributeError(f"'{self}' has no attribute '{a}'")
 
     def __repr__(self):
         return f"<{self.__class__.__name__} description:\"{self.description}\" for {self.host.name}>"
