@@ -1,4 +1,4 @@
-# Copyright (C) 2021, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -587,7 +587,7 @@ def _handle_base_customization(target_cls, ns, k, state):
         key = InjectionKey(carthage.machine.BaseCustomization, **key.constraints)
         ns.to_inject[key] = dependency_quote(val), state.injection_options
     state.flags &= ~(NSFlags.inject_by_class | NSFlags.instantiate_on_access)
-    state.value = decorators.wrap_base_customization(val)
+    state.value = decorators.wrap_base_customization(val, state.new_name or k)
 
 __all__ += ['_handle_base_customization']
 

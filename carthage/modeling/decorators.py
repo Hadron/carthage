@@ -1,4 +1,4 @@
-# Copyright (C) 2021, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -372,14 +372,15 @@ def model_mixin_for(**constraints):
 
 class wrap_base_customization:
 
-    def __init__(self, val):
+    def __init__(self, val, name):
+        self.name = name
         functools.wraps(val)(self)
         self.value = val
 
     def __get__(self, instance, owner):
         if instance is None: return self.value
         machine = instance.injector.get_instance(InjectionKey(carthage.machine.Machine, _ready = False))
-        return instance.injector(self.value, apply_to = machine)
+        return instance.injector(self.value, apply_to = machine, stamp=self.name)
 
     
 
