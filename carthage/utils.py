@@ -41,7 +41,28 @@ class memoproperty:
         res = self.fun(instance)
         setattr(instance, self.name, res)
         return res
-    
+
+class WhenNeededMeta(type):
+
+    def __repr__(self):
+        if self.resolved_obj:
+            return f'<when_needed resolved={repr(self.resolved_obj)}>'
+
+        wraps, args, kwargs, injector = self.repr_info
+        if isinstance(wraps, type):
+            wraps_repr = wraps.__name__
+        else: wraps_repr = repr(wraps)
+        s = "when_needed({}".format(wraps_repr)
+        for a in args:
+            s +=", {}".format(a)
+        for k,v in kwargs.items():
+            s += ", {}={}".format(k, v)
+        s +=")"
+        if injector is not None:
+            s += ", injector ={}".format(repr(injector))
+            s += ")"
+        return s
+
 def when_needed(wraps, *args, injector = None,
                 addl_keys = [],
                 **kwargs):
@@ -73,7 +94,7 @@ def when_needed(wraps, *args, injector = None,
     @functools.wraps(wraps,
                      assigned = functools.WRAPPER_ASSIGNMENTS ,
                      updated = tuple())
-    class WhenNeeded(AsyncInjectable):
+    class WhenNeeded(AsyncInjectable, metaclass=WhenNeededMeta):
 
         resolved_obj = None
         resolving = None
@@ -115,6 +136,7 @@ def when_needed(wraps, *args, injector = None,
 
         # class level property to track all the injectors in use.
         ainjector_set = weakref.WeakSet()
+        repr_info = (wraps, args, kwargs, injector)
                 
         async def async_resolve(self):
             nonlocal kwargs
@@ -134,6 +156,7 @@ def when_needed(wraps, *args, injector = None,
                 del self.__class__.resolving
                 # We will never need them again so release the references
                 kwargs = None
+                del self.__class__.repr_info
                 del self.ainjector
                 del self.inside_kwargs
                 return res
@@ -142,20 +165,6 @@ def when_needed(wraps, *args, injector = None,
                 self.__class__.resolving = None # try again next time
                 raise
                 
-        def __repr__(self):
-            if isinstance(wraps, type):
-                wraps_repr = wraps.__name__
-            else: wraps_repr = repr(wraps)
-            s = "when_needed({}(".format(wraps_repr)
-            for a in args:
-                s +=", {}".format(a)
-            for k,v in kwargs.items():
-                s += ", {}={}".format(k, v)
-            s +=")"
-            if injector is not None:
-                s += ", injector ={}".format(repr(injector))
-            s += ")"
-            return s
 
     addl_keys = list(map(
         lambda k: k if isinstance(k, InjectionKey) else InjectionKey(k), addl_keys))
