@@ -407,14 +407,14 @@ class Machine(AsyncInjectable, SshMixin):
                     self.sshfs_path = tempfile.mkdtemp(dir = self.config_layout.state_dir, prefix=self.name, suffix = "sshfs")
                     self.sshfs_process = await self.sshfs_process_factory()
                     for x in range(5):
-                        await asyncio.sleep(0.4)
-                        if os.path.exists(os.path.join(
-                                self.sshfs_path, "run")):
-                            break
                         alive, *rest = self.sshfs_process.process.is_alive()
                         if not alive:
                             await self.sshfs_process
                             raise RuntimeError #I'd expect that to have happened from an sh exit error already
+                        if os.path.exists(os.path.join(
+                                self.sshfs_path, "run")):
+                            break
+                        await asyncio.sleep(0.4)
                     else:
                         raise TimeoutError("sshfs failed to mount")
             yield self.sshfs_path
