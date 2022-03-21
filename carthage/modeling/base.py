@@ -358,7 +358,10 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
         inject()(res) #Pick up any injections from extra bases
         for k, customization in self.injector.filter_instantiate(carthage.machine.BaseCustomization, ['description'], stop_at = self.injector):
             name = customization.__name__
-            setattr(res, f'{name}_task', carthage.machine.customization_task(customization))
+            task = carthage.machine.customization_task(customization)
+            setattr(res, f'{name}_task', task)
+            task.__set_name__(res, name)
+            
         res.model = self
         return res
 

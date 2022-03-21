@@ -16,7 +16,7 @@ from .ssh import SshKey, SshAgent, RsyncPath
 from .utils import memoproperty
 from . import sh
 import carthage.ssh
-from .setup_tasks import SetupTaskMixin, setup_task
+from .setup_tasks import SetupTaskMixin, setup_task, TaskWrapperBase
 import logging
 logger = logging.getLogger("carthage")
 
@@ -361,11 +361,14 @@ class Machine(AsyncInjectable, SshMixin):
 
 
 
-    async def apply_customization(self, cust_class, method = 'apply'):
+    async def apply_customization(self, cust_class, method = 'apply', **kwargs):
         '''
         Apply a :class:`BaseCustomization` to this machine..
+
+        :parameter stamp: A distinguisher for stamps created by the customization.  The stamp will include this value as well as the stamp from the :func:`setup_task`.
+
         '''
-        customization = await self.ainjector(cust_class, apply_to = self)
+        customization = await self.ainjector(cust_class, apply_to = self, **kwargs)
         meth = getattr(customization, method)
         return await meth()
 
@@ -432,9 +435,10 @@ class Machine(AsyncInjectable, SshMixin):
 class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
     def __init__(self, apply_to: Machine,
-                  **kwargs):
+                  stamp, **kwargs):
         self.host = apply_to
         if not self.description: self.description = self.__class__.__name__
+        self.stamp_stem = stamp
         super().__init__(**kwargs)
 
     @classmethod
@@ -444,12 +448,25 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
     
     # We do not run setup_tasks on construction
     async_ready = AsyncInjectable.async_ready
+
     #:Can be overridden; a context manager in which customization tasks should be run
     customization_context = None
 
     @property
     def stamp_path(self):
         return self.host.stamp_path
+
+    def create_stamp(self, stamp, contents):
+        stamp = f'{self.stamp_stem}-{stamp}'
+        return super().create_stamp(stamp, contents)
+
+    def check_stamp(self, stamp):
+        stamp = f'{self.stamp_stem}-{stamp}'
+        return super().check_stamp(stamp)
+
+    def delete_stamp(self, stamp):
+        stamp = f'{self.stamp_stem}-{stamp}'
+        return super().delete_stamp(stamp)
 
     async def last_run(self):
         '''
@@ -538,7 +555,36 @@ class FilesystemCustomization(BaseCustomization):
             return
 
 
+class CustomizationWrapper(TaskWrapperBase):
 
+    customization: typing.Type[BaseCustomization]
+
+    def __init__(self, customization, before=None, **kwargs):
+        self.customization = customization
+        if before:
+            kwargs['order'] = before.order-1
+        try:
+            if kwargs['order'] is None: del kwargs['order']
+        except AttributeError: pass
+        kwargs['description'] = customization.description or customization.__name__
+        super().__init__(**kwargs)
+        
+    @memoproperty
+    def stamp(self):
+        raise RuntimeError('This CustomizationTask was never assigned to a SetupTaskMixin')
+    
+    async def func(self, machine):
+        await machine.apply_customization(self.customization, stamp=self.stamp)
+
+    async def check_completed_func(self, machine):
+        res = await machine.apply_customization(self.customization, method = "last_run", stamp=self.stamp)
+        # unfortunately if we return a last_run and one of our
+        # dependencies has run more recently, we will continue to
+        # generate unneeded task runs because we never inject our
+        # dependency's last run into the customization so we never
+        # update our last_run time.
+        return bool(res)
+    
 def customization_task    (c: BaseCustomization, order: int = None,
                            before = None):
     '''
@@ -550,22 +596,11 @@ def customization_task    (c: BaseCustomization, order: int = None,
         add_packages = customization_task(AddOurPackagesCustomization)
 
     '''
-    @setup_task(c.description, order = order, before = before)
-    @inject(ainjector = AsyncInjector)
-    async def do_task(machine, ainjector):
-        await machine.apply_customization(c)
+    return CustomizationWrapper(customization=c,
+                                order=order,
+                                before=before)
 
-    @do_task.check_completed()
-    @inject(ainjector = AsyncInjector)
-    async def do_task(machine, ainjector):
-        res = await machine.apply_customization(c, method = "last_run")
-        # unfortunately if we return a last_run and one of our
-        # dependencies has run more recently, we will continue to
-        # generate unneded task runs because we never inject our
-        # dependency's last run into the customization so we never
-        # update our last_run time.
-        return bool(res)
-    return do_task
+                                
 
 @inject_autokwargs(ssh_key =InjectionKey(SshKey, _ready=True))
 class BareMetalMachine(Machine, SetupTaskMixin):
