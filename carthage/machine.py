@@ -435,10 +435,10 @@ class Machine(AsyncInjectable, SshMixin):
 class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
     def __init__(self, apply_to: Machine,
-                  stamp, **kwargs):
+                  stamp=None, **kwargs):
         self.host = apply_to
         if not self.description: self.description = self.__class__.__name__
-        self.stamp_stem = stamp
+        self.stamp_stem = stamp or self.__class__.__name__
         super().__init__(**kwargs)
 
     @classmethod
