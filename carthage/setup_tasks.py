@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -32,10 +32,9 @@ def _inc_task_order():
     return t
 
 @dataclasses.dataclass
-class TaskWrapper:
+class TaskWrapperBase:
 
     
-    func: typing.Callable
     description: str
     order: int = dataclasses.field(default_factory = _inc_task_order)
     invalidator_func = None
@@ -44,26 +43,14 @@ class TaskWrapper:
 
     @memoproperty
     def stamp(self):
-        return self.func.__name__
-
+        raise NotImplementedError
+    
     def __set_name__(self, owner, name):
         self.stamp = name
     def __get__(self, instance, owner):
         if instance is None: return self
         return TaskMethod(self, instance)
     
-    def __getattr__(self, a):
-        if a == "func": raise AttributeError
-        return getattr(self.func, a)
-
-    extra_attributes = frozenset()
-
-    def __setattr__(self, a, v):
-        if a in ('func', 'stamp', 'order',
-                 'invalidator_func', 'check_completed_func', 'hash_func') or a in self.__class__.extra_attributes:
-            return super().__setattr__(a, v)
-        else:
-            return setattr(self.func, a, v)
 
     def __call__(self, instance, *args, **kwargs):
         def callback(fut):
@@ -97,9 +84,6 @@ class TaskWrapper:
                 instance.delete_stamp(self.stamp)
             raise
             
-    @property
-    def __wraps__(self):
-        return self.func
 
     async def should_run_task(self, obj: SetupTaskMixin, 
                               dependency_last_run: float = None,
@@ -232,6 +216,34 @@ class TaskWrapper:
             return self
         return wrap
 
+class TaskWrapper(TaskWrapperBase):
+
+    def __init__(self, func, **kwargs):
+        super().__setattr__('func', func)
+        super().__init__(**kwargs)
+        
+    @memoproperty
+    def stamp(self):
+        return self.func.__name__
+
+    def __getattr__(self, a):
+        if a == "func": raise AttributeError
+        return getattr(self.func, a)
+
+    extra_attributes = frozenset()
+
+    def __setattr__(self, a, v):
+        if a in ('func', 'stamp', 'order',
+                 'invalidator_func', 'check_completed_func', 'hash_func') or a in self.__class__.extra_attributes:
+            return super().__setattr__(a, v)
+        else:
+            return setattr(self.func, a, v)
+
+    @property
+    def __wraps__(self):
+        return self.func
+
+    
 class TaskMethod:
 
     def __init__(self, task, instance):
@@ -339,7 +351,7 @@ class SetupTaskMixin:
                 if m in meth_names: continue
                 meth = getattr(c, m)
                 meth_names[m] = True
-                if isinstance(meth, TaskWrapper):
+                if isinstance(meth, TaskWrapperBase):
                     yield meth
 
     async def async_ready(self):
@@ -389,6 +401,7 @@ class SetupTaskMixin:
 def _iso_time(t):
     return datetime.datetime.fromtimestamp(t).isoformat()
 
+    
 class cross_object_dependency(TaskWrapper):
 
     '''
