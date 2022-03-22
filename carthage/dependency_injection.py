@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import contextvars, enum, inspect, typing, weakref
+import contextvars, enum, inspect, traceback, typing, weakref
 import collections.abc
 import asyncio, functools
 import logging
@@ -127,17 +127,18 @@ class Injectable:
         "Called when an instance of an injectable is used to add a dependency provider bby the single argument form of :meth:`Injectable.add_provider()`"
         return InjectionKey(self.__class__)
     
-    
 class DependencyProvider:
     __slots__ = ('provider',
                  'allow_multiple',
                  'close',
+                 '_creation_tb',
                  )
 
     def __init__(self, provider, allow_multiple = False, close = True):
         self.provider = provider
         self.allow_multiple = allow_multiple
         self.close = close
+        self._creation_tb = traceback.extract_stack()[:-1]
 
     def __repr__(self):
         return "<DependencyProvider allow_multiple={}: {}>".format(
@@ -170,9 +171,14 @@ class InjectionFailed(RuntimeError):
 
 class ExistingProvider(RuntimeError):
 
-    def __init__(self, k):
-        super().__init__(f'Provider for {k} already registered')
+    def __init__(self, k, old_p, new_p):
         self.existing_key = k
+        self.old_provider = old_p
+        self.new_provider = new_p
+        s = f'Unable to add provider {new_p.provider} for {k}: already registered to {old_p.provider}.\n\n'
+        s = s + 'The previous provider was created here:\n\n'
+        s = s + '> ' + '> '.join(traceback.format_list(old_p._creation_tb))
+        super().__init__(s)
 
 class  InjectorClosed(RuntimeError): pass
 
@@ -255,7 +261,7 @@ class Injector(Injectable, event.EventListener):
             existing_provider = self._get(k)
             if replace:
                 existing_provider.provider = p.provider
-            else: raise ExistingProvider(k)
+            else: raise ExistingProvider(k, existing_provider, p)
         else:
             self._providers[k] = p
         for k2 in k.supplementary_injection_keys(p.provider):
