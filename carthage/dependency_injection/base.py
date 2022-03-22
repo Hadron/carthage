@@ -17,6 +17,7 @@ import collections.abc
 import asyncio
 import functools
 import logging
+import traceback
 import types
 import sys
 from dataclasses import dataclass
@@ -160,12 +161,13 @@ class Injectable:
         "Called when an instance of an injectable is used to add a dependency provider bby the single argument form of :meth:`Injectable.add_provider()`"
         return InjectionKey(self.__class__)
 
-
 class DependencyProvider:
     __slots__ = ('provider',
                  'allow_multiple',
                  'close',
-                 'instantiation_contexts', 'keys',
+                 'instantiation_contexts',
+                 'keys',
+                 '_creation_tb',
                  )
 
     def __init__(self, provider, allow_multiple=False, close=True):
@@ -174,6 +176,7 @@ class DependencyProvider:
         self.close = close
         self.keys = set()
         self.instantiation_contexts = set()
+        self._creation_tb = traceback.extract_stack()[:-1]
 
     def __repr__(self):
         return "<DependencyProvider allow_multiple={}: {}>".format(
@@ -219,9 +222,14 @@ class InjectionFailed(RuntimeError):
 
 class ExistingProvider(RuntimeError):
 
-    def __init__(self, k):
-        super().__init__(f'Provider for {k} already registered')
+    def __init__(self, k, old_p, new_p):
         self.existing_key = k
+        self.old_provider = old_p
+        self.new_provider = new_p
+        s = f'Unable to add provider {new_p.provider} for {k}: already registered to {old_p.provider}.\n\n'
+        s = s + 'The previous provider was created here:\n\n'
+        s = s + '> ' + '> '.join(traceback.format_list(old_p._creation_tb))
+        super().__init__(s)
 
 
 class InjectorClosed(RuntimeError):
@@ -314,7 +322,7 @@ class Injector(Injectable, event.EventListener):
                 existing_provider.provider = p.provider
                 existing_provider.keys.add(k)
             else:
-                raise ExistingProvider(k)
+                raise ExistingProvider(k, existing_provider, p)
         else:
             self._providers[k] = p
             p.keys.add(k)
