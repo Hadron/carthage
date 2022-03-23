@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2021, Hadron Industries, Inc.
+# Copyright (C) 2019, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -40,6 +40,17 @@ Clone the ``HEAD`` of a Git working copy into a new temporary directory  This pr
         dir.cleanup()
 
 __all__ += ['rsync_git_tree',]
+
+def git_tree_hash(git_tree):
+    '''
+    Return the HEAD of a git tree suitable for use in a setup_task's hash function
+'''
+    res = sh.git('rev-parse', 'HEAD',
+                 _cwd=git_tree,
+                 )
+    return str(res.stdout,'utf-8').rstrip()
+
+__all__ += ['git_tree_hash']
 
 
 def git_checkout_task(url, repo):

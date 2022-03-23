@@ -35,9 +35,11 @@ from .ssh import RsyncPath
 import carthage.pki
 from . import ansible
 from . import cloud_init
-from .files import rsync_git_tree
+from .files import rsync_git_tree, git_tree_hash
+
 
 __all__ += [ 'Machine',  'rsync_git_tree',
+             'git_tree_hash',
              'RsyncPath',
              'AbstractMachineModel', 'MachineCustomization',
              'ContainerCustomization', 'FilesystemCustomization',
