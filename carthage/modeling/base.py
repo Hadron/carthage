@@ -375,13 +375,13 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
         '''
         See :meth:`~carthage.machine.AbstractMachineModel.resolve_networking` for documentation.
 
-        In adition to the standard behavior, if  :meth:`machine_type` is an instance of :class:`~carthage.local.LocalMachine`,
+        In adition to the standard behavior, if  :meth:`machine_type` is an instance of :class:`~carthage.local.LocalMachineMixin`,
 then call :func:`carthage.local.process_local_network_config` to learn about local bridges.
         '''
         res = await super().resolve_networking(*args, **kwargs)
-        from carthage.local import LocalMachine, process_local_network_config
+        from carthage.local import LocalMachineMixin, process_local_network_config
         try:
-            if issubclass(self.machine_type, LocalMachine):
+            if issubclass(self.machine_type, LocalMachineMixin):
                 process_local_network_config(self)
         except KeyError: pass #no machine_implementation_key
         return res

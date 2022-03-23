@@ -16,30 +16,18 @@ from .setup_tasks import SetupTaskMixin
 from .network import NetworkLink, BridgeNetwork
 
 
-class LocalMachine(Machine, SetupTaskMixin):
+class LocalMachineMixin:
 
-    '''A machine representing the node on which carthage is running.
+    '''A mixin for :class:`machines <Machine>` that represent the locally running system.  If no special behavior is required :class:`LocalMachine` should be used instead.  This mixin is appropriate for cloud machines where it is desirable to retain functionality such as using cloud APIs to examine the configuration, but where  marking the machine as local to prevent shutdown and simplify filesysetm access is desired.
+
+When testing whether a :class:`Machine` is local, test for ``isinstance(machine, LocalMachineMixin)``
+
     '''
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.running = True
-        
+    
     ip_address = "127.0.0.1"
-
-    async def async_ready(self):
-        await self.resolve_networking()
-        await self.run_setup_tasks()
-        await super().async_ready()
-
     @contextlib.asynccontextmanager
     async def filesystem_access(self):
         yield "/"
-
-    async def start_machine(self):
-        await self.start_dependencies()
-        await super().start_machine()
-        return
 
     async def stop_machine(self):
         raise NotImplementedError("Stopping localhost may be more dramatic than desired")
@@ -48,6 +36,30 @@ class LocalMachine(Machine, SetupTaskMixin):
     def shell(self):
         # We don't actually need to enter a namespace, but this provides similar semantics to what we get with containers
         return sh.nsenter.bake()
+
+    
+class LocalMachine(LocalMachineMixin, Machine, SetupTaskMixin):
+
+    '''A machine representing the node on which carthage is running.
+    '''
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.running = True
+        
+
+    async def async_ready(self):
+        await self.resolve_networking()
+        await self.run_setup_tasks()
+        await super().async_ready()
+
+
+    async def start_machine(self):
+        await self.start_dependencies()
+        await super().start_machine()
+        return
+
+
 
     async def is_machine_running(self):
         self.running = True
@@ -77,4 +89,4 @@ However if Carthage is configuring the local networking on the hypervisor, then 
         if not isinstance(l, BridgeLink): continue
         associate_bridge(l.net, l.interface)
         
-__all__ = ['LocalMachine', 'process_local_network_config']
+__all__ = ['LocalMachineMixin', 'LocalMachine', 'process_local_network_config']
