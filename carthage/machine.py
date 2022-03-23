@@ -27,7 +27,9 @@ class MachineRunning:
             self.machine.already_running = self.machine.running
         self.machine.with_running_count +=1
         if self.machine.running:
-            return
+            if self.machine._ssh_online_required and self.ssh_online:
+                await self.machine.ssh_online()
+                return
         try:
             await self.machine.start_machine()
             if self.ssh_online: await self.machine.ssh_online()
@@ -58,6 +60,8 @@ class SshMixin:
     to reach the appropriate devices.  Requires ip_address to be made
     available.  Requires an carthage.ssh.SshKey be injectable.
     '''
+
+    _ssh_online_required = True
 
     @memoproperty
     def ip_address(self):
@@ -126,11 +130,13 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
             break
         if not online:
             raise TimeoutError("{} not online".format(self.ip_address))
+        self._ssh_online_required = False
 
     def ssh_recompute(self, *args):
         try:
             del self.__dict__['ssh']
         except KeyError: pass
+        self._ssh_online_required = True
 
     @classmethod
     def clear_ssh_known_hosts(cls, config_layout):
@@ -325,6 +331,7 @@ class Machine(AsyncInjectable, SshMixin):
                         "stop_machine", self,
                         adl_keys   = {InjectionKey(Machine,  host = self.name)} |
                         set(self.supplementary_injection_keys(InjectionKey(Machine, host = self.name))))
+        self._ssh_online_required = True
 
 
     async def is_machine_running(self):
