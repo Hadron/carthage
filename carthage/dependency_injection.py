@@ -681,7 +681,8 @@ Return the first injector in our parent chain containing *k* or None if there is
         elif self.claimed_by() is None:
             claim_str = "claimed by dead object"
         else: claim_str = f'claimed by {repr(self.claimed_by())}'
-        return f'<{self.__class__.__name__} {claim_str}>'
+        closed_str = 'CLOSED ' if self.closed else ''
+        return f'<{closed_str}{self.__class__.__name__} {claim_str}>'
 
     @property
     def is_claimed(self):
