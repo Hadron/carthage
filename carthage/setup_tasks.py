@@ -331,6 +331,7 @@ class SetupTaskMixin:
                         self.logger_for().info(f"Running {t.description} task for {self}")
                         await ainjector(t, self)
                         dependency_last_run = time.time()
+                        self.logger_for().info(f"Finished running {t.description} task for {self} at {dependency_last_run}")
                     else:
                         self.logger_for().info(f'Would run {t.description} task for {self}')
                 except SkipSetupTask: pass
