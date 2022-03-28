@@ -2,7 +2,7 @@
 
 error=0; trap 'error=$(($?>$error?$?:$error))' ERR # save maximum error code
 
-fcopy -M /etc/cloud/ds-identify.cfg
+ifclass EC2 || fcopy -M /etc/cloud/ds-identify.cfg
 fcopy -M /etc/cloud/cloud.cfg.d/20_use_netplan.cfg
 
 rm -f $target/etc/ssh/ssh_host* 2>/dev/null
