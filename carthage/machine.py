@@ -29,7 +29,7 @@ class MachineRunning:
         if self.machine.running:
             if self.machine._ssh_online_required and self.ssh_online:
                 await self.machine.ssh_online()
-                return
+            return
         try:
             await self.machine.start_machine()
             if self.ssh_online: await self.machine.ssh_online()
