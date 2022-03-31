@@ -32,7 +32,8 @@ def container(test_ainjector, loop):
     yield container
     if container.running:
         loop.run_until_complete(container.stop_container())
-    time.sleep(0.2)
+    container.close()
+
 @async_test
 async def test_start_container(container, loop):
     await container.start_container()
