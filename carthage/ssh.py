@@ -62,10 +62,10 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
 
     @setup_task('gen-key')
     async def generate_key(self):
-        no_passphrase = io.StringIO("")
         os.makedirs(self.config_layout.state_dir, exist_ok = True)
         await sh.ssh_keygen(f = self.key_path,
-                            _in = no_passphrase,
+                            N = '',
+                            _in = None,
                             _bg = True,
                             _bg_exc = False)
 
