@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -251,7 +251,7 @@ async def run_playbook(hosts,
 
     :param playbook: Path to the playbook local to *origin*.  The current directory when ansible is run will be the directory containing the playbook.
 
-    :param hosts: A list of hosts to run the play against.  Hosts can be strings, or :class:`Machine` objects.  For machine objects, *ansible_inventory_name* will be tried before :meth:`Machine.name`.
+    :param hosts: A list of hosts to run the play against.  Hosts can be strings, or :class:`Machine` objects.  For machine objects, *ansible_inventory_name* will be tried before :meth:`Machine.name`.  If a machine is not running and has :meth:`ansible_not_running_context`, then that asyncronous context manager will be entered.  The return from that context manager will be used as inventory variables for the machine.  For example :class:`~carthage.container.Container` uses this to arrange to run ansible plays without booting a container.
 
 :param log: A local path where a log of output and errors should be created or ``None`` to parse the ansible result programatically after ansible completes.  It is not possible to produce human readable output and a result that can be parsed at the same time without writing a custom ansible callback plugin.
 
@@ -273,13 +273,19 @@ async def run_playbook(hosts,
     if not isinstance(hosts, list): hosts = [hosts]
     async with contextlib.AsyncExitStack() as stack:
         target_hosts = []
+        inventory_overrides = {}
         for h in hosts:
             if isinstance(h, str):
                 target_hosts.append(h)
             else:
                 if hasattr(h, 'ansible_inventory_name'):
-                    target_hosts.append(h.ansible_inventory_name)
-                else: target_hosts.append(h.name)
+                    target_name = h.ansible_inventory_name
+                else: target_name = h.name
+                if not h.running and hasattr(h, 'ansible_not_running_context'):
+                    inventory_overrides[target_name] = await stack.enter_async_context(
+                        h.ansible_not_running_context())
+                target_hosts.append(target_name)
+                    
         list(map(lambda h: validate_shell_safe(h), target_hosts))
         target_hosts = ":".join(target_hosts)
         playbook = str(playbook)
@@ -305,7 +311,9 @@ async def run_playbook(hosts,
         with await ainjector(
                 write_config, config_dir,
                 [inventory],
-                ansible_config = ansible_config, log = log, origin = origin) as config_file:
+                ansible_config = ansible_config, log = log,
+                inventory_overrides=inventory_overrides,
+                origin = origin) as config_file:
 
             ansible_command += f'ANSIBLE_CONFIG={to_inner(config_file)} ansible-playbook -l"{target_hosts}" {" ".join(extra_args)} {os.path.basename(playbook)}'
             log_args: dict = {}
@@ -430,6 +438,7 @@ __all__ += ['run_play']
 def write_config(config_dir, inventory,
                  *, ssh_key, log,
                  config, origin,
+                 inventory_overrides,
                  ansible_config):
     private_key = None
     if ssh_key:
@@ -450,19 +459,31 @@ filter_plugins={":".join(ansible_config.filter_plugins)}
 {private_key}
 
 ''')
-        if origin is None or isinstance(origin, NetworkNamespaceOrigin):
+        if inventory_overrides or origin is None or isinstance(origin, NetworkNamespaceOrigin):
             os.makedirs(dir+"/inventory/group_vars")
-            with open(dir + "/inventory/hosts.ini", "wt") as hosts_file:
-                # This may need to be more generalized as Carthage core gains the ability to construct nontrivial Ansible inventory.
-                # Another concern is that the way Ansible uses hosts, groups and variables is conceptually similar to how Carthage uses injectors.  It's likely that we want a way to reference more injection keys as dependencies for a play than just  config variables, and to access attributes of those dependencies.
-# If those mechanisms become available, we may want to revisit this.
-                #This hosts file is empty and only present so the inventory source is valid
-                hosts_file.write("[all]\n")
+            with open(dir + "/inventory/hosts.yml", "wt") as hosts_file:
+                # This may need to be more generalized as Carthage
+                # core gains the ability to construct nontrivial
+                # Ansible inventory.  Another concern is that the way
+                # Ansible uses hosts, groups and variables is
+                # conceptually similar to how Carthage uses injectors.
+                # It's likely that we want a way to reference more
+                # injection keys as dependencies for a play than just
+                # config variables, and to access attributes of those
+                # dependencies.  If those mechanisms become available,
+                # we may want to revisit this.  This hosts file is
+                # sometimes empty if there are no inventory_overrides,
+                # but is still needed to make a valid inventory
+                # source.
+                hosts_file.write(yaml.dump(
+                    dict(all=dict(hosts=inventory_overrides)),
+                    default_flow_style=False))
+            
             with open(dir + "/inventory/group_vars/all.yml", "wt") as config_yaml:
                 config_yaml.write(yaml.dump(
                     {'config': config.__getstate__()},
                     default_flow_style = False))
-            inventory = [dir + "/inventory/hosts.ini"] + inventory
+            inventory = [dir + "/inventory/hosts.yml"] + inventory
         f.write(f'inventory = {",".join(inventory)}')
 
         #ssh section
@@ -489,6 +510,7 @@ ssh_args = -o ControlMaster=auto -o ControlPersist=60s -oStrictHostKeyChecking=n
 class LocalhostMachine:
     name = "localhost"
     ip_address = "127.0.0.1"
+    running = True
 
     def ansible_inventory_line(self):
         return "localhost ansible_connection=local"
@@ -550,12 +572,15 @@ plays:[{[k for k in self.tasks.keys()]}]"
 
 __all__ += ['AnsibleResult']
 
-def _handle_host_origin(host):
+def _handle_host_origin(host, origin):
     if not isinstance(host, Machine) and hasattr(host, 'host'):
         host = host.host
+    if not origin:
+        return host, {}
     if isinstance(host, Container) and not host.running:
-        return localhost_machine, {'origin': dependency_quote(host)}
-    return host, {}
+        return localhost_machine, dict(origin=dependency_quote(host))
+    return host, dict(origin=dependency_quote(host))
+
 
 class ansible_playbook_task(setup_tasks.TaskWrapper):
 
@@ -563,9 +588,9 @@ class ansible_playbook_task(setup_tasks.TaskWrapper):
 
 
 
-    def __init__(self, playbook, **kwargs):
+    def __init__(self, playbook, origin=False, **kwargs):
         async def func(inst):
-            host, extra_args = _handle_host_origin(inst)
+            host, extra_args = _handle_host_origin(inst, origin)
             return             await inst.ainjector(run_playbook, host, self.dir.joinpath(self.playbook), **extra_args)
         super().__init__(
             func = func,
@@ -584,20 +609,21 @@ class ansible_playbook_task(setup_tasks.TaskWrapper):
 __all__ += ['ansible_playbook_task']
 
 def ansible_role_task(roles, vars = None,
-                      before=None, order=None):
+                      before=None, order=None, origin=False):
     '''
     A :func:`setup_task` to apply one or more ansible roles to a machine.
 
     :param roles: A single role (as a string) or list of roles to include.  Roles can also be a list of dictionaries containing argumens to *import_role*.
 
     :param vars: An optional dictionary of ansible variable assignments.
+    :param origin: If True, use host as origin from which to run ansible.
 
     '''
     @setup_tasks.setup_task(f'Apply {roles} ansible roles',
                             before=before, order=order)
     @inject(ainjector = AsyncInjector)
     async def apply_roles(self, ainjector):
-        host, extra_args = _handle_host_origin(self)
+        host, extra_args = _handle_host_origin(self, origin)
         play = []
         for r in roles:
             if isinstance(r,dict): r_dict = r

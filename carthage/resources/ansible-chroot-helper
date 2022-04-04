@@ -1,0 +1,20 @@
+#!/usr/bin/python3
+import sys
+from carthage import *
+from carthage.container import Container, container_volume
+from carthage.image import ContainerVolume
+import carthage.utils
+
+@inject(ainjector=AsyncInjector)
+async def run(ainjector):
+    container_dir = sys.argv[1]
+    name = sys.argv[2]
+    cl = await ainjector(ConfigLayout)
+    cl.container_prefix = ""
+    ainjector.add_provider(container_volume, await ainjector(ContainerVolume, container_dir))
+    container = await ainjector(Container, name=name, image=None)
+    return container.shell("/bin/sh", "-c", sys.argv[4], _fg=True)
+
+if __name__ == "__main__":
+    carthage.utils.carthage_main_run(run)
+          

@@ -7,6 +7,7 @@
 # LICENSE for details.
 
 import asyncio, contextlib, logging, os, re, shutil, sys
+from pathlib import Path
 from .dependency_injection import *
 from .image import  SetupTaskMixin, setup_task, SkipSetupTask, ContainerVolume
 from . import sh, ConfigLayout
@@ -15,6 +16,7 @@ from .machine import MachineRunning, Machine, SshMixin, ssh_origin
 import carthage.network
 import carthage.ssh
 
+_resources_path = Path(__file__).parent
 logger = logging.getLogger('carthage.container')
 
 
@@ -153,7 +155,9 @@ class Container(Machine, SetupTaskMixin):
                 self.process.terminate()
                 process = self.process
                 self.process = None
-                await process
+                try:
+                    await process
+                except sh.SignalException_SIGTERM: pass
             else:
                 await sh.machinectl("stop", self.full_name,
                                     _bg  = True, _bg_exc = False)
@@ -295,3 +299,23 @@ class Container(Machine, SetupTaskMixin):
     async def filesystem_access(self):
         yield str(self.volume.path)
 
+
+    @contextlib.asynccontextmanager
+    async def ansible_not_running_context(self):
+        ''' 
+        When a :class:`Container`  that is not running is used as a host in a call to :func:`carthage.ansible.run_playbook`, then the ansible *chroot* plugin is used to connect to the container.  However, configuration is changed to use ``nsenter`` so that an actual namespace is used.
+'''
+        process = await self.run_container("/bin/bash") #create a container; the bash does nothing
+        try:
+            yield {
+                'ansible_connection': 'chroot',
+                # Overriding ansible_executable is a hack; it's one of the arguments we can specify and we need to pass the name to our helper
+                'ansible_executable': self.full_name,
+                'ansible_host': str(self.volume.path),
+                'ansible_chroot_exe': _resources_path/"ansible-chroot-helper",
+                }
+        finally:
+            try:
+                await self.stop_container()
+            except Exception: pass
+            

@@ -66,6 +66,13 @@ class LayoutTest(ModelGroup):
 
     add_provider(machine_implementation_key, dependency_quote(Container))
 
+    class never_running_container(MachineModel):
+        name = "never-running"
+
+        class Cust(ContainerCustomization):
+            install_ansible = install_stage1_packages_task(["ansible"])
+            do_roles = ansible_role_task(os.path.dirname(__file__)+"/resources/test_ansible_role")
+            
     class test_container(MachineModel, SystemdNetworkModelMixin):
         name = "test-container"
 
@@ -79,7 +86,7 @@ class LayoutTest(ModelGroup):
                 with open(Path(self.path)/"local_playbook.yml", "wt") as f:
                     f.write(_resource_dir.joinpath("local_playbook.yml").read_text())
                     
-            local_play = ansible_playbook_task("/local_playbook.yml")
+            local_play = ansible_playbook_task("/local_playbook.yml", origin=True)
             
         class cust(MachineCustomization):
 
@@ -98,6 +105,7 @@ async def test_ansible_and_modeling(test_ainjector, config):
     await ainjector.get_instance_async(carthage.ssh.SshKey)
     await layout.generate()
     await layout.test_container.machine.async_become_ready()
+    await layout.never_running_container.machine.async_become_ready()
     
 
 @async_test
