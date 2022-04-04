@@ -118,6 +118,7 @@ def handle_plugin_url(url, injector):
 def handle_git_url(parsed, injector):
     config = injector(ConfigLayout)
     stem = Path(parsed.path).name
+    if stem.endswith('.git'): stem = stem[:-4]
     dest = Path(config.checkout_dir)/stem
     if dest.exists(): return dest
     logger.info(f'Checking out {parsed.geturl()}')
