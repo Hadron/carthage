@@ -29,6 +29,7 @@ def test_ainjector(loop):
         ainjector = base_injector.claim()(AsyncInjector)
         config = loop.run_until_complete( ainjector(ConfigLayout))
         config.delete_volumes = True
+        config.persist_local_networking = False
         vol = loop.run_until_complete( ainjector(DebianContainerImage, name = "base-debian"))
         vol.config_layout = vol.injector(ConfigLayout)
         vol.config_layout.delete_volumes = False
