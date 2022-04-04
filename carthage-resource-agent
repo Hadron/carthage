@@ -8,17 +8,22 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import sys, os
+_OCF_RESKEY_PYTHONPATH = os.environ.get('OCF_RESKEY_PYTHONPATH', None)
+if _OCF_RESKEY_PYTHONPATH:
+    sys.path = list(filter(lambda x: x, _OCF_RESKEY_PYTHONPATH.split(':'))) + sys.path
+sys.path.extend(["/usr/lib/ocf/lib/heartbeat"])
+
 import asyncio
 import contextlib
 import functools
 import os
 import sys
+
 # reset basename so ocf doesn't overwrite carthage logger
 sys.argv[0] = 'carthage-agent'
 
 from pathlib import Path
-sys.path.extend(["/storage/devstack-carthage/project/carthage",
-"/usr/lib/ocf/lib/heartbeat"])
 import ocf
 from carthage import *
 from carthage.modeling import *
@@ -126,6 +131,7 @@ agent = ocf.Agent(name="carthage", shortdesc="Manage a set of machines from a Ca
                   )
 agent.add_parameter("config", "Path to the config.yml for the layout", required=True)
 agent.add_parameter("machines", "Space separated list of machines to manage", required=True)
+agent.add_parameter("PYTHONPATH", "PYTHONPATH to be used for carthage-resource-agent", required=False)
 agent.add_action('start', timeout="180s", handler=start)
 agent.add_action('stop', timeout='220s', handler=stop)
 agent.add_action('monitor', interval='30s', timeout='90s', handler=monitor)
