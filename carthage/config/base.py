@@ -67,3 +67,6 @@ class DebianConfig(ConfigSchema, prefix = "debian"):
 
     #: Whether to include security.debian.org and the updates source
     include_security:bool = True
+
+    #: Any debootstrap option to include
+    debootstrap_options: str = ""
