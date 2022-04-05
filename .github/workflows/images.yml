@@ -6,6 +6,7 @@ on:
     paths:
       - carthage/*
       - oci_images/*
+      - .github/workflows/images.yml
 
 permissions:
   contents: read
