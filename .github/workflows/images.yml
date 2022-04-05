@@ -1,0 +1,32 @@
+name: Build Carthage OCI Images
+on:
+  - push:
+    branches:
+      - master
+    paths:
+      - carthage/*
+      - oci_images/*
+
+permissions:
+  contents: read
+  packages: write
+jobs:
+  build_image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: install dependencies
+        run: |
+          sudo apt -q update
+          sudo apt -y install systemd-container socat qemu-utils fai-setup-storage fai-server python3-mako python3-sh python3-pyvmomi python3-yaml python3-pytest ansible genisoimage
+      - name: Login to ghcr.io
+        uses: redhat-actions/podman-login@v1
+        with:
+          username: ${{github.actor}}
+          password: ${{github.token}
+          
+
+      - name: Build image
+        run: |
+          sudo PYTHONPATH=. python3 oci_images/build_container_image.py
+        
