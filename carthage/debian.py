@@ -71,6 +71,7 @@ class DebianContainerImage(ContainerImage):
         self.stage1_mirror = self.config_layout.debian.stage1_mirror
         self.distribution = self.config_layout.debian.distribution
         self.include_security = self.config_layout.debian.include_security
+        self.debootstrap_options = self.config_layout.debian.debootstrap_options
         if mirror:
             self.mirror = mirror
             if not stage1_mirror: self.stage1_mirror = mirror
@@ -88,6 +89,7 @@ class DebianContainerImage(ContainerImage):
     @setup_task("unpack using debootstrap")
     async def unpack_container_image(self):
         await sh.debootstrap('--include=openssh-server',
+                             *(self.debootstrap_options.split()),
                              self.distribution,
                              self.path, self.stage1_mirror,
                              _bg = True,
@@ -95,9 +97,10 @@ class DebianContainerImage(ContainerImage):
         path = Path(self.path)
         try: os.unlink(path/"etc/hostname")
         except FileNotFoundError: pass
-        with path.joinpath("etc/ssh/sshd_config").open("at") as f:
-            f.write("PasswordAuthentication no")
-        
+        try:
+            with path.joinpath("etc/ssh/sshd_config").open("at") as f:
+                f.write("PasswordAuthentication no")
+        except FileNotFoundError: pass
 
     debian_customizations = customization_task(DebianContainerCustomizations)
 
