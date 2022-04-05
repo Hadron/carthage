@@ -430,11 +430,9 @@ class CarthageLayout(ModelGroup):
         else: return InjectionKey(CarthageLayout)
         
 
-    @property
-    def layout_name(self):
-        raise NotImplementedError("You must specify a name on a layout")
+    layout_name = None
 
-    __all__ += ['CarthageLayout']
+__all__ += ['CarthageLayout']
     
 @inject(injector = Injector)
 def model_bases(host: str, *bases,
