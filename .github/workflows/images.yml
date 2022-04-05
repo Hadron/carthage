@@ -1,6 +1,6 @@
 name: Build Carthage OCI Images
 on:
-  - push:
+  push:
     branches:
       - master
     paths:
