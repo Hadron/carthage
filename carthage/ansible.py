@@ -416,6 +416,7 @@ async def run_play(hosts, play,
                                "inventory.txt"), "wt") as f:
                 f.write("[hosts]\n")
                 for h in hosts:
+                    if not h.running and hasattr(h, 'ansible_not_running_context'): continue
                     try:
                         f.write(h.ansible_inventory_line()+"\n")
                     except AttributeError:
