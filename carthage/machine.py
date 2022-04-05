@@ -232,6 +232,8 @@ class Machine(AsyncInjectable, SshMixin):
         if self.model: return self.model.network_links
         return {}
 
+    #: If true, use self.filesystem_access for rsync, otherwise use ssh.
+    rsync_uses_filesystem_access = False
     async def start_dependencies(self):
         '''Interface point that should be called by :meth:`start_machine` to start any dependent machines such as routers needed by this machine.
 
