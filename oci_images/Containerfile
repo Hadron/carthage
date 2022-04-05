@@ -1,0 +1,6 @@
+FROM scratch
+ADD container.tar /
+CMD ["/bin/systemd"]
+VOLUME ["/layout"]
+LABEL org.opencont>ainers.image.source https://github.com/hadron/carthage
+
