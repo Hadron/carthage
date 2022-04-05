@@ -23,8 +23,8 @@ jobs:
       - name: Login to ghcr.io
         uses: redhat-actions/podman-login@v1
         with:
-          username: ${github.actor}}
-          password: ${github.token}
+          username: ${{github.actor}}
+          password: ${{github.token}}
           registry: ghcr.io
           
 
