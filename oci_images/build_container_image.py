@@ -25,6 +25,7 @@ def layout():
         add_provider(machine_implementation_key, dependency_quote(Container))
         add_provider(config_key('debian.debootstrap_options'), "--variant=minbase --include=systemd")
         add_provider(ConfigLayout)
+        add_provider(carthage.ansible.ansible_log, str(_dir/"ansible.log"))
 
         @provides(container_image)
         class OurBaseImage(DebianContainerImage):
