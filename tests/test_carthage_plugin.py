@@ -48,7 +48,7 @@ async def test_mock_machine(ssh_key):
 @inject(ssh_key = carthage.ssh.SshKey)
 async def test_carthage_controller(ssh_key, request, capsys):
     m = Machine('carthage-inner')
-    ssh_key.rsync(os.path.join(
+    await ssh_key.rsync(os.path.join(
         resource_dir,
         "inner_plugin_test.py"),
                   m.rsync_path('/'))
