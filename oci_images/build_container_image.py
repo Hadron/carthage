@@ -55,6 +55,7 @@ def layout():
 @inject(ainjector=AsyncInjector)
 async def build_oci_image(container: Container, container_file:str, image_tag:str, ainjector):
     config = await ainjector(ConfigLayout)
+    Path(config.vm_image_dir).mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=config.vm_image_dir) as d_str:
         d = Path(d_str)
         shutil.copyfile(container_file, d/'Containerfile')
