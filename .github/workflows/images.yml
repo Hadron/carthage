@@ -31,6 +31,7 @@ jobs:
       - name: Build image
         run: |
           sudo PYTHONPATH=$(pwd) python3 oci_images/build_container_image.py
+          sudo -E podman push carthage ghcr.io/hadron/carthage:latest
 
       - name: upload ansible log
         uses: actions/upload-artifact@v3
