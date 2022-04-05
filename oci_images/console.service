@@ -1,0 +1,21 @@
+[Unit]
+Description=Carthage Services
+ConditionPathExists=/dev/console
+After=getty-pre.target
+Before=getty.target
+[Service]
+ExecStart=/start-carthage.sh
+ExecStop=/bin/systemctl poweroff
+Type=idle
+StandardInput=tty
+StandardOutput=inherit
+StandardError=inherit
+UtmpIdentifier=cons
+TTYPath=/dev/console
+TTYReset=yes
+TTYVHangup=yes
+IgnoreSIGPIPE=no
+SendSIGHUP=yes
+
+[Install]
+WantedBy=getty.target
