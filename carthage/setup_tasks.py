@@ -13,7 +13,7 @@ from pathlib import Path
 import carthage
 from carthage.dependency_injection import AsyncInjector, inject
 from carthage.config import ConfigLayout
-from carthage.utils import memoproperty
+from carthage.utils import memoproperty, import_resources_files
 import collections.abc
 
 __all__ = [ 'logger', 'TaskWrapper', 'TaskMethod', 'setup_task', 'SkipSetupTask', 'SetupTaskMixin',
@@ -496,11 +496,11 @@ If the template has a def called *hash*, this def will be rendered with the same
         module = sys.modules[owner.__module__]
         try: self.lookup = module._mako_lookup
         except AttributeError:
-            if hasattr(module, '__path__'): resources= importlib.resources.files(module)
+            if hasattr(module, '__path__'): resources= import_resources_files(module)
             elif module.__package__ == "":
                 resources = Path(module.__file__).parent
             else:
-                resources = importlib.resources.files(module.__package__)
+                resources = import_resources_files(module.__package__)
             templates = resources/'templates'
             if not templates.exists(): templates = resources
             module._mako_lookup = mako.lookup.TemplateLookup([str(templates)], strict_undefined = True)
