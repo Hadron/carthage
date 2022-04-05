@@ -30,5 +30,12 @@ jobs:
 
       - name: Build image
         run: |
-          sudo PYTHONPATH=. python3 oci_images/build_container_image.py
-        
+          sudo PYTHONPATH=$(pwd) python3 oci_images/build_container_image.py
+
+      - name: upload ansible log
+        uses: actions/upload-artifact@v3
+        with:
+          name: images ansible.log
+          path: oci_images/ansible.log
+
+
