@@ -16,7 +16,7 @@ from .machine import MachineRunning, Machine, SshMixin, ssh_origin
 import carthage.network
 import carthage.ssh
 
-_resources_path = Path(__file__).parent
+_resources_path = Path(__file__).parent.joinpath("resources")
 logger = logging.getLogger('carthage.container')
 
 
@@ -47,7 +47,8 @@ class Container(Machine, SetupTaskMixin):
         self.close_volume = True
         self.cleanup_future = None
 
-        
+
+    rsync_uses_filesystem_access = True
         
 
     async def async_ready(self):
@@ -251,7 +252,7 @@ class Container(Machine, SetupTaskMixin):
         await process
         self.ssh_rekeyed()
 
-    async def container_command(self, *args, **kwargs):
+    async def container_command(self, *args, _bg=True, _bg_exc=False, **kwargs):
         '''Call :meth:`run_container` and await the resulting process.
         '''
         process = await self.run_container(*args, **kwargs)
@@ -312,7 +313,7 @@ class Container(Machine, SetupTaskMixin):
                 # Overriding ansible_executable is a hack; it's one of the arguments we can specify and we need to pass the name to our helper
                 'ansible_executable': self.full_name,
                 'ansible_host': str(self.volume.path),
-                'ansible_chroot_exe': _resources_path/"ansible-chroot-helper",
+                'ansible_chroot_exe': str((_resources_path/"ansible-chroot-helper").absolute()),
                 }
         finally:
             try:

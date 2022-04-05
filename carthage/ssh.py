@@ -7,7 +7,8 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import dataclasses, io, os, time
+import contextlib, dataclasses, io, os, time
+from pathlib import Path
 from .dependency_injection import inject, AsyncInjector, Injector, AsyncInjectable, Injectable, InjectionKey, dependency_quote
 from .config import ConfigLayout
 from .setup_tasks import SetupTaskMixin, setup_task
@@ -28,6 +29,14 @@ class RsyncPath:
     def __str__(self):
         return f'{self.machine.ip_address}:{self.path}'
 
+    @property
+    def relpath(self):
+        '''Path relative to the root directory of machine'''
+        p = Path(self.path)
+        if p.is_absolute():
+            return str(p.relative_to("/"))
+        else: return self.path
+        
     @memoproperty
     def ssh_origin(self):
         from .machine import ssh_origin
@@ -82,43 +91,44 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
     def ssh(self):
         return sh.ssh.bake(_env = self.agent.agent_environ)
 
-    def rsync(self, *args, ssh_origin = None):
+    async def rsync(self, *args, ssh_origin = None):
         from .network import access_ssh_origin
         ssh_options = []
         args = list(args)
-        for i, a in enumerate(args):
-            if isinstance(a, RsyncPath):
-                sso = a.ssh_origin
-                if ssh_origin is None:
-                    ssh_origin = sso
-                    vrf = a.ssh_origin_vrf
-                    ssh_options = a.machine.ssh_options
-                elif ssh_origin is not sso:
-                    raise RuntimeError(f"Two different ssh_origins: {sso} and {ssh_origin}")
-                args[i] = str(a)
-        if ssh_options:
-            ssh_options = list(ssh_options)
+        async with contextlib.AsyncExitStack() as stack:
+            for i, a in enumerate(args):
+                if isinstance(a, RsyncPath):
+                    if a.machine.rsync_uses_filesystem_access:
+                        path = await stack.enter_async_context(a.machine.filesystem_access())
+                        args[i] = Path(path).joinpath(a.relpath)
+                        continue
+                    sso = a.ssh_origin
+                    if ssh_origin is None:
+                        ssh_origin = sso
+                        vrf = a.ssh_origin_vrf
+                        ssh_options = a.machine.ssh_options
+                    elif ssh_origin is not sso:
+                        raise RuntimeError(f"Two different ssh_origins: {sso} and {ssh_origin}")
+                    args[i] = str(a)
+            if ssh_options:
+                ssh_options = list(ssh_options)
 
         
-        ssh_options.extend(['-oUserKnownHostsFile='+self.known_hosts])
-        ssh_options = " ".join(ssh_options)
-        rsync_opts = ('-e', 'ssh '+ssh_options)
+            ssh_options.extend(['-oUserKnownHostsFile='+self.known_hosts])
+            ssh_options = " ".join(ssh_options)
+            rsync_opts = ('-e', 'ssh '+ssh_options)
         
-        if ssh_origin:
-            return access_ssh_origin(ssh_origin = ssh_origin,
+            if ssh_origin:
+                return await access_ssh_origin(ssh_origin = ssh_origin,
                                      ssh_origin_vrf = vrf)(
-                              'rsync',
-                              *rsync_opts, *args,
-                              _bg = True, _bg_exc = False,
+                                         'rsync',
+                                         *rsync_opts, *args,
+                                         _bg = True, _bg_exc = False,
+                                         _env = self.agent.agent_environ)
+            else:
+                return await sh.rsync(*rsync_opts, *args, _bg = True, _bg_exc = False,
             _env = self.agent.agent_environ)
-        else:
-            return sh.rsync(*rsync_opts, *args, _bg = True, _bg_exc = False,
-            _env = self.agent.agent_environ)
-        
-        
 
-        return sh.rsync.bake('-e' 'ssh',
-                             _env = self.agent.agent_environ)
     
     @memoproperty
     def pubkey_contents(self):
