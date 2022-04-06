@@ -56,6 +56,10 @@ class CarthageConsole(code.InteractiveConsole):
 
     def exec_resource(self, pkg, resource):
         res_str = pkg_resources.resource_string(pkg, resource)
+        try:
+            fn = pkg_resources.resource_filename(pkg, resource)
+        except:
+            raise
         exec(compile(res_str, resource, mode = "exec"),  self.locals)
         
     def __init__(self, locals=None, extra_locals=None):
