@@ -248,7 +248,7 @@ class TaskMethod:
 
     def __init__(self, task, instance):
         self.task = task
-        self.instance = weakref.proxy(instance)
+        self.instance = instance
 
     def __call__(self, *args, **kwargs):
         return self.task(self.instance, *args, **kwargs)
