@@ -439,7 +439,7 @@ Return the first injector in our parent chain containing *k* or None if there is
 )
             if isinstance(result, asyncio.Future):
                 if loop is None:
-                    raise AsyncRequired(f'{k} requires asynchronous instantiation')
+                    raise AsyncRequired(f'{k} requires asynchronous instantiation for {self}')
                 futures.append(result)
                 provider.record_instantiation(result, k, satisfy_against, final = False)
                 return result
@@ -454,6 +454,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                     raise AsyncRequired(f"Requesting instantiation of {result} to ready, outside of async context")
                 # We pass in placement not do_place because the item has already been recorded.
                 future = loop.create_task(self._handle_async_injectable(result, resolv = False, placement = placement))
+                future.set_name(f'Handle async injectable {result}  for {k} of {self}')
                 futures.append(future)
                 return future
 
@@ -475,7 +476,7 @@ Return the first injector in our parent chain containing *k* or None if there is
         # _loop if  present means we can return something for which _is_async will return True
         # _orig_k affects error handling; the injection key we're resolving
         self._check_closed()
-        def handle_result(done_future = None):
+        def handle_result():
             # Called when all kwargs are populated
             try:
                 try: res = cls(*args, **kwargs)
@@ -486,15 +487,20 @@ Return the first injector in our parent chain containing *k* or None if there is
                         if isinstance(res, collections.abc.Coroutine):
                             res.close()
                         raise AsyncRequired("Asynchronous dependency injected into non-asynchronous context")
-                    if done_future is None: done_future = _loop.create_future()
-                    self._handle_async(res, done_future,
+
+                    future = asyncio.ensure_future(self._handle_async(res, 
                                        placement = _placement,
                                        interim_placement = _interim_placement,
-                                       loop = _loop)
-                    return done_future
+                                       loop = _loop))
+                    if _interim_placement: _interim_placement(future)
+                    self._pending.add(future)
+
+                    if _orig_k:
+                        future.set_name(f'Handle Async {_orig_k} for {self}')
+                    else: future.set_name(f'Handle async  {res} for {self}')
+                    return future
                 else:
                     if _placement: _placement(res)
-                    if done_future: done_future.set_result(res)
                     return res
             except AsyncRequired: raise
             except Exception as e:
@@ -506,17 +512,14 @@ Return the first injector in our parent chain containing *k* or None if there is
                 else:
                     raise
 
-        def callback(fut):
-            nonlocal done_future
-            try:
-                fut.result() #confirm all successful
-                #If they were all successful, then kwargs is fully populated at this point
-                handle_result(done_future)
-            except asyncio.CancelledError:
-                done_future.cancel()
-            except Exception as e:
-                done_future.set_exception(e)
-
+        async def callback(futures):
+            await asyncio.gather(*futures)
+            # since that succeeded, allkwargs are placed
+            res =  handle_result()
+            if isinstance(res, asyncio.Future):
+                return await res
+            return res
+            
         def kwarg_place(k):
             def collect(res):
                 kwargs[k] = res
@@ -546,12 +549,14 @@ Return the first injector in our parent chain containing *k* or None if there is
                 injector.get_instance(d, placement = kwarg_place(k),
                                       loop = _loop, futures = futures)
             if futures:
-                fut = asyncio.gather(*futures)
-                fut.add_done_callback(callback)
-                done_future = _loop.create_future()
-                return done_future
+                fut = asyncio.ensure_future(callback(futures))
+                if _orig_k:
+                    fut.set_name(f'Instantiate {_orig_k} for {self}')
+                else: fut.set_name(f'Instantiate {cls} for {self}')
+                return fut
+                
             else:
-                res = handle_result(done_future = None)
+                res = handle_result()
                 return res
         finally:
             #Perhaps some day we need to clean up something about the sub_injector
@@ -567,36 +572,31 @@ Return the first injector in our parent chain containing *k* or None if there is
         return False
 
 
-    def _handle_async(self, p, done_future,
+    async def _handle_async(self, p, 
                       interim_placement, placement,
                       loop):
-        def callback(f):
-            try:
-                res = f.result()
-                done_future.set_result(res)
-                if placement: placement(res)
-            except asyncio.CancelledError:
-                done_future.cancel()
-            except BaseException as e:
-                tb_utils.filter_chatty_modules(e, _chatty_modules, 3)
-                done_future.set_exception(e)
-
         if not hasattr(self, 'loop'):
             self.loop = loop
-        if isinstance(p, collections.abc.Coroutine):
-            fut = asyncio.ensure_future(p)
-        elif  isinstance(p, AsyncInjectable):
-            fut =  asyncio.ensure_future(self._handle_async_injectable(p, placement = placement))
-            try: fut.set_name(f'Handle ASyncInjectable {repr(p)} ')
-            except Exception: pass
-        elif isinstance(p, asyncio.Future):
-            fut = p
-        else:
+        try:
+            if isinstance(p, collections.abc.Coroutine):
+                res = await p
+            elif  isinstance(p, AsyncInjectable):
+                res = await self._handle_async_injectable(p, placement = placement)
+            elif isinstance(p, asyncio.Future):
+                res = await p
+            else:
                 raise RuntimeError('_is_async returned True when _handle_async cannot handle')
-        fut.add_done_callback(callback)
-        self._pending.add(fut)
+            if placement: placement(res)
+            return res
+        except asyncio.CancelledError:
+            if hasattr(p, 'injector'):
+                await shutdown_injector(p.injector)
+            raise
+        except Exception as e:
+            tb_utils.filter_chatty_modules(e, _chatty_modules, 5)
+            raise e from None
+            
 
-        if interim_placement: interim_placement(done_future)
 
     async def _handle_async_injectable(self, obj, placement, resolv = True):
         try:
@@ -608,10 +608,8 @@ Return the first injector in our parent chain containing *k* or None if there is
                         obj._async_ready_state = ReadyState.RESOLVED
                     res = obj
                 if self._is_async(res):
-                    future = self.loop.create_future()
-                    self._handle_async(res, done_future = future, placement = placement,
+                    return await self._handle_async(res, placement = placement,
                                        interim_placement = None, loop = self.loop)
-                    return await future
                 else: return res
             else: # no resolution required
                 if instantiate_to_ready.get():
@@ -979,6 +977,7 @@ class AsyncInjectable(Injectable):
             raise RuntimeError("Resolution should have already happened")
         elif self._async_ready_state == ReadyState.RESOLVED:
             self._ready_future = asyncio.ensure_future(_handle_async_deps(self, cycle_set))
+            self._ready_future.set_name(f'Async dependencies for {self}')
             self._async_ready_state = ReadyState.READY_PENDING
             try:
                 return await self._ready_future
@@ -1049,7 +1048,7 @@ class AsyncInjector(Injectable):
             _interim_placement = None,
             _orig_k = None)
 
-        if isinstance(res, asyncio.Future):
+        if isinstance(res, (asyncio.Future, collections.abc.Coroutine)):
             return await res
         else: return res
 
@@ -1101,7 +1100,8 @@ async def _handle_async_deps(obj, cycle_set):
         future.set_name(f'Dependency become ready for {dep} of {repr}')
         futures.append(future)
 
-    await asyncio.gather(*futures)
+    gather =  asyncio.gather(*futures)
+    await gather
     return await obj.async_ready()
 
 
