@@ -24,10 +24,11 @@ cpus
 
 memory_mb
     The amount of memory in megabytes
-
-disk_size
-    The size of the primary disk in bytes.  This is provided in bytes rather than KiB to allow for exact matching of image sizes.
     
+
+disk_sizes
+    A sequence of disk sizes for primary and secondary disks.  Provided in GiB.
+
 nested_virt
     Boolean indicating whether to allow nested virtualization
 
