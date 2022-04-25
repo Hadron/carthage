@@ -349,7 +349,9 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
     
     @memoproperty
     def machine_type(self):
-        implementation = self.injector.get_instance(machine_implementation_key)
+        try: implementation = self.injector.get_instance(machine_implementation_key)
+        except AsyncRequired:
+            raise AsyncRequired('A provider registered for machine_implementation_key has asynchronous dependencies; did you forget a dependency_quote()')
         bases = [implementation] + list(map(lambda x: x[1], self.injector.filter_instantiate(MachineMixin, ['name'])))
         bases += self.machine_mixins
         for b in bases:
