@@ -107,7 +107,7 @@ async def subtest_controller(request, target, pytest_args,
     if isinstance(pytest_args, str):
         pytest_args = [pytest_args]
     json_frag = f'/tmp/{id(pytest_args)}.json'
-    pytest_args = ['--carthage-json', json_frag]+pytest_args
+    pytest_args = ['--carthage-json='+ json_frag]+pytest_args
     ssh_args = []
     if ssh_agent:
         ssh_args.append('-A')
