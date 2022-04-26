@@ -72,6 +72,13 @@ def pytest_configure(config):
     if not config.getoption('carthage_commands_verbose'):
         logging.getLogger('carthage.sh').setLevel(logging.ERROR)
         logging.getLogger('carthage.sh').propagate = False
+        carthage_config = config.getoption('carthage_config')
+    if carthage_config:
+        config_layout = base_injector(ConfigLayout)
+        try:
+            config_layout.load_yaml(carthage_config)
+        finally:
+            carthage_config.close()
     test_params_yaml = config.getoption('test_parameters')
     if test_params_yaml:
         config.carthage_test_parameters = yaml.load(test_params_yaml)
@@ -98,11 +105,3 @@ def pytest_sessionfinish():
     
 
     
-def pytest_collection_finish(session):
-    carthage_config = session.config.getoption('carthage_config')
-    if carthage_config:
-        config_layout = base_injector(ConfigLayout)
-        try:
-            config_layout.load_yaml(carthage_config)
-        finally:
-            carthage_config.close()
