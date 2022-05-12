@@ -118,6 +118,7 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
         return RsyncPath(self, p)
 
     async def ssh_online(self):
+        logger.debug(f'Waiting for {self.name} to be ssh_online')
         online = False
         for i in range(60):
             try: await self.ssh('date',
@@ -127,6 +128,7 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
                 await asyncio.sleep(1)
                 continue
             online = True
+            logger.debug(f'{self.name} is ssh_online')
             break
         if not online:
             raise TimeoutError("{} not online".format(self.ip_address))
@@ -561,7 +563,7 @@ class FilesystemCustomization(BaseCustomization):
 
     @contextlib.asynccontextmanager
     async def _machine_context(self):
-        async with self.host.filesystem_access() as path:
+        async with self.host.machine_running(ssh_online=True), self.host.filesystem_access() as path:
             self.path = path
             yield
             return
