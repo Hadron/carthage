@@ -117,11 +117,13 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
         '''
         return RsyncPath(self, p)
 
+    #: The command run remotely by :meth:`ssh_online`
+    ssh_online_command = 'date'
     async def ssh_online(self):
         logger.debug(f'Waiting for {self.name} to be ssh_online')
         online = False
         for i in range(60):
-            try: await self.ssh('date',
+            try: await self.ssh(self.ssh_online_command,
                                 _bg = True, _bg_exc = False,
                                 _timeout = 5)
             except (sh.TimeoutException, sh.ErrorReturnCode):
