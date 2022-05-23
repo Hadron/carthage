@@ -122,19 +122,20 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
     async def ssh_online(self):
         logger.debug(f'Waiting for {self.name} to be ssh_online')
         online = False
+        last_error = None
         for i in range(60):
             try: await self.ssh(self.ssh_online_command,
                                 _bg = True, _bg_exc = False,
                                 _timeout = 5)
-            except (sh.TimeoutException, sh.ErrorReturnCode):
+            except (sh.TimeoutException, sh.ErrorReturnCode) as last_error:
                 await asyncio.sleep(1)
                 continue
             online = True
+            self._ssh_online_required = False
             logger.debug(f'{self.name} is ssh_online')
             break
         if not online:
-            raise TimeoutError("{} not online".format(self.ip_address))
-        self._ssh_online_required = False
+            raise TimeoutError("{} not online".format(self.ip_address)) from last_error
 
     def ssh_recompute(self, *args):
         try:
