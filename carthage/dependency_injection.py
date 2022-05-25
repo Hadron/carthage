@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -28,7 +28,9 @@ class ReadyState(enum.Enum):
     READY = 3
 
 instantiate_to_ready = contextvars.ContextVar('instantiate_to_ready', default = True)
+_current_instantiation = contextvars.ContextVar('current_instantiation', default=None)
 
+instantiation_roots = set()
 # While this is needed by InjectableModelType's add_provider, it is
 # not part of the public api
 def default_injection_key(p):
@@ -132,12 +134,15 @@ class DependencyProvider:
     __slots__ = ('provider',
                  'allow_multiple',
                  'close',
-                 )
+                 'instantiation_contexts', 'keys',
+                                  )
 
     def __init__(self, provider, allow_multiple = False, close = True):
         self.provider = provider
         self.allow_multiple = allow_multiple
         self.close = close
+        self.keys = set()
+        self.instantiation_contexts = set()
 
     def __repr__(self):
         return "<DependencyProvider allow_multiple={}: {}>".format(
@@ -160,13 +165,94 @@ self.allow_multiple, repr(self.provider))
                 dp.provider = dependency_quote(dp.provider)
         return dp
 
+class BaseInstantiationContext:
+
+    def __init__(self, injector):
+        self.injector = injector
+        self.dependencies_waiting = {}
+        self.parent = None
+        self._done = False
+
+    def dependency_progress(self, key, context):
+        '''Indicate that this instantiation has a dependency on *key*, currently in progress, with state tracked by *context*.'''
+        self.dependencies_waiting[key] = context
+
+    def dependency_final(self, key, context):
+        try:
+            del self.dependencies_waiting[key]
+        except KeyError: pass
+
+    def __enter__(self):
+        self.parent = _current_instantiation.get()
+        if not self.parent: instantiation_roots.add(self)
+        self.reset_token = _current_instantiation.set(self)
+        return self
+
+    def __exit__(self, *args):
+        _current_instantiation.reset(self.reset_token)
+        return False
+
+    def done(self):
+        '''Indicate that the instantiation has completed'''
+        assert not self._done
+        self._done = True
+        if not self.parent: instantiation_roots.remove(self)
+
+    def __str__(self):
+        res = self.description
+        if self.parent: res = f'{str(self.parent)} -> {res}'
+        return res
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}<{str(self)}>'
+    
+class InstantiationContext(BaseInstantiationContext):
+
+    '''
+    Represents the instantiation of an :class:`InjectionKey` in the scope of a :class:`Injector`.
+    '''
+
+    
+    def __init__(self, injector:injector, satisfy_against:Injector, key:InjectionKey,
+                 provider:DependencyProvider):
+        super().__init__(injector)
+        self.satisfy_against = satisfy_against
+        self.key = key
+        self.provider = provider
+
+    def __enter__(self):
+        self.provider.instantiation_contexts.add(self)
+        return super().__enter__()
+
+    def __exit__(self, *args):
+        self.provider.instantiation_contexts.remove(self)
+        return super().__exit__(*args)
+
+    @property
+    def description(self):
+        desc = f'Instantiating {self.key} using {self.satisfy_against}'
+        if self.satisfy_against is not self.injector:
+            desc += f' for {self.injector}'
+        return desc
+
+
+    def progress(self):
+        for parent in self.provider.instantiation_contexts:
+            parent.dependency_progress(self.key, self)
+
+    def final(self):
+        for parent in self.provider.instantiation_contexts:
+            parent.dependency_final(self.key, self)
+
+            
 
 
 class InjectionFailed(RuntimeError):
 
-    def __init__(self, k):
-        super().__init__(f"Error resolving dependency for {k}")
-        self.failed_dependency = k
+    def __init__(self, context):
+        super().__init__(f"Error {context.description}")
+        self.failed_dependency = context.key
+        
 
 class ExistingProvider(RuntimeError):
 
@@ -176,7 +262,14 @@ class ExistingProvider(RuntimeError):
 
 class  InjectorClosed(RuntimeError): pass
 
-class AsyncRequired(RuntimeError): pass
+class AsyncRequired(RuntimeError):
+
+    def __init__(self, msg, context):
+        super().__init__(f'{msg} {context.description}')
+
+def current_instantiation():
+    return _current_instantiation.get()
+
 
 # Note that after @inject is defined, this class is redecorated to take parent_injector as a dependency so that
 #    injector = sub_injector(Injector)
@@ -255,12 +348,15 @@ class Injector(Injectable, event.EventListener):
             existing_provider = self._get(k)
             if replace:
                 existing_provider.provider = p.provider
+                existing_provider.keys.add(k)
             else: raise ExistingProvider(k)
         else:
             self._providers[k] = p
+            p.keys.add(k)
         for k2 in k.supplementary_injection_keys(p.provider):
             if k2 not in self:
                 self._providers[k2] = p
+                p.keys.add(k2)
         return k
 
     def replace_provider(self, *args, **kwargs):
@@ -369,7 +465,6 @@ Return the first injector in our parent chain containing *k* or None if there is
         return self._instantiate(
             cls, *args, **kwargs,
             _loop = None,
-            _orig_k = None,
             _placement = None,
             _interim_placement = None)
 
@@ -391,15 +486,20 @@ Return the first injector in our parent chain containing *k* or None if there is
             assert futures is not None
         def do_place(res):
             provider.record_instantiation(res, k, satisfy_against, final = True)
+            instantiation_context.final()
             if placement: placement(res)
         def do_interim_place(res):
             provider.record_instantiation(res, k, satisfy_against, final = False)
+            instantiation_context.progress()
 
         def future_resolved(fut):
             #our caller handles exceptions
             try:
                 placement(fut.result())
-            except BaseException: pass
+                instantiation_context.final()
+                instantiation_context.done()
+            except BaseException:
+                instantiation_context.done()
 
         logger.debug("Looking up provider for {}".format(k))
 
@@ -415,66 +515,92 @@ Return the first injector in our parent chain containing *k* or None if there is
                 if placement: placement(None)
                 return None
             raise KeyError("No dependency for {}".format(k)) from None
-        try:
-            if k.ready is not None:
-                ready_reset = instantiate_to_ready.set(k.ready)
-            else: ready_reset = None
-            to_ready = instantiate_to_ready.get()
-            result = provider.provider
-            if isinstance(result, dependency_quote):
-                if placement: placement(result.value)
-                return result.value
-            elif isinstance(result, asyncio.Future):
-                #If we have a future that already exists, we need to
-                #arrange for placement to be called just as
-                #_instantiate does for futures it generates.
-                if placement: result.add_done_callback(future_resolved)
-            elif provider.is_factory:
-                result = satisfy_against._instantiate(
-                    result,
-                    _loop = loop,
-                    _placement = do_place,
-                    _orig_k = k,
-                    _interim_placement = do_interim_place,
-)
-            if isinstance(result, asyncio.Future):
-                if loop is None:
-                    raise AsyncRequired(f'{k} requires asynchronous instantiation for {self}')
-                futures.append(result)
-                provider.record_instantiation(result, k, satisfy_against, final = False)
-                return result
-            elif to_ready and isinstance(result,AsyncInjectable) \
-                     and result._async_ready_state != ReadyState.READY:
-                # This happens if an AsyncInjectable was previously
-                # instantiated in _ready = False state but now we are
-                # requesting that object in _ready = True.  In this
-                # case if we were the ones calling _instantiate, we
-                # would already have a future.
-                if not loop:
-                    raise AsyncRequired(f"Requesting instantiation of {result} to ready, outside of async context")
-                # We pass in placement not do_place because the item has already been recorded.
-                future = loop.create_task(self._handle_async_injectable(result, resolv = False, placement = placement))
-                future.set_name(f'Handle async injectable {result}  for {k} of {self}')
-                futures.append(future)
-                return future
+        mark_instantiation_done = True
+        with InstantiationContext(
+                self, satisfy_against, k, provider) as instantiation_context:
+            try:
+                if k.ready is not None:
+                    ready_reset = instantiate_to_ready.set(k.ready)
+                else: ready_reset = None
+                to_ready = instantiate_to_ready.get()
+                result = provider.provider
+                if isinstance(result, dependency_quote):
+                    if placement: placement(result.value)
+                    return result.value
+                elif isinstance(result, asyncio.Future):
+                    #If we have a future that already exists, we need to
+                    #arrange for placement to be called just as
+                    #_instantiate does for futures it generates.
+                    if placement:
+                        result.add_done_callback(future_resolved)
+                        mark_instantiation_done = False
+                elif provider.is_factory:
+                    result = satisfy_against._instantiate(
+                        result,
+                        _loop = loop,
+                        _placement = do_place,
+                        _interim_placement = do_interim_place,
+    )
+                if isinstance(result, asyncio.Future):
+                    if loop is None:
+                        raise AsyncRequired(
+                            f'{k} requires asynchronous instantiation',
+                            current_instantiation())
+                    futures.append(result)
+                    provider.record_instantiation(result, k, satisfy_against, final = False)
+                    instantiation_context.progress()
+                    mark_instantiation_done = False
+                    return result
+                elif to_ready and isinstance(result,AsyncInjectable) \
+                         and result._async_ready_state != ReadyState.READY:
+                    # This happens if an AsyncInjectable was previously
+                    # instantiated in _ready = False state but now we are
+                    # requesting that object in _ready = True.  In this
+                    # case if we were the ones calling _instantiate, we
+                    # would already have a future.
+                    if not loop:
+                        raise AsyncRequired(f"Requesting instantiation of {result} to ready, outside of async context", current_instantiation())
+                    future = loop.create_task(
+                        self._handle_async_injectable(
+                            result,
+                            resolv=False,
+                            placement=do_place,
+                            mark_instantiation_done=True))
+                    future.set_name(f'Handle async injectable {result}  for {k} of {self}')
+                    mark_instantiation_done = False
+                    instantiation_context.progress()
+                    futures.append(future)
+                    return future
 
-        finally:
-            if ready_reset is not None:
-                instantiate_to_ready.reset(ready_reset)
+            finally:
+                if ready_reset is not None:
+                    instantiate_to_ready.reset(ready_reset)
+                if mark_instantiation_done:
+                    instantiation_context.done()
 
 
-        # Either not a future or not a factory
-        if placement: placement(result)
-        return result
+            # Either not a future or not a factory
+            if placement: placement(result)
+            return result
 
 
     def _instantiate(self, cls, *args,
                      _loop,
-                     _orig_k, _placement,
+                     _placement,
                      _interim_placement,
                      **kwargs):
         # _loop if  present means we can return something for which _is_async will return True
-        # _orig_k affects error handling; the injection key we're resolving
+        # There are complicated interactions between the
+        # DependencyProvider machinery and the InstantiationContext
+        # machinery.  An instantiationcontext is marked done when  the
+        # instantiation has completed or failed and no other events
+        # will be logged against this context.  A DpendencyProvider is
+        # recorded as final when the underlying object providing the
+        # dependency will no longer change.  That doesn't mean the
+        # instantiation is done though.  The most common case where a
+        # DependencyProvider can be final but where the instantiation
+        # is not done is where async_become_ready needs to be
+        # called.
         self._check_closed()
         def handle_result():
             # Called when all kwargs are populated
@@ -486,17 +612,16 @@ Return the first injector in our parent chain containing *k* or None if there is
                     if not _loop:
                         if isinstance(res, collections.abc.Coroutine):
                             res.close()
-                        raise AsyncRequired("Asynchronous dependency injected into non-asynchronous context")
+                        raise AsyncRequired("Asynchronous dependency injected into non-asynchronous context", current_instantiation())
 
                     future = asyncio.ensure_future(self._handle_async(res, 
                                        placement = _placement,
-                                       interim_placement = _interim_placement,
                                        loop = _loop))
                     if _interim_placement: _interim_placement(future)
                     self._pending.add(future)
 
-                    if _orig_k:
-                        future.set_name(f'Handle Async {_orig_k} for {self}')
+                    if current_instantiation():
+                        future.set_name(f'async {current_instantiation().description}')
                     else: future.set_name(f'Handle async  {res} for {self}')
                     return future
                 else:
@@ -505,10 +630,10 @@ Return the first injector in our parent chain containing *k* or None if there is
             except AsyncRequired: raise
             except Exception as e:
                 tb_utils.filter_chatty_modules(e, _chatty_modules, 4)
-                if _orig_k:
+                if current_instantiation():
                     tb_utils.filter_before_here(e)
-                    logger.exception(f'Error resolving dependency for {_orig_k}')
-                    raise InjectionFailed(_orig_k) from e
+                    logger.exception(f'Error resolving dependency for {current_instantiation()}')
+                    raise InjectionFailed(current_instantiation()) from e
                 else:
                     raise
 
@@ -550,8 +675,8 @@ Return the first injector in our parent chain containing *k* or None if there is
                                       loop = _loop, futures = futures)
             if futures:
                 fut = asyncio.ensure_future(callback(futures))
-                if _orig_k:
-                    fut.set_name(f'Instantiate {_orig_k} for {self}')
+                if current_instantiation():
+                    fut.set_name(f'{current_instantiation()}')
                 else: fut.set_name(f'Instantiate {cls} for {self}')
                 return fut
                 
@@ -573,15 +698,18 @@ Return the first injector in our parent chain containing *k* or None if there is
 
 
     async def _handle_async(self, p, 
-                      interim_placement, placement,
-                      loop):
+                       placement,
+                            loop,
+                            mark_instantiation_done=True):
         if not hasattr(self, 'loop'):
             self.loop = loop
         try:
             if isinstance(p, collections.abc.Coroutine):
                 res = await p
             elif  isinstance(p, AsyncInjectable):
-                res = await self._handle_async_injectable(p, placement = placement)
+                res = await self._handle_async_injectable(p, placement
+                                                          = placement,
+                                                          mark_instantiation_done=False)
             elif isinstance(p, asyncio.Future):
                 res = await p
             else:
@@ -595,10 +723,15 @@ Return the first injector in our parent chain containing *k* or None if there is
         except Exception as e:
             tb_utils.filter_chatty_modules(e, _chatty_modules, 5)
             raise e from None
+        finally:
+            if mark_instantiation_done and current_instantiation():
+                current_instantiation().done()
             
 
 
-    async def _handle_async_injectable(self, obj, placement, resolv = True):
+    async def _handle_async_injectable(self, obj, placement, resolv =
+                                       True,
+                                       mark_instantiation_done=False):
         try:
             #Don't bother running the resolve protocol for the base case
             if resolv and (obj._async_ready_state == ReadyState.NOT_READY):
@@ -608,8 +741,10 @@ Return the first injector in our parent chain containing *k* or None if there is
                         obj._async_ready_state = ReadyState.RESOLVED
                     res = obj
                 if self._is_async(res):
-                    return await self._handle_async(res, placement = placement,
-                                       interim_placement = None, loop = self.loop)
+                    return await self._handle_async(
+                        res, placement = placement,
+                        loop = self.loop,
+                        mark_instantiation_done=False)
                 else: return res
             else: # no resolution required
                 if instantiate_to_ready.get():
@@ -623,6 +758,9 @@ Return the first injector in our parent chain containing *k* or None if there is
             if hasattr(obj, 'injector'):
                 await shutdown_injector(obj.injector)
             raise
+        finally:
+            if mark_instantiation_done:
+                current_instantiation().done()
 
     def close(self, canceled_futures = None):
         '''
@@ -672,7 +810,11 @@ Return the first injector in our parent chain containing *k* or None if there is
             claim_str = f'unclaimed id: {id(self)}'
         elif self.claimed_by() is None:
             claim_str = "claimed by dead object"
-        else: claim_str = f'claimed by {repr(self.claimed_by())}'
+        else:
+            try:
+                claim_str = f'claimed by {repr(self.claimed_by())}'
+            except Exception:
+                claim_str = f'claimed by object with id {id(self.claimed_by())}'
         return f'<{self.__class__.__name__} {claim_str}>'
 
     @property
@@ -1046,7 +1188,7 @@ class AsyncInjector(Injectable):
             _loop = self.loop,
             _placement = None,
             _interim_placement = None,
-            _orig_k = None)
+            )
 
         if isinstance(res, (asyncio.Future, collections.abc.Coroutine)):
             return await res
@@ -1258,6 +1400,8 @@ def aspect_for( cls: typing.Type[Injectable],
 
 
 __all__ = '''
+BaseInstantiationContext InstantiationContext current_instantiation
+instantiation_roots
     inject inject_autokwargs Injector AsyncInjector
     Injectable AsyncInjectable InjectionFailed ExistingProvider
     InjectionKey AsyncRequired
