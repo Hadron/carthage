@@ -127,10 +127,12 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
             try: await self.ssh(self.ssh_online_command,
                                 _bg = True, _bg_exc = False,
                                 _timeout = 5)
-            except (sh.TimeoutException, sh.ErrorReturnCode) as last_error:
+            except (sh.TimeoutException, sh.ErrorReturnCode) as e:
+                last_error = e
                 await asyncio.sleep(1)
                 continue
             online = True
+            last_error = None
             self._ssh_online_required = False
             logger.debug(f'{self.name} is ssh_online')
             break
