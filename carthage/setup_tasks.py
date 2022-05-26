@@ -53,18 +53,26 @@ class TaskWrapperBase:
     
 
     def __call__(self, instance, *args, **kwargs):
+        def success():
+            if not self.check_completed_func:
+                hash_contents = instance.injector(self.hash_func, instance)
+                instance.create_stamp(self.stamp, hash_contents)
+
+        def fail():
+            if not self.check_completed_func:
+                instance.logger_for().warning(f'Deleting {self.description} task stamp for {instance} because task failed')
+                instance.delete_stamp(self.stamp)
+
+        def final(): pass
+        
         def callback(fut):
             try:
                 res = fut.result()
-                if not self.check_completed_func:
-                    hash_contents = instance.injector(self.hash_func, instance)
-                    instance.create_stamp(self.stamp, hash_contents)
+                success()
             except SkipSetupTask: pass
             except Exception:
-                if not self.check_completed_func:
-                    instance.logger_for().warning(f'Deleting {self.description} task stamp for {instance} because task failed')
-                    instance.delete_stamp(self.stamp)
-
+                fail()
+            finally: final()
         try:
             res = self.func(instance, *args, **kwargs)
             if isinstance(res, collections.abc.Coroutine):
@@ -74,15 +82,15 @@ class TaskWrapperBase:
                     res.purpose = f'setup task: {self.stamp} for {instance.name}'
                 return res
             else:
-                if not self.check_completed_func:
-                    instance.create_stamp(self.stamp, instance.injector(self.hash_func, instance))
+                success()
+                return res
         except SkipSetupTask:
             raise
         except Exception:
-            if not self.check_completed_func:
-                instance.logger_for().warning(f'Deleting {self.description} task stamp for {instance} because task failed')
-                instance.delete_stamp(self.stamp)
+            fail()
             raise
+        finally:
+            final()
             
 
     async def should_run_task(self, obj: SetupTaskMixin, 
