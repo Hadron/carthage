@@ -46,12 +46,13 @@ class TaskWrapperBase:
         raise NotImplementedError
     
     def __set_name__(self, owner, name):
+        assert not getattr(self, 'stamp_is_explicit', False)
         self.stamp = name
+
     def __get__(self, instance, owner):
         if instance is None: return self
         return TaskMethod(self, instance)
     
-
     def __call__(self, instance, *args, **kwargs):
         def callback(fut):
             try:
@@ -219,8 +220,12 @@ class TaskWrapperBase:
 class TaskWrapper(TaskWrapperBase):
 
     def __init__(self, func, **kwargs):
+        _stamp = kwargs.pop('stamp', None)
         super().__setattr__('func', func)
         super().__init__(**kwargs)
+        if _stamp is not None:
+            self.stamp = _stamp
+            self.stamp_is_explicit = True
         
     @memoproperty
     def stamp(self):
@@ -301,8 +306,8 @@ class SetupTaskMixin:
         self.setup_tasks = sorted(self._class_setup_tasks(),
                                   key = lambda t: t.order)
 
-    def add_setup_task(self, stamp, task):
-        self.setup_tasks.append(TaskWrapper(func = task, stamp = stamp))
+    def add_setup_task(self, stamp, task, description='setup task'):
+        self.setup_tasks.append(TaskWrapper(func = task, stamp = stamp, description = description))
 
     async def run_setup_tasks(self, context = None):
         '''Run the set of collected setup tasks.  If context is provided, it
