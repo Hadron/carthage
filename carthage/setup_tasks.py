@@ -11,7 +11,7 @@ import asyncio, dataclasses, datetime, logging, os, os.path, time, typing, sys, 
 import importlib.resources
 from pathlib import Path
 import carthage
-from carthage.dependency_injection import AsyncInjector, inject
+from carthage.dependency_injection import AsyncInjector, inject, BaseInstantiationContext
 from carthage.config import ConfigLayout
 from carthage.utils import memoproperty, import_resources_files
 import collections.abc
@@ -31,6 +31,29 @@ def _inc_task_order():
     _task_order += 100
     return t
 
+class SetupTaskContext(BaseInstantiationContext):
+
+    def __init__(self, instance, task):
+        super().__init__(instance.injector)
+        self.instance = instance
+        self.task = task
+
+    def __enter__(self):
+        res = super().__enter__()
+        if self.parent:
+            self.parent.dependency_progress(self.task, self)
+            return res
+
+    def done(self):
+        if self.parent:
+            self.parent.dependency_final(self.task, self)
+        super().done()
+        
+    @property
+    def description(self):
+        return f'setup_task: {self.obj}.{self.task}'
+
+    
 @dataclasses.dataclass
 class TaskWrapperBase:
 
