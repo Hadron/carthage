@@ -11,7 +11,7 @@ from carthage.dependency_injection import *
 import carthage, carthage.ansible
 from carthage.pytest import *
 from carthage.setup_tasks import *
-from carthage.setup_tasks import SetupTaskContext
+from carthage.setup_tasks import SetupTaskContext, TaskWrapperBase
 from pathlib import Path
 
 state_dir = Path(__file__).parent.joinpath("test_state")
@@ -225,4 +225,28 @@ async def test_setup_task_context(ainjector):
     called = 0
     await ainjector.get_instance_async(ContextTest)
     assert called == 1
+    
+
+@async_test
+async def test_add_setup_task(ainjector):
+    def task_a(self):
+        nonlocal task_a_called
+        task_a_called = 1
+    @setup_task("TaskWrapper test")
+    def task_b(self):
+        nonlocal task_b_called
+        task_b_called = 1
+    task_a_called = False
+    task_b_called = False
+    class C(Stampable): pass
+    o = await ainjector(C)
+
+    assert not task_a_called
+    assert not task_b_called
+    o.add_setup_task(task_a, description="call task_a")
+    assert isinstance(task_b, TaskWrapperBase)
+    o.add_setup_task(task_b)
+    await o.run_setup_tasks()
+    assert task_a_called
+    assert task_b_called
     

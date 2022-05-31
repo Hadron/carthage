@@ -336,9 +336,14 @@ class SetupTaskMixin:
         self.setup_tasks = sorted(self._class_setup_tasks(),
                                   key = lambda t: t.order)
 
-    def add_setup_task(self, stamp, task):
-        self.setup_tasks.append(TaskWrapper(func = task, stamp = stamp))
-
+    def add_setup_task(self, task, **kwargs):
+        if isinstance(task, TaskWrapperBase):
+            if kwargs: raise RuntimeError('kwargs cannot be specified if task is a TaskWrapper')
+        else:
+            stamp = kwargs.pop('stamp', None)
+            task = TaskWrapper(func=task, **kwargs)
+            if stamp: task.stamp = stamp
+        self.setup_tasks.append(task)
     async def run_setup_tasks(self, context = None):
         '''Run the set of collected setup tasks.  If context is provided, it
         is used as an asynchronous context manager that will be entered before the
