@@ -250,8 +250,13 @@ class InstantiationContext(BaseInstantiationContext):
 class InjectionFailed(RuntimeError):
 
     def __init__(self, context):
-        super().__init__(f"Error {context.description}")
-        self.failed_dependency = context.key
+        super().__init__(f"Error {str(context)}")
+        ctx = context
+        while True:
+            try:
+                self.failed_dependency = ctx.key
+                break
+            except AttributeError: ctx = context.parent
         
 
 class ExistingProvider(RuntimeError):
@@ -540,6 +545,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                         _loop = loop,
                         _placement = do_place,
                         _interim_placement = do_interim_place,
+                        _context_established=True,
     )
                 if isinstance(result, asyncio.Future):
                     if loop is None:
@@ -588,6 +594,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                      _loop,
                      _placement,
                      _interim_placement,
+                     _context_established=False,
                      **kwargs):
         # _loop if  present means we can return something for which _is_async will return True
         # There are complicated interactions between the
@@ -616,7 +623,7 @@ Return the first injector in our parent chain containing *k* or None if there is
 
                     future = asyncio.ensure_future(self._handle_async(res, 
                                        placement = _placement,
-                                       loop = _loop))
+                                                                      loop = _loop, mark_instantiation_done=_context_established))
                     if _interim_placement: _interim_placement(future)
                     self._pending.add(future)
 
