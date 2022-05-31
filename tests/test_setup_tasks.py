@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -11,6 +11,7 @@ from carthage.dependency_injection import *
 import carthage, carthage.ansible
 from carthage.pytest import *
 from carthage.setup_tasks import *
+from carthage.setup_tasks import SetupTaskContext
 from pathlib import Path
 
 state_dir = Path(__file__).parent.joinpath("test_state")
@@ -28,9 +29,7 @@ class  Stampable(SetupTaskMixin, AsyncInjectable):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        f = sys._getframe(3)
-        self.name = f.f_code.co_name
-
+        self.name = self.__class__.__qualname__
     def __repr__(self):
         return f"<setup_test object for {self.name} test>"
 
@@ -209,3 +208,21 @@ async def test_mako_hash(ainjector):
     fake_hash = "90"
     await o.run_setup_tasks()
     assert output() == "bar"
+@async_test
+async def test_setup_task_context(ainjector):
+    class  ContextTest(Stampable):
+
+        @setup_task("Test context")
+        async def test_context(self):
+            nonlocal called
+            ctx = current_instantiation()
+            assert isinstance(ctx, SetupTaskContext)
+            assert ctx.instance is self
+            assert ctx.parent.key is InjectionKey(ContextTest)
+            called = 1
+
+    ainjector.add_provider(ContextTest)
+    called = 0
+    await ainjector.get_instance_async(ContextTest)
+    assert called == 1
+    

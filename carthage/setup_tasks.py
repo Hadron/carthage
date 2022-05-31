@@ -41,17 +41,17 @@ class SetupTaskContext(BaseInstantiationContext):
     def __enter__(self):
         res = super().__enter__()
         if self.parent:
-            self.parent.dependency_progress(self.task, self)
-            return res
+            self.parent.dependency_progress(self.task.stamp, self)
+        return res
 
     def done(self):
         if self.parent:
-            self.parent.dependency_final(self.task, self)
+            self.parent.dependency_final(self.task.stamp, self)
         super().done()
         
     @property
     def description(self):
-        return f'setup_task: {self.obj}.{self.task}'
+        return f'setup_task: {self.instance}.{self.task.stamp}'
 
     
 @dataclasses.dataclass
@@ -86,7 +86,8 @@ class TaskWrapperBase:
                 instance.logger_for().warning(f'Deleting {self.description} task stamp for {instance} because task failed')
                 instance.delete_stamp(self.stamp)
 
-        def final(): pass
+        def final():
+            context.done()
         
         def callback(fut):
             try:
@@ -96,24 +97,27 @@ class TaskWrapperBase:
             except Exception:
                 fail()
             finally: final()
-        try:
-            res = self.func(instance, *args, **kwargs)
-            if isinstance(res, collections.abc.Coroutine):
-                res = instance.ainjector.loop.create_task(res)
-                res.add_done_callback(callback)
-                if hasattr(instance,'name'):
-                    res.purpose = f'setup task: {self.stamp} for {instance.name}'
-                return res
-            else:
-                success()
-                return res
-        except SkipSetupTask:
-            raise
-        except Exception:
-            fail()
-            raise
-        finally:
-            final()
+        mark_context_done = True
+        with SetupTaskContext(instance, self) as context:
+            try:
+                res = self.func(instance, *args, **kwargs)
+                if isinstance(res, collections.abc.Coroutine):
+                    res = instance.ainjector.loop.create_task(res)
+                    res.add_done_callback(callback)
+                    mark_context_done = False
+                    if hasattr(instance,'name'):
+                        res.purpose = f'setup task: {self.stamp} for {instance.name}'
+                    return res
+                else:
+                    success()
+                    return res
+            except SkipSetupTask:
+                raise
+            except Exception:
+                fail()
+                raise
+            finally:
+                if mark_context_done: final()
             
 
     async def should_run_task(self, obj: SetupTaskMixin, 
