@@ -9,8 +9,8 @@
 from __future__ import annotations
 import enum, functools, inspect, threading, typing
 from carthage.dependency_injection import *
-from carthage.dependency_injection import default_injection_key # not part of public api
-from carthage.dependency_injection import InjectorXrefMarker
+from carthage.dependency_injection.base import default_injection_key # not part of public api
+from carthage.dependency_injection.base import InjectorXrefMarker
 from .utils import *
 from carthage.network import NetworkConfig
 import carthage.machine

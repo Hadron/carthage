@@ -15,7 +15,8 @@ import types
 import sys
 from dataclasses import dataclass
 
-from . import tb_utils, event
+from .. import tb_utils, event
+from .introspection import *
 
 _chatty_modules = {asyncio.futures, asyncio.tasks, sys.modules[__name__]}
 logger = logging.getLogger('carthage.dependency_injection')
@@ -28,9 +29,7 @@ class ReadyState(enum.Enum):
     READY = 3
 
 instantiate_to_ready = contextvars.ContextVar('instantiate_to_ready', default = True)
-_current_instantiation = contextvars.ContextVar('current_instantiation', default=None)
 
-instantiation_roots = set()
 # While this is needed by InjectableModelType's add_provider, it is
 # not part of the public api
 def default_injection_key(p):
@@ -98,7 +97,7 @@ class Injectable:
     def close(self, canceled_futures = None):
         if hasattr(self, 'injector'):
             self.injector.close(canceled_futures)
-        
+
     @classmethod
     def supplementary_injection_keys(cls, k: InjectionKey):
         '''
@@ -128,8 +127,8 @@ class Injectable:
     def default_instance_injection_key(self):
         "Called when an instance of an injectable is used to add a dependency provider bby the single argument form of :meth:`Injectable.add_provider()`"
         return InjectionKey(self.__class__)
-    
-    
+
+
 class DependencyProvider:
     __slots__ = ('provider',
                  'allow_multiple',
@@ -165,86 +164,7 @@ self.allow_multiple, repr(self.provider))
                 dp.provider = dependency_quote(dp.provider)
         return dp
 
-class BaseInstantiationContext:
 
-    def __init__(self, injector):
-        self.injector = injector
-        self.dependencies_waiting = {}
-        self.parent = None
-        self._done = False
-
-    def dependency_progress(self, key, context):
-        '''Indicate that this instantiation has a dependency on *key*, currently in progress, with state tracked by *context*.'''
-        self.dependencies_waiting[key] = context
-
-    def dependency_final(self, key, context):
-        try:
-            del self.dependencies_waiting[key]
-        except KeyError: pass
-
-    def __enter__(self):
-        self.parent = _current_instantiation.get()
-        if not self.parent: instantiation_roots.add(self)
-        self.reset_token = _current_instantiation.set(self)
-        return self
-
-    def __exit__(self, *args):
-        _current_instantiation.reset(self.reset_token)
-        return False
-
-    def done(self):
-        '''Indicate that the instantiation has completed'''
-        assert not self._done
-        self._done = True
-        if not self.parent: instantiation_roots.remove(self)
-
-    def __str__(self):
-        res = self.description
-        if self.parent: res = f'{str(self.parent)} -> {res}'
-        return res
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}<{str(self)}>'
-    
-class InstantiationContext(BaseInstantiationContext):
-
-    '''
-    Represents the instantiation of an :class:`InjectionKey` in the scope of a :class:`Injector`.
-    '''
-
-    
-    def __init__(self, injector:injector, satisfy_against:Injector, key:InjectionKey,
-                 provider:DependencyProvider):
-        super().__init__(injector)
-        self.satisfy_against = satisfy_against
-        self.key = key
-        self.provider = provider
-
-    def __enter__(self):
-        self.provider.instantiation_contexts.add(self)
-        return super().__enter__()
-
-    def __exit__(self, *args):
-        self.provider.instantiation_contexts.remove(self)
-        return super().__exit__(*args)
-
-    @property
-    def description(self):
-        desc = f'Instantiating {self.key} using {self.satisfy_against}'
-        if self.satisfy_against is not self.injector:
-            desc += f' for {self.injector}'
-        return desc
-
-
-    def progress(self):
-        for parent in self.provider.instantiation_contexts:
-            parent.dependency_progress(self.key, self)
-
-    def final(self):
-        for parent in self.provider.instantiation_contexts:
-            parent.dependency_final(self.key, self)
-
-            
 
 
 class InjectionFailed(RuntimeError):
@@ -257,7 +177,7 @@ class InjectionFailed(RuntimeError):
                 self.failed_dependency = ctx.key
                 break
             except AttributeError: ctx = ctx.parent
-        
+
 
 class ExistingProvider(RuntimeError):
 
@@ -272,8 +192,6 @@ class AsyncRequired(RuntimeError):
     def __init__(self, msg, context):
         super().__init__(f'{msg} {context.description}')
 
-def current_instantiation():
-    return _current_instantiation.get()
 
 
 # Note that after @inject is defined, this class is redecorated to take parent_injector as a dependency so that
@@ -621,7 +539,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                             res.close()
                         raise AsyncRequired("Asynchronous dependency injected into non-asynchronous context", current_instantiation())
 
-                    future = asyncio.ensure_future(self._handle_async(res, 
+                    future = asyncio.ensure_future(self._handle_async(res,
                                        placement = _placement,
                                                                       loop = _loop, mark_instantiation_done=_context_established))
                     if _interim_placement: _interim_placement(future)
@@ -651,7 +569,7 @@ Return the first injector in our parent chain containing *k* or None if there is
             if isinstance(res, asyncio.Future):
                 return await res
             return res
-            
+
         def kwarg_place(k):
             def collect(res):
                 kwargs[k] = res
@@ -686,7 +604,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                     fut.set_name(f'{current_instantiation()}')
                 else: fut.set_name(f'Instantiate {cls} for {self}')
                 return fut
-                
+
             else:
                 res = handle_result()
                 return res
@@ -704,7 +622,7 @@ Return the first injector in our parent chain containing *k* or None if there is
         return False
 
 
-    async def _handle_async(self, p, 
+    async def _handle_async(self, p,
                        placement,
                             loop,
                             mark_instantiation_done=True):
@@ -733,7 +651,7 @@ Return the first injector in our parent chain containing *k* or None if there is
         finally:
             if mark_instantiation_done and current_instantiation():
                 current_instantiation().done()
-            
+
 
 
     async def _handle_async_injectable(self, obj, placement, resolv =
@@ -779,7 +697,7 @@ Return the first injector in our parent chain containing *k* or None if there is
 
         If the provider's :meth:`close` method takes an argument called *canceled_futures* then the *canceled_futures* argument will be passed down.
         '''
-        
+
         for f in self._pending:
             try: f.cancel()
             except: pass
@@ -1406,14 +1324,11 @@ def aspect_for( cls: typing.Type[Injectable],
     return wrapper
 
 
-__all__ = '''
-BaseInstantiationContext InstantiationContext current_instantiation
-instantiation_roots
-    inject inject_autokwargs Injector AsyncInjector
-    Injectable AsyncInjectable InjectionFailed ExistingProvider
-    InjectionKey AsyncRequired
-    DependencyProvider
-aspect_for
-dependency_quote injector_xref
-    partial_with_dependencies shutdown_injector
-'''.split()
+__all__ = [
+    'AsyncInjectable', 'AsyncInjector', 'AsyncRequired',
+    'DependencyProvider',
+    'ExistingProvider', 'Injectable', 'InjectionFailed',
+    'InjectionKey', 'Injector', 'InstantiationContext', 'aspect_for',
+    'dependency_quote', 'inject',
+    'inject_autokwargs', 'injector_xref',
+    'partial_with_dependencies', 'shutdown_injector']
