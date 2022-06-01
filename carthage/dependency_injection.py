@@ -252,11 +252,11 @@ class InjectionFailed(RuntimeError):
     def __init__(self, context):
         super().__init__(f"Error {str(context)}")
         ctx = context
-        while True:
+        while ctx:
             try:
                 self.failed_dependency = ctx.key
                 break
-            except AttributeError: ctx = context.parent
+            except AttributeError: ctx = ctx.parent
         
 
 class ExistingProvider(RuntimeError):
