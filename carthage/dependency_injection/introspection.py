@@ -106,3 +106,25 @@ def current_instantiation():
     return _current_instantiation.get()
 
 __all__ += ['current_instantiation']
+
+class AsyncBecomeReadyContext(BaseInstantiationContext):
+
+    def __init__(self, obj):
+        super().__init__(obj.injector)
+        self.obj = obj
+        self.entered = False
+
+    def __enter__(self):
+        parent = _current_instantiation.get()
+        if isinstance(parent, InstantiationContext) and  parent.provider.provider is self.obj:
+            return parent
+        self.entered = True
+        return super().__enter__()
+
+    def __exit__(self, *args):
+        if self.entered:
+            super().__exit__(*args)
+        return False
+
+__all__ += ['AsyncBecomeReadyContext']
+

@@ -1040,21 +1040,22 @@ class AsyncInjectable(Injectable):
         This method also makes sure that dependencies registered with :func:`.inject` are made ready before :meth:`async_ready` is called.
         Subclasses should not override this method but instead should override :meth:`async_ready`.
         '''
-        if self._async_ready_state == ReadyState.NOT_READY:
-            raise RuntimeError("Resolution should have already happened")
-        elif self._async_ready_state == ReadyState.RESOLVED:
-            self._ready_future = asyncio.ensure_future(_handle_async_deps(self, cycle_set))
-            self._ready_future.set_name(f'Async dependencies for {self}')
-            self._async_ready_state = ReadyState.READY_PENDING
-            try:
-                return await self._ready_future
-            except:
-                self._async_ready_state = ReadyState.RESOLVED
-                raise
-            finally: del self._ready_future
-        elif self._async_ready_state == ReadyState.READY_PENDING:
-            return await asyncio.shield(self._ready_future)
-        else: return
+        with AsyncBecomeReadyContext(self):
+            if self._async_ready_state == ReadyState.NOT_READY:
+                raise RuntimeError("Resolution should have already happened")
+            elif self._async_ready_state == ReadyState.RESOLVED:
+                self._ready_future = asyncio.ensure_future(_handle_async_deps(self, cycle_set))
+                self._ready_future.set_name(f'Async dependencies for {self}')
+                self._async_ready_state = ReadyState.READY_PENDING
+                try:
+                    return await self._ready_future
+                except:
+                    self._async_ready_state = ReadyState.RESOLVED
+                    raise
+                finally: del self._ready_future
+            elif self._async_ready_state == ReadyState.READY_PENDING:
+                return await asyncio.shield(self._ready_future)
+            else: return
 
 
 
