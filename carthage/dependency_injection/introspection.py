@@ -8,8 +8,8 @@
 
 from __future__ import annotations
 
-
 import contextvars
+import dataclasses
 
 _current_instantiation = contextvars.ContextVar('current_instantiation', default=None)
 
@@ -93,13 +93,18 @@ class InstantiationContext(BaseInstantiationContext):
 
 
     def progress(self):
-        for parent in self.provider.instantiation_contexts:
+        for ctx in self.provider.instantiation_contexts:
+            parent = ctx.parent
+            if parent is None: continue
             parent.dependency_progress(self.key, self)
 
     def final(self):
         for parent in self.provider.instantiation_contexts:
             parent.dependency_final(self.key, self)
 
+    def get_dependencies(self):
+        return get_dependencies_for(self.provider.provider, self.injector)
+    
 __all__ += ['InstantiationContext']
 
 def current_instantiation():
@@ -114,6 +119,10 @@ class AsyncBecomeReadyContext(BaseInstantiationContext):
         self.obj = obj
         self.entered = False
 
+    @property
+    def description(self):
+        return f'{self.obj}.async_become_ready()'
+    
     def __enter__(self):
         parent = _current_instantiation.get()
         if isinstance(parent, InstantiationContext) and  parent.provider.provider is self.obj:
@@ -124,7 +133,93 @@ class AsyncBecomeReadyContext(BaseInstantiationContext):
     def __exit__(self, *args):
         if self.entered:
             super().__exit__(*args)
+            self.done()
         return False
 
+    def get_dependencies(self):
+        return get_dependencies_for(self.obj, self.obj.injector)
+    
 __all__ += ['AsyncBecomeReadyContext']
 
+@dataclasses.dataclass
+class InjectedDependencyInspector:
+
+    '''
+    Using :func:`~carthage.dependency_injection.inject`, a dependency can be injected into a function or class.  Various APIs such as :meth:`~carthage.dependency_injection.Injector.get_dependencies_for` or :func:`get_dependencies_for` will allow introspection of these dependencies.  Those methods iterate over *INjectedDependencyInspector*s to give information on each dependency.
+    '''
+
+    #: The :class:`Injector` that provides the dependency. *None* if the dependency is unresolved.
+    injector:typing.Optional[Injector]
+
+    provider: DependencyProvider
+
+    key: InjectionKey #: What dependency is injected
+
+    @property
+    def is_provided(self):
+        '''True if the dependency is provided; False if there is no injector in the chain providing this dependency.'''
+        return self.provider is None
+    
+    @property
+    def is_final(self):
+        '''True if the dependency has been fully instantiated.  If true, :meth:`get_value` will never raise *AsyncRequired*.
+'''
+        return self.is_provided and not self.provider.is_factory
+
+
+    def all_keys(self):
+        '''Iterate over all keys that provide this dependency in the given injector.
+'''
+        if not self.is_provided: yield self.key
+        else:
+            yield from self.provider.keys
+
+    def get_value(self, ready=None):
+        '''Returns the value provided for the dependency.  May raise *KeyError* if not provided.
+'''
+        from .base import InjectionKey
+        key = self.key
+        if ready is not None:
+            key = InjectionKey(key, _ready=ready)
+        return self.injector.get_instance(key)
+
+    async def get_value_async(self, ready=None):
+        '''Like :func:`get_value` but asynchronous.
+        '''
+        from .base import AsyncInjector, InjectionKey
+        ainjector = AsyncInjector(self.injector)
+        key = self.key
+        if ready is not None: key = InjectionKey(key, _ready=ready)
+        return await ainjector.get_instance_async(key)
+
+    @property
+    def instantiation_contexts(self):
+        '''Return any ongoing instantiations referencing this dependency.  Typically contexts are very short lived if :meth:`is_final` is true.  However if a dependency is itself waiting for dependencies, the contexts can be used to chain those dependencies.
+'''
+        if not self.provider: return frozenset()
+        return frozenset(self.provider.instantiation_contexts)
+
+    def all_waiting_dependencies(self):
+        result = {}
+        for c in self.instantiation_contexts:
+            result.update(c.dependencies_waiting)
+        return result
+    
+__all__ += ['InjectedDependencyInspector']
+
+def get_dependencies_for(obj, injector):
+    if not hasattr(obj, '_injection_dependencies'): return
+    for injection_key in obj._injection_dependencies.values():
+        try:
+            dp, satisfy_against  = injector._get_parent(injection_key)
+            yield InjectedDependencyInspector(
+                injector=satisfy_against,
+                key=injection_key,
+                provider=dp)
+        except KeyError:
+            yield InjectedDependencyInspector(
+                injector=None,
+                key=injection_key,
+                provider=None)
+            
+__all__ += ['get_dependencies_for']
