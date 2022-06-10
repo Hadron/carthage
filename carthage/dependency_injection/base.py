@@ -418,7 +418,7 @@ Return the first injector in our parent chain containing *k* or None if there is
         def future_resolved(fut):
             #our caller handles exceptions
             try:
-                placement(fut.result())
+                if placement: placement(fut.result())
                 instantiation_context.final()
                 instantiation_context.done()
             except BaseException:
@@ -454,9 +454,8 @@ Return the first injector in our parent chain containing *k* or None if there is
                     #If we have a future that already exists, we need to
                     #arrange for placement to be called just as
                     #_instantiate does for futures it generates.
-                    if placement:
-                        result.add_done_callback(future_resolved)
-                        mark_instantiation_done = False
+                    result.add_done_callback(future_resolved)
+                    mark_instantiation_done = False
                 elif provider.is_factory:
                     result = satisfy_against._instantiate(
                         result,
