@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -7,9 +7,11 @@
 # LICENSE for details.
 
 from carthage import dependency_injection
-from carthage.dependency_injection import inject, InjectionKey, AsyncInjectable, Injectable, inject_autokwargs
+from carthage.dependency_injection import *
+from carthage.dependency_injection.introspection import *
 from carthage.utils import when_needed
 from carthage.pytest import async_test
+from carthage_test_utils import Trigger
 
 import asyncio, pytest
 
@@ -471,3 +473,28 @@ async def test_notready_cycles_okay(a_injector):
     ainjector.add_provider(foo_key, Cycle)
     await ainjector.get_instance_async(foo_key)
     
+
+@async_test
+async def test_introspection_registers_root(a_injector, loop):
+    ainjector = a_injector
+    class c(AsyncInjectable):
+        async def async_ready(self):
+            trigger_1.trigger()
+            await trigger_2
+            await super().async_ready()
+
+    with Trigger() as trigger_1, Trigger() as trigger_2:
+        assert len(instantiation_roots) == 0
+        ainjector.add_provider(c)
+        c_future = loop.create_task(ainjector.get_instance_async(c))
+        await trigger_1
+        assert len(instantiation_roots) == 1
+        for ic in instantiation_roots:
+            assert hasattr(ic, 'key')
+            assert ic.key is InjectionKey(c)
+            assert len(ic.dependencies_waiting) == 0
+        trigger_2.trigger()
+        await c_future
+    assert len(instantiation_roots) == 0
+    
+        
