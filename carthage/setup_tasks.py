@@ -53,6 +53,10 @@ class SetupTaskContext(BaseInstantiationContext):
     def description(self):
         return f'setup_task: {self.instance}.{self.task.stamp}'
 
+    def get_dependencies(self):
+        from .dependency_injection.introspection import get_dependencies_for
+        return get_dependencies_for(self.task, self.instance.injector)
+    
     
 @dataclasses.dataclass
 class TaskWrapperBase:
