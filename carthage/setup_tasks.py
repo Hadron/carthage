@@ -7,11 +7,12 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import asyncio, dataclasses, datetime, logging, os, os.path, time, typing, sys, shutil, weakref
+import asyncio, contextlib, dataclasses, datetime, logging, os, os.path, time, typing, sys, shutil, weakref
 import importlib.resources
 from pathlib import Path
 import carthage
 from carthage.dependency_injection import AsyncInjector, inject, BaseInstantiationContext
+from carthage.dependency_injection.introspection import current_instantiation
 from carthage.config import ConfigLayout
 from carthage.utils import memoproperty, import_resources_files
 import collections.abc
@@ -102,7 +103,14 @@ class TaskWrapperBase:
                 fail()
             finally: final()
         mark_context_done = True
-        with SetupTaskContext(instance, self) as context:
+        with contextlib.ExitStack() as stack:
+            context = current_instantiation()
+            if isinstance(context, SetupTaskContext) \
+               and context.instance is instance  and context.task is self:
+                pass #This is the right context to use; set up by run_setup_tasks
+            else:
+                context = SetupTaskContext(instance, self)
+                stack.enter_context(context)
             try:
                 res = self.func(instance, *args, **kwargs)
                 if isinstance(res, collections.abc.Coroutine):
@@ -373,7 +381,8 @@ class SetupTaskMixin:
                         context_entered = True
                     if not dry_run:
                         self.logger_for().info(f"Running {t.description} task for {self}")
-                        await ainjector(t, self)
+                        with SetupTaskContext(self, t):
+                            await ainjector(t, self)
                         dependency_last_run = time.time()
                     else:
                         self.logger_for().info(f'Would run {t.description} task for {self}')

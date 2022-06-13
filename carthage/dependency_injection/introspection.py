@@ -70,18 +70,19 @@ class InstantiationContext(BaseInstantiationContext):
 
 
     def __init__(self, injector:injector, satisfy_against:Injector, key:InjectionKey,
-                 provider:DependencyProvider):
+                 provider:DependencyProvider,
+                 ready:bool):
         super().__init__(injector)
         self.satisfy_against = satisfy_against
         self.key = key
         self.provider = provider
+        self.ready = ready
 
     def __enter__(self):
         self.provider.instantiation_contexts.add(self)
         return super().__enter__()
 
     def __exit__(self, *args):
-        self.provider.instantiation_contexts.remove(self)
         return super().__exit__(*args)
 
     @property
@@ -91,6 +92,9 @@ class InstantiationContext(BaseInstantiationContext):
             desc += f' for {self.injector}'
         return desc
 
+    def done(self):
+        super().done()
+        self.provider.instantiation_contexts.remove(self)
 
     def progress(self):
         for ctx in self.provider.instantiation_contexts:
@@ -99,7 +103,12 @@ class InstantiationContext(BaseInstantiationContext):
             parent.dependency_progress(self.key, self)
 
     def final(self):
-        for parent in self.provider.instantiation_contexts:
+        from .base import is_obj_ready
+        obj_ready = is_obj_ready(self.provider.provider)
+        for ctx in self.provider.instantiation_contexts:
+            parent = ctx.parent
+            if parent is None: continue
+            if ctx.ready and not obj_ready: continue
             parent.dependency_final(self.key, self)
 
     def get_dependencies(self):
@@ -223,3 +232,5 @@ def get_dependencies_for(obj, injector):
                 provider=None)
             
 __all__ += ['get_dependencies_for']
+
+

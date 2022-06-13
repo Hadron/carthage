@@ -440,7 +440,8 @@ Return the first injector in our parent chain containing *k* or None if there is
             raise KeyError("No dependency for {}".format(k)) from None
         mark_instantiation_done = True
         with InstantiationContext(
-                self, satisfy_against, k, provider) as instantiation_context:
+                self, satisfy_against, k, provider,
+                k.ready if (k.ready is not None) else instantiate_to_ready.get()) as instantiation_context:
             try:
                 if k.ready is not None:
                     ready_reset = instantiate_to_ready.set(k.ready)
@@ -1323,6 +1324,11 @@ def aspect_for( cls: typing.Type[Injectable],
         return val
     return wrapper
 
+def is_obj_ready(obj):
+    if isinstance(obj, AsyncInjectable):
+        return obj._async_ready_state == ReadyState.READY
+    return True
+
 
 __all__ = [
     'AsyncInjectable', 'AsyncInjector', 'AsyncRequired',
@@ -1332,3 +1338,4 @@ __all__ = [
     'dependency_quote', 'inject',
     'inject_autokwargs', 'injector_xref',
     'partial_with_dependencies', 'shutdown_injector']
+

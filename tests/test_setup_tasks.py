@@ -6,8 +6,10 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import os, pytest, os.path, sys, shutil
+import asyncio, os, pytest, os.path, sys, shutil
 from carthage.dependency_injection import *
+from carthage.dependency_injection.introspection import *
+from carthage_test_utils import Trigger
 import carthage, carthage.ansible
 from carthage.pytest import *
 from carthage.setup_tasks import *
@@ -249,4 +251,43 @@ async def test_add_setup_task(ainjector):
     await o.run_setup_tasks()
     assert task_a_called
     assert task_b_called
+    
+@async_test
+async def test_setup_task_introspection(ainjector):
+    class Dependent(Stampable):
+
+        @setup_task("Do some stuff in the dependent object")
+        async def task_dependent(self):
+            trigger1.trigger()
+            await trigger2
+
+    class Main(Stampable):
+
+        @setup_task("Depends on setup task")
+        @inject(d=Dependent)
+        async def task_depending(self, d):
+            await trigger3
+
+    ainjector.add_provider(Dependent)
+    ainjector.add_provider(Main)
+    with Trigger() as trigger1, \
+         Trigger() as trigger2, Trigger() as trigger3:
+        main_future = asyncio.gather(ainjector.get_instance_async(Main))
+        assert len(instantiation_roots) == 0
+        await trigger1
+        assert len(instantiation_roots) == 1
+        icontext = next(iter(instantiation_roots))
+        assert icontext.key == InjectionKey(Main)
+        assert len(icontext.dependencies_waiting) == 1
+        assert 'task_depending' in icontext.dependencies_waiting
+        td_context = icontext.dependencies_waiting['task_depending']
+        assert InjectionKey(Dependent) in td_context.dependencies_waiting
+        trigger2.trigger()
+        await ainjector.get_instance_async(Dependent)
+        assert td_context._done is False
+        trigger3.trigger()
+        await main_future
+        assert not td_context.dependencies_waiting
+    assert not icontext.dependencies_waiting
+    assert len(instantiation_roots) == 0
     
