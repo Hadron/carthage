@@ -280,6 +280,13 @@ class Injector(Injectable, event.EventListener):
             if k2 not in self:
                 self._providers[k2] = p
                 p.keys.add(k2)
+        self.emit_event(
+                    k, "add_provider",
+            p.provider,
+            replace=replace, close=close,
+            allow_multiple=allow_multiple,
+            other_keys=p.keys,
+            adl_keys=p.keys|{InjectionKey(Injector)})
         return k
 
     def replace_provider(self, *args, **kwargs):
@@ -661,7 +668,7 @@ Return the first injector in our parent chain containing *k* or None if there is
             #Don't bother running the resolve protocol for the base case
             if resolv and (obj._async_ready_state == ReadyState.NOT_READY):
                 res = await obj.async_resolve()
-                if res is None:
+                if res is None or res is obj:
                     if obj._async_ready_state == ReadyState.NOT_READY:
                         obj._async_ready_state = ReadyState.RESOLVED
                     res = obj
