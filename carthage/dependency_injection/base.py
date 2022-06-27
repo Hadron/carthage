@@ -443,7 +443,7 @@ Return the first injector in our parent chain containing *k* or None if there is
             raise KeyError("No dependency for {}".format(k)) from None
         mark_instantiation_done = True
         with InstantiationContext(
-                self, satisfy_against, k, provider,
+                satisfy_against, self, k, provider,
                 k.ready if (k.ready is not None) else instantiate_to_ready.get()) as instantiation_context:
             try:
                 if k.ready is not None:
@@ -636,6 +636,10 @@ Return the first injector in our parent chain containing *k* or None if there is
                                                           = placement,
                                                           mark_instantiation_done=False)
             elif isinstance(p, asyncio.Future):
+                # We may need to re-add an instantiation to
+                # waiting dependencies in the instantiations that
+                # are moving to ready.
+                if mark_instantiation_done: current_instantiation().progress()
                 res = await p
                 if isinstance(res, AsyncInjectable) and  res._async_ready_state != ReadyState.READY:
                     res = await self._handle_async_injectable(

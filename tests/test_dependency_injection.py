@@ -498,3 +498,56 @@ async def test_introspection_registers_root(a_injector, loop):
     assert len(instantiation_roots) == 0
     
         
+@async_test
+async def test_ready_event_propagation(a_injector, loop):
+    "Make sure that when multiple instantiations of an object, one to ready and one not to ready are in progress, the right context is recorded in dependency_waiting so that we can subscribe to the right events."
+    ainjector = a_injector
+    class ToReady(AsyncInjectable):
+
+        async def async_resolve(self):
+            trigger_async_resolve_started.trigger()
+            await trigger_async_resolve
+            return self
+
+        async def async_ready(self):
+            trigger_async_ready_started.trigger()
+            return await super().async_ready()
+
+    
+    @inject(to_ready=InjectionKey(ToReady, _ready=False))
+    class Dependent1(Injectable): pass
+
+    @inject(to_ready=ToReady)
+    class Dependent2(Injectable): pass
+    def dp_callback(*args, **kwargs):
+        trigger_event_received.trigger()
+    sub_injector = await ainjector(Injector)
+    sub_ainjector = sub_injector(AsyncInjector)
+    # we start in the super injector with something that will cause
+    # ToReady to get started being instantiated.  In the sub injector
+    # we pick that up as an in-progress dependency and make sure that
+    # if we look up the dependency in the introspection interface and
+    # subscribe to that, we get the right callback.  I.E. we make sure
+    # we get the InstantiationContext waiting in the higher level
+    # injector.
+    with Trigger() as trigger_async_resolve_started, \
+         Trigger() as trigger_async_resolve, \
+         Trigger() as trigger_async_ready_started, \
+         Trigger() as trigger_event_received:
+        ainjector.add_provider(Dependent1)
+        ainjector.add_provider(ToReady)
+        assert len(instantiation_roots) == 0
+        dependent1_future = loop.create_task(
+            ainjector.get_instance_async(Dependent1))
+        await trigger_async_resolve_started
+        sub_ainjector.add_provider(Dependent2)
+        dependent2_future = loop.create_task(
+            sub_ainjector.get_instance_async(Dependent2))
+        trigger_async_resolve.trigger()
+        with ainjector.injector.event_listener_context(
+                InjectionKey(ToReady), "dependency_final", dp_callback) as futures:
+            await dependent2_future
+        trigger_async_ready_started.assert_triggered()
+        if futures: await asyncio.gather(futures)
+        trigger_event_received.assert_triggered()
+    assert len(instantiation_roots) == 0

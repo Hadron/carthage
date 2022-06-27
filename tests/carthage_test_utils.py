@@ -21,6 +21,11 @@ class Trigger:
         yield from self.future
         self.awaited = True
 
+    def assert_triggered(self):
+        assert self.future.done()
+        self.future.result()
+        self.awaited = True
+
     def __enter__(self):
         return self
 
