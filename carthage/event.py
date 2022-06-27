@@ -130,7 +130,10 @@ class EventScope:
             except KeyError: continue
             for callback, (events, futures) in d.items():
                 if event in events:
-                    future = loop.create_task(possibly_async(callback( key = ck, event=event, target = target, *args, **kwargs)))
+                    future = loop.create_task(
+                        possibly_async(callback(
+                            key = ck, event=event, target = target, *args,
+                                                 target_key=k, **kwargs)))
                     result_futures.append(future)
                     futures.add(future)
                     future.add_done_callback(gen_callback(futures))
@@ -202,7 +205,8 @@ class EventListener:
         return self._event_scope.emit(loop, key, event, target,
                                *args,
                                **kwargs,
-                               adl_keys = adl_keys)
+                                      adl_keys = adl_keys,
+                                      scope=self)
 
     @contextlib.contextmanager
     def event_listener_context(self, key, events, callback):
