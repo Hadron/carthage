@@ -416,7 +416,7 @@ Return the first injector in our parent chain containing *k* or None if there is
             result = {k: True for k in self.parent_injector.filter(target, predicate, stop_at=stop_at)}
         else:  # no stop_at; ended chain
             result = {}
-        result.update({k: True for k in self._providers.keys() if k.target is target and predicate(k)})
+        result.update({k: True for k in self._providers.keys() if ((not target) or   k.target is target ) and predicate(k)})
         return list(result.keys())
 
     def filter_instantiate(self, target, predicate, *, stop_at=None, ready=False):
