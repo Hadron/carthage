@@ -13,7 +13,7 @@ from tempfile import TemporaryDirectory
 from .dependency_injection import *
 from .config import ConfigLayout, config_key
 from . import sh
-from .utils import possibly_async
+from .utils import possibly_async, memoproperty
 from .setup_tasks import setup_task, SkipSetupTask, SetupTaskMixin, TaskWrapper
 import carthage
 from .machine import ContainerCustomization, customization_task
@@ -278,7 +278,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         self.unpack = unpack
 
     def __repr__(self):
-        return f"<ImageVolume path={self.path}>"
+        return f"<{self.__class__.__name__} path={self.path}>"
 
 
     async def async_ready(self):
@@ -321,6 +321,14 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         if hasattr(self, 'create_size'):
             os.truncate(self.path, self.create_size)
 
+    def qemu_config(self, disk_config):
+        return dict(
+            path=self.path,
+            source_type="file",
+            driver='raw',
+            qemu_source='file',
+            )
+    
     async def apply_customization(self, cust_class, method = 'apply', **kwargs):
         from .container import container_image, container_volume, Container
         injector = self.injector(Injector)
@@ -377,25 +385,43 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         else:
             raise ValueError("Unknown volume type {}".format(volume_type))
 
+class BlockVolume(ImageVolume):
 
+    def __init__(self, path, **kwargs):
+        if 'name' in kwargs:
+            raise ValueError('BlockVolume does not take name even though ImageVolume does')
+        assert path.startswith('/')
+        assert path[1] != '/' # otherwise stamp_path needs to be more clever
+        super().__init__(name=path, unpack=False)
 
-@inject(
+    @memoproperty
+    def stamp_path(self):
+        res = Path(self.config_layout.state_dir)/"block_volume_stamps"/self.path[1:]
+        os.makedirs(res, exist_ok=True)
+        return res
+
+    def qemu_config(self, disk_config):
+        res = dict(
+            source_type='block',
+            path=self.path,
+            driver='raw',
+            qemu_source='dev')
+        return res
+
+@inject_autokwargs(
     config_layout = ConfigLayout,
-    ainjector = AsyncInjector)
-class QcowCloneVolume:
+    )
+class QcowCloneVolume(Injectable):
 
-    def __init__(self, name, volume,
-                 *, config_layout, ainjector):
-        self.ainjector = ainjector
-        self.injector = ainjector.injector
+    def __init__(self, name, volume, **kwargs):
+        super().__init__(**kwargs)
         self.name = name
-        self.path = os.path.join(config_layout.vm_image_dir, name+".qcow")
+        self.path = os.path.join(self.config_layout.vm_image_dir, name+".qcow")
         if not os.path.exists(self.path):
             sh.qemu_img(
                 'create', '-fqcow2',
                 '-obacking_file='+volume.path,
 str(self.path))
-        self.config_layout = config_layout
 
 
     def delete_volume(self):
@@ -407,6 +433,14 @@ str(self.path))
         if self.config_layout.delete_volumes:
             self.delete_volume()
 
+    def qemu_config(self, disk_config):
+        return dict(
+            path=self.path,
+            source_type='file',
+            driver='qcow2',
+            qemu_source='file'
+            )
+    
 @inject_autokwargs(config_layout = ConfigLayout)
 class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
 

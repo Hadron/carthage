@@ -38,29 +38,23 @@ disk_cache = getattr(model, 'disk_cache', 'writethrough')
   <on_reboot>restart</on_reboot>
   <devices>
     <emulator>/usr/bin/kvm</emulator>
-    <disk type='file' device='disk'>
-      <driver name='qemu' type='qcow2' cache='${disk_cache}'/>
-      <source file='${volume.path}'/>
-      <target dev='hda' bus='scsi'/>
-      <boot order='1'/>
-
-    </disk>
-    <disk type='file' device='cdrom'>
-      <driver name='qemu' type='raw'/>
-      <target dev='hdb' bus='scsi'/>
-      <readonly/>
-
-    </disk>
-%if ci_data:
-<disk type='file' device='cdrom'>
-      <driver name='qemu' type='raw'/>
-      <target  bus='scsi' dev='hdc' />
-      <source file='${ci_data}' />
-      <readonly/>
-
-    </disk>
+%for disk_num, disk in enumerate(disk_config):
+    <disk type='${disk.source_type}' device='${disk.target_type}'>
+      <driver name='qemu' type='${disk.driver}' cache='${disk.cache}'/>
+%if hasattr(disk, 'path'):
+      <source ${disk.qemu_source}='${disk.path}'/>
 %endif
-    <controller type='scsi' model='virtio-scsi' />
+      <target dev='hd${chr(ord('a')+disk_num)}' bus='scsi'/>
+%if disk_num == 0:
+      <boot order='1'/>
+%endif
+%if getattr(disk, 'readonly', False):
+      <readonly />
+%endif
+
+    </disk>
+%endfor
+<controller type='scsi' model='virtio-scsi' />
     %for i, link in links.items():
     <% if link.local_type: continue %>\
         <interface type='bridge'>

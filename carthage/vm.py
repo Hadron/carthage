@@ -6,13 +6,13 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import asyncio, json, logging, os, os.path, shutil
+import asyncio, json, logging, os, os.path, shutil, types
 import mako, mako.lookup, mako.template
 from pathlib import Path
 from .dependency_injection import *
 from .utils import when_needed, memoproperty
 from .image import SetupTaskMixin, setup_task, ImageVolume
-from .machine import Machine, SshMixin, ContainerCustomization
+from .machine import Machine, SshMixin, ContainerCustomization, disk_config_from_model
 from . import sh
 from .config import ConfigLayout
 from .ports import PortReservation
@@ -70,6 +70,9 @@ class VM(Machine, SetupTaskMixin):
         ci_data = None
         if self.model and getattr(self.model, 'cloud_init', False):
             ci_data = await self.ainjector(carthage.cloud_init.generate_cloud_init_cidata)
+        disk_config = []
+        async for d in  await self.ainjector(qemu_disk_config, self, ci_data):
+            disk_config.append(types.SimpleNamespace(**d))
         with open(self.config_path, 'wt') as f:
             f.write(template.render(
                 console_needed=self.console_needed,
@@ -77,7 +80,7 @@ class VM(Machine, SetupTaskMixin):
                 name=self.full_name,
                 links=self.network_links,
                 model_in=self.model,
-                ci_data = ci_data,
+                disk_config=disk_config,
                 if_name = lambda n: carthage.network.base.if_name("vn", self.config_layout.container_prefix, n.name, self.name),
                 volume = self.volume))
             if self.console_needed:
@@ -246,5 +249,49 @@ class InstallQemuAgent(ContainerCustomization):
     async def install_guest_agent(self):
         await self.container_command("/usr/bin/apt", "-y", "install", "qemu-guest-agent")
 
+@inject(ainjector=AsyncInjector)
+async def qemu_disk_config(vm, ci_data, *, ainjector):
+    # Handle qemu specific disk_config
+    disk_config = disk_config_from_model(getattr(vm, 'model', {}),
+                                         default_disk_config=[
+                                             dict(),
+                                             dict(target_type='cdrom',
+                                                  source_type='file',
+                                                  driver='raw',
+                                                  qemu_source='file',
+                                                  readonly=True)],
+                                         )
+    
+    for i, entry in enumerate(disk_config):
+        if i == 0: # primary disk
+            if 'volume' not in entry:
+                entry['volume'] = vm.volume
+        if 'cache' not in entry:
+            try: entry['cache'] = vm.model.disk_cache
+            except AttributeError: entry['cache'] = 'writethrough'
+        if 'volume' not in entry and 'size' in entry:
+            entry['volume'] = await ainjector(
+                    ImageVolume, name=vm.name+f'_disk_{i}',
+                    create_size=entry.size,
+                    unpack=False)
+        try: await entry['volume'].async_become_ready()
+        except AttributeError: pass #QemuVolume is not AsyncInjectable
+        except KeyError: pass #volume not set
+        entry.setdefault('target_type', 'disk')
+        if 'volume' in entry:
+            entry.update(entry['volume'].qemu_config(entry))
+            entry.setdefault('source_type', 'file')
+            entry.setdefault('qemu_source', 'dev' if entry['source_type'] == 'block' else 'file')
+        yield entry
+    if ci_data:
+        yield dict(
+            target_type='cdrom',
+            source_type='file',
+            qemu_source='file',
+            driver='raw',
+            readonly=True,
+            path=ci_data,
+            cache='writeback')
+        
         __all__ = ('VM', 'Vm', 'InstallQemuAgent')
         

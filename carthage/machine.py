@@ -652,6 +652,21 @@ class BareMetalMachine(Machine, SetupTaskMixin):
     def stamp_path(self):
         return Path(f'{self.config_layout.state_dir}/machines/{self.name}')
     
+def disk_config_from_model(model, default_disk_config):
+    '''Return a :ref:`disk_config <disk_config>` specification from a model.  Handles *disk_sizes* and makes sure there is always an entry for the primary disk.
+'''
+    primary_disk_found = False
+    if hasattr(model, 'disk_config'):
+        for entry in model.disk_config:
+            primary_disk_found = True
+            yield dict(entry) #copy the first level of the dict
+    elif hasattr(model, 'disk_sizes'):
+        for size in model.disk_sizes:
+            primary_disk_found = True
+            yield dict(size=size)
+    if not primary_disk_found:
+        yield from default_disk_config
+        
 
 
 __all__ = ['AbstractMachineModel',

@@ -29,6 +29,11 @@ memory_mb
 disk_sizes
     A sequence of disk sizes for primary and secondary disks.  Provided in GiB.
 
+.. _disk_config:
+
+disk_config
+    A sequence of dicts configuring primary and secondary disks.  The only key defined at this level is *size*, the size of the disk in GiB.  If *disk_config* is provided, *disk_sizes* is ignored.  The intent of *disk_config* is to permit MachineImplementation specific configuration of disks.  Consult the specific machine implementations for details.
+
 nested_virt
     Boolean indicating whether to allow nested virtualization
 
