@@ -281,6 +281,7 @@ async def qemu_disk_config(vm, ci_data, *, ainjector):
         if 'volume' in entry:
             entry.update(entry['volume'].qemu_config(entry))
             entry.setdefault('source_type', 'file')
+            entry.setdefault('driver', 'raw')
             entry.setdefault('qemu_source', 'dev' if entry['source_type'] == 'block' else 'file')
         yield entry
     if ci_data:
