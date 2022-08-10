@@ -76,7 +76,9 @@ class CarthageConsole(code.InteractiveConsole):
         self.locals['h'] = self.history
 
     def interact(self, *args, **kwargs):
-
+        try: asyncio.get_event_loop()
+        except Exception: #Running in thread without loop
+            asyncio.set_event_loop(self.loop)
         self.orig_completer = readline.get_completer()
         self.orig_displayhook = sys.displayhook
 

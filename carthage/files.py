@@ -11,14 +11,14 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from .dependency_injection import *
 from . import ConfigLayout, sh
-from .ssh import RsyncPath, SshKey
+from .ssh import RsyncPath, SshKey, rsync
 from .setup_tasks import *
 __all__ = []
 
 @inject(config = ConfigLayout,
-        ssh_key = SshKey)
+        ainjector=AsyncInjector)
 async def rsync_git_tree(git_tree, target:RsyncPath,
-                         *, config, ssh_key):
+                         *, config, ainjector):
     '''
     Copy a git tree into a target system.
 
@@ -34,8 +34,9 @@ Clone the ``HEAD`` of a Git working copy into a new temporary directory  This pr
         await sh.git('clone',
                      git_tree, dir.name,
                      _bg = True, _bg_exc = False)
-        return await ssh_key.rsync('-a','--delete',
-                                   dir.name+'/', target)
+        return await ainjector(rsync, '-a','--delete',
+                               '--mkpath', 
+                                   dir.name+'/', target+'/')
     finally:
         dir.cleanup()
 

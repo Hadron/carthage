@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 from .base import *
-from .base import InjectorClosed, _call_close
+from .base import InjectorClosed, _call_close, is_obj_ready
 from .introspection import *
 
 __all__ = [

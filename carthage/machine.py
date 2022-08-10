@@ -58,7 +58,7 @@ class SshMixin:
     injection key.  If found, this should be a container.  The ssh will be
     launched from within the network namespace of that container in order
     to reach the appropriate devices.  Requires ip_address to be made
-    available.  Requires an carthage.ssh.SshKey be injectable.
+    available.  Requires an carthage.ssh.SshAgent be injectable.
     '''
 
     _ssh_online_required = True
@@ -80,21 +80,27 @@ class SshMixin:
         except InjectionFailed:
             from .container import Container
             ssh_origin_container = self if isinstance(self, Container) else None
-        ssh_key = self.injector.get_instance(carthage.ssh.SshKey)
+        ssh_key = self.injector.get_instance(InjectionKey(carthage.ssh.SshKey, _optional=True))
+        if ssh_key:
+            ssh_agent = ssh_key.agent
+            key_options = ("-i", ssh_key.key_path,)
+        else:
+            ssh_agent = self.injector.get_instance(carthage.ssh.SshAgent)
+            key_options = tuple()
         options = self.ssh_options + ('-oUserKnownHostsFile='+os.path.join(self.config_layout.state_dir, 'ssh_known_hosts'),)
         if ssh_origin_container is not None:
             ip_address = self.ip_address
             ssh_origin_container.done_future().add_done_callback(self.ssh_recompute)
             return self.injector(access_ssh_origin).bake(
                                    "/usr/bin/ssh",
-                              "-i", ssh_key.key_path,
+                *key_options,
                                    *options,
                                    ip_address,
-                                   _env = ssh_key.agent.agent_environ)
+                                   _env = ssh_agent.agent_environ)
         else:
-            return sh.ssh.bake('-i', ssh_key.key_path,
+            return sh.ssh.bake(*key_options,
                                *options, self.ip_address,
-                               _env = ssh_key.agent.agent_environ)
+                               _env = ssh_agent.agent_environ)
 
     def rsync(self, *args):
         '''

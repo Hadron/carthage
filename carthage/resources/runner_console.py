@@ -12,8 +12,8 @@ from carthage import sh, ssh
 config = base_injector(ConfigLayout)
 async def async_setup():
     global ssh_key, tmux
-    ssh_key = await ainjector.get_instance_async(ssh.SshKey)
-    tmux = sh.tmux.bake( 'new-window', _env = ssh_key.agent.agent_environ)
+    ssh_agent = await ainjector.get_instance_async(ssh.SshAgent)
+    tmux = sh.tmux.bake( 'new-window', _env = ssh_agent.agent_environ)
 
 def unbake(cmd):
     "Helper to split out the arguments of a baked sh command"

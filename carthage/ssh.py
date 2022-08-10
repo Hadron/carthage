@@ -7,9 +7,9 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import contextlib, dataclasses, io, os, time
+import asyncio, contextlib, dataclasses, io, os, time
 from pathlib import Path
-from .dependency_injection import inject, AsyncInjector, Injector, AsyncInjectable, Injectable, InjectionKey, dependency_quote
+from .dependency_injection import inject, AsyncInjector, Injector, AsyncInjectable, Injectable, InjectionKey, dependency_quote, is_obj_ready
 from .config import ConfigLayout
 from .setup_tasks import SetupTaskMixin, setup_task
 from . import sh, machine
@@ -91,43 +91,13 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
     def ssh(self):
         return sh.ssh.bake(_env = self.agent.agent_environ)
 
-    async def rsync(self, *args, ssh_origin = None):
-        from .network import access_ssh_origin
-        ssh_options = []
-        args = list(args)
-        async with contextlib.AsyncExitStack() as stack:
-            for i, a in enumerate(args):
-                if isinstance(a, RsyncPath):
-                    if a.machine.rsync_uses_filesystem_access:
-                        path = await stack.enter_async_context(a.machine.filesystem_access())
-                        args[i] = Path(path).joinpath(a.relpath)
-                        continue
-                    sso = a.ssh_origin
-                    if ssh_origin is None:
-                        ssh_origin = sso
-                        vrf = a.ssh_origin_vrf
-                        ssh_options = a.machine.ssh_options
-                    elif ssh_origin is not sso:
-                        raise RuntimeError(f"Two different ssh_origins: {sso} and {ssh_origin}")
-                    args[i] = str(a)
-            if ssh_options:
-                ssh_options = list(ssh_options)
-
-        
-            ssh_options.extend(['-oUserKnownHostsFile='+self.known_hosts])
-            ssh_options = " ".join(ssh_options)
-            rsync_opts = ('-e', 'ssh '+ssh_options)
-        
-            if ssh_origin:
-                return await access_ssh_origin(ssh_origin = ssh_origin,
-                                     ssh_origin_vrf = vrf)(
-                                         'rsync',
-                                         *rsync_opts, *args,
-                                         _bg = True, _bg_exc = False,
-                                         _env = self.agent.agent_environ)
-            else:
-                return await sh.rsync(*rsync_opts, *args, _bg = True, _bg_exc = False,
-            _env = self.agent.agent_environ)
+    async def rsync(self, *args, ssh_origin=None):
+        return await self.ainjector(
+            rsync,
+            *args,
+            key = dependency_quote(self),
+            ssh_origin = ssh_origin)
+    
 
     
     @memoproperty
@@ -135,6 +105,52 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
         with open(self.key_path+".pub", "rt") as f:
             return f.read()
         
+
+@inject(
+    key=InjectionKey(SshKey, _optional=True),
+    config_layout = ConfigLayout,
+    injector=Injector)
+async def rsync( *args, config_layout,
+                 injector,
+                 ssh_origin = None, key=None):
+    from .network import access_ssh_origin
+    if key: ssh_agent = key.agent
+    else: ssh_agent = injector.get_instance(SshAgent)
+    ssh_options = []
+    args = list(args)
+    async with contextlib.AsyncExitStack() as stack:
+        for i, a in enumerate(args):
+            if isinstance(a, RsyncPath):
+                if a.machine.rsync_uses_filesystem_access:
+                    path = await stack.enter_async_context(a.machine.filesystem_access())
+                    args[i] = Path(path).joinpath(a.relpath)
+                    continue
+                sso = a.ssh_origin
+                if ssh_origin is None:
+                    ssh_origin = sso
+                    vrf = a.ssh_origin_vrf
+                    ssh_options = a.machine.ssh_options
+                elif ssh_origin is not sso:
+                    raise RuntimeError(f"Two different ssh_origins: {sso} and {ssh_origin}")
+                args[i] = str(a)
+        if ssh_options:
+            ssh_options = list(ssh_options)
+
+
+        ssh_options.extend(['-oUserKnownHostsFile='+config_layout.state_dir+"/ssh_known_hosts"])
+        ssh_options = " ".join(ssh_options)
+        rsync_opts = ('-e', 'ssh '+ssh_options)
+
+        if ssh_origin:
+            return await access_ssh_origin(ssh_origin = ssh_origin,
+                                           ssh_origin_vrf = vrf)(
+                                               'rsync',
+                                               *rsync_opts, *args,
+                                               _bg = True, _bg_exc = False,
+                                               _env = ssh_agent.agent_environ)
+        else:
+            return await sh.rsync(*rsync_opts, *args, _bg = True, _bg_exc = False,
+                                  _env = ssh_agent.agent_environ)
 
 @inject(
         ssh_key = SshKey,
@@ -161,7 +177,7 @@ class AuthorizedKeysFile(Injectable):
 
 @inject(
     injector=Injector,
-    key = SshKey)
+    key = InjectionKey(SshKey, _optional=True, _ready=False))
 class SshAgent(Injectable):
 
     def __init__(self, injector, key):
@@ -178,12 +194,19 @@ class SshAgent(Injectable):
             self.process = sh.ssh_agent('-a', auth_sock,
                                     '-D', _bg = True)
             self.auth_sock = auth_sock
+        if key and is_obj_ready(key):
+            self.handle_key(key)
+        elif key: # not ready
+            future = asyncio.ensure_future(key.async_become_ready())
+            future.add_done_callback(lambda f: self.handle_key(f.result()))
+
+    def handle_key(self, key):
         try:
             sh.ssh_add(key.key_path, _env = self.agent_environ)
         except sh.ErrorReturnCode:
             time.sleep(2)
             sh.ssh_add(key.key_path, _env = self.agent_environ)
-            
+
     def close(self):
         if self.process is not None:
             try: self.process.terminate()
@@ -198,5 +221,5 @@ class SshAgent(Injectable):
 
 ssh_agent = when_needed(SshAgent)
 
-__all__ = ('SshKey', 'ssh_agent', 'SshAgent', 'RsyncPath')
+__all__ = ('SshKey', 'ssh_agent', 'SshAgent', 'RsyncPath', 'rsync')
 
