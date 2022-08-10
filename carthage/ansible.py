@@ -433,7 +433,7 @@ async def run_play(hosts, play,
 __all__ += ['run_play']
 
 
-@inject(ssh_key = SshKey,
+@inject(ssh_key = InjectionKey(SshKey,_optional=True),
         config = ConfigLayout)
 @contextlib.contextmanager
 def write_config(config_dir, inventory,
@@ -441,7 +441,7 @@ def write_config(config_dir, inventory,
                  config, origin,
                  inventory_overrides,
                  ansible_config):
-    private_key = None
+    private_key = ""
     if ssh_key:
         private_key = f"private_key_file = {ssh_key.key_path}"
     if not log:
