@@ -26,6 +26,8 @@ Clone the ``HEAD`` of a Git working copy into a new temporary directory  This pr
 '''
 
     assert isinstance(target, RsyncPath)
+    if not str(target.path).endswith('/'):
+        target = RsyncPath(target.machine, str(target.path)+'/')
     git_tree = sh.git('rev-parse', '--show-toplevel', _cwd = git_tree)
     git_tree = str(git_tree.stdout, 'utf-8').rstrip()
     dir = None
@@ -36,7 +38,7 @@ Clone the ``HEAD`` of a Git working copy into a new temporary directory  This pr
                      _bg = True, _bg_exc = False)
         return await ainjector(rsync, '-a','--delete',
                                '--mkpath', 
-                                   dir.name+'/', target+'/')
+                                   dir.name+'/', target)
     finally:
         dir.cleanup()
 
