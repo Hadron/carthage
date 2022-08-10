@@ -172,7 +172,7 @@ class AuthorizedKeysFile(Injectable):
                 keys_in = Path(authorized_keys).read_text()
         with open(self.path, "wt") as f:
             f.write(keys_in)
-            f.write(ssh_key.pubkey_contents)
+            if ssh_key: f.write(ssh_key.pubkey_contents)
                 
 
 @inject(
