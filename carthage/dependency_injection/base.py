@@ -551,7 +551,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                     return res
             except AsyncRequired: raise
             except Exception as e:
-                tb_utils.filter_chatty_modules(e, _chatty_modules, 4)
+                tb_utils.filter_chatty_modules(e, _chatty_modules, 3)
                 if current_instantiation():
                     tb_utils.filter_before_here(e)
                     logger.exception(f'Error resolving dependency for {current_instantiation()}')
@@ -654,7 +654,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                 await shutdown_injector(p.injector)
             raise
         except Exception as e:
-            tb_utils.filter_chatty_modules(e, _chatty_modules, 5)
+            tb_utils.filter_chatty_modules(e, _chatty_modules, 3)
             raise e from None
         finally:
             if mark_instantiation_done and current_instantiation():
