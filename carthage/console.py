@@ -11,9 +11,31 @@
 import asyncio, argparse, code, collections.abc, time
 import pkg_resources, os.path, readline, rlcompleter, sys, traceback
 import carthage, carthage.utils
-from carthage import base_injector, AsyncInjector, ConfigLayout
-import carthage.vmware.vm
+from carthage import base_injector, AsyncInjector, ConfigLayout, InjectionKey, Injector
 
+
+
+class EventMonitor:
+
+    def __init__(self, injector):
+        injector.add_event_listener(InjectionKey(Injector), "dependency_progress", self.progress_cb)
+        injector.add_event_listener(InjectionKey(Injector), "dependency_final", self.final_cb)
+        self.injector = injector
+
+    def close(self):
+        self.injector.remove_event_listener(InjectionKey(Injector), "dependency_progress", self.progress_cb)
+        self.remove_event_listener(InjectionKey(Injector), "dependency_final", self.final_cb)
+
+    def progress_cb(self, target, **kwargs):
+                print(f'Progress: {target}: {target.provider.provider}')
+
+    def final_cb(self, target, **kwargs):
+        print(f'Resolved: {target}: {target.get_value(False)}')
+
+def attach_event_monitor_to_console(injector):
+    return EventMonitor(injector)
+
+        
 class CarthageConsole(code.InteractiveConsole):
 
     @staticmethod
@@ -46,11 +68,14 @@ class CarthageConsole(code.InteractiveConsole):
         class sleeper():
             def __repr__(self):
                 time.sleep(2**31)
+        from carthage.dependency_injection.introspection import instantiation_roots
         return {
             'injector': base_injector,
+            'instantiation_roots': instantiation_roots,
             'ainjector': base_injector(AsyncInjector),
             'sleep': sleeper(),
             'loop': asyncio.get_event_loop(),
+            'attach_monitor': attach_event_monitor_to_console,
             'config': base_injector(ConfigLayout)
         }
 
