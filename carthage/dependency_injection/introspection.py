@@ -15,7 +15,17 @@ _current_instantiation = contextvars.ContextVar('current_instantiation', default
 
 __all__ = []
 
-instantiation_roots = set()
+class GetItemSet(set):
+
+    def __getitem__(self, idx):
+        self_iter = iter(self)
+        result = None
+        while idx >= 0:
+            result = next(self_iter)
+            idx -= 1
+        return result
+
+instantiation_roots = GetItemSet()
 
 __all__ += ['instantiation_roots']
 

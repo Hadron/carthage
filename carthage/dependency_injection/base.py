@@ -14,13 +14,15 @@ import logging
 import types
 import sys
 from dataclasses import dataclass
-
 from .. import tb_utils, event
 from .introspection import *
 
 _chatty_modules = {asyncio.futures, asyncio.tasks, sys.modules[__name__]}
 logger = logging.getLogger('carthage.dependency_injection')
 logger.setLevel('INFO')
+
+#: If true, tracebacks are filtered for better user error messages, but hinding internal state
+filter_tracebacks = True
 
 class ReadyState(enum.Enum):
     NOT_READY = 0
@@ -551,7 +553,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                     return res
             except AsyncRequired: raise
             except Exception as e:
-                tb_utils.filter_chatty_modules(e, _chatty_modules, 3)
+                if filter_tracebacks: tb_utils.filter_chatty_modules(e, _chatty_modules, None)
                 if current_instantiation():
                     tb_utils.filter_before_here(e)
                     logger.exception(f'Error resolving dependency for {current_instantiation()}')
@@ -654,7 +656,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                 await shutdown_injector(p.injector)
             raise
         except Exception as e:
-            tb_utils.filter_chatty_modules(e, _chatty_modules, 3)
+            if filter_tracebacks: tb_utils.filter_chatty_modules(e, _chatty_modules, None)
             raise e from None
         finally:
             if mark_instantiation_done and current_instantiation():
@@ -1117,25 +1119,33 @@ class AsyncInjector(Injectable):
 '''
         if not hasattr(self, 'loop'):
             self.loop = self.get_instance(asyncio.AbstractEventLoop)
-        res =  self._instantiate(
-            cls, *args, **kwargs,
-            _loop = self.loop,
-            _placement = None,
-            _interim_placement = None,
+        try:
+            res =  self._instantiate(
+                cls, *args, **kwargs,
+                _loop = self.loop,
+                _placement = None,
+                _interim_placement = None,
             )
 
-        if isinstance(res, (asyncio.Future, collections.abc.Coroutine)):
-            return await res
-        else: return res
+            if isinstance(res, (asyncio.Future, collections.abc.Coroutine)):
+                return await res
+            else: return res
+        except Exception as e:
+            if filter_tracebacks: tb_utils.filter_chatty_modules(e, _chatty_modules, 1)
+            raise e from None
 
     async def get_instance_async(self, k):
         futures = []
-        res = self.get_instance(k,
+        try:
+            res = self.get_instance(k,
                                 loop = self.loop,
                                 futures = futures)
-        if isinstance(res, (asyncio.Future, collections.abc.Coroutine)):
-            return await res
-        else: return res
+            if isinstance(res, (asyncio.Future, collections.abc.Coroutine)):
+                return await res
+            else: return res
+        except Exception as e:
+            if filter_tracebacks: tb_utils.filter_chatty_modules(e, _chatty_modules, 1)
+            raise e from None
 
     async def filter_instantiate_async(self, target, predicate,
                                        *, stop_at = None,

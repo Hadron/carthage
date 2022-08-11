@@ -27,15 +27,16 @@ def filter_before_here(e):
                 e.__traceback__ = i
             return tb
     return tb
+
 def filter_chatty_modules(e,module_list, level = 1):
     '''
     Filter chatty modules from an exception or traceback
 
     :param e: a :class:`Traceback` or :class:`BaseException` to be filtered in place
 
-    :param module_list: A list of modules that are viewed as too chatty.
+    :param module_list: A list of modules that are viewed as too chatty.  At most one consecutive entry from these modules will be retained.
 
-    :param level: How many stack frames to look back for the caller.  Nothing before the caller will be filtered.
+    :param level: How many stack frames to look back for the caller.  Nothing before the caller will be filtered.  If *level* is None, the entire stack is filtered.
 
     This function first looks and finds the caller *level* levels above this call.
 
@@ -47,10 +48,12 @@ def filter_chatty_modules(e,module_list, level = 1):
 
     '''
     tb = get_tb(e)
-    caller = sys._getframe(level)
-    caller_found = False
+    if level is not None:
+        caller = sys._getframe(level)
+        caller_found = False
+    else: caller_found = True
     module_filenos = frozenset(x.__file__ for x in module_list)
-    while tb.tb_next is not None:
+    while not caller_found and tb.tb_next is not None:
         if not caller_found:
             if caller is tb.tb_frame:
                 caller_found = True
@@ -58,9 +61,13 @@ def filter_chatty_modules(e,module_list, level = 1):
         else: # caller already found
             break
     if caller_found:
-        while (tb.tb_next is not None) and tb.tb_next.tb_frame.f_code.co_filename in module_filenos:
-            tb.tb_next = tb.tb_next.tb_next
-    return tb
+        while (tb.tb_next is not None) and tb.tb_next.tb_next is not None:
+            if  tb.tb_next.tb_frame.f_code.co_filename in module_filenos \
+                and tb.tb_next.tb_next.tb_frame.f_code.co_filename in module_filenos:
+                tb.tb_next = tb.tb_next.tb_next
+            else:
+                tb = tb.tb_next
+
 
 
 __all__ = ('filter_before_here', 'filter_chatty_modules')
