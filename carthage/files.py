@@ -14,6 +14,12 @@ from . import ConfigLayout, sh
 from .ssh import RsyncPath, SshKey, rsync
 from .setup_tasks import *
 __all__ = []
+rsync_supports_mkpath_state = None
+def rsync_supports_mkpath():
+    global rsync_supports_mkpath_state
+    if rsync_supports_mkpath_state is None:
+        rsync_supports_mkpath_state = 'mkpath' in sh.rsync('--help')
+    return rsync_supports_mkpath_state
 
 @inject(config = ConfigLayout,
         ainjector=AsyncInjector)
@@ -26,7 +32,9 @@ Clone the ``HEAD`` of a Git working copy into a new temporary directory  This pr
 '''
 
     assert isinstance(target, RsyncPath)
-    if not str(target.path).endswith('/'):
+    rsync_opts = []
+    if rsync_supports_mkpath(): rsync_opts.append('--mkpath')
+    if rsync_supports_mkpath() and not str(target.path).endswith('/'):
         target = RsyncPath(target.machine, str(target.path)+'/')
     git_tree = sh.git('rev-parse', '--show-toplevel', _cwd = git_tree)
     git_tree = str(git_tree.stdout, 'utf-8').rstrip()
@@ -37,7 +45,7 @@ Clone the ``HEAD`` of a Git working copy into a new temporary directory  This pr
                      git_tree, dir.name,
                      _bg = True, _bg_exc = False)
         return await ainjector(rsync, '-a','--delete',
-                               '--mkpath', 
+                               *rsync_opts,
                                    dir.name+'/', target)
     finally:
         dir.cleanup()
