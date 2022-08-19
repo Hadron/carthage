@@ -476,11 +476,11 @@ class ModelingContainer(InjectableModelType):
             for outer_key in val.__provides_dependencies_for__:
                 if isinstance(outer_key.target, ModelingContainer) and len(outer_key.constraints) > 0:
                     break
-        if outer_key is None or len(outer_key.constraints) == 0:
-            warnings.warn("Cannot propagate because no outer key with constraints found", stacklevel=3)
-            return
         to_propagate = combine_mro_mapping(val, ModelingContainer, '__container_propagations__')
         to_propagate.update(val.__container_propagations__)
+        if to_propagate and (outer_key is None or len(outer_key.constraints) == 0):
+            warnings.warn("Cannot propagate because no outer key with constraints found", stacklevel=3)
+            return
         for k, info in to_propagate.items():
                 v, options = info
                 propagate_provider(k, v, options)
