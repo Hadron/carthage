@@ -210,7 +210,7 @@ class VaultSshKey(SshKey):
 
     def add_to_agent(self, agent):
         from gc import collect
-        # test for key ready
+        assert self._async_ready_state.name == 'READY',f"{self} is not READY"
         r = self.vault.client.read(self._vault_key_path)['data']['data']
         sh.ssh_add('-', _env=agent.agent_environ, _in=r['PrivateKey'])
         r = 4*'\0'*self._key_size
@@ -240,7 +240,7 @@ class VaultSshKey(SshKey):
             await self._generate_key()
         r = self.vault.client.read(self._vault_key_path)['data']['data']
 
-        self._pubs = r['SshPublicKey']
+        self._pubs = r['SshPublicKey'].replace('\n', '')
         r = 4*'\0'*self._key_size
         del(r)
         collect()
