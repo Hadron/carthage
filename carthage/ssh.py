@@ -77,9 +77,17 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
                             _bg = True,
                             _bg_exc = False)
 
+    def add_to_agent(self, agent):
+        try:
+            sh.ssh_add(self.key_path, _env = agent.agent_environ)
+        except sh.ErrorReturnCode:
+            time.sleep(2)
+            sh.ssh_add(self.key_path, _env = agent.agent_environ)
 
     @memoproperty
     def key_path(self):
+        '''The path of the private key suitable for inclusion with ``ssh -i`` or *None* if no filesystem key exists.
+        '''
         return self.config_layout.state_dir+'/ssh_key'
 
     @memoproperty
@@ -200,11 +208,7 @@ class SshAgent(Injectable):
             future.add_done_callback(lambda f: self.handle_key(f.result()))
 
     def handle_key(self, key):
-        try:
-            sh.ssh_add(key.key_path, _env = self.agent_environ)
-        except sh.ErrorReturnCode:
-            time.sleep(2)
-            sh.ssh_add(key.key_path, _env = self.agent_environ)
+        key.add_to_agent(self)
 
     def close(self):
         if self.process is not None:

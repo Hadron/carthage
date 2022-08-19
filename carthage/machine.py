@@ -83,7 +83,8 @@ class SshMixin:
         ssh_key = self.injector.get_instance(InjectionKey(carthage.ssh.SshKey, _optional=True))
         if ssh_key:
             ssh_agent = ssh_key.agent
-            key_options = ("-i", ssh_key.key_path,)
+            if ssh_key.key_path: key_options = ("-i", ssh_key.key_path,)
+            else: key_options = ('',)
         else:
             ssh_agent = self.injector.get_instance(carthage.ssh.SshAgent)
             key_options = tuple()

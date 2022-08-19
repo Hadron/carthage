@@ -9,9 +9,14 @@
 import os
 import os.path
 import hvac
-from ..config import ConfigSchema, ConfigLayout
-from ..dependency_injection import *
-from ..config.types import ConfigString, ConfigPath, ConfigLookupPlugin
+from carthage import sh
+from carthage.config import ConfigSchema, ConfigLayout
+from carthage.dependency_injection import *
+from carthage.dependency_injection import is_obj_ready
+from carthage.config.types import ConfigString, ConfigPath, ConfigLookupPlugin
+from carthage.setup_tasks import setup_task
+from carthage.ssh import AuthorizedKeysFile, SshAgent, SshKey
+from carthage.utils import memoproperty
 
 class VaultError(RuntimeError): pass
 
@@ -22,6 +27,9 @@ class VaultConfig(ConfigSchema, prefix = "vault"):
 
     #: Path to a CA bundle
     ca_bundle : ConfigString
+
+    #: The path to an ssh key in vault
+    ssh_key: ConfigString
 
 vault_token_key = InjectionKey('vault.token')
 
@@ -184,6 +192,69 @@ class VaultConfigPlugin(ConfigLookupPlugin):
             raise SyntaxError("The vault plugin requires a field")
         result = client.read(secret)
         return result['data'][field]
+
+@inject_autokwargs(
+    vault = Vault
+)
+class VaultSshKey(SshKey):
+
+    def __init__(self, **kwargs):
+        if 'key_size' in kwargs:
+            self._key_size = kwargs.pop('key_size')
+        else:
+            self._key_size = 2048
+        super().__init__(**kwargs)
+        config_layout = self.injector(ConfigLayout)
+        if not hasattr(config_layout.vault, 'ssh_key'):
+            raise AttributeError("\nYou must specify\n\nvault:\n  ssh_key: path/to/key-name\n\nfor this implementation to function")
+        self._vault_key_path = config_layout.vault.ssh_key
+
+        self._pubs = None
+
+    def add_to_agent(self, agent):
+        assert is_obj_ready(self),f"{self} is not READY"
+        r = self.vault.client.read(self._vault_key_path)['data']['data']
+        sh.ssh_add('-', _env=agent.agent_environ, _in=r['PrivateKey'])
+        del(r)
+
+    @setup_task('gen-key')
+    async def generate_key(self):
+        pk =  sh.openssl('genpkey', '-algorithm=RSA', '-pkeyopt', f'rsa_keygen_bits:{self._key_size}', '-outform=PEM', _in=None, _bg=True, _bg_exc=False)
+        await pk
+        pk_str = pk.stdout
+        pubk =  sh.openssl('pkey', '-pubout', _in=pk, _bg=True, _bg_exc=False)
+        await pubk
+        pubk_str = pubk.stdout
+        pubs =  sh.ssh_keygen('-i', '-m', 'PKCS8', '-f', '/dev/stdin', _in=pubk, _bg=True, _bg_exc=False)
+        await pubs
+        pubs_str = pubs.stdout
+
+        self.vault.client.write(self._vault_key_path, **dict(data=dict(PrivateKey=pk_str, PublicKey=pubk_str, SshPublicKey=pubs_str)))
+        self._pubs = pubs_str
+        del(pk, pubk, pubs)
+
+    @generate_key.check_completed()
+    def generate_key(self):
+        r = self.vault.client.read(self._vault_key_path)
+        if r is None:
+            return False
+        r = r['data']['data']
+        if ('PrivateKey' and 'PublicKey' and 'SshPublicKey') not in r.keys():
+            return False
+        self._pubs = r['SshPublicKey'].replace('\n', '')
+        return True
+
+    @memoproperty
+    def key_path(self):
+        return None
+
+    @memoproperty
+    def vault_key_path(self):
+        return self._vault_key_path
+
+    @property
+    def pubkey_contents(self):
+        return self._pubs
 
 @inject( injector = Injector)
 def carthage_plugin(injector):
