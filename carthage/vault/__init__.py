@@ -208,7 +208,7 @@ class VaultSshKey(SshKey):
         if not hasattr(config_layout.vault, 'ssh_key'):
             raise AttributeError("\nYou must specify\n\nvault:\n  ssh_key: path/to/key-name\n\nfor this implementation to function")
         self._vault_key_path = config_layout.vault.ssh_key
-            
+
         self._pubs = None
 
     def add_to_agent(self, agent):
