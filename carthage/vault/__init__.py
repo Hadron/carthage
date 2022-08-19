@@ -209,45 +209,30 @@ class VaultSshKey(SshKey):
         self._pubs = None
 
     def add_to_agent(self, agent):
-        from gc import collect
         assert self._async_ready_state.name == 'READY',f"{self} is not READY"
         r = self.vault.client.read(self._vault_key_path)['data']['data']
         sh.ssh_add('-', _env=agent.agent_environ, _in=r['PrivateKey'])
-        r = 4*'\0'*self._key_size
         del(r)
-        collect()
-
-    async def _generate_key(self):
-        from gc import collect
-        pk = sh.openssl('genpkey', '-algorithm=RSA', '-outform=PEM', _in=None, _bg=False, _bg_exec=False).stdout
-        pubk = sh.openssl('pkey', '-pubout', _in=pk, _bg=False, _bg_exec=False).stdout
-        pubs = sh.ssh_keygen('-i', '-m', 'PKCS8', '-f', '/dev/stdin', _in=pubk, _bg=False, _bg_exec=False).stdout
-
-        self.vault.client.write(self._vault_key_path, **dict(data=dict(PrivateKey=pk, PublicKey=pubk, SshPublicKey=pubs)))
-        pk, pubk, pk8, pubs = ['\0'*self._key_size]*4
-        del(pk, pubk, pk8, pubs)
-        collect()
 
     @setup_task('gen-key')
     async def generate_key(self):
-        from gc import collect
-        r = self.vault.client.read(self._vault_key_path)
-        if r is None:
-            await self._generate_key()
-            r = self.vault.client.read(self._vault_key_path)
-        r = r['data']['data']
-        if ('PrivateKey' and 'PublicKey' and 'SshPublicKey') not in r.keys():
-            await self._generate_key()
-        r = self.vault.client.read(self._vault_key_path)['data']['data']
+        pk = await sh.openssl('genpkey', '-algorithm=RSA', '-outform=PEM', _in=None, _bg=False, _bg_exec=False).stdout
+        pubk = await sh.openssl('pkey', '-pubout', _in=pk, _bg=False, _bg_exec=False).stdout
+        pubs = await sh.ssh_keygen('-i', '-m', 'PKCS8', '-f', '/dev/stdin', _in=pubk, _bg=False, _bg_exec=False).stdout
 
-        self._pubs = r['SshPublicKey'].replace('\n', '')
-        r = 4*'\0'*self._key_size
-        del(r)
-        collect()
+        self.vault.client.write(self._vault_key_path, **dict(data=dict(PrivateKey=pk, PublicKey=pubk, SshPublicKey=pubs)))
+        del(pk, pubk, pk8, pubs)
 
     @generate_key.check_completed()
     def generate_key(self):
-        return self._pubs != None
+        r = self.vault.client.read(self._vault_key_path)
+        if r is None:
+            return False
+        r = r['data']['data']
+        if ('PrivateKey' and 'PublicKey' and 'SshPublicKey') not in r.keys():
+            return False
+        self._pubs = r['SshPublicKey'].replace('\n', '')
+        return True
 
     @memoproperty
     def key_path(self):
