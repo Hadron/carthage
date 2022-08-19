@@ -9,13 +9,13 @@
 import os
 import os.path
 import hvac
-from .. import sh
-from ..config import ConfigSchema, ConfigLayout
-from ..dependency_injection import *
-from ..config.types import ConfigString, ConfigPath, ConfigLookupPlugin
-from ..setup_tasks import setup_task
-from ..ssh import AuthorizedKeysFile, SshAgent, SshKey
-from ..utils import memoproperty
+from carthage import sh
+from carthage.config import ConfigSchema, ConfigLayout
+from carthage.dependency_injection import *
+from carthage.config.types import ConfigString, ConfigPath, ConfigLookupPlugin
+from carthage.setup_tasks import setup_task
+from carthage.ssh import AuthorizedKeysFile, SshAgent, SshKey
+from carthage.utils import memoproperty
 
 class VaultError(RuntimeError): pass
 
