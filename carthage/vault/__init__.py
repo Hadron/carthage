@@ -209,7 +209,6 @@ class VaultSshKey(SshKey):
         self._pubs = None
 
     def add_to_agent(self, agent):
-        breakpoint()
         from gc import collect
         # test for key ready
         r = self.vault.client.read(self._vault_key_path)['data']['data']
@@ -222,7 +221,6 @@ class VaultSshKey(SshKey):
         from gc import collect
         pk = sh.openssl('genpkey', '-algorithm=RSA', '-outform=PEM', _in=None, _bg=False, _bg_exec=False).stdout
         pubk = sh.openssl('pkey', '-pubout', _in=pk, _bg=False, _bg_exec=False).stdout
-        pk8 = sh.openssl('rsa', _in=pk, _bg=False, _bg_exec=False).stdout
         pubs = sh.ssh_keygen('-i', '-m', 'PKCS8', '-f', '/dev/stdin', _in=pubk, _bg=False, _bg_exec=False).stdout
 
         self.vault.client.write(self._vault_key_path, **dict(data=dict(PrivateKey=pk, PublicKey=pubk, SshPublicKey=pubs)))
@@ -242,8 +240,6 @@ class VaultSshKey(SshKey):
             await self._generate_key()
         r = self.vault.client.read(self._vault_key_path)['data']['data']
 
-        await self._add_to_agent()
-
         self._pubs = r['SshPublicKey']
         r = 4*'\0'*self._key_size
         del(r)
@@ -260,16 +256,6 @@ class VaultSshKey(SshKey):
     @memoproperty
     def vault_key_path(self):
         return self._vault_key_path
-
-    async def _add_to_agent(self):
-        from gc import collect
-        r = self.vault.client.read(self._vault_key_path)
-        r = r['data']['data']
-        agent = self.injector(SshAgent)
-        sh.ssh_add('-', _env=agent.agent_environ, _in=r['PrivateKey'])
-        r = 4*'\0'*self._key_size
-        del(r)
-        collect()
 
     @memoproperty
     def pubkey_contents(self):
