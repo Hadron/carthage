@@ -216,9 +216,12 @@ class VaultSshKey(SshKey):
 
     @setup_task('gen-key')
     async def generate_key(self):
-        pk = await sh.openssl('genpkey', '-algorithm=RSA', '-outform=PEM', _in=None, _bg=False, _bg_exec=False).stdout
-        pubk = await sh.openssl('pkey', '-pubout', _in=pk, _bg=False, _bg_exec=False).stdout
-        pubs = await sh.ssh_keygen('-i', '-m', 'PKCS8', '-f', '/dev/stdin', _in=pubk, _bg=False, _bg_exec=False).stdout
+        pk = await sh.openssl('genpkey', '-algorithm=RSA', '-outform=PEM', _in=None, _bg=False, _bg_exec=False)
+        pk = pk.stdout
+        pubk = await sh.openssl('pkey', '-pubout', _in=pk, _bg=False, _bg_exec=False)
+        pubk = pubk.stdout
+        pubs = await sh.ssh_keygen('-i', '-m', 'PKCS8', '-f', '/dev/stdin', _in=pubk, _bg=False, _bg_exec=False)
+        pubs = pubs.stdout
 
         self.vault.client.write(self._vault_key_path, **dict(data=dict(PrivateKey=pk, PublicKey=pubk, SshPublicKey=pubs)))
         del(pk, pubk, pubs)
