@@ -199,13 +199,16 @@ class VaultConfigPlugin(ConfigLookupPlugin):
 class VaultSshKey(SshKey):
 
     def __init__(self, **kwargs):
+        if 'key_size' in kwargs:
+            self._key_size = kwargs.pop('key_size')
+        else:
+            self._key_size = 2048
         super().__init__(**kwargs)
         config_layout = self.injector(ConfigLayout)
         if not hasattr(config_layout.vault, 'ssh_key'):
             raise AttributeError("\nYou must specify\n\nvault:\n  ssh_key: path/to/key-name\n\nfor this implementation to function")
         self._vault_key_path = config_layout.vault.ssh_key
-        self._key_size = 2048
-
+            
         self._pubs = None
 
     def add_to_agent(self, agent):
@@ -216,7 +219,7 @@ class VaultSshKey(SshKey):
 
     @setup_task('gen-key')
     async def generate_key(self):
-        pk = await sh.openssl('genpkey', '-algorithm=RSA', '-outform=PEM', _in=None, _bg=False, _bg_exec=False)
+        pk = await sh.openssl('genpkey', '-algorithm=RSA', '-pkeyopt', f'rsa_keygen_bits:{self._key_size}', '-outform=PEM', _in=None, _bg=False, _bg_exec=False)
         pk = pk.stdout
         pubk = await sh.openssl('pkey', '-pubout', _in=pk, _bg=False, _bg_exec=False)
         pubk = pubk.stdout
