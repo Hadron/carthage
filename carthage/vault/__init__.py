@@ -221,7 +221,7 @@ class VaultSshKey(SshKey):
         pubs = await sh.ssh_keygen('-i', '-m', 'PKCS8', '-f', '/dev/stdin', _in=pubk, _bg=False, _bg_exec=False).stdout
 
         self.vault.client.write(self._vault_key_path, **dict(data=dict(PrivateKey=pk, PublicKey=pubk, SshPublicKey=pubs)))
-        del(pk, pubk, pk8, pubs)
+        del(pk, pubk, pubs)
 
     @generate_key.check_completed()
     def generate_key(self):
