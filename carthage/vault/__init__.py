@@ -9,9 +9,13 @@
 import os
 import os.path
 import hvac
+from .. import sh
 from ..config import ConfigSchema, ConfigLayout
 from ..dependency_injection import *
 from ..config.types import ConfigString, ConfigPath, ConfigLookupPlugin
+from ..setup_tasks import setup_task
+from ..ssh import AuthorizedKeysFile, SshAgent, SshKey
+from ..utils import memoproperty
 
 class VaultError(RuntimeError): pass
 
@@ -22,6 +26,9 @@ class VaultConfig(ConfigSchema, prefix = "vault"):
 
     #: Path to a CA bundle
     ca_bundle : ConfigString
+
+    #: The path to an ssh key in vault
+    ssh_key: ConfigString
 
 vault_token_key = InjectionKey('vault.token')
 
@@ -184,6 +191,89 @@ class VaultConfigPlugin(ConfigLookupPlugin):
             raise SyntaxError("The vault plugin requires a field")
         result = client.read(secret)
         return result['data'][field]
+
+@inject(
+    ainjector = AsyncInjector,
+    vault = Vault
+)
+class VaultSshKey(SshKey):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        config_layout = self.injector(ConfigLayout)
+        if not hasattr(config_layout.vault, 'ssh_key'):
+            raise AttributeError("\nYou must specify\n\nvault:\n  ssh_key: path/to/key-name\n\nfor this implementation to function")
+        self._vault_key_path = config_layout.vault.ssh_key
+        self._key_size = 2048
+
+        self._pubs = None
+
+    def add_to_agent(self, agent):
+        breakpoint()
+        from gc import collect
+        # test for key ready
+        r = self.vault.client.read(self._vault_key_path)['data']['data']
+        sh.ssh_add('-', _env=agent.agent_environ, _in=r['PrivateKey'])
+        r = 4*'\0'*self._key_size
+        del(r)
+        collect()
+
+    async def _generate_key(self):
+        from gc import collect
+        pk = sh.openssl('genpkey', '-algorithm=RSA', '-outform=PEM', _in=None, _bg=False, _bg_exec=False).stdout
+        pubk = sh.openssl('pkey', '-pubout', _in=pk, _bg=False, _bg_exec=False).stdout
+        pk8 = sh.openssl('rsa', _in=pk, _bg=False, _bg_exec=False).stdout
+        pubs = sh.ssh_keygen('-i', '-m', 'PKCS8', '-f', '/dev/stdin', _in=pubk, _bg=False, _bg_exec=False).stdout
+
+        self.vault.client.write(self._vault_key_path, **dict(data=dict(PrivateKey=pk, PublicKey=pubk, SshPublicKey=pubs)))
+        pk, pubk, pk8, pubs = ['\0'*self._key_size]*4
+        del(pk, pubk, pk8, pubs)
+        collect()
+
+    @setup_task('gen-key')
+    async def generate_key(self):
+        from gc import collect
+        r = self.vault.client.read(self._vault_key_path)
+        if r is None:
+            await self._generate_key()
+            r = self.vault.client.read(self._vault_key_path)
+        r = r['data']['data']
+        if ('PrivateKey' and 'PublicKey' and 'SshPublicKey') not in r.keys():
+            await self._generate_key()
+        r = self.vault.client.read(self._vault_key_path)['data']['data']
+
+        await self._add_to_agent()
+
+        self._pubs = r['SshPublicKey']
+        r = 4*'\0'*self._key_size
+        del(r)
+        collect()
+
+    @generate_key.check_completed()
+    def generate_key(self):
+        return self._pubs != None
+
+    @memoproperty
+    def key_path(self):
+        return None
+
+    @memoproperty
+    def vault_key_path(self):
+        return self._vault_key_path
+
+    async def _add_to_agent(self):
+        from gc import collect
+        r = self.vault.client.read(self._vault_key_path)
+        r = r['data']['data']
+        agent = self.injector(SshAgent)
+        sh.ssh_add('-', _env=agent.agent_environ, _in=r['PrivateKey'])
+        r = 4*'\0'*self._key_size
+        del(r)
+        collect()
+
+    @memoproperty
+    def pubkey_contents(self):
+        return self._pubs
 
 @inject( injector = Injector)
 def carthage_plugin(injector):
