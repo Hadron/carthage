@@ -8,7 +8,7 @@ Arguments for a model can come from multiple places:
 
 * From the injector hierarchy::
 
-    @inject_autokwargs(verbose_logging=InjectionKey("verbose_logging")
+    @inject_autokwargs(verbose_logging=InjectionKey("verbose_logging"))
     class Model(InjectableModel): pass
 
     class enclave(Enclave):
