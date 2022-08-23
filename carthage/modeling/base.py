@@ -57,8 +57,6 @@ class InjectableModel(Injectable, metaclass = InjectableModelType):
                 try: dependency_providers[v] = dp
                 except TypeError: pass
             options = dict(options)
-            try: del options['globally_unique']
-            except: pass
             try:
                 self.injector.add_provider(k, dp, replace = True, **options)
             except Exception as e:
@@ -252,8 +250,7 @@ class MachineModelType(ModelingContainer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not kwargs.get('template', False):
-            self.__globally_unique_key__ = self.our_key()
-            machine_key = InjectionKey(carthage.machine.Machine, host = self.name)
+            machine_key = InjectionKey(carthage.machine.Machine, host = self.name, _globally_unique=True)
             self.__transclusions__ |= {
                 (machine_key, machine_key, self),
                 (self.our_key(), machine_key, self),
@@ -261,7 +258,7 @@ class MachineModelType(ModelingContainer):
             self.__initial_injections__[machine_key] = (
                     self.machine, dict(
                         close = True, allow_multiple = False,
-                        globally_unique = True))
+))
             self.__container_propagations__[machine_key] = \
                 self.__initial_injections__[machine_key]
 
@@ -317,7 +314,7 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
     @classmethod
     def our_key(cls):
         "Returns the globally unique InjectionKey by which this model is known."
-        return InjectionKey(MachineModel, host = cls.name)
+        return InjectionKey(MachineModel, host = cls.name, _globally_unique=True)
 
 
 

@@ -139,14 +139,7 @@ class ModelingNamespace(dict):
                         class_key = InjectionKey(b)
                     class_key = InjectionKey(b, **class_key.constraints)
                     yield class_key, (val(class_key), options)
-        try:
-            global_key = state.value.__globally_unique_key__
-            global_options = state.injection_options
-            global_options['globally_unique'] = True
-            yield global_key, (val(global_key), global_options)
-        except (AttributeError, KeyError): global_key = None
         for k in state.extra_keys:
-            if global_key and (global_key ==k): continue
             yield k, (val(k), options)
 
     def __getitem__(self, k):
@@ -376,12 +369,14 @@ class InjectableModelType(ModelingBase):
         if not isinstance(k, InjectionKey) and v is None:
             v = k
             k = default_injection_key(k)
+        if globally_unique:
+            warnings.warn("Globally_unique is deprecated; set _globally_unique on the key", DeprecationWarning, stacklevel=2)
+            k = InjectionKey(k, _globally_unique=True)
         if transclusion_overrides:
             ns.transclusions.add((k,k))
         ns.to_inject[k] = (v, dict(
             close = close,
             allow_multiple = allow_multiple,
-            globally_unique = globally_unique,
             ))
         if propagate:
             assert issubclass(cls, ModelingContainer), "Only ModelingContainers accept propagation"
@@ -430,7 +425,7 @@ class ModelingContainer(InjectableModelType):
             #(plus the constraints from the outer key) into the outer
             #injector.  We pick one outer key just for simplicity; it
             #could be made to work with more.
-            globally_unique = options.get('globally_unique', False)
+            globally_unique = k_inner.globally_unique
             inner_transcludable = (k_inner, k_inner, val) in val.__transclusions__
             if not globally_unique:
                 outer_constraints = outer_key.constraints
@@ -473,7 +468,10 @@ class ModelingContainer(InjectableModelType):
         val = state.value
         outer_key = None
         if hasattr(val, '__provides_dependencies_for__'):
-            for outer_key in val.__provides_dependencies_for__:
+            for outer_key in sorted(
+                    val.__provides_dependencies_for__,
+                    key=lambda k: k.globally_unique,
+                    reverse=True):
                 if isinstance(outer_key.target, ModelingContainer) and len(outer_key.constraints) > 0:
                     break
         to_propagate = combine_mro_mapping(val, ModelingContainer, '__container_propagations__')
@@ -540,7 +538,7 @@ class ModelingContainer(InjectableModelType):
             # This is gross, but it's not clear how to support
             # decorators ourselves
             if (not close) or allow_multiple:
-                raise TypeError('If using dynamic_name, use decorators to adjust close and allow_multple')
+                raise TypeError('If using dynamic_name, use decorators to adjust close and allow_multiple')
             ns[fixup_dynamic_name(dynamic_name)] = obj
             return
         ModelingContainer._integrate_containment(cls, ns, obj.__name__, state)
@@ -551,7 +549,6 @@ class ModelingContainer(InjectableModelType):
             state.flags |= NSFlags.allow_multiple
         options = state.injection_options
         for k in obj.__provides_dependencies_for__:
-            options['globally_unique'] = (k == getattr(obj, '__globally_unique_key__', None))
             if k not in ns.to_inject:
                 ns.to_inject[k] = (obj, options)
                 ns.to_propagate[k] = (obj, options)

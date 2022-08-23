@@ -39,8 +39,6 @@ class ModelingDecoratorWrapper:
     @property
     def __provides_dependencies_for__(self): return self.value.__provides_dependencies_for__
 
-    @property
-    def __globally_unique_key__(self): return self.value.__globally_unique_key__
 
 
 class injector_access(ModelingDecoratorWrapper):
@@ -178,11 +176,9 @@ def globally_unique_key(
             key = key(val)
         elif isinstance(key, str):
             key = InjectionKey(key)
-        val.__globally_unique_key__ = key
-        #Make sure we're providing the key as well.
         setattr_default(val, '__provides_dependencies_for__', [])
         if key not in val.__provides_dependencies_for__:
-            val.__provides_dependencies_for__.append(key)
+            val.__provides_dependencies_for__.append(InjectionKey(key, _globally_unique=True))
         return val
     return wrapper
 
@@ -309,7 +305,12 @@ def transclude_overrides(injector:Injector = None,
     def wrap(val):
         nonlocal key
         if key is None:
-            key = val.__globally_unique_key__
+            for k in val.__provides_dependencies_for__:
+                if k.globally_unique:
+                    key = k
+                    break
+            if key is None:
+                raise ValueError('A globally unique key is required')
         if injector:
             target = injector.injector_containing(key)
             if target:

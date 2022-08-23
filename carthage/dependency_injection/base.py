@@ -759,6 +759,7 @@ Return the first injector in our parent chain containing *k* or None if there is
 
 _INJECTION_KEY_DEFAULTS = {
     'optional': False,
+    'globally_unique': False,
     'ready': None}
 
 class InjectionKey:
@@ -775,6 +776,8 @@ class InjectionKey:
     :param _optional: If true, then if no provider for the dependency is registered, None will be passed rather than raising
 
     :param _ready:  If None (the default), then use the same readyness as the object into which this is being injected (or full readyness if this is a base operation).  If True, then to satisfy this dependency, the provided object must be fully ready.  If False, then a not ready object is preferred.
+
+    :param _globally_unique:  If true, then this provided dependency (typically in a call to :func:`carthage.modeling.provides`) is globally unique and need not be modified during :class:`container propagation <carthage.modeling.ModelingContainer>`.
 
     '''
 

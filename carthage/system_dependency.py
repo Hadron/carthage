@@ -1,4 +1,4 @@
-# Copyright (C) 2021, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -9,7 +9,7 @@
 import abc
 from .dependency_injection import *
 from .machine import Machine
-
+from .utils import memoproperty
 __all__ = []
 
 class SystemDependency(abc.ABC, Injectable):
@@ -29,12 +29,12 @@ class SystemDependency(abc.ABC, Injectable):
     def __call__(self, ainjector:AsyncInjector): raise NotImplementedError
 
     def default_instance_injection_key(self):
-        return InjectionKey(SystemDependency, name = self.name)
+        return InjectionKey(SystemDependency, name = self.name, _globally_unique=True)
 
-    @property
-    def __globally_unique_key__(self):
+    @memoproperty
+    def __provides_dependencies_for__(self):
         # This will make sure that dependencies in a modeling.InjectableModel are added to the injector so they are found 
-        return self.default_instance_injection_key()
+        return [self.default_instance_injection_key()]
     
     def __repr__(self):
         return f'<SystemDependency name={self.name}'
