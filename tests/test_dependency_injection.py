@@ -558,4 +558,12 @@ def test_optional_not_present(injector):
     def func(**kwargs):
         assert len(kwargs) == 0
     injector(func)
+    @inject_autokwargs(dep=InjectionKey("foo", _optional=NotPresent))
+    class AnotherDependency(Injectable): pass
+    instance = injector(AnotherDependency)
+    assert not hasattr(instance, 'dep')
+    injector.add_provider(InjectionKey('foo'), 42)
+    instance2 = injector(AnotherDependency)
+    assert instance2.dep == 42
+    
     

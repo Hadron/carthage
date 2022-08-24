@@ -939,10 +939,12 @@ def inject_autokwargs(**dependencies):
         @inject(foo = bar)
         class baz(Injectable):
 
+    :class:`InjectionKey`s with *_optional* set to NotPresent are not required.
     '''
     def wrap(cls):
         inject(**dependencies)(cls)
-        cls._injection_autokwargs |= cls._injection_this_level
+        cls._injection_autokwargs |= set(filter(
+            lambda k: cls._injection_dependencies[k].optional is not NotPresent, cls._injection_this_level))
         return cls
     return wrap
 
