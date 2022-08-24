@@ -1,6 +1,8 @@
 FROM scratch
 ADD container.tar /
+ENV PYTHONPATH /carthage
+ENV PATH /usr/bin:/usr/sbin:/carthage/bin
 CMD ["/bin/systemd"]
 VOLUME ["/layout"]
-LABEL org.opencont>ainers.image.source https://github.com/hadron/carthage
+LABEL org.opencontainers.image.source https://github.com/hadron/carthage
 
