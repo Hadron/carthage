@@ -16,6 +16,7 @@ import sys
 from dataclasses import dataclass
 from .. import tb_utils, event
 from .introspection import *
+from ..utils import NotPresent
 
 _chatty_modules = {asyncio.futures, asyncio.tasks, sys.modules[__name__]}
 logger = logging.getLogger('carthage.dependency_injection')
@@ -440,8 +441,9 @@ Return the first injector in our parent chain containing *k* or None if there is
         except KeyError:
             self._check_closed()
             if k.optional:
-                if placement: placement(None)
-                return None
+                res = None if k.optional is True else k.optional
+                if placement: placement(res)
+                return res
             raise KeyError("No dependency for {}".format(k)) from None
         mark_instantiation_done = True
         with InstantiationContext(
@@ -574,7 +576,7 @@ Return the first injector in our parent chain containing *k* or None if there is
 
         def kwarg_place(k):
             def collect(res):
-                kwargs[k] = res
+                if res is not NotPresent: kwargs[k] = res
             return collect
         try:
             futures = []
@@ -773,7 +775,7 @@ class InjectionKey:
 
         * An object such as a string that is a unique identifier for what is desired
 
-    :param _optional: If true, then if no provider for the dependency is registered, None will be passed rather than raising
+    :param _optional: If *True*, then if no provider for the dependency is registered, None will be passed rather than raising; if some other true value, that value will be returned by default.  If *NotPresent*, then no kwarg will be specified if the dependency is not provided. Because of the historical API, there is no current way to have an optional key default to *True*.  The *optional* parameter is read from the call to :meth:`Injector.add_provider`.
 
     :param _ready:  If None (the default), then use the same readyness as the object into which this is being injected (or full readyness if this is a base operation).  If True, then to satisfy this dependency, the provided object must be fully ready.  If False, then a not ready object is preferred.
 
@@ -1356,6 +1358,7 @@ __all__ = [
     'DependencyProvider',
     'ExistingProvider', 'Injectable', 'InjectionFailed',
     'InjectionKey', 'Injector', 'InstantiationContext', 'aspect_for',
+    'NotPresent',
     'dependency_quote', 'inject',
     'inject_autokwargs', 'injector_xref',
     'partial_with_dependencies', 'shutdown_injector']

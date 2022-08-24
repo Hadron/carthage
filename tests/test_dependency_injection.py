@@ -551,3 +551,11 @@ async def test_ready_event_propagation(a_injector, loop):
         if futures: await asyncio.gather(futures)
         trigger_event_received.assert_triggered()
     assert len(instantiation_roots) == 0
+
+def test_optional_not_present(injector):
+    class SomeDependency(Injectable): pass
+    @inject(dep=InjectionKey(SomeDependency, _optional=NotPresent))
+    def func(**kwargs):
+        assert len(kwargs) == 0
+    injector(func)
+    

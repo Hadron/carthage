@@ -309,7 +309,25 @@ async def file_locked(fd: typing.Union[int,str], mode=fcntl.LOCK_EX, unlock=Fals
             await loop.run_in_executor(None, lock, fcntl.LOCK_UN)
         if close: os.close(fd)
         
-                
+
+class NotPresentType:
+    '''A singleton value indicating that an dependency should not be injected into a function if if the dependency is not provided.  Used as the value for the *_optional* parameter to :func:`~carthage.dependency_injection.inject`
+    Usage::
+
+        @inject(router=InjectionKey(Router, _optional=NotPresent))
+        def func(**kwargs):
+            # If the injector does not provide Router, kwargs will not contain 'router'
+            #If _optional had been True, then router would be None when not provided.
+
+    '''
+
+    def __new__(cls):
+        raise TypeError('NotPresent is a singleton')
+
+    def __repr__(self):
+        return 'NotPresent'
+
+NotPresent = object.__new__(NotPresentType) 
     
 __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
            'add_carthage_arguments', 'carthage_main_argparser',

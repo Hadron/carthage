@@ -15,6 +15,7 @@ __all__ = [
     'DependencyProvider',
     'ExistingProvider', 'Injectable', 'InjectionFailed',
     'InjectionKey', 'Injector', 'InstantiationContext', 'aspect_for',
+    'NotPresent',
     'current_instantiation', 'dependency_quote', 'inject',
     'inject_autokwargs', 'injector_xref',
     'partial_with_dependencies', 'shutdown_injector']
