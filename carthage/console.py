@@ -11,7 +11,10 @@
 import asyncio, argparse, code, collections.abc, time
 import pkg_resources, os.path, readline, rlcompleter, sys, traceback
 import carthage, carthage.utils
-from carthage import base_injector, AsyncInjector, ConfigLayout, InjectionKey, Injector
+from carthage import base_injector, ConfigLayout
+from carthage.dependency_injection import *
+__all__ = []
+
 
 
 
@@ -153,6 +156,45 @@ class CarthageConsole(code.InteractiveConsole):
         else:
             self.orig_displayhook(obj)
 
+__all__ += ['CarthageConsole']
+
+subparser_action_key = InjectionKey('argparse.SubParserAction')
+
+@inject_autokwargs(subparser_action=subparser_action_key)
+class CarthageRunnerCommand(Injectable):
+
+    @property
+    def name(self):
+        raise NotImplementedError('You must set name in a subclass')
+
+    #: Extra arguments to be passed into .add_subparser
+    subparser_kwargs = {}
+
+    #: Does generate need to be run on the layout before this command?
+    generate_required=False
+
+    def setup_subparser(self, subparser):
+        '''Generally calls add_argument a lot.'''
+        raise NotImplementedError
+
+    async def run(self, args):
+        '''Called when this subcommand is selected.'''
+        pass
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        parser = self.subparser_action.add_parser(
+            self.name, **self.subparser_kwargs)
+        self.setup_subparser(parser)
+        
+    @classmethod
+    def default_class_injection_key(cls):
+        return InjectionKey(CarthageRunnerCommand, name=cls.name)
+
+
+__all__ += ['CarthageRunnerCommand', 'subparser_action_key']
+        
+        
 def main():
 
     console = CarthageConsole()

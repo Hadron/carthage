@@ -204,11 +204,16 @@ def carthage_main_argparser(*args, **kwargs):
     add_carthage_arguments(parser)
     return parser
 
-def carthage_main_setup(parser=None):
+def carthage_main_setup(parser=None, unknown_ok=True):
     from . import base_injector, ConfigLayout
     if parser is None:
         parser = carthage_main_argparser()
-    args = parser.parse_args()
+    if unknown_ok:
+        result = parser.parse_known_args()
+        args = result[0]
+    else:
+        args = parser.parse_args()
+        result = args
     if len(args.config) > 0:
         config = base_injector(ConfigLayout)
         for f in args.config:
@@ -232,7 +237,7 @@ def carthage_main_setup(parser=None):
     if args.tasks_verbose:
         logging.getLogger('carthage.setup_tasks').setLevel(10)
         
-    return args
+    return result
 
 def carthage_main_run(func, *args, **kwargs):
     loop = asyncio.get_event_loop()

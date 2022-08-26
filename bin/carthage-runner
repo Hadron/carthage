@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -10,8 +10,8 @@
 import argparse, functools, os, sys, gc, traceback, warnings, yaml
 import asyncio, logging
 import  carthage.console
-from carthage.dependency_injection import AsyncInjector, InjectionKey, shutdown_injector
-from carthage import base_injector, sh, ssh
+from carthage.dependency_injection import *
+from carthage import base_injector, sh, ssh, ConfigLayout
 from carthage.network import Network, BridgeNetwork, external_network_key
 from carthage.machine import Machine
 import carthage.ssh
@@ -48,14 +48,18 @@ async def queue_all(action):
 def start_machine_cb(target, *args, **kwargs):
     if target not in machines:
         machines.append(target)
-        
+
+async def setup_layout():
+    global layout, ainjector
+    config = await ainjector(carthage.config.ConfigLayout)
+    layout = await ainjector(instantiate_layout, config.layout_name)
+    ainjector = layout.ainjector
+            
 async def run():
     global ainjector, layout
     config = await ainjector(carthage.config.ConfigLayout)
     layout_name = config.layout_name
     if args.warn_dns: warn_on_dns()
-    layout = await ainjector(instantiate_layout, config.layout_name)
-    ainjector = layout.ainjector
     ainjector.add_event_listener(InjectionKey(Machine), ['start_machine'], start_machine_cb)
     if args.keep_machines:
         config.persist_local_networking = True
@@ -121,7 +125,7 @@ ainjector = base_injector(AsyncInjector)
 loop = asyncio.get_event_loop()
 machine_queue = asyncio.Queue()
 
-parser = carthage.utils.carthage_main_argparser()
+parser = carthage.utils.carthage_main_argparser(add_help=False)
 parser.add_argument('--generate',
                     help = "Generate configuration for the layout",
                     dest = 'actions',
@@ -157,12 +161,17 @@ parser.add_argument('--warn-dns',
                     action='store_true',
                     help="Warn on any use of dns in layout; testing tool to avoid dns dependencies when the layout will provide dns service")
 
+parser.add_argument(
+    '-h', '--help',
+    action='store_true',
+    help='Print usage')
+
 
 
 console = carthage.console.CarthageConsole()
 console.add_arguments(parser)
 
-args = carthage.utils.carthage_main_setup(parser)
+args, unknown = carthage.utils.carthage_main_setup(parser, unknown_ok=True)
 
 
 # First see if we need to rexec
@@ -170,10 +179,45 @@ if 'TMUX' not in os.environ and  args.tmux:
     os.execvp("tmux", ["tmux", "new-session", "-A", "-scarthage",
                        ]+sys.argv)
 
+    
 if args.start is not None:
     args.actions.append('start')
 if args.stop is not None:
     args.actions.append('stop')
+
+layout = None
+try: loop.run_until_complete(setup_layout())
+except KeyError: pass
+if layout is None:
+    # If a layout is specified in the config it is not needed as a subcommand
+    # Otherwise we need it before the subcommand
+    parser.add_argument('plugin_path', help='Plugin containing a layout')
+    plugin = unknown.pop(0)
+    try:
+        base_injector(carthage.plugins.load_plugin, plugin)
+        loop.run_until_complete(setup_layout())
+    except Exception:
+        parser.print_help()
+        raise
+subparser_action = parser.add_subparsers(title='subcommands', dest='cmd',
+                                         required=False)
+base_injector.add_provider(carthage.console.subparser_action_key, subparser_action)
+
+
+subcommands = {}
+k = None
+v = None
+for k,v in ainjector.filter_instantiate(
+        carthage.console.CarthageRunnerCommand,
+        ['name']):
+    subcommands[v.name] = v
+del k
+del v
+
+args = carthage.utils.carthage_main_setup(parser, unknown_ok=False)
+if args.help:
+    parser.print_help()
+    sys.exit(0)
     
 
 console.process_arguments(args)
@@ -183,7 +227,14 @@ console.process_arguments(args)
 
 try:
     queue_workers = []
-    loop.run_until_complete(run())
+    if args.cmd is None:
+        loop.run_until_complete(run())
+    else:
+        selected_subcommand = subcommands[args.cmd]
+        if selected_subcommand.generate_required:
+            loop.run_until_complete(layout.generate())
+        loop.run_until_complete(ainjector( selected_subcommand.run, args))
+        
     for q in queue_workers:
         q.cancel()
 finally:
