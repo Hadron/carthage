@@ -129,7 +129,7 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass = ModelingContainer
         return [m[1] for m in models]
 
     async def resolve_networking(self, force = False):
-        if hasattr(self, 'resolve_networking_models'):
+        if hasattr(self, 'resolve_networking_models') and not force:
             return self.resolve_networking_models
         async def await_futures(pending_futures, event, target, **kwargs):
             if pending_futures:
@@ -173,7 +173,12 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass = ModelingContainer
         if futures: await asyncio.gather(*futures)
         if hasattr(super(), 'generate'):
             await super().generate()
-        
+
+
+    async def async_ready(self):
+        await self.resolve_networking()
+        return await super().async_ready()
+    
             
     
 
@@ -432,7 +437,18 @@ class CarthageLayout(ModelGroup):
     layout_name = None
 
 __all__ += ['CarthageLayout']
-    
+
+@inject(ainjector=AsyncInjector)
+async def instantiate_layout(layout_name = None, *, ainjector):
+    if layout_name:
+        layout = await ainjector.get_instance_async(InjectionKey(CarthageLayout, layout_name = layout_name))
+    else:
+        layout = await ainjector.get_instance_async(CarthageLayout)
+    return layout
+
+__all__ += ['instantiate_layout']
+
+
 @inject(injector = Injector)
 def model_bases(host: str, *bases,
                    injector):

@@ -88,9 +88,9 @@ def test_container(injector):
                 
     res = injector(Layout)
     nc = res.injector.get_instance(InjectionKey(
-        NetworkConfig, domain = "evil.com"))
+        NetworkConfig, domain = "evil.com", _ready=False))
     assert nc is Layout.RedEnclave.nc
-    machine = res.injector.get_instance(InjectionKey(MachineModel, host = "server.evil.com"))
+    machine = res.injector.get_instance(InjectionKey(MachineModel, host = "server.evil.com", _ready=False))
     assert isinstance(machine, MachineModel)
     assert res.net_config is res.RedEnclave.nc
     assert res.access_key_1 == 42
@@ -131,7 +131,8 @@ async def test_machine_model(injector):
 
         red_router = injector_access(InjectionKey(MachineModel, host  = "router.evil.com"))
 
-    res = injector(Layout)
+    ainjector = injector(AsyncInjector)
+    res = await ainjector(Layout)
     assert res.red_router.name == "router.evil.com"
     assert hasattr(res.Red.task_machine, 'setup_tasks')
     await res.Red.task_machine.async_become_ready()
@@ -147,7 +148,9 @@ async def test_example_model(ainjector):
     samba = res.injector.get_instance(InjectionKey(MachineModel, host = "samba.evil.com"))
     assert samba.network_config is nc
     
-def test_transclusion(injector):
+@async_test
+async def test_transclusion(ainjector):
+    injector = ainjector.injector
     injector.add_provider(InjectionKey(MachineModel, host="moo.com"),
                           "bar")
     injector.add_provider(InjectionKey(Machine, host = "mar.com"),
@@ -158,7 +161,7 @@ def test_transclusion(injector):
         class MarMixin(MachineModel):
             mixed_in = True
 
-    first_layout = injector(FirstLayout)
+    first_layout = await ainjector(FirstLayout)
     injector = first_layout.injector
 
     @transclude_injector(injector)
@@ -172,7 +175,8 @@ def test_transclusion(injector):
             name = "mar.com"
             
 
-    l = injector(Layout)
+    ainjector = injector(AsyncInjector)
+    l = await ainjector(Layout)
     assert l.moo == "bar"
     assert l.mar.machine == "baz"
     assert l.mar.mixed_in == True
@@ -216,13 +220,14 @@ async def test_generate_and_network(ainjector):
             
                 
     stuff_generated = False
-    l = ainjector.injector(Layout)
+    l = await ainjector(Layout)
     await l.generate()
     assert stuff_generated
     assert l.TheMachine.network_links['eth0'].other.machine == l.OtherMachine
     assert len(l.net.network_links) == 2
     
-def test_implicit_customization(injector):
+@async_test
+async def test_implicit_customization(ainjector):
     class Layout(ModelGroup):
 
         class foo(MachineModel):
@@ -230,8 +235,8 @@ def test_implicit_customization(injector):
             class cust(MachineCustomization):
                 pass
 
-    l = injector(Layout)
-    injector.add_provider(machine_implementation_key, dependency_quote(Machine))
+    l = await ainjector(Layout)
+    ainjector.add_provider(machine_implementation_key, dependency_quote(Machine))
     assert hasattr(l.foo.machine_type, 'cust_task') 
     
 def test_model_mixin(injector):

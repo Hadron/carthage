@@ -16,7 +16,7 @@ from carthage.network import Network, BridgeNetwork, external_network_key
 from carthage.machine import Machine
 import carthage.ssh
 from carthage.local import LocalMachine
-from carthage.modeling import CarthageLayout
+from carthage.modeling import CarthageLayout, instantiate_layout
 
 logger = logging.getLogger('carthage')
 
@@ -54,19 +54,13 @@ async def run():
     config = await ainjector(carthage.config.ConfigLayout)
     layout_name = config.layout_name
     if args.warn_dns: warn_on_dns()
-    if layout_name:
-        layout = await ainjector.get_instance_async(InjectionKey(CarthageLayout, layout_name = layout_name))
-    else:
-        layout = await ainjector.get_instance_async(CarthageLayout)
+    layout = await ainjector(instantiate_layout, config.layout_name)
     ainjector = layout.ainjector
     ainjector.add_event_listener(InjectionKey(Machine), ['start_machine'], start_machine_cb)
     if args.keep_machines:
         config.persist_local_networking = True
     if 'generate' in args.actions:
         await layout.generate()
-    else:
-        #We at least need to resolve network across the entire layout
-        await layout.resolve_networking()
     if 'start' in args.actions and args.start:
         await queue_explicit(args.start, 'start')
     elif 'start' in args.actions:
@@ -158,7 +152,6 @@ parser.add_argument(
                     action='store_true',
                     dest ='keep_machines')
 parser.add_argument('--warn-dns',
-
                     '--warn-on-dns',
                     dest='warn_dns',
                     action='store_true',
@@ -181,8 +174,6 @@ if args.start is not None:
     args.actions.append('start')
 if args.stop is not None:
     args.actions.append('stop')
-if not args.actions:
-    args.actions = ['generate', 'start']
     
 
 console.process_arguments(args)
