@@ -114,7 +114,7 @@ class Injectable:
                 yield InjectionKey(c)
                 if k.constraints: yield InjectionKey(c, **k.constraints)
             elif c is k.target and k.constraints:
-                    yield InjectionKey(c, **k.constraints)
+                    yield InjectionKey(c)
 
     @classmethod
     def satisfies_injection_key(cls, k):
