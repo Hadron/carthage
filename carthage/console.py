@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -83,7 +83,8 @@ class CarthageConsole(code.InteractiveConsole):
         res_str = pkg_resources.resource_string(pkg, resource)
         exec(compile(res_str, resource, mode = "exec"),  self.locals)
         
-    def __init__(self, locals=None, extra_locals=None):
+    def __init__(self, locals=None, extra_locals=None,
+                 history_file="~/.carthage_history"):
         if locals is None:
            locals = self.default_locals()
         if extra_locals is not None:
@@ -99,6 +100,11 @@ class CarthageConsole(code.InteractiveConsole):
         if 'h' in self.locals and self.locals['h'] is not self.history:
             raise NotImplementedError("When replacing `h', it is unclear whether you want to link to the async history object or disable it.")
         self.locals['h'] = self.history
+        if history_file:
+            history_file = os.path.expanduser(history_file)
+            try: readline.read_history_file(history_file)
+            except FileNotFoundError: pass
+        self.history_file = history_file
 
     def interact(self, *args, **kwargs):
         try: asyncio.get_event_loop()
@@ -117,6 +123,7 @@ class CarthageConsole(code.InteractiveConsole):
         finally:
             readline.set_completer(self.orig_completer)
             sys.displayhook = self.orig_displayhook
+            if self.history_file: readline.write_history_file(self.history_file)
             
     def raw_input(self, *args, **kwargs):
         for k in self.completed_keys:
