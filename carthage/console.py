@@ -160,9 +160,14 @@ __all__ += ['CarthageConsole']
 
 subparser_action_key = InjectionKey('argparse.SubParserAction')
 
-@inject_autokwargs(subparser_action=subparser_action_key)
-class CarthageRunnerCommand(Injectable):
+@inject_autokwargs(subparser_action=subparser_action_key,
+                   )
+class CarthageRunnerCommand(AsyncInjectable):
 
+    #Although this class is an Injectable, because of the way it is
+    #instantiated, async_resolve and async_ready must both be trivial.
+    #It is an AsyncInjectable only to get a claimed AsyncInjector.
+    
     @property
     def name(self):
         raise NotImplementedError('You must set name in a subclass')
