@@ -356,3 +356,15 @@ async def test_injector_xref_no_cycle(ainjector):
     wait_future.set_result(True)
     await instantiation_future
     
+@async_test
+async def test_globally_unique_with_name(ainjector):
+    "Confirm that if @globally_unique shadows inject_by_name the result is globally unique"
+    class outer(ModelGroup):
+        @provides(InjectionKey("inner", role="role"))
+        class inner(ModelGroup):
+            @globally_unique_key("comcast_net")
+            class comcast_net(NetworkModel): pass
+    l = await ainjector(outer)
+    ainjector = l.ainjector
+    await ainjector.get_instance_async('comcast_net')
+                  

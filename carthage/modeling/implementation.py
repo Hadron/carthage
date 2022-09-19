@@ -130,7 +130,11 @@ class ModelingNamespace(dict):
             return decorators.injector_access(state.transclusion_key)
         options = state.injection_options
         if state.flags & NSFlags.inject_by_name:
-            yield InjectionKey(name), (val(InjectionKey(name)), options)
+            name_key = InjectionKey(name)
+            # If name_key is in extra_keys, use that, so we avoid
+            # differing in _globally_unique or _ready
+            if name_key not in state.extra_keys:
+                yield InjectionKey(name), (val(InjectionKey(name)), options)
         if isinstance(state.value, type) and (state.flags & NSFlags.inject_by_class):
             for b in state.value.__mro__:
                 if b in self.classes_to_inject:
