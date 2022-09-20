@@ -113,7 +113,7 @@ def handle_plugin_url(url, injector):
     if parsed.scheme in ('https', 'git+ssh'):
         return handle_git_url(parsed, injector)
     else:
-        raise NotImplementedError(f"Don't know how to handle {scheme} URL")
+        raise NotImplementedError(f"Don't know how to handle {parsed.scheme} URL")
 
 def handle_git_url(parsed, injector):
     config = injector(ConfigLayout)
