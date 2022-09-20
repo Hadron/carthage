@@ -187,7 +187,7 @@ if args.stop is not None:
 
 layout = None
 try: loop.run_until_complete(setup_layout())
-except KeyError: pass
+except KeyError: raise
 if layout is None:
     # If a layout is specified in the config it is not needed as a subcommand
     # Otherwise we need it before the subcommand
@@ -214,7 +214,7 @@ for k,v in ainjector.filter_instantiate(
 del k
 del v
 
-args = carthage.utils.carthage_main_setup(parser, unknown_ok=False)
+args = parser.parse_args()
 if args.help:
     parser.print_help()
     sys.exit(0)
