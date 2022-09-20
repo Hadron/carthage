@@ -204,7 +204,7 @@ def carthage_main_argparser(*args, **kwargs):
     add_carthage_arguments(parser)
     return parser
 
-def carthage_main_setup(parser=None, unknown_ok=True):
+def carthage_main_setup(parser=None, unknown_ok=False):
     from . import base_injector, ConfigLayout
     if parser is None:
         parser = carthage_main_argparser()
