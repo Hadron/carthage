@@ -1,4 +1,4 @@
-# Copyright (C) 2021, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import os, random, yaml
+import contextlib, fcntl, os, random, yaml
 from pathlib import Path
 from ..dependency_injection import *
 from ..config import ConfigLayout
@@ -36,6 +36,15 @@ class MacStore(Injectable, dict):
     def _resolved_event(self, key, event, target, *args, **kwargs):
         self.persist()
 
+    @contextlib.contextmanager
+    def locked(self):
+        fd = os.open(self.path.with_suffix('.yml.lock'), os.O_CREAT|os.O_CLOEXEC|os.O_RDWR, 0o664)
+        try:
+            fcntl.lockf(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            os.close(fd)
+
     def load(self):
         def recurse(current, base_key):
             for k, v in current.items():
@@ -45,7 +54,7 @@ class MacStore(Injectable, dict):
                     self[base_key + (k,)] = v
                     
         if self.path.exists():
-            yaml_dict = yaml.safe_load(self.path.read_text())
+            with self.locked(): yaml_dict = yaml.safe_load(self.path.read_text())
             assert isinstance(yaml_dict, dict)
             recurse(yaml_dict, tuple())
             
@@ -63,8 +72,9 @@ class MacStore(Injectable, dict):
         result = {}
         for k, v in self.items():
             recurse(k, result, v)
-        new_path.write_text(yaml.dump(result, default_flow_style = False))
-        new_path.replace(self.path)
+        with self.locked():
+            new_path.write_text(yaml.dump(result, default_flow_style = False))
+            new_path.replace(self.path)
 
     def __getitem__(self, k):
         if k in self: return super().__getitem__(k)
