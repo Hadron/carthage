@@ -52,7 +52,7 @@ def start_machine_cb(target, *args, **kwargs):
 async def setup_layout():
     global layout, ainjector
     config = await ainjector(carthage.config.ConfigLayout)
-    layout = await ainjector(instantiate_layout, config.layout_name)
+    layout = await ainjector(instantiate_layout, config.layout_name, optional=True)
     ainjector = layout.ainjector
             
 async def run():
@@ -186,8 +186,8 @@ if args.stop is not None:
     args.actions.append('stop')
 
 layout = None
-try: loop.run_until_complete(setup_layout())
-except KeyError: raise
+loop.run_until_complete(setup_layout())
+
 if layout is None:
     # If a layout is specified in the config it is not needed as a subcommand
     # Otherwise we need it before the subcommand

@@ -439,11 +439,11 @@ class CarthageLayout(ModelGroup):
 __all__ += ['CarthageLayout']
 
 @inject(ainjector=AsyncInjector)
-async def instantiate_layout(layout_name = None, *, ainjector):
+async def instantiate_layout(layout_name = None, *, ainjector, optional=False):
     if layout_name:
-        layout = await ainjector.get_instance_async(InjectionKey(CarthageLayout, layout_name = layout_name))
+        layout = await ainjector.get_instance_async(InjectionKey(CarthageLayout, layout_name = layout_name, _optional=optional))
     else:
-        layout = await ainjector.get_instance_async(CarthageLayout)
+        layout = await ainjector.get_instance_async(InjectionKey(CarthageLayout, _optional=optional))
     return layout
 
 __all__ += ['instantiate_layout']
