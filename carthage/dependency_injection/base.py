@@ -197,7 +197,7 @@ class  InjectorClosed(RuntimeError): pass
 class AsyncRequired(RuntimeError):
 
     def __init__(self, msg, context):
-        super().__init__(f'{msg} {context.description}')
+        super().__init__(f'{msg} {context.description if context else ""}')
 
 
 
