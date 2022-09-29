@@ -25,27 +25,56 @@ This module is typically used alongside the :ref:`carthage.pytest_plugin` Pytest
 
 '''
 
-time_remaining = 120
+class TestTiming:
+
+    time_remaining = 120
+    previous_timing = None
+    __test__ = False
+
+
+    '''
+    Usage::
+
+         with TestTiming(300):
+              # Block of code that is given 300 seconds to run
+
+'''
+
+    def __init__(self, timing:float):
+        self.time_remaining = timing
+        self.initial_time_remaining = timing
+
+    def __enter__(self):
+        global test_timing
+        self.previous_timing = test_timing
+        test_timing = self
+
+    def __exit__(self, *args):
+        global test_timing
+        test_timing = self.previous_timing
+        
+test_timing = None
 
 def time_loop(loop, future):
     '''Run *future* in 5 second slices, adjusting time_remaining.  If time runs out, cancel the future but eventually raise TimeoutError.
 '''
-    global time_remaining
     done = tuple()
     #: None or the eventual error message to print.
     timed_out = None
     time_delta = 5
     while not done:
         now = time.time()
+        time_remaining = test_timing.time_remaining
         done, pending = loop.run_until_complete(asyncio.wait(
             [future], timeout=time_remaining if time_remaining < time_delta else time_delta))
+        # test_timing.time_remaining may have increased while running.
         if not done:
-            time_remaining -= time.time()-now
-            if time_remaining <0:
+            test_timing.time_remaining -= time.time()-now
+            if test_timing.time_remaining <0:
                 if timed_out: raise TimeoutError(timed_out)
-                timed_out = f'{future} failed to complete'
+                timed_out = f'{future} failed to complete in {test_timing.initial_time_remaining} seconds'
                 future.cancel(msg='timed out')
-                time_remaining = 30
+                test_timing.time_remaining = 30
     if timed_out:
         if not future.cancelled():
             raise ValueError('Task failed to cancel on timeout')
@@ -74,8 +103,8 @@ def async_test(t):
     orig_ainjector = True
     @functools.wraps(t)
     def wrapper(loop, *args,  **kwargs):
-        global time_remaining
-        time_remaining = 120
+        global test_timing
+        test_timing = TestTiming(TestTiming.time_remaining)
 
         if orig_loop:
             kwargs['loop'] = loop
@@ -162,4 +191,5 @@ async def subtest_controller(request, target, pytest_args,
         
 
     
-__all__ = 'async_test subtest_controller'.split()
+__all__ = ['async_test', 'subtest_controller', 'TestTiming']
+

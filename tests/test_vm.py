@@ -49,23 +49,25 @@ async def test_vm_config(loop, ainjector, vm_image):
 
 @async_test
 async def test_vm_test(request, ainjector, vm_image):
-    vm = await ainjector(VM, name = "vm_2", image = vm_image)
+    with TestTiming(300):
+        vm = await ainjector(VM, name = "vm_2", image = vm_image)
     vm.ssh_rekeyed()
     assert vm.config_layout.delete_volumes
-    async with vm.machine_running():
-        await vm.ssh_online()
-        await vm.ssh("apt-get update")
-        await vm.ssh("apt-get -y install python3-pytest ansible rsync python3-mako")
-        await ainjector(rsync_git_tree, resource_dir, vm.rsync_path('/carthage'))
-        await subtest_controller(request, vm, "/carthage/tests/inner_plugin_test.py",
+    with TestTiming(400):
+        async with vm.machine_running():
+            await vm.ssh_online()
+            await vm.ssh("apt-get update")
+            await vm.ssh("apt-get -y install python3-pytest ansible rsync python3-mako")
+            await ainjector(rsync_git_tree, resource_dir, vm.rsync_path('/carthage'))
+            await subtest_controller(request, vm, "/carthage/tests/inner_plugin_test.py",
                                  python_path = "/carthage")
-        # We also test ansible here because we already have a VM up and running
-        await ainjector(
-            carthage.ansible.run_playbook,
-            ["vm"],
-            "/carthage/tests/resources/test_playbook.yml",
-            inventory = "/carthage/tests/resources/inventory.txt",
-            origin = vm)
+            # We also test ansible here because we already have a VM up and running
+            await ainjector(
+                carthage.ansible.run_playbook,
+                ["vm"],
+                "/carthage/tests/resources/test_playbook.yml",
+                inventory = "/carthage/tests/resources/inventory.txt",
+                origin = vm)
         
         
 @async_test
@@ -105,8 +107,9 @@ async def test_cloud_init(test_ainjector, vm_image):
     ainjector.add_provider(layout)
     l = await ainjector.get_instance_async(layout)
     ainjector = l.ainjector
-    m = await ainjector.get_instance_async(InjectionKey(Machine, host = "vm-3"))
-    m.ssh_rekeyed()
-    async with m.machine_running(ssh_online = True):
-        pass
+    with TestTiming(300):
+        m = await ainjector.get_instance_async(InjectionKey(Machine, host = "vm-3"))
+        m.ssh_rekeyed()
+        async with m.machine_running(ssh_online = True):
+            pass
     

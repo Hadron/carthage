@@ -104,8 +104,9 @@ async def test_ansible_and_modeling(test_ainjector, config):
     ainjector.add_provider(InjectionKey("layout"), layout) # So it is cleaned up
     await ainjector.get_instance_async(carthage.ssh.SshKey)
     await layout.generate()
-    await layout.test_container.machine.async_become_ready()
-    await layout.never_running_container.machine.async_become_ready()
+    with TestTiming(300):
+        await layout.test_container.machine.async_become_ready()
+        await layout.never_running_container.machine.async_become_ready()
     
 
 @async_test
