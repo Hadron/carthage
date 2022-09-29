@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -6,12 +6,13 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import asyncio, functools, inspect, json, pytest, sys
+import asyncio, functools, inspect, json, pytest, sys, time
 
 from .dependency_injection import inject, InjectionKey
 
 from _pytest.reports import TestReport
 from _pytest.nodes import Node
+
 
 '''
 Decorators and functions for use with Carthage.
@@ -23,6 +24,33 @@ This module is typically used alongside the :ref:`carthage.pytest_plugin` Pytest
 * Running a subtest within an item implementing :ref:`SshMixin` and collecting the results.
 
 '''
+
+time_remaining = 120
+
+def time_loop(loop, future):
+    '''Run *future* in 5 second slices, adjusting time_remaining.  If time runs out, cancel the future but eventually raise TimeoutError.
+'''
+    global time_remaining
+    done = tuple()
+    #: None or the eventual error message to print.
+    timed_out = None
+    time_delta = 5
+    while not done:
+        now = time.time()
+        done, pending = loop.run_until_complete(asyncio.wait(
+            [future], timeout=time_remaining if time_remaining < time_delta else time_delta))
+        if not done:
+            time_remaining -= time.time()-now
+            if time_remaining <0:
+                if timed_out: raise TimeoutError(timed_out)
+                timed_out = f'{future} failed to complete'
+                future.cancel(msg='timed out')
+                time_remaining = 30
+    if timed_out:
+        if not future.cancelled():
+            raise ValueError('Task failed to cancel on timeout')
+        raise TimeoutError(timed_out)
+    
 
 def async_test(t):
     '''A decorator for wrapping a test. *t* is expected to be a coroutine
@@ -46,6 +74,9 @@ def async_test(t):
     orig_ainjector = True
     @functools.wraps(t)
     def wrapper(loop, *args,  **kwargs):
+        global time_remaining
+        time_remaining = 120
+
         if orig_loop:
             kwargs['loop'] = loop
         ainjector = kwargs.get('ainjector', None)
@@ -55,8 +86,7 @@ def async_test(t):
             if not orig_ainjector:
                 del kwargs['ainjector']
             task = asyncio.ensure_future(ainjector(t, *args, **kwargs), loop = loop)
-        done, pending = loop.run_until_complete(asyncio.wait([task], timeout = 840))
-        if pending: raise  TimeoutError
+        time_loop(loop, task)
         return task.result()
     params = list(sig.parameters.values())
     try:
