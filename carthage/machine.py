@@ -24,6 +24,8 @@ class MachineRunning:
 
     async def __aenter__(self):
         if self.machine.with_running_count <= 0:
+            if self.machine.running is None:
+                await self.machine.is_machine_running()
             self.machine.already_running = self.machine.running
         self.machine.with_running_count +=1
         if self.machine.running:
@@ -230,6 +232,7 @@ class Machine(AsyncInjectable, SshMixin):
         self.sshfs_lock = asyncio.Lock()
         self.injector.add_provider(InjectionKey(Machine), self)
         if not hasattr(self, 'model'): self.model = None
+        self.running = None
 
     def machine_running(self, **kwargs):
         '''Returns a asynchronous context manager; within the context manager, the machine is expected to be running unless :meth:`stop_machine` is explicitly called.
