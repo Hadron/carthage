@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 from carthage.dependency_injection import *
 from .setup_tasks import setup_task, SetupTaskMixin
+from .utils import memoproperty
 
 
 __all__ = []
@@ -58,6 +59,16 @@ class OciManaged(SetupTaskMixin, AsyncInjectable):
 
 __all__ += ['OciManaged']
 
+@dataclasses.dataclass
+class OciExposedPort(Injectable):
+
+    container_port: int
+    host_ip: str = "0.0.0.0"
+    host_port: int = ""
+
+    def default_instance_injection_key(self):
+        return InjectionKey(OciExposedPort, container_port=self.container_port)
+
 @inject_autokwargs(
     oci_interactive=InjectionKey('oci_interactive', _optional=NotPresent),
     oci_tty=InjectionKey('oci_tty', _optional=NotPresent),
@@ -70,4 +81,13 @@ class OciContainer(OciManaged):
     #: Allocate a tty for stdio
     oci_tty = False
 
+    @memoproperty
+    def exposed_ports(self):
+        '''Return a sequence of :class:`OciExposedPort` for any container ports that should be exposed.
+
+        By default, instantiate all *OciExposedPort* instances in the injector.
+        '''
+        result = self.injector.filter_instantiate(OciExposedPort, ['container_port'])
+        return [i[1] for i in result]
+    
 __all__ += ['OciContainer']

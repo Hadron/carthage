@@ -20,6 +20,9 @@ from .oci import *
 
 logger = logging.getLogger('carthage.podman')
 
+def podman_port_option(p: OciExposedPort):
+    return f'-p{p.host_ip}:{p.host_port}:{p.container_port}'
+
 __all__ = []
 
 class PodmanContainerHost:
@@ -49,6 +52,21 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     #: Timeout in seconds to wait when stopping a container
     stop_timeout = 10
+
+    @property
+    def ssh_options(self):
+        if not hasattr(self, 'ssh_port'):
+            raise ValueError('Set ssh_port before ssh')
+        return (
+            '-oStrictHostKeyChecking=no',
+            f'-l{self.ssh_user}',
+            f'-p{self.ssh_port}')
+
+    ssh_user = 'root'
+
+    #:The port on which to connect to for ssh
+    ssh_port: int
+    
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -72,6 +90,9 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             return False
         containers = json.loads(str(result))
         self.container_info = containers[0]
+        ports = self.container_info['NetworkSettings']['Ports']
+        if not hasattr(self, 'ssh_port') and '22/tcp' in ports:
+            self.ssh_port = ports['22/tcp'][0]['HostPort']
         return dateutil.parser.isoparse(containers[0]['Created']).timestamp()
 
     async def do_create(self):
@@ -86,6 +107,8 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         options = []
         if self.oci_interactive: options.append('-i')
         if self.oci_tty: options.append('-t')
+        for p in self.exposed_ports:
+            options.append(podman_port_option(p))
         return options
         
     async def delete(self, force=True, volumes=True):
@@ -125,15 +148,23 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             self.running = False
             await super().stop_machine()
 
-    async def container_exec(self, *args):
+    def container_exec(self, *args):
         '''
 'Execute a command in a running container and return stdout.  This function intentionally has a differentname than :meth:`carthage.container.Container.container_command` because that method does not expect the container to be running.
 '''
-        result = await self.podman(
+        result =  self.podman(
             'container', 'exec',
             self.full_name,
             *args,
             )
         return result
+
+    #: An alias to be more compatible with :class:`carthage.container.Container`
+    shell = container_exec
+
+    def __repr__(self):
+        try: host = repr(self.container_host)
+        except Exception: host = "repr failed"
+        return f'<{self.__class__.__name__ {self.name} on {host}>'
     
 __all__ += ['PodmanContainer']
