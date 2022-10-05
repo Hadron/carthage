@@ -16,7 +16,7 @@ from . import sh
 from .utils import possibly_async, memoproperty
 from .setup_tasks import setup_task, SkipSetupTask, SetupTaskMixin, TaskWrapper
 import carthage
-from .machine import ContainerCustomization, customization_task
+from .machine import ContainerCustomization, FilesystemCustomization, customization_task
 
 
 @inject_autokwargs(config_layout = ConfigLayout)
@@ -511,7 +511,7 @@ def image_factory(name, image_type = 'raw',
     return ainjector(image, name = name, path = path,
                      create_size = config_layout.vm_image_size)
 
-class SshAuthorizedKeyCustomizations(ContainerCustomization):
+class SshAuthorizedKeyCustomizations(FilesystemCustomization):
 
     description = "Set up authorized_keys file"
 

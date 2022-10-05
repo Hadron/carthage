@@ -8,9 +8,11 @@
 
 from __future__ import annotations
 import asyncio
+import contextlib
 import json
 import logging
 import dateutil.parser
+from pathlib import Path
 from carthage.dependency_injection import *
 from . import sh
 from .machine import AbstractMachineModel, Machine
@@ -33,6 +35,18 @@ class PodmanContainerHost:
 
 class LocalPodmanContainerHost(PodmanContainerHost):
 
+    @contextlib.asynccontextmanager
+    async def filesystem_access(self, container):
+        result = await self.podman(
+            'container', 'mount',
+            container,
+            _bg=True, _bg_exc=False)
+        try:
+            path = str(result).strip()
+            yield path
+        finally:
+            pass #Perhaps we should unmount, but we'd need a refcount to do that.
+        
     def podman(self, *args,
                _bg=True, _bg_exc=True):
         return sh.podman(
@@ -162,9 +176,31 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
     #: An alias to be more compatible with :class:`carthage.container.Container`
     shell = container_exec
 
+    def _apply_to_filesystem_customization(self, customization):
+        @contextlib.asynccontextmanager
+        async def customization_context():
+            async with self.machine_running(ssh_online=False), self.filesystem_access() as path:
+                customization.path = path
+                yield
+            return
+        customization.customization_context = customization_context()
+        customization.run_command = self.container_exec
+
+
+    def filesystem_access(self):
+        return self.container_host.filesystem_access(self.full_name)
+    
+            
     def __repr__(self):
         try: host = repr(self.container_host)
         except Exception: host = "repr failed"
-        return f'<{self.__class__.__name__ {self.name} on {host}>'
+        return f'<{self.__class__.__name__} {self.name} on {host}>'
+
+    @memoproperty
+    def stamp_path(self):
+        state_dir = Path(self.config_layout.state_dir)
+        result = state_dir.joinpath("podman", self.name)
+        result.mkdir(exist_ok=True, parents=True)
+        return result
     
 __all__ += ['PodmanContainer']

@@ -398,6 +398,13 @@ class Machine(AsyncInjectable, SshMixin):
         meth = getattr(customization, method)
         return await meth()
 
+    def _apply_to_filesystem_customization(self, customization):
+        '''
+        Adapts the customization to this type of machine.  Overridden in machines that can customize a filesystem without booting.
+        '''
+        customization.customization_context = customization._machine_context()
+        customization.run_command = self.ssh
+
     async def sshfs_process_factory(self):
         return sh.sshfs(
             '-o' 'ssh_command='+" ".join(
@@ -539,14 +546,14 @@ class MachineCustomization(BaseCustomization):
 
 class ContainerCustomization(BaseCustomization):
 
-    '''A customization class for running tasks on :class:`~carthage.container.Container` instances or :class:`~carthage.image.ImageVolume` instances without actually booting the container.  This is valuable for tasks used in image production that want to manipulate the filesystem.
+    '''A customization class for running tasks on :class:`~carthage.container.Container` instances or :class:`~carthage.image.ImageVolume` instances without actually booting the container.  May also run on objects providing :meth:`_apply_to_container_customization` like :class:`carthage.podman.PodmanContainer`.  This is valuable for tasks used in image production that want to manipulate the filesystem.
 '''
 
     def __init__(self, apply_to, **kwargs):
-        from .container import Container
-        if not isinstance(apply_to, Container):
+        if not hasattr(apply_to, '_apply_to_container_customization'):
             raise TypeError(f'{self.__class__.__name__} can only be applied to Containers or ImageVolumes')
         super().__init__(apply_to = apply_to, **kwargs)
+        apply_to._apply_to_container_customization(self)
 
     @property
     def path(self):
@@ -565,16 +572,8 @@ class FilesystemCustomization(BaseCustomization):
 '''
 
     def __init__(self, apply_to, **kwargs):
-        from .container import Container
-        if isinstance(apply_to, Container):
-            self.path = apply_to.volume.path
-            run_command = apply_to.container_command
-        else:
-            self.customization_context = self._machine_context()
-            run_command = apply_to.ssh
-        #: Run a command on the given filesystem, avoiding a boot if possible
-        self.run_command = run_command
         super().__init__(apply_to, **kwargs)
+        apply_to._apply_to_filesystem_customization(self)
 
     @contextlib.asynccontextmanager
     async def _machine_context(self):
