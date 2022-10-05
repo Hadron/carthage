@@ -234,7 +234,6 @@ class Container(Machine, SetupTaskMixin):
                                  raise_on_running = False)
         done_future = self.done_future()
         await asyncio.wait([done_future, started_future],
-                           loop = self.loop,
                            return_when = "FIRST_COMPLETED")
         if done_future.done():
             logger.error("Container {} failed to start".format(self.name))
