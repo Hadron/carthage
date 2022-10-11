@@ -17,5 +17,5 @@ jobs:
 
       - name: run tests
         run: |
-          sudo PYTHONPATH=$(pwd) podman unshare pytest-3 -v --carthage-config=.github/test_config.yml --log-cli-level=debug
+          sudo PYTHONPATH=$(pwd) pytest-3 -v --carthage-config=.github/test_config.yml --log-cli-level=debug
           
