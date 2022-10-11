@@ -35,6 +35,10 @@ class podman_layout(CarthageLayout):
     add_provider(oci_container_image, 'debian:latest')
     oci_interactive = True
 
+    class DebianWithAuthorizedKeys(PodmanImage):
+        oci_image_tag = 'localhost/authorized-debian:latest'
+        authorized_keys = image_layer_task(SshAuthorizedKeyCustomizations)
+        
     class foo(MachineModel):
 
         name = 'foo.com'
@@ -94,3 +98,9 @@ async def test_container_ssh(ainjector):
     finally:
         await machine.delete()
         
+@async_test
+async def test_podman_image(ainjector):
+    l = await ainjector(podman_layout)
+    ainjector = l.ainjector
+    await l.DebianWithAuthorizedKeys.async_become_ready()
+    

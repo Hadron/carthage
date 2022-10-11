@@ -89,5 +89,28 @@ class OciContainer(OciManaged):
         '''
         result = self.injector.filter_instantiate(OciExposedPort, ['container_port'])
         return [i[1] for i in result]
+
+    #: Override the entry point in the container if set
+    oci_entry_point = None
+
+    #: Override the default command if set
+    oci_command = None
     
 __all__ += ['OciContainer']
+
+
+class OciImage(OciManaged):
+
+    def __init__(self, *, oci_image_tag=None, id=None, **kwargs):
+        if oci_image_tag: self.oci_image_tag = oci_image_tag
+        if id: self.id = id
+        if not hasattr(self, 'oci_image_tag') and not hasattr(self, 'id'):
+            raise TypeError('Either oci_image_tag or id is required')
+        super().__init__(**kwargs)
+
+    oci_image_author = ""
+    oci_image_cmd = None
+    oci_image_entry_point = None
+    id = None
+
+__all__ += ['OciImage']

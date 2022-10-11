@@ -18,7 +18,7 @@ from . import sh
 from .machine import AbstractMachineModel, Machine
 from .utils import memoproperty
 from .oci import *
-
+from .setup_tasks import setup_task, SetupTaskMixin
 
 logger = logging.getLogger('carthage.podman')
 
@@ -48,7 +48,7 @@ class LocalPodmanContainerHost(PodmanContainerHost):
             pass #Perhaps we should unmount, but we'd need a refcount to do that.
         
     def podman(self, *args,
-               _bg=True, _bg_exc=True):
+               _bg=True, _bg_exc=False):
         return sh.podman(
             *args,
             _bg=_bg, _bg_exc=_bg_exc,
@@ -107,6 +107,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         ports = self.container_info['NetworkSettings']['Ports']
         if not hasattr(self, 'ssh_port') and '22/tcp' in ports:
             self.ssh_port = ports['22/tcp'][0]['HostPort']
+        self.id = self.container_info['Id']
         return dateutil.parser.isoparse(containers[0]['Created']).timestamp()
 
     async def do_create(self):
@@ -204,3 +205,180 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         return result
     
 __all__ += ['PodmanContainer']
+
+class PodmanImageBuilderContainer(PodmanContainer):
+
+    oci_entry_point = ['sleep']
+    #: How long a single image building layer can take expressed as an argument to sleep (I.E. one element list with string value)
+    oci_command = ['3600']
+    stop_timeout = 0
+    def _apply_to_container_customization(self, customization):
+        @contextlib.asynccontextmanager
+        async def customization_context():
+            async with self.machine_running(ssh_online=False), self.filesystem_access() as path:
+                customization.path = path
+                yield
+            return
+        customization.customization_context = customization_context()
+        
+@inject_autokwargs(
+    base_image = oci_container_image,
+    )
+class PodmanImage(OciImage, SetupTaskMixin):
+
+
+    '''
+    Represents an OCI container image and provides facilities for building the image.
+
+    :class:`customizations <carthage.machine.BaseCustomization>` can be turned into image layers using the :func:`image_layer_customization` function.  Note that :func:`setup_tasks <setup_task>` are only run when images are actually built.  By default, the image is only built if it does not exist, although see :meth:`should_build` to override.
+
+    '''
+
+    last_layer = None
+
+    async def pull_base_image(self):
+        if not self.base_image.startswith('localhost/'):
+            await self.podman(
+                'pull', self.base_image,
+            )
+        inspect_result = await self.podman(
+            'image', 'inspect',
+            self.base_image)
+        image_info = json.loads(str(inspect_result))[0]
+        config = image_info['Config']
+        if  not self.oci_image_cmd and 'Cmd' in config:
+            self.oci_image_cmd = config['Cmd']
+        if not self.oci_image_entry_point and 'EntryPoint' in config:
+            self.oci_image_entry_point  = config['EntryPoint']
+        self.base_image_info = image_info
+
+    async def find(self):
+        if self.id:
+            to_find = self.id
+            self.oci_read_only = True
+        else: to_find = self.oci_image_tag
+        try:
+            result = await self.podman(
+                'image', 'inspect', to_find,
+            )
+        except sh.ErrorReturnCode: return False
+        info = json.loads(str(result))[0]
+        self.id = info['Id']
+        self.image_info = info
+        return dateutil.parser.isoparse(info['Created']).timestamp()
+
+    async def should_build(self):
+        '''If the image exists, this is called.  If it returns True, then the image will be rebuilt even though it exists.  If a caller wants to force a rebuild, it is better to call :meth:`build_image` than to patch this method.
+        '''
+        return False
+
+    @contextlib.asynccontextmanager
+    async def image_layer_context(self, commit_message=""):
+        '''
+        Generate a container to produce  a new image layer:
+        
+        * The image of the container will be either *self.last_layer* or *self.base_image* if *last_layer* is not set.
+
+        * The container will be a :class:`PodmanImageBuilderContainer`, and as such will simply pause when started so that :meth:`container_exec` can be used to run commands in the container.
+
+        Usage::
+
+            async with self.image_layer_context() as layer_container:
+                # Apply customizations/run commands in layer_container
+            #Now, self.last_layer is the image ID of the new layer
+        '''
+        def container_delete(future):
+            try: future.result()
+            except Exception as e:
+                logger.error('Error deleting %s: %s', layer_container, str(e))
+                
+        base_image  = self.last_layer or self.base_image
+        layer_container = await self.ainjector(
+            PodmanImageBuilderContainer,
+            oci_container_image=base_image,
+            name=f'carthage-image-build-{id(self)}',
+            )
+        try:
+            await layer_container.start_machine()
+            yield layer_container
+            await self.commit_container(layer_container, commit_message)
+        finally:
+            delete_task = asyncio.get_event_loop().create_task(layer_container.delete())
+            delete_task.add_done_callback(container_delete)
+
+    async def commit_container(self, container, commit_message):
+        entrypoint = None
+        cmd = None
+        if self.oci_image_entry_point:
+            entrypoint = json.dumps(self.oci_image_entry_point)
+        if self.oci_image_cmd:
+            cmd = json.dumps(self.oci_image_cmd)
+        options = []
+        if cmd: options.append('--change=CMD '+cmd)
+        if entrypoint: options.append('--change=ENTRYPOINT '+entrypoint)
+        if self.oci_image_author: options.append('--author='+self.oci_image_author)
+        if commit_message: options.appeng('--message='+commit_message)
+        # options must be quoted if it's going through ssh or something that can split args on space
+        commit_result = await self.podman(
+            'container', 'commit',
+            *options,
+            container.id)
+        self.last_layer = str(commit_result.stdout, 'utf-8').strip()
+
+    async def tag_last_layer(self):
+        assert self.last_layer
+        await self.podman(
+            'image', 'tag',
+            self.last_layer, self.oci_image_tag)
+
+    async def find_or_create(self):
+        '''See if image exists otherwise rebuild the image.
+        Note that this is not a :func:`setup_task` even though it is in the parent.  This is always run from :meth:`async_ready`
+        '''
+        if await self.find():
+            if not await self.should_build(): return
+        return await self.build_image()
+
+    async def build_image(self):
+        await self.pull_base_image()
+        # You might think that context for run_setup_tasks should be
+        # self.image_layer_context().  If it worked that way, then
+        # everything would end up in a single layer.  Instead, use
+        # image_layer_task for wrapping customizations and explicitly
+        # call image_layer_context in setup_tasks.
+        await self.run_setup_tasks()
+        if not self.last_layer:
+            logger.warn('%s failed to generate any image layers', self)
+            return
+        await self.tag_last_layer()
+
+    async def async_ready(self):
+        await self.find_or_create()
+        return await AsyncInjectable.async_ready(self)
+    
+    @memoproperty
+    def podman(self):
+        return self.container_host.podman
+
+    @memoproperty
+    def container_host(self):
+        return LocalPodmanContainerHost()
+    
+__all__ += ['PodmanImage']
+
+def image_layer_task(customization, **kwargs):
+    '''Wrap a :class:`~carthage.machine.BaseCustomization` as a layer in a :class:`PodmanImage`.
+    '''
+    if getattr(customization, 'description'):
+        kwargs['description'] = customization.description
+    @setup_task(**kwargs)
+    async def task(image):
+        async with image.image_layer_context() as container:
+            await container.apply_customization(customization)
+    @task.check_completed()
+    def task(image):
+        # We always want to re-run layers
+        return False
+    return task
+
+__all__ += ['image_layer_task']
