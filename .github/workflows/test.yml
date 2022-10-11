@@ -13,9 +13,9 @@ jobs:
       - name: install dependencies
         run: |
           sudo apt -q update
-          sudo apt -y install systemd-container socat qemu-utils fai-setup-storage fai-server python3-mako python3-sh python3-pyvmomi python3-yaml python3-pytest ansible genisoimage
+          sudo apt -y install systemd-container socat qemu-utils fai-setup-storage fai-server python3-mako python3-sh python3-pyvmomi python3-yaml python3-pytest python3-dateutil ansible genisoimage
 
       - name: run tests
         run: |
-          sudo PYTHONPATH=$(pwd) pytest-3 -v --carthage-config=.github/test_config.yml --log-cli-level=debug
+          sudo PYTHONPATH=$(pwd) podman unshare pytest-3 -v --carthage-config=.github/test_config.yml --log-cli-level=debug
           
