@@ -117,7 +117,10 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         if not hasattr(self, 'ssh_port') and '22/tcp' in ports:
             self.ssh_port = ports['22/tcp'][0]['HostPort']
         self.id = self.container_info['Id']
-        return dateutil.parser.isoparse(containers[0]['Created']).timestamp()
+        try:
+            return dateutil.parser.isoparse(containers[0]['Created']).timestamp()
+        except Exception as e:
+            raise ValueError(f'Invalid ISO string: {self.container_info["Created"]}')
 
     async def do_create(self):
         await self.podman(
