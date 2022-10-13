@@ -8,12 +8,15 @@
 # LICENSE for details.
 
 
-import asyncio, argparse, code, collections.abc, time
+import asyncio, argparse, code, collections.abc, concurrent.futures, shlex, re, time
 import pkg_resources, os.path, readline, rlcompleter, sys, traceback
 import carthage, carthage.utils
 from carthage import base_injector, ConfigLayout
 from carthage.dependency_injection import *
+
 __all__ = []
+
+subcommands_re = re.compile(r'^\s*!\s*(\S.*)\s*$')
 
 
 
@@ -103,6 +106,8 @@ class CarthageConsole(code.InteractiveConsole):
         if 'h' in self.locals and self.locals['h'] is not self.history:
             raise NotImplementedError("When replacing `h', it is unclear whether you want to link to the async history object or disable it.")
         self.locals['h'] = self.history
+        self.subcommands = None
+        self.subcommands_parser = None
         if history_file:
             history_file = os.path.expanduser(history_file)
             try: readline.read_history_file(history_file)
@@ -156,6 +161,14 @@ class CarthageConsole(code.InteractiveConsole):
         else:
             self.orig_displayhook(obj)
 
+    async def enable_console_commands(self, ainjector):
+        parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+        subparser_action = parser.add_subparsers(title='command', dest='cmd', required=True)
+        subparser_action.add_parser('help', help='Print Help')
+        self.subcommands = await self.setup_subcommands(ainjector, subparser_action)
+        self.ainjector = ainjector
+        self.subcommands_parser = parser
+        
     async def setup_subcommands(self, ainjector, subparser_action):
         '''
         Search through the injector for :class:`CarthageRunnerCommand` instances.  If they are available, then attach them to the parser.
@@ -175,6 +188,30 @@ class CarthageConsole(code.InteractiveConsole):
             subcommands[v.name] = v
         return subcommands
 
+    def runsource(self, source, filename):
+        if self.subcommands:
+            match = subcommands_re.match(source)
+            if match:
+                args = self.subcommands_parser.parse_args(shlex.split(match.group(1)))
+                if args.cmd == 'help':
+                    self.subcommands_parser.print_help()
+                    return
+                subcommand =  self.subcommands[args.cmd]
+                future = self.loop.create_task(self.ainjector(subcommand.run, args))
+                self.wait_future(future)
+                return
+        return super().runsource(source, filename)
+
+    def wait_future(self, future):
+        def cb(future2):
+            try:
+                future2.result()
+            finally: cfuture.set_result(True)
+        cfuture = concurrent.futures.Future()
+        future.add_done_callback(cb)
+        self.loop.call_soon_threadsafe(self.noop)
+        cfuture.result()
+        
 __all__ += ['CarthageConsole']
 
 
@@ -213,7 +250,7 @@ class CarthageRunnerCommand(AsyncInjectable):
         return InjectionKey(CarthageRunnerCommand, name=cls.name)
 
 
-__all__ += ['CarthageRunnerCommand', 'subparser_action_key']
+__all__ += ['CarthageRunnerCommand']
         
         
 def main():

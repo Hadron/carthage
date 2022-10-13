@@ -202,7 +202,7 @@ if layout is None:
         raise
 subparser_action = parser.add_subparsers(title='subcommands', dest='cmd',
                                          required=False)
-loop.run_until_complete(
+subcommands = loop.run_until_complete(
     console.setup_subcommands(ainjector, subparser_action))
 
 
@@ -214,6 +214,8 @@ if args.help:
     
 
 console.process_arguments(args)
+loop.run_until_complete(
+    console.enable_console_commands(ainjector))
 
 
 
