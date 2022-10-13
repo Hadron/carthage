@@ -319,7 +319,7 @@ class Container(Machine, SetupTaskMixin):
                 await self.stop_container()
             except Exception: pass
 
-    def _apply_to_container_customization(self):
+    def _apply_to_container_customization(self, customization):
         '''A method indicating that this object can have :class:`~carthage.machine.ContainerCustomizations` applied.  Provides a mechanism for adapting the customization if needed to a particular container-like machine.  Not needed for this class.
         '''
         return
