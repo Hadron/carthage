@@ -156,17 +156,30 @@ class CarthageConsole(code.InteractiveConsole):
         else:
             self.orig_displayhook(obj)
 
+    async def setup_subcommands(self, ainjector, subparser_action):
+        '''
+        Search through the injector for :class:`CarthageRunnerCommand` instances.  If they are available, then attach them to the parser.
+
+        :return: Mapping of subcommand tag to subcommand instances.
+
+        It is typical for this method to be called more than once.  For example the runner calls this both for its main parser and for a parser used within the console.
+        '''
+        subcommands = {}
+        k = None
+        v = None
+        for k,v in await ainjector.filter_instantiate_async(
+        carthage.console.CarthageRunnerCommand,
+        ['name']):
+            if await v.should_register():
+                v.register(subparser_action)
+            subcommands[v.name] = v
+        return subcommands
+
 __all__ += ['CarthageConsole']
 
-subparser_action_key = InjectionKey('argparse.SubParserAction')
 
-@inject_autokwargs(subparser_action=subparser_action_key,
-                   )
 class CarthageRunnerCommand(AsyncInjectable):
 
-    #Although this class is an Injectable, because of the way it is
-    #instantiated, async_resolve and async_ready must both be trivial.
-    #It is an AsyncInjectable only to get a claimed AsyncInjector.
     
     @property
     def name(self):
@@ -186,12 +199,15 @@ class CarthageRunnerCommand(AsyncInjectable):
         '''Called when this subcommand is selected.'''
         pass
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        parser = self.subparser_action.add_parser(
+    async def should_register(self):
+        ''' Returns True if this command should be registered.  For example, start_machine might wish to confirm that the layout has Machines before registering.  This function should bd work even if for example there is no CarthageLayout.
+'''
+        return True
+    def register(self, subparser_action):
+        parser = subparser_action.add_parser(
             self.name, **self.subparser_kwargs)
         self.setup_subparser(parser)
-        
+
     @classmethod
     def default_class_injection_key(cls):
         return InjectionKey(CarthageRunnerCommand, name=cls.name)

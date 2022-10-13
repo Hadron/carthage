@@ -53,7 +53,8 @@ async def setup_layout():
     global layout, ainjector
     config = await ainjector(carthage.config.ConfigLayout)
     layout = await ainjector(instantiate_layout, config.layout_name, optional=True)
-    ainjector = layout.ainjector
+    if layout:
+        ainjector = layout.ainjector
             
 async def run():
     global ainjector, layout
@@ -201,18 +202,10 @@ if layout is None:
         raise
 subparser_action = parser.add_subparsers(title='subcommands', dest='cmd',
                                          required=False)
-base_injector.add_provider(carthage.console.subparser_action_key, subparser_action)
+loop.run_until_complete(
+    console.setup_subcommands(ainjector, subparser_action))
 
 
-subcommands = {}
-k = None
-v = None
-for k,v in ainjector.filter_instantiate(
-        carthage.console.CarthageRunnerCommand,
-        ['name']):
-    subcommands[v.name] = v
-del k
-del v
 
 args = parser.parse_args()
 if args.help:
