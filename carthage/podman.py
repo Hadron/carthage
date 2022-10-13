@@ -25,6 +25,15 @@ logger = logging.getLogger('carthage.podman')
 def podman_port_option(p: OciExposedPort):
     return f'-p{p.host_ip}:{p.host_port}:{p.container_port}'
 
+def podman_mount_option(m: OciMount):
+    res = f'--mount=type={m.mount_type}'
+    if m.source: res += f',source={m.source}'
+    if m.destination:
+        res += f',destination={m.destination}'
+    else: raise TypeError('destination is required')
+    if m.options: res += f',{m.options}'
+    return res
+
 __all__ = []
 
 class PodmanContainerHost:
@@ -124,6 +133,8 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         if self.oci_tty: options.append('-t')
         for p in self.exposed_ports:
             options.append(podman_port_option(p))
+        for m in self.mounts:
+            options.append(podman_mount_option(m))
         return options
         
     async def delete(self, force=True, volumes=True):

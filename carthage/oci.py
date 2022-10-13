@@ -90,6 +90,16 @@ class OciContainer(OciManaged):
         result = self.injector.filter_instantiate(OciExposedPort, ['container_port'])
         return [i[1] for i in result]
 
+    @memoproperty
+    def mounts(self):
+        '''
+        Sequence of :class:`OciMount` objects to be mounted to the container.
+
+        By default instantiate *OciMount* objects in the injector hierarchy.
+        '''
+        results = self.injector.filter_instantiate(OciMount, ['destination'])
+        return [i[1] for i in results]
+    
     #: Override the entry point in the container if set
     oci_entry_point = None
 
@@ -114,3 +124,21 @@ class OciImage(OciManaged):
     id = None
 
 __all__ += ['OciImage']
+
+@dataclasses.dataclass
+class OciMount(Injectable):
+
+
+    destination: str
+    source: str
+    options: str = ""
+    mount_type: str = 'volume'
+
+    def default_instance_injection_key(self):
+        return InjectionKey(OciMount, destination=self.destination)
+
+    @classmethod
+    def default_class_injection_key(self):
+        return InjectionKey(OciMount, destination=self.destination)
+
+__all__ += ['OciMount']

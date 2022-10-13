@@ -9,7 +9,7 @@ import pytest
 import shutil
 from pathlib import Path
 from carthage.podman import *
-from carthage.oci import oci_container_image, OciExposedPort
+from carthage.oci import oci_container_image, OciExposedPort, OciMount
 from carthage.modeling import *
 from carthage.image import SshAuthorizedKeyCustomizations
 from carthage.ssh import SshKey
@@ -48,7 +48,14 @@ class podman_layout(CarthageLayout):
         ip_address = '127.0.0.1'
 
         add_provider(OciExposedPort(22))
-        
+
+    class mount_test(MachineModel):
+        add_provider(OciMount(
+            mount_type='bind',
+            destination='/host',
+            source='/',
+))
+            
 
 
 @async_test
@@ -104,3 +111,17 @@ async def test_podman_image(ainjector):
     ainjector = l.ainjector
     await l.DebianWithAuthorizedKeys.async_become_ready()
     
+@async_test
+async def test_podman_mount(ainjector):
+    l = await ainjector(podman_layout)
+    ainjector = l.ainjector
+    machine = l.mount_test.machine
+    assert machine.mounts
+    try:
+        machine.stop_timeout = 0
+        await machine.async_become_ready()
+        async with machine.machine_running(ssh_online=False):
+            await machine.container_exec('ls', '/host/etc')
+    finally:
+        await machine.delete()
+        
