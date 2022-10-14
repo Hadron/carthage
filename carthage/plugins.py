@@ -1,4 +1,4 @@
-# Copyright (C) 2021, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -24,6 +24,7 @@ class CarthagePlugin(Injectable):
     name: str
     package: typing.Optional[importlib.resources.Package]
     resource_dir: Path
+    metadata: dict
 
     def __init__(self, name: str, package: importlib.resources.Package,
                  metadata: dict,
@@ -36,6 +37,7 @@ class CarthagePlugin(Injectable):
         else:
             self.resource_dir = Path(package.__path__[0])
         self._resources = {}
+        self.metadata = metadata
 
     def _get_resource(self, resource):
         p = self.resource_dir.joinpath(resource)

@@ -82,6 +82,7 @@ async def run():
         console.locals['ainjector'] = ainjector
         console.locals['layout'] = layout
         console.locals['in_tmux'] = 'TMUX' in os.environ
+        await console.setup_from_plugins()
         console.exec_resource('carthage', 'resources/runner_console.py')
         if 'async_setup' in console.locals:
             await console.locals['async_setup']();

@@ -202,6 +202,21 @@ class CarthageConsole(code.InteractiveConsole):
                 return
         return super().runsource(source, filename)
 
+    async def setup_from_plugins(self, injector=None):
+        from .plugins import CarthagePlugin
+        if injector is None: injector = base_injector
+        for k, plugin in injector.filter_instantiate(CarthagePlugin, ['name']):
+            if 'console_setup' in plugin.metadata:
+                try:
+                    exec(plugin.metadata['console_setup'], self.locals)
+                    if 'async_setup' in self.locals:
+                        await self.locals['async_setup']()
+                except Exception:
+                    print('failed to setup plugin '+plugin.name)
+                    traceback.print_exc()
+                finally:
+                    try: del self.locals['async_setup']
+                    except KeyError: pass
     def wait_future(self, future):
         def cb(future2):
             try:
@@ -210,7 +225,7 @@ class CarthageConsole(code.InteractiveConsole):
         cfuture = concurrent.futures.Future()
         future.add_done_callback(cb)
         self.loop.call_soon_threadsafe(self.noop)
-        cfuture.result()
+        cfuture.result() # blocks
         
 __all__ += ['CarthageConsole']
 
