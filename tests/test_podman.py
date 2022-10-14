@@ -10,6 +10,7 @@ import shutil
 from pathlib import Path
 from carthage.podman import *
 from carthage.oci import oci_container_image, OciExposedPort, OciMount
+from carthage.container import container_image
 from carthage.modeling import *
 from carthage.image import SshAuthorizedKeyCustomizations
 from carthage.ssh import SshKey
@@ -35,6 +36,10 @@ class podman_layout(CarthageLayout):
     add_provider(oci_container_image, 'debian:latest')
     oci_interactive = True
 
+    class FromScratchDebian(PodmanFromScratchImage):
+        oci_image_cmd ='bash'
+        oci_image_tag = 'localhost/from_scratch_debian'
+        
     class DebianWithAuthorizedKeys(PodmanImage):
         oci_image_tag = 'localhost/authorized-debian:latest'
         authorized_keys = image_layer_task(SshAuthorizedKeyCustomizations)
@@ -125,3 +130,9 @@ async def test_podman_mount(ainjector):
     finally:
         await machine.delete()
         
+@async_test
+async def test_from_scratch_image(test_ainjector):
+    l = await test_ainjector(podman_layout)
+    ainjector = l.ainjector
+    ainjector.add_provider(podman_image_volume_key, injector_access(container_image))
+    await l.FromScratchDebian.async_become_ready()

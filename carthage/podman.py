@@ -11,8 +11,9 @@ import asyncio
 import contextlib
 import json
 import logging
-import dateutil.parser
 from pathlib import Path
+import tempfile
+import dateutil.parser
 from carthage.dependency_injection import *
 from . import sh
 from .machine import AbstractMachineModel, Machine
@@ -42,6 +43,21 @@ class PodmanContainerHost:
                _bg=True, _bg_exc=True):
         raise NotImplementedError
 
+    async def filesystem_access(self, container):
+        raise NotImplementedError
+
+    async def tar_volume_context(self, volume):
+        '''
+        An asynchronous context manager that tars up a volume and provides a path to that tar file usable in ``podman import``.  Typical usage::
+
+            async with container_host.tar_volume_context(container_image) as path:
+                await container_host.podman('import', path)
+
+        On local systems this manages temporary directories.  For remote container hosts, this manages to get the tar file to the remote system and clean up later.
+        '''
+        raise NotImplementedError
+    
+        
 class LocalPodmanContainerHost(PodmanContainerHost):
 
     @contextlib.asynccontextmanager
@@ -62,7 +78,23 @@ class LocalPodmanContainerHost(PodmanContainerHost):
             *args,
             _bg=_bg, _bg_exc=_bg_exc,
             _encoding='utf-8')
-    
+
+    @contextlib.asynccontextmanager
+    async def tar_volume_context(self, volume):
+        assert hasattr(volume, 'path')
+        with tempfile.TemporaryDirectory() as path_raw:
+            path = Path(path_raw)
+            await sh.tar(
+                "-C", str(volume.path),
+                "--xattrs",
+                "--xattrs-include=*.*",
+                "-czf",
+                str(path/"container.tar.gz"),
+                ".",
+                _bg = True,
+                _bg_exc = False)
+            yield path/'container.tar.gz'
+
     
 @inject_autokwargs(
     oci_container_image=InjectionKey(oci_container_image, _optional=NotPresent)
@@ -259,12 +291,16 @@ class PodmanImage(OciImage, SetupTaskMixin):
             'image', 'inspect',
             self.base_image)
         image_info = json.loads(str(inspect_result))[0]
+        self.parse_base_image_info(image_info)
+        
+
+    def parse_base_image_info(self, image_info):
         config = image_info['Config']
         if  not self.oci_image_cmd and 'Cmd' in config:
             self.oci_image_cmd = config['Cmd']
         if not self.oci_image_entry_point and 'EntryPoint' in config:
             self.oci_image_entry_point  = config['EntryPoint']
-        self.base_image_info = image_info
+            self.base_image_info = image_info
 
     async def find(self):
         if self.id:
@@ -320,16 +356,20 @@ class PodmanImage(OciImage, SetupTaskMixin):
             delete_task = asyncio.get_event_loop().create_task(layer_container.delete())
             delete_task.add_done_callback(container_delete)
 
-    async def commit_container(self, container, commit_message):
+    def _commit_options(self):
         entrypoint = None
         cmd = None
         if self.oci_image_entry_point:
             entrypoint = json.dumps(self.oci_image_entry_point)
         if self.oci_image_cmd:
             cmd = json.dumps(self.oci_image_cmd)
-        options = []
+            options = []
         if cmd: options.append('--change=CMD '+cmd)
         if entrypoint: options.append('--change=ENTRYPOINT '+entrypoint)
+        return options
+
+    async def commit_container(self, container, commit_message):
+        options = self._commit_options()
         if self.oci_image_author: options.append('--author='+self.oci_image_author)
         if commit_message: options.appeng('--message='+commit_message)
         # options must be quoted if it's going through ssh or something that can split args on space
@@ -379,6 +419,36 @@ class PodmanImage(OciImage, SetupTaskMixin):
         return LocalPodmanContainerHost()
     
 __all__ += ['PodmanImage']
+podman_image_volume_key = InjectionKey('carthage.podman/image_volume')
+
+
+@inject(base_image=None)
+@inject_autokwargs(
+    image_volume=podman_image_volume_key,
+    )
+class PodmanFromScratchImage(PodmanImage):
+
+
+    async def pull_base_image(self):
+        await self.image_volume.async_become_ready()
+        async with self.container_host.tar_volume_context(self.image_volume) as tar_path:
+            result = await self.podman(
+                'image', 'import',
+                *self._commit_options(),
+                tar_path,
+                )
+        id = str(result.stdout, 'utf-8').strip()
+        inspect_result = await self.podman(
+            'image', 'inspect',
+            id)
+        image_info = json.loads(str(inspect_result))[0]
+        self.last_layer = id
+        self.parse_base_image_info(image_info)
+
+__all__ += ['PodmanFromScratchImage', 'podman_image_volume_key']
+
+        
+                   
 
 def image_layer_task(customization, **kwargs):
     '''Wrap a :class:`~carthage.machine.BaseCustomization` as a layer in a :class:`PodmanImage`.
