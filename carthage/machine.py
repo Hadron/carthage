@@ -72,7 +72,25 @@ class SshMixin:
         except AttributeError: raise NotImplementedError from None
         
 
-    ssh_options = ('-oStrictHostKeyChecking=no', '-lroot', )
+    @memoproperty
+    def ssh_options(self):
+        if hasattr(self.model, 'ssh_options'):
+            return self.model.ssh_options
+        return ('-oStrictHostKeyChecking=no', '-lroot', )
+
+    @memoproperty
+    def ssh_online_retries(self):
+        if hasattr(self.model, 'ssh_online_retries'):
+            assert type(self.model.ssh_online_retries) is int,"ssh_online_retries must be `int`"
+            return self.model.ssh_online_retries
+        return 60
+
+    @memoproperty
+    def ssh_online_timeout(self):
+        if hasattr(self.model, 'ssh_online_timeout'):
+            assert type(self.model.ssh_online_timeout) is int,"ssh_online_timeout must be `int`"
+            return self.model.ssh_online_timeout
+        return 5
 
     @memoproperty
     def ssh(self):
@@ -132,10 +150,10 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
         logger.debug(f'Waiting for {self.name} to be ssh_online')
         online = False
         last_error = None
-        for i in range(60):
+        for i in range(self.ssh_online_retries):
             try: await self.ssh(self.ssh_online_command,
                                 _bg = True, _bg_exc = False,
-                                _timeout = 5)
+                                _timeout = self.ssh_online_timeout)
             except (sh.TimeoutException, sh.ErrorReturnCode) as e:
                 last_error = e
                 await asyncio.sleep(1)
