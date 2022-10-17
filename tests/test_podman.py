@@ -5,16 +5,19 @@
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
+import os
 import pytest
 import shutil
 from pathlib import Path
 from carthage.podman import *
 from carthage.oci import oci_container_image, OciExposedPort, OciMount
+from carthage.ansible import *
 from carthage.container import container_image
 from carthage.modeling import *
 from carthage.image import SshAuthorizedKeyCustomizations
 from carthage.ssh import SshKey
 from carthage import *
+from carthage.machine import FilesystemCustomization
 import carthage
 from carthage.pytest import *
 
@@ -34,6 +37,8 @@ class podman_layout(CarthageLayout):
 
     add_provider(machine_implementation_key, dependency_quote(PodmanContainer))
     add_provider(oci_container_image, 'debian:latest')
+    add_provider(ansible_log, "/tmp/ansible.log")
+    
     oci_interactive = True
 
     class FromScratchDebian(PodmanFromScratchImage):
@@ -60,7 +65,18 @@ class podman_layout(CarthageLayout):
             destination='/host',
             source='/',
 ))
-            
+
+    class ansible_test(MachineModel):
+
+        class cust(FilesystemCustomization):
+
+            @setup_task("Install Ansible")
+            async def install_ansible(self):
+                await self.run_command('apt', 'update')
+                await self.run_command('apt', '-y', 'install', 'ansible')
+                
+            do_roles = ansible_role_task(os.path.dirname(__file__)+"/resources/test_ansible_role")
+
 
 
 @async_test
@@ -134,5 +150,19 @@ async def test_podman_mount(ainjector):
 async def test_from_scratch_image(test_ainjector):
     l = await test_ainjector(podman_layout)
     ainjector = l.ainjector
+    config = await test_ainjector(ConfigLayout)
+    config.delete_volumes = False
     ainjector.add_provider(podman_image_volume_key, injector_access(container_image))
+    breakpoint()
     await l.FromScratchDebian.async_become_ready()
+
+@async_test
+async def test_podman_ansible(ainjector):
+    l = await ainjector(podman_layout)
+    ainjector = l.ainjector
+    machine = l.ansible_test.machine
+    try:
+        await machine.async_become_ready()
+    finally:
+        await machine.delete()
+        

@@ -269,7 +269,8 @@ async def run_playbook(hosts,
     '''
     injector = ainjector.injector
     def to_inner(s):
-        return config_inner + s[len(config_dir):]
+        s = str(s)
+        return str(config_inner) + s[len(str(config_dir)):]
     if not isinstance(hosts, list): hosts = [hosts]
     async with contextlib.AsyncExitStack() as stack:
         target_hosts = []
@@ -284,6 +285,8 @@ async def run_playbook(hosts,
                 if not h.running and hasattr(h, 'ansible_not_running_context'):
                     inventory_overrides[target_name] = await stack.enter_async_context(
                         h.ansible_not_running_context())
+                elif hasattr(h, 'ansible_inventory_overrides'):
+                    inventory_overrides[target_name] = h.ansible_inventory_overrides
                 target_hosts.append(target_name)
                     
         list(map(lambda h: validate_shell_safe(h), target_hosts))
@@ -420,7 +423,8 @@ async def run_play(hosts, play,
                     try:
                         f.write(h.ansible_inventory_line()+"\n")
                     except AttributeError:
-                        f.write(f'{h.name} ansible_ip={h.ip_address}\n')
+                        try: f.write(f'{h.name} ansible_ip={h.ip_address}\n')
+                        except (NotImplementedError, AttributeError): pass
             inventory = f'/{ansible_dir.relative_to(root_path)}/inventory.txt'
         return await ainjector(run_playbook,
                                hosts,
@@ -494,7 +498,7 @@ pipelining=True
 ''')
         if origin is None or isinstance(origin, NetworkNamespaceOrigin):
             f.write(f'''\
-ssh_args = -o ControlMaster=auto -o ControlPersist=60s -oUserKnownHostsFile={config.state_dir}/ssh_known_hosts -oStrictHostKeyChecking=no
+ssh_args = -o ControlMaster=auto -o ControlPersist=60s -oUserKnownHostsFile={config.state_dir}/ssh_known_hosts {config.global_ssh_options}
 ''')
         else:
             f.write(f'''\

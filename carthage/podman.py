@@ -119,6 +119,14 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     #:The port on which to connect to for ssh
     ssh_port: int
+
+    @memoproperty
+    def ansible_inventory_overrides(self):
+        return dict(
+            ansible_connection='containers.podman.podman',
+            ansible_pipelining=False,
+            ansible_host=self.full_name,
+        )
     
     
     def __init__(self, **kwargs):
