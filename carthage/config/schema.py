@@ -8,7 +8,7 @@
 
 import sys
 from ipaddress import IPv6Address, IPv4Address, IPv4Network, IPv6Network
-
+from pathlib import Path
 from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies, InjectorClosed, InjectionFailed
 
 def config_key(k):
@@ -208,7 +208,7 @@ class ConfigAccessor:
                     elif v is None or isinstance(v, bool):
                         #just fine as is
                         pass
-                    elif isinstance(v, (IPv4Address, IPv4Network, IPv6Address, IPv6Network)):
+                    elif isinstance(v, (IPv4Address, IPv4Network, IPv6Address, IPv6Network, Path)):
                         v = str(v)
                     else:
                         raise TypeError( f'{v} is a {type(v)} which will not work so well saved to YAML')
