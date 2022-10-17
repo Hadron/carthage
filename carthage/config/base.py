@@ -20,6 +20,10 @@ class BaseSchema(ConfigSchema, prefix = ""):
 
     #: What resolv option to use when host networking is used with a container.  Likely options include bind-host, bind-stub or bind-uplink
     host_networking_resolv_conf:str = "bind-host"
+
+    #: Ssh options that are always included
+    global_ssh_options:str = '-oStrictHostKeyChecking=no'
+
     base_dir: ConfigPath = "/srv/images/test"
     checkout_dir:ConfigPath = "{base_dir}/checkout"
     output_dir: ConfigPath = "{base_dir}/output"

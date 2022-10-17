@@ -76,7 +76,7 @@ class SshMixin:
     def ssh_options(self):
         if hasattr(self.model, 'ssh_options'):
             return self.model.ssh_options
-        return ('-oStrictHostKeyChecking=no', '-lroot', )
+        return ('-lroot', )
 
     @memoproperty
     def ssh_online_retries(self):
@@ -116,11 +116,14 @@ class SshMixin:
                                    "/usr/bin/ssh",
                 *key_options,
                                    *options,
+                *self.config_layout.global_ssh_options.split(),
                                    ip_address,
                                    _env = ssh_agent.agent_environ)
         else:
             return sh.ssh.bake(*key_options,
-                               *options, self.ip_address,
+                               *options,
+                               *self.config_layout.global_ssh_options.split(),
+                               self.ip_address,
                                _env = ssh_agent.agent_environ)
 
     def rsync(self, *args):

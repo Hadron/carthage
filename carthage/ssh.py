@@ -136,7 +136,7 @@ async def rsync( *args, config_layout,
                 if ssh_origin is None:
                     ssh_origin = sso
                     vrf = a.ssh_origin_vrf
-                    ssh_options = a.machine.ssh_options
+                    ssh_options = a.machine.ssh_options + a.machine.config_layout.global_ssh_options.split()
                 elif ssh_origin is not sso:
                     raise RuntimeError(f"Two different ssh_origins: {sso} and {ssh_origin}")
                 args[i] = str(a)

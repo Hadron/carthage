@@ -108,16 +108,14 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
     #: Timeout in seconds to wait when stopping a container
     stop_timeout = 10
 
-    @property
+    @memoproperty
     def ssh_options(self):
         if not hasattr(self, 'ssh_port'):
             raise ValueError('Set ssh_port before ssh')
         return (
-            '-oStrictHostKeyChecking=no',
-            f'-l{self.ssh_user}',
+            *super().ssh_options,
             f'-p{self.ssh_port}')
 
-    ssh_user = 'root'
 
     #:The port on which to connect to for ssh
     ssh_port: int
