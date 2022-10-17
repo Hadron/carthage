@@ -37,7 +37,7 @@ class podman_layout(CarthageLayout):
 
     add_provider(machine_implementation_key, dependency_quote(PodmanContainer))
     add_provider(oci_container_image, 'debian:latest')
-    add_provider(ansible_log, "/tmp/ansible.log")
+    #add_provider(ansible_log, "/tmp/ansible.log")
     
     oci_interactive = True
 
