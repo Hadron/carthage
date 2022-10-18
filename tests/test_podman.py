@@ -162,7 +162,6 @@ async def test_from_scratch_image(test_ainjector):
     config = await test_ainjector(ConfigLayout)
     config.delete_volumes = False
     ainjector.add_provider(podman_image_volume_key, injector_access(container_image))
-    breakpoint()
     await l.FromScratchDebian.async_become_ready()
 
 @async_test
