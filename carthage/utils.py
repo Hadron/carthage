@@ -193,10 +193,16 @@ def add_carthage_arguments(parser):
                         action = 'append')
     parser.add_argument('--command-verbose',
                         help = "Verbose command logging",
-                        action ='store_true')
+                        action =argparse.BooleanOptionalAction)
     parser.add_argument('--tasks-verbose',
                         help = "Verbose logging for tasks",
-                        action = 'store_true')
+                        action = argparse.BooleanOptionalAction)
+    parser.add_argument('--plugin',
+                        dest='plugins',
+                        default=[],
+                        action='append',
+                        help='Load a plugin into Carthage',
+                        metavar='plugin')
     return parser
 
 def carthage_main_argparser(*args, **kwargs):
@@ -206,6 +212,7 @@ def carthage_main_argparser(*args, **kwargs):
 
 def carthage_main_setup(parser=None, unknown_ok=False):
     from . import base_injector, ConfigLayout
+    from .plugins import load_plugin
     if parser is None:
         parser = carthage_main_argparser()
     if unknown_ok:
@@ -218,6 +225,8 @@ def carthage_main_setup(parser=None, unknown_ok=False):
         config = base_injector(ConfigLayout)
         for f in args.config:
             config.load_yaml(f)
+    for p in args.plugins:
+        base_injector(load_plugin, p)
     root_logger = logging.getLogger()
     console_handler = logging.StreamHandler()
     root_logger.addHandler(console_handler)

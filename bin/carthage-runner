@@ -190,28 +190,28 @@ if args.stop is not None:
 layout = None
 loop.run_until_complete(setup_layout())
 
-if layout is None:
+if layout is None and not args.plugins:
     # If a layout is specified in the config it is not needed as a subcommand
     # Otherwise we need it before the subcommand
     parser.add_argument('plugin_path', help='Plugin containing a layout')
-    plugin = unknown.pop(0)
-    try:
-        base_injector(carthage.plugins.load_plugin, plugin)
-        loop.run_until_complete(setup_layout())
-    except Exception:
-        parser.print_help()
-        raise
+    if unknown:
+        plugin = unknown.pop(0)
+        try:
+            base_injector(carthage.plugins.load_plugin, plugin)
+            loop.run_until_complete(setup_layout())
+        except Exception:
+            parser.print_help()
+            raise
 subparser_action = parser.add_subparsers(title='subcommands', dest='cmd',
                                          required=False)
 subcommands = loop.run_until_complete(
     console.setup_subcommands(ainjector, subparser_action))
 
 
-
-args = parser.parse_args()
 if args.help:
     parser.print_help()
-    sys.exit(0)
+    sys.exit(2)
+args = parser.parse_args()
     
 
 console.process_arguments(args)
