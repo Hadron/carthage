@@ -95,9 +95,52 @@ class LocalPodmanContainerHost(PodmanContainerHost):
                 _bg_exc = False)
             yield path/'container.tar.gz'
 
-    
+
+class PodmanPod(OciPod):
+
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.injector.add_provider(InjectionKey(PodmanPod), dependency_quote(self))
+        
+    async def find(self):
+        if self.id:
+            inspect_arg = self.id
+        else: inspect_arg = self.name
+        try:
+            result = await self.podman(
+                'pod', 'inspect', inspect_arg)
+        except sh.ErrorReturnCode:
+            return False
+        pod_info = json.loads(str(result.stdout,'utf-8'))
+        self.pod_info = pod_info
+        return dateutil.parser.isoparse(pod_info['Created']).timestamp()
+
+    async def do_create(self):
+        options = []
+        for p in self.exposed_ports:
+            options.append(podman_port_option(p))
+        await self.podman(
+            'pod', 'create',
+            *options,
+            '--name='+self.name)
+
+    async def delete(self, force=False):
+        force_options = []
+        if force: force_options.append('--force')
+        await self.podman(
+            'pod', 'rm',
+            *force_options,
+            self.name)
+
+    @memoproperty
+    def podman(self):
+        return LocalPodmanContainerHost().podman
+__all__ += ['PodmanPod']
+        
 @inject_autokwargs(
-    oci_container_image=InjectionKey(oci_container_image, _optional=NotPresent)
+    oci_container_image=InjectionKey(oci_container_image, _optional=NotPresent),
+    pod=InjectionKey(PodmanPod, _optional=True),
     )
 class PodmanContainer(Machine, OciContainer):
 
@@ -161,6 +204,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             raise ValueError(f'Invalid ISO string: {self.container_info["Created"]}')
 
     async def do_create(self):
+        if self.pod: await self.pod.async_become_ready()
         await self.podman(
             'container', 'create',
             f'--name={self.full_name}',
@@ -172,8 +216,11 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         options = []
         if self.oci_interactive: options.append('-i')
         if self.oci_tty: options.append('-t')
-        for p in self.exposed_ports:
-            options.append(podman_port_option(p))
+        if not self.pod:
+            for p in self.exposed_ports:
+                options.append(podman_port_option(p))
+        else: #there is a pod
+            options.append('--pod='+self.pod.name)
         for m in self.mounts:
             options.append(podman_mount_option(m))
         return options

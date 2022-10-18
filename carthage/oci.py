@@ -142,3 +142,30 @@ class OciMount(Injectable):
         return InjectionKey(OciMount, destination=self.destination)
 
 __all__ += ['OciMount']
+
+class OciPod(OciManaged):
+
+    #: The name of the pod
+    name:str = None
+    #: the ID of the pod
+    id:str  = None
+
+    def __init__(self, name=None, id=None, **kwargs):
+        if name: self.name  = name
+        if id: self.id = id
+        if not (self.name or self.id):
+            raise TypeError('Either name or id is mandatory')
+        super().__init__(**kwargs)
+        if self.id: self.oci_read_only = True
+
+
+    @memoproperty
+    def exposed_ports(self):
+        '''Return a sequence of :class:`OciExposedPort` for any container ports that should be exposed.
+
+        By default, instantiate all *OciExposedPort* instances in the injector.
+        '''
+        result = self.injector.filter_instantiate(OciExposedPort, ['container_port'])
+        return [i[1] for i in result]
+
+__all__ += ['OciPod']

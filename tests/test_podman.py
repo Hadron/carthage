@@ -77,6 +77,15 @@ class podman_layout(CarthageLayout):
                 
             do_roles = ansible_role_task(os.path.dirname(__file__)+"/resources/test_ansible_role")
 
+    class pod_group(ModelGroup):
+        add_provider(OciExposedPort(22))
+        @provides(InjectionKey(PodmanPod))
+        class pod(PodmanPod):
+            name = 'carthage-test-pod'
+            
+
+        class pod_member(MachineModel): pass
+        
 
 
 @async_test
@@ -165,4 +174,16 @@ async def test_podman_ansible(ainjector):
         await machine.async_become_ready()
     finally:
         await machine.delete()
+        
+@async_test
+async def test_podman_pod(ainjector):
+    l = await ainjector(podman_layout)
+    ainjector = l.ainjector
+    pg = l.pod_group
+    machine = pg.pod_member.machine
+    try:
+        await machine.async_become_ready()
+    finally:
+        try: await pg.pod.delete(force=True)
+        except Exception: pass
         
