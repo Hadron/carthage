@@ -10,6 +10,8 @@
 import argparse, functools, os, sys, gc, traceback, warnings, yaml
 import asyncio, logging
 import  carthage.console
+import carthage.runner_commands
+
 from carthage.dependency_injection import *
 from carthage import base_injector, sh, ssh, ConfigLayout
 from carthage.network import Network, BridgeNetwork, external_network_key
@@ -204,6 +206,8 @@ if layout is None and not args.plugins:
             raise
 subparser_action = parser.add_subparsers(title='subcommands', dest='cmd',
                                          required=False)
+carthage.runner_commands.enable_runner_commands(ainjector)
+
 subcommands = loop.run_until_complete(
     console.setup_subcommands(ainjector, subparser_action))
 

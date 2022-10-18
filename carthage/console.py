@@ -169,7 +169,7 @@ class CarthageConsole(code.InteractiveConsole):
         self.ainjector = ainjector
         self.subcommands_parser = parser
         
-    async def setup_subcommands(self, ainjector, subparser_action):
+    async def setup_subcommands(self, ainjector, subparser_action, debug=False):
         '''
         Search through the injector for :class:`CarthageRunnerCommand` instances.  If they are available, then attach them to the parser.
 
@@ -180,9 +180,17 @@ class CarthageConsole(code.InteractiveConsole):
         subcommands = {}
         k = None
         v = None
-        for k,v in await ainjector.filter_instantiate_async(
+        for k in ainjector.filter(
         carthage.console.CarthageRunnerCommand,
         ['name']):
+            if debug:
+                try : v = await ainjector.get_instance_async(k)
+                except InjectionFailed: continue
+            else:
+                with injection_failed_unlogged():
+                    try : v = await ainjector.get_instance_async(k)
+                    except InjectionFailed: continue
+                    
             if await v.should_register():
                 v.register(subparser_action)
             subcommands[v.name] = v
