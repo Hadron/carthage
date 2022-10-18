@@ -58,6 +58,5 @@ class ListMachines(MachineCommand):
 def enable_runner_commands(ainjector):
     ainjector.add_provider(StartCommand)
     ainjector.add_provider(ListMachines)
-    
-    ainjector.add_provider(StopCommand)
+        ainjector.add_provider(StopCommand)
     
