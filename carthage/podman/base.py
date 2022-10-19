@@ -15,11 +15,11 @@ from pathlib import Path
 import tempfile
 import dateutil.parser
 from carthage.dependency_injection import *
-from . import sh
-from .machine import AbstractMachineModel, Machine
-from .utils import memoproperty
-from .oci import *
-from .setup_tasks import setup_task, SetupTaskMixin
+from .. import sh
+from ..machine import AbstractMachineModel, Machine
+from ..utils import memoproperty
+from ..oci import *
+from ..setup_tasks import setup_task, SetupTaskMixin
 
 logger = logging.getLogger('carthage.podman')
 
