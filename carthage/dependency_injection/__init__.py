@@ -18,6 +18,7 @@ __all__ = [
     'NotPresent',
     'current_instantiation', 'dependency_quote', 'inject',
     'inject_autokwargs', 'injector_xref',
-    'partial_with_dependencies', 'shutdown_injector']
+    'partial_with_dependencies', 'shutdown_injector',
+    'injection_failed_unlogged']
 
 

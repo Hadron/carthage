@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import contextvars, enum, inspect, typing, weakref
+import contextlib, contextvars, enum, inspect, typing, weakref
 import collections.abc
 import asyncio, functools
 import logging
@@ -32,6 +32,8 @@ class ReadyState(enum.Enum):
     READY = 3
 
 instantiate_to_ready = contextvars.ContextVar('instantiate_to_ready', default = True)
+
+log_injection_failed = contextvars.ContextVar('log_injection_failed', default=True)
 
 # While this is needed by InjectableModelType's add_provider, it is
 # not part of the public api
@@ -558,7 +560,8 @@ Return the first injector in our parent chain containing *k* or None if there is
                 if filter_tracebacks: tb_utils.filter_chatty_modules(e, _chatty_modules, None)
                 if current_instantiation():
                     tb_utils.filter_before_here(e)
-                    logger.exception(f'Error resolving dependency for {current_instantiation()}')
+                    if log_injection_failed.get():
+                        logger.exception(f'Error resolving dependency for {current_instantiation()}')
                     raise InjectionFailed(current_instantiation()) from e
                 else:
                     raise
@@ -1354,6 +1357,15 @@ def is_obj_ready(obj):
         return obj._async_ready_state == ReadyState.READY
     return True
 
+@contextlib.contextmanager
+def injection_failed_unlogged():
+    '''Typically InjectionFailed is logged at severity error.  Within this context, InjectionFailed errors are not logged.
+    '''
+    reset = log_injection_failed.set(False)
+    try: yield
+    finally:
+        log_injection_failed.reset(reset)
+        
 
 __all__ = [
     'AsyncInjectable', 'AsyncInjector', 'AsyncRequired',
@@ -1363,4 +1375,5 @@ __all__ = [
     'NotPresent',
     'dependency_quote', 'inject',
     'inject_autokwargs', 'injector_xref',
-    'partial_with_dependencies', 'shutdown_injector']
+    'partial_with_dependencies', 'shutdown_injector',
+    'injection_failed_unlogged']
