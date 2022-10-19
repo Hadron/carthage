@@ -9,7 +9,7 @@
 import sys
 from ipaddress import IPv6Address, IPv4Address, IPv4Network, IPv6Network
 from pathlib import Path
-from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies, InjectorClosed, InjectionFailed
+from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies, InjectorClosed, InjectionFailed, injection_failed_unlogged
 
 def config_key(k):
     return InjectionKey("config/"+k)
@@ -145,7 +145,8 @@ class ConfigSchema(metaclass = ConfigSchemaMeta, prefix = ""):
             except  (KeyError):
                 if self.default is None: return None
                 try:
-                    res = injector(self.type, self.default)
+                    with injection_failed_unlogged():
+                        res = injector(self.type, self.default)
                     return res
                 except Exception as e:
                     raise ConfigResolutionFailed(self.name, self.default) from None
