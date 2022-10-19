@@ -100,8 +100,6 @@ class OciContainer(OciManaged):
         results = self.injector.filter_instantiate(OciMount, ['destination'])
         return [i[1] for i in results]
     
-    #: Override the entry point in the container if set
-    oci_entry_point = None
 
     #: Override the default command if set
     oci_command = None
@@ -119,7 +117,7 @@ class OciImage(OciManaged):
         super().__init__(**kwargs)
 
     oci_image_author = ""
-    oci_image_cmd = None
+    oci_image_command = None
     oci_image_entry_point = None
     id = None
 
@@ -169,3 +167,25 @@ class OciPod(OciManaged):
         return [i[1] for i in result]
 
 __all__ += ['OciPod']
+
+
+@dataclasses.dataclass
+class OciEnviron(Injectable):
+
+    assignment: str
+    scope: str = 'all' #: or exec or image or container
+
+    def default_instance_injection_key(self):
+        if self.scope == 'all':
+            return InjectionKey(OciEnviron, name=self.name)
+        else:
+            return InjectionKey(OciEnviron, name=self.name, scope=self.scope)
+
+    @property
+    def name(self):
+        name, sep, value = self.assignment.partition('=')
+        return name
+
+__all__ += ['OciEnviron']
+
+    

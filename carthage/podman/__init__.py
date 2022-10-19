@@ -13,9 +13,9 @@ __all__ += ['PodmanPod', 'PodmanContainer', 'PodmanImage',
             'PodmanFromScratchImage', 'podman_image_volume_key',
             'image_layer_task']
 
-from .modeling import PodmanPodModel
+from .modeling import PodmanPodModel, PodmanImageModel
 
-__all__ += ['PodmanPodModel']
+__all__ += ['PodmanPodModel', 'PodmanImageModel']
 
 @carthage.inject(injector=carthage.Injector)
 def carthage_plugin(injector):

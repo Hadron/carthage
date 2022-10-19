@@ -205,17 +205,24 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     async def do_create(self):
         if self.pod: await self.pod.async_become_ready()
+        command_options = []
+        if self.oci_command:
+            command_options = list(self.oci_command)
         await self.podman(
             'container', 'create',
             f'--name={self.full_name}',
             *self._podman_create_options(),
             self.oci_container_image,
+            *command_options,
             _bg=True, _bg_exc=False)
 
     def _podman_create_options(self):
         options = []
         if self.oci_interactive: options.append('-i')
         if self.oci_tty: options.append('-t')
+        for k,v in self.injector.filter_instantiate(
+                OciEnviron, lambda k: 'name' in k.constraints and k.constraints.get('scope','all') in ('all,container')):
+            options.append('-e'+v.assignment)
         if not self.pod:
             for p in self.exposed_ports:
                 options.append(podman_port_option(p))
@@ -307,10 +314,10 @@ __all__ += ['PodmanContainer']
 
 class PodmanImageBuilderContainer(PodmanContainer):
 
-    oci_entry_point = ['sleep']
-    #: How long a single image building layer can take expressed as an argument to sleep (I.E. one element list with string value)
-    oci_command = ['3600']
+
+    oci_command = ['sleep', '3600']
     stop_timeout = 0
+
     def _apply_to_container_customization(self, customization):
         @contextlib.asynccontextmanager
         async def customization_context():
@@ -321,7 +328,7 @@ class PodmanImageBuilderContainer(PodmanContainer):
         customization.customization_context = customization_context()
         
 @inject_autokwargs(
-    base_image = oci_container_image,
+    base_image = InjectionKey(oci_container_image, _optional=NotPresent),
     )
 class PodmanImage(OciImage, SetupTaskMixin):
 
@@ -349,8 +356,8 @@ class PodmanImage(OciImage, SetupTaskMixin):
 
     def parse_base_image_info(self, image_info):
         config = image_info['Config']
-        if  not self.oci_image_cmd and 'Cmd' in config:
-            self.oci_image_cmd = config['Cmd']
+        if  not self.oci_image_command and 'Cmd' in config:
+            self.oci_image_command = config['Cmd']
         if not self.oci_image_entry_point and 'EntryPoint' in config:
             self.oci_image_entry_point  = config['EntryPoint']
             self.base_image_info = image_info
@@ -414,8 +421,8 @@ class PodmanImage(OciImage, SetupTaskMixin):
         cmd = None
         if self.oci_image_entry_point:
             entrypoint = json.dumps(self.oci_image_entry_point)
-        if self.oci_image_cmd:
-            cmd = json.dumps(self.oci_image_cmd)
+        if self.oci_image_command:
+            cmd = json.dumps(self.oci_image_command)
             options = []
         if cmd: options.append('--change=CMD '+cmd)
         if entrypoint: options.append('--change=ENTRYPOINT '+entrypoint)

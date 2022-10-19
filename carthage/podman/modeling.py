@@ -63,3 +63,7 @@ class PodmanPodModel(PodmanPod, InjectableModel, metaclass=carthage.modeling.imp
             yield InjectionKey(PodmanPodModel, **k.constraints)
     
 __all__ += ['PodmanPodModel']
+
+class PodmanImageModel(PodmanImage, InjectableModel): pass
+
+__all__ += ['PodmanImageModel']
