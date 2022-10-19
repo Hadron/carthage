@@ -343,13 +343,17 @@ class PodmanImage(OciImage, SetupTaskMixin):
     last_layer = None
 
     async def pull_base_image(self):
-        if not self.base_image.startswith('localhost/'):
+        if isinstance(self.base_image, OciImage):
+            await self.base_image.async_become_ready()
+            base_image = self.base_image.oci_image_tag
+        else: base_image = self.base_image
+        if not base_image.startswith('localhost/'):
             await self.podman(
-                'pull', self.base_image,
+                'pull', base_image,
             )
         inspect_result = await self.podman(
             'image', 'inspect',
-            self.base_image)
+            base_image)
         image_info = json.loads(str(inspect_result))[0]
         self.parse_base_image_info(image_info)
         
@@ -360,7 +364,8 @@ class PodmanImage(OciImage, SetupTaskMixin):
             self.oci_image_command = config['Cmd']
         if not self.oci_image_entry_point and 'EntryPoint' in config:
             self.oci_image_entry_point  = config['EntryPoint']
-            self.base_image_info = image_info
+        self.base_image_info = image_info
+        self.last_layer = self.base_image_info['Id']
 
     async def find(self):
         if self.id:
@@ -431,7 +436,9 @@ class PodmanImage(OciImage, SetupTaskMixin):
     async def commit_container(self, container, commit_message):
         options = self._commit_options()
         if self.oci_image_author: options.append('--author='+self.oci_image_author)
-        if commit_message: options.appeng('--message='+commit_message)
+        if commit_message:
+            options.append('-fdocker')
+            options.append('--message='+commit_message)
         # options must be quoted if it's going through ssh or something that can split args on space
         commit_result = await self.podman(
             'container', 'commit',
@@ -515,9 +522,11 @@ def image_layer_task(customization, **kwargs):
     '''
     if getattr(customization, 'description'):
         kwargs['description'] = customization.description
+    if 'description' not in kwargs:
+        kwargs['description'] = 'Image Layer: '+customization.__name__
     @setup_task(**kwargs)
     async def task(image):
-        async with image.image_layer_context() as container:
+        async with image.image_layer_context(kwargs['description']) as container:
             await container.apply_customization(customization)
     @task.check_completed()
     def task(image):
