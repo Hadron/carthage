@@ -44,7 +44,7 @@ class OciManaged(SetupTaskMixin, AsyncInjectable):
         del self._find_result
         if self.oci_read_only:
             raise RuntimeError(f'{self} is read only but does not exist')
-        
+
         await self.do_create()
         self._find_result = await self.find()
         return self._find_result
@@ -99,11 +99,19 @@ class OciContainer(OciManaged):
         '''
         results = self.injector.filter_instantiate(OciMount, ['destination'])
         return [i[1] for i in results]
-    
 
-    #: Override the default command if set
-    oci_command = None
-    
+
+    @memoproperty
+    def oci_command(self):
+        '''Override the container command if non-None.
+        Defaults to checking on the model
+'''
+        if hasattr(self.model, 'oci_command'):
+            return self.model.oci_command
+        return None
+
+
+
 __all__ += ['OciContainer']
 
 
@@ -187,5 +195,3 @@ class OciEnviron(Injectable):
         return name
 
 __all__ += ['OciEnviron']
-
-    
