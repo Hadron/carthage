@@ -428,7 +428,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
             entrypoint = json.dumps(self.oci_image_entry_point)
         if self.oci_image_command:
             cmd = json.dumps(self.oci_image_command)
-            options = []
+        options = []
         if cmd: options.append('--change=CMD '+cmd)
         if entrypoint: options.append('--change=ENTRYPOINT '+entrypoint)
         return options
