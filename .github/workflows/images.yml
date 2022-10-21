@@ -13,7 +13,7 @@ permissions:
   packages: write
 jobs:
   build_image:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v2
       - name: install dependencies
