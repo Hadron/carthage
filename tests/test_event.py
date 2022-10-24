@@ -56,3 +56,13 @@ async def test_event_scoping(loop):
     assert callback_called == 1
     
     
+
+def test_multiple_scope_breaks(loop):
+    def callback(*args): pass
+    injector = base_injector(Injector).claim("injector")
+    injector2 = injector(Injector).claim("injector2")
+    injector3 = injector2(Injector).claim("injector3")
+    key = InjectionKey("event")
+    injector3.add_event_listener(key, "foo", callback)
+    injector2.add_event_listener(key, "foo", callback)
+    

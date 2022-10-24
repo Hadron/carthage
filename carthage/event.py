@@ -50,6 +50,7 @@ class EventScope:
     def add_child(self, parent, child):
         '''Must be called for any object that has *self* as an *EventScope* and is not *self.target*.'''
         assert id(parent) in self.children
+        child._event_parent_id = id(parent)
         self.children[id(parent)].add(child)
         self.children[id(child)] = weakref.WeakSet()
         fin = weakref.finalize(child, self._finalize_child, self.children, self.finalizers, id(child))
@@ -70,6 +71,7 @@ class EventScope:
             fin.atexit = False
             finalizers[id(elt)] = fin
         recurse(new_target)
+        self.children[new_target._event_parent_id].remove(new_target)
         return children, finalizers
 
     @staticmethod
