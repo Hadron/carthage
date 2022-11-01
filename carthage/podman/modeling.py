@@ -9,6 +9,8 @@
 from carthage.modeling import *
 import carthage.modeling.implementation
 from .base import *
+from carthage import *
+from carthage.dependency_injection import *
 
 __all__ = []
 
@@ -49,6 +51,14 @@ class PodmanPodModel(PodmanPod, InjectableModel, metaclass=carthage.modeling.imp
                 class container1(MachineModel): pass
 
     '''
+
+    add_provider(machine_implementation_key, dependency_quote(PodmanContainer))
+
+    def __init__(self, **kwargs):
+        if ('id' not in kwargs) and ('name' not in kwargs):
+            if not self.id and not self.name:
+                self.name = self.__class__.__name__
+        super().__init__(**kwargs)
 
     pod_name_global = False #: If True, the pod name is globally unique
 
