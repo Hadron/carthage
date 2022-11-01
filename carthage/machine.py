@@ -494,7 +494,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
     def __init__(self, apply_to: Machine,
                   stamp=None, **kwargs):
         self.host = apply_to
-        if not self.description: self.description = self.__class__.__name__
+        if not getattr(self, 'description', None): self.description = self.__class__.__name__
         self.stamp_stem = stamp or self.__class__.__name__
         super().__init__(**kwargs)
 
@@ -506,9 +506,14 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
     # We do not run setup_tasks on construction
     async_ready = AsyncInjectable.async_ready
 
-    #:Can be overridden; a context manager in which customization tasks should be run
-    customization_context = None
-
+    @memoproperty
+    @contextlib.asynccontextmanager
+    async def customization_context(self):
+        '''Can be overridden; context in which customization tasks are run.
+'''
+        try: yield
+        finally: pass
+    
     @property
     def stamp_path(self):
         return self.host.stamp_path
@@ -615,7 +620,7 @@ class CustomizationWrapper(TaskWrapperBase):
         try:
             if kwargs['order'] is None: del kwargs['order']
         except AttributeError: pass
-        kwargs['description'] = customization.description or customization.__name__
+        kwargs['description'] = getattr(customization, 'description', None) or customization.__name__
         super().__init__(**kwargs)
         
     @memoproperty
