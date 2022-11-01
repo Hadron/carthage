@@ -11,6 +11,7 @@ import dataclasses
 from carthage.dependency_injection import *
 from .setup_tasks import setup_task, SetupTaskMixin
 from .utils import memoproperty
+from .config.types import ConfigPath
 
 
 __all__ = []
@@ -69,6 +70,7 @@ class OciExposedPort(Injectable):
     def default_instance_injection_key(self):
         return InjectionKey(OciExposedPort, container_port=self.container_port)
 
+__all__ += ['OciExposedPort']
 @inject_autokwargs(
     oci_interactive=InjectionKey('oci_interactive', _optional=NotPresent),
     oci_tty=InjectionKey('oci_tty', _optional=NotPresent),
@@ -147,6 +149,11 @@ class OciMount(Injectable):
     def default_class_injection_key(self):
         return InjectionKey(OciMount, destination=self.destination)
 
+    def source_resolved(self, injector):
+        return injector(ConfigPath, self.source)
+    
+
+        
 __all__ += ['OciMount']
 
 class OciPod(OciManaged):
@@ -195,3 +202,10 @@ class OciEnviron(Injectable):
         return name
 
 __all__ += ['OciEnviron']
+
+def host_mount(dir, readonly=False):
+    options = []
+    if readonly: options.append('ro=true')
+    return OciMount(dir, dir, mount_type='bind', options=','.join(options))
+
+__all__ += ['host_mount']

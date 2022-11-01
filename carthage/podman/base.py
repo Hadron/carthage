@@ -26,9 +26,9 @@ logger = logging.getLogger('carthage.podman')
 def podman_port_option(p: OciExposedPort):
     return f'-p{p.host_ip}:{p.host_port}:{p.container_port}'
 
-def podman_mount_option(m: OciMount):
+def podman_mount_option(injector:Injector, m: OciMount):
     res = f'--mount=type={m.mount_type}'
-    if m.source: res += f',source={m.source}'
+    if m.source: res += f',source={m.source_resolved(injector)}'
     if m.destination:
         res += f',destination={m.destination}'
     else: raise TypeError('destination is required')
@@ -68,7 +68,7 @@ class LocalPodmanContainerHost(PodmanContainerHost):
             _bg=True, _bg_exc=False)
         try:
             path = str(result).strip()
-            yield path
+            yield Path(path)
         finally:
             pass #Perhaps we should unmount, but we'd need a refcount to do that.
         
@@ -229,7 +229,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         else: #there is a pod
             options.append('--pod='+self.pod.name)
         for m in self.mounts:
-            options.append(podman_mount_option(m))
+            options.append(podman_mount_option(self.injector, m))
         return options
         
     async def delete(self, force=True, volumes=True):
@@ -520,7 +520,7 @@ __all__ += ['PodmanFromScratchImage', 'podman_image_volume_key']
 def image_layer_task(customization, **kwargs):
     '''Wrap a :class:`~carthage.machine.BaseCustomization` as a layer in a :class:`PodmanImage`.
     '''
-    if getattr(customization, 'description'):
+    if getattr(customization, 'description', None):
         kwargs['description'] = customization.description
     if 'description' not in kwargs:
         kwargs['description'] = 'Image Layer: '+customization.__name__
