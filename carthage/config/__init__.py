@@ -8,6 +8,7 @@
 
 from .schema import ConfigSchema, config_key, ConfigAccessor
 from .layout import ConfigLayout
+from .types import ConfigPath
 from . import base
 from ..dependency_injection import *
 

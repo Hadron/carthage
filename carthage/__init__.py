@@ -14,8 +14,8 @@ import carthage.dependency_injection
 
 __all__ = []
 
-from .utils import memoproperty, when_needed
-__all__ += [ 'memoproperty', 'when_needed' ]
+from .utils import memoproperty, when_needed, relative_path
+__all__ += [ 'memoproperty', 'when_needed' , 'relative_path']
 
 from .setup_tasks import *
 __all__ += carthage.setup_tasks.__all__

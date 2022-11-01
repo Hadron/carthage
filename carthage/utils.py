@@ -342,7 +342,14 @@ class NotPresentType:
         return 'NotPresent'
 
 NotPresent = object.__new__(NotPresentType) 
-    
+
+def relative_path(p):
+    '''Returns a :class:`pathlib.Path` that is guaranteed to be relative.  Intended to be used to make sure that joining the return value to a filesystem root does not escape the filesystem.
+    '''
+    p = pathlib.Path(p)
+    if p.is_absolute(): return p.relative_to('/')
+    return p
+
 __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
            'add_carthage_arguments', 'carthage_main_argparser',
            'carthage_main_setup', 'carthage_main_run',
@@ -352,4 +359,5 @@ __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty'
            'import_resources_files',
                    'mako_lookup',
            'file_locked',
+           'relative_path',
                    ]
