@@ -176,7 +176,7 @@ class TaskWrapperBase:
             return (True, dependency_last_run)
         obj.logger_for().debug(f"Task {self.description} last run for {obj} at {_iso_time(last_run)}")
         if not self.check_completed_func:
-            actual_hash_contents = ainjector.injector(self.hash_func, obj)
+            actual_hash_contents = await ainjector(self.hash_func, obj)
             if actual_hash_contents != hash_contents:
                 obj.logger_for().debug(f'Task {self.description} old_hash: `{hash_contents}`, new_hash: `{actual_hash_contents}`')
                 return (True, dependency_last_run)
@@ -503,7 +503,7 @@ class mako_task(TaskWrapper):
 
     Typically used in a :class:`~carthage.modeling.MachineModel`.  Introduces a setup task to render a mako template.  Extra keyword arguments can be :class:`InjectionKey` in which case they are instantiated in the context of the injector of the object to which the setup task is attached.  These arguments are made available in the mako template context.  The *instance* template context argument is introduced and points to  the object on which the setup task is run.
 
-If the template has a def called *hash*, this def will be rendered with the same arguments as the main template bod.  This value will be stored in the completion stamp; if the hash changes, the template will be re-rendered.  For performance reasons, try to keep the hash easy to compute.
+If the template has a def called *hash*, this def will be rendered with the same arguments as the main template body.  This value will be stored in the completion stamp; if the hash changes, the template will be re-rendered.  For performance reasons, try to keep the hash easy to compute.
 
     '''
     
@@ -532,7 +532,7 @@ If the template has a def called *hash*, this def will be rendered with the same
             if template.has_def('hash'):
                 hash_template = template.get_def("hash")
                 return hash_template.render(instance = instance, **kwargs)
-            else: return ""
+            else: return template.render(instance=instance, **kwargs)
         self.template = template
         if output is None:
             output = template
