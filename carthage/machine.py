@@ -471,7 +471,7 @@ class Machine(AsyncInjectable, SshMixin):
                         await asyncio.sleep(0.4)
                     else:
                         raise TimeoutError("sshfs failed to mount")
-            yield self.sshfs_path
+            yield Path(self.sshfs_path)
         finally:
             self.sshfs_count -= 1
             if self.sshfs_count <= 0:
@@ -493,6 +493,8 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
     def __init__(self, apply_to: Machine,
                   stamp=None, **kwargs):
+        if isinstance(apply_to, BaseCustomization):
+            apply_to = apply_to.host
         self.host = apply_to
         if not getattr(self, 'description', None): self.description = self.__class__.__name__
         self.stamp_stem = stamp or self.__class__.__name__
@@ -599,7 +601,7 @@ class FilesystemCustomization(BaseCustomization):
 
     def __init__(self, apply_to, **kwargs):
         super().__init__(apply_to, **kwargs)
-        apply_to._apply_to_filesystem_customization(self)
+        self.host._apply_to_filesystem_customization(self)
 
     @contextlib.asynccontextmanager
     async def _machine_context(self):
