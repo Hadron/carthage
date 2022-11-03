@@ -27,7 +27,7 @@ When testing whether a :class:`Machine` is local, test for ``isinstance(machine,
     ip_address = "127.0.0.1"
     @contextlib.asynccontextmanager
     async def filesystem_access(self):
-        yield "/"
+        yield Path("/")
 
     async def stop_machine(self):
         raise NotImplementedError("Stopping localhost may be more dramatic than desired")

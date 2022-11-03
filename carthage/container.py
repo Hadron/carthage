@@ -297,7 +297,7 @@ class Container(Machine, SetupTaskMixin):
 
     @contextlib.asynccontextmanager
     async def filesystem_access(self):
-        yield str(self.volume.path)
+        yield Path(self.volume.path)
 
 
     @contextlib.asynccontextmanager

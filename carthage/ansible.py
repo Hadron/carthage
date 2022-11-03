@@ -301,7 +301,7 @@ async def run_playbook(hosts,
         else: ansible_command = ''
         if origin and not isinstance(origin, NetworkNamespaceOrigin):
             config_dir = await stack.enter_async_context(origin.filesystem_access())
-            config_dir += "/ansible"
+            config_dir = config_dir/"ansible"
             os.makedirs(config_dir, exist_ok = True)
             config_inner = "/ansible"
         else:
