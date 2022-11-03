@@ -424,7 +424,21 @@ class Machine(AsyncInjectable, SshMixin):
         Adapts the customization to this type of machine.  Overridden in machines that can customize a filesystem without booting.
         '''
         customization.customization_context = customization._machine_context()
-        customization.run_command = self.ssh
+        customization.run_command = self.ssh_run_command
+
+    def ssh_run_command(self,
+                        *args,
+                        _bg=True,
+                        _bg_exc = False):
+        '''
+            Ssh has really bad quoting; it effectively  removes one level of quoting from the input.
+This handles quoting and  makes sure each argument is a separate argument on the eventual shell;
+it works like :meth:`carthage.container.Container.container_command` and is used to give a consistent interface by :meth:`FilesystemCustomization.run_command`.
+'''
+        return self.ssh(
+            shlex.join(*args),
+            _bg=_bg, _bg_exc=_bg_exc)
+        
 
     async def sshfs_process_factory(self):
         return sh.sshfs(
