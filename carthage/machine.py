@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import abc, asyncio, contextlib, os, os.path, tempfile, typing
+import abc, asyncio, contextlib, os, os.path, shlex, tempfile, typing
 from pathlib import Path
 
 from .dependency_injection import *
@@ -436,7 +436,7 @@ This handles quoting and  makes sure each argument is a separate argument on the
 it works like :meth:`carthage.container.Container.container_command` and is used to give a consistent interface by :meth:`FilesystemCustomization.run_command`.
 '''
         return self.ssh(
-            shlex.join(*args),
+            shlex.join(args),
             _bg=_bg, _bg_exc=_bg_exc)
         
 
