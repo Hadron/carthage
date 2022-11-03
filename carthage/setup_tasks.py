@@ -589,6 +589,7 @@ def install_mako_task(relationship, cross_dependency = True):
     async def install(self):
         async with self.filesystem_access() as fspath:
             related = getattr(self, relationship)
+            await related.async_become_ready()
             base = Path(related.stamp_path)
             path = Path(fspath)
             for mt in find_mako_tasks(related.setup_tasks):
