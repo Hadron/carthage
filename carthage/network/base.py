@@ -555,9 +555,11 @@ class NetworkLink:
     #interface than for the host as a whole. If set to a string, this
     #is the (potentially unqualified) dns name for the interface.  If
     #set to an empty string, the interface should not be registered in
-    #dns.
+    #dns.  Whether None implies the host should be registered under its name depends on how dns is configured.
     dns_name:typing.Optional[str] = None
-    
+
+    #: In NAT environments it is desirable to have a public DNS name separate than a private DNS name.  If set, then  when the public IP address is known, register this in dns.  It is more likely that this name needs to be fully qualified than dns_name.
+    public_dns_name:typing.Optional[str] = None
 
     def __new__(cls, connection, interface, args):
         if 'local_type' in args:
