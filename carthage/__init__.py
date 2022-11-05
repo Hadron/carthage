@@ -70,6 +70,10 @@ from .debian import DebianContainerImage
 
 __all__ += ['DebianContainerImage']
 
+from .dns import DnsZone, PublicDnsManagement
+
+__all__ += ['DnsZone', 'PublicDnsManagement']
+
 from .plugins import CarthagePlugin
 
 __all__ += ['CarthagePlugin']
