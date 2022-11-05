@@ -502,11 +502,11 @@ class ModelingContainer(InjectableModelType):
 
     def __new__(cls, name, bases, ns, **kwargs):
         to_propagate = ns.to_propagate
+        ns['__container_propagations__'] = to_propagate
         self = super().__new__(cls, name, bases, ns, **kwargs)
         for k in list(to_propagate.keys()):
             if k not in self.__initial_injections__:
-                del to_propagate[k]
-        self.__container_propagations__ = to_propagate
+                del self.__container_propagations[k]
         return self
 
     def __init__(self, *args, **kwargs):
