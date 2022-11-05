@@ -594,4 +594,28 @@ def _handle_base_customization(target_cls, ns, k, state):
 
 __all__ += ['_handle_base_customization']
 
+def add_provider_after(cls, k:InjectionKey,
+                     v: typing.Any = None,
+                     close = True,
+                     allow_multiple = False, 
+                     propagate = False,
+                     transclusion_overrides = False):
+    '''This is a hack two allow you to call add_provider in init_subclass.
+This must happen prior to the first instantiation of a subclass, and for propagation at least currently prior to the first time the class is put in a container.
+    Long term we will rework modelmethod to also add a class method usable prior to instantiation, and rework propagation so that it happens in instance initialization (or at least containing class initialization) time to give more room for adjusting.
+    This will be romeved then.
+    '''
+    if not isinstance(k, InjectionKey) and v is None:
+        v = k
+        k = default_injection_key(k)
+    if transclusion_overrides:
+        cls.__transclusions__.add((k,k, cls))
+    cls.__initial_injections__[k] = (v, dict(
+        close = close,
+        allow_multiple = allow_multiple,
+    ))
+    if propagate:
+        assert isinstance(cls, ModelingContainer), "Only ModelingContainers accept propagation"
+        cls.__container_propagations__[k] = cls.__initial_injections__[k]
+
 from . import decorators
