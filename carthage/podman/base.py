@@ -24,7 +24,9 @@ from ..setup_tasks import setup_task, SetupTaskMixin
 logger = logging.getLogger('carthage.podman')
 
 def podman_port_option(p: OciExposedPort):
-    return f'-p{p.host_ip}:{p.host_port}:{p.container_port}'
+    res = f'-p{p.host_ip}:{p.host_port}:{p.container_port}'
+    if p.proto != 'tcp': res += f'/{p.proto}'
+    return res
 
 def podman_mount_option(injector:Injector, m: OciMount):
     res = f'--mount=type={m.mount_type}'

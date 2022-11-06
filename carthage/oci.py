@@ -66,8 +66,11 @@ class OciExposedPort(Injectable):
     container_port: int
     host_ip: str = "0.0.0.0"
     host_port: int = ""
+    proto: str = 'tcp'
 
     def default_instance_injection_key(self):
+        if self.proto != 'tcp':
+            return InjectionKey(OciExposedPort, container_port=self.container_port, proto=self.proto)
         return InjectionKey(OciExposedPort, container_port=self.container_port)
 
 __all__ += ['OciExposedPort']
