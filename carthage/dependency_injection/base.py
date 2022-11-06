@@ -1258,7 +1258,7 @@ def injector_xref(injectable_key: InjectionKey,
         base_injector.add_provider(target_key,
             injector_xref(sub_injector_key, target_key))
 
-    :param injectable_key: The :class:`InjectionKey` of an :class:`Injectable` or an :class:`Injector` in which the target is actually looked up.
+    :param injectable_key: The :class:`InjectionKey` of an :class:`Injectable` or an :class:`Injector` in which the target is actually looked up.  If *None*, then look up in the current injector.
 
     :param target_key: An :class:`InjectionKey` registered with the
     injector belonging to *injectable_key*.  It is important that
@@ -1269,7 +1269,7 @@ def injector_xref(injectable_key: InjectionKey,
 
     '''
     # If we return an AsyncInjectable that needs to be ready, our
-    # caller will handle calling async_become_reeady.  We want to
+    # caller will handle calling async_become_ready.  We want to
     # requesta not_ready object to avoid cycles.  If asynchronous is
     # called, we'll hold with an interim future providing the
     # dependency while InjectorXrefMarker's async_resolve runs.
@@ -1279,8 +1279,8 @@ def injector_xref(injectable_key: InjectionKey,
     # where someone asks for _ready=False while async_become_ready is
     # running, this creates a cycle.
     tkey = InjectionKey(target_key, _ready=False)
-    ikey = injectable_key
-    @inject(injectable = injectable_key,
+    ikey = injectable_key if injectable_key is not None else InjectionKey(Injector)
+    @inject(injectable = ikey,
             injector = None)
     class instance(InjectorXrefMarker):
         target_key = tkey
