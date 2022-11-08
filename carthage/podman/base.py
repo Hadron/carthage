@@ -142,6 +142,7 @@ __all__ += ['PodmanPod']
         
 @inject_autokwargs(
     oci_container_image=InjectionKey(oci_container_image, _optional=NotPresent),
+    podman_restart=InjectionKey('podman_restart', _optional=NotPresent),
     pod=InjectionKey(PodmanPod, _optional=True),
     )
 class PodmanContainer(Machine, OciContainer):
@@ -154,6 +155,9 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
     stop_timeout = 10
     machine_running_ssh_online = False
 
+    #: restart containers (no, always, on-failure)
+    podman_restart = 'no'
+    
     @memoproperty
     def ssh_options(self):
         if not hasattr(self, 'ssh_port'):
@@ -221,6 +225,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     def _podman_create_options(self):
         options = []
+        options.append('--restart='+self.podman_restart)
         if self.oci_interactive: options.append('-i')
         if self.oci_tty: options.append('-t')
         for k,v in self.injector.filter_instantiate(
