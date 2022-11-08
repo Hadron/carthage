@@ -14,6 +14,9 @@ DHCP=ipv4
 Address=${str(v4_config.address)}/${v4_config.network.prefixlen}
 <%nontrivial = True %>
 %endif
+%if link.precious:
+KeepConfiguration = dhcp
+%endif
 %if v4_config.domains:
 Domains=${v4_config.domains}
 %endif

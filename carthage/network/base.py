@@ -549,6 +549,9 @@ class NetworkLink:
     v4_config: typing.Optional[V4Config] = None
     lldp: typing.Optional[bool] = dataclasses.field(default = True, repr = False)
     required: typing.Optional[bool] = dataclasses.field(default = True, repr = False)
+    #: If true, this interface is essential and networkd should keep it up even if a dhcp lease expires or networkd is stopped
+    precious: typing.Optional[bool] = dataclasses.field(default=False, repr=False)
+    
     admin_status:typing.Optional[str] = dataclasses.field(default='up', repr=False)
     public_v4_address: typing.Optional[IPv4Address] = dataclasses.field(default=None, repr=False)
     #: Sometimes it is desirable to have a different dns entry for an
