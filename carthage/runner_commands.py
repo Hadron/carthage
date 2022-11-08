@@ -27,7 +27,9 @@ class StartCommand(MachineCommand):
 
     async def run(self,args):
         machine = await self.ainjector.get_instance_async(InjectionKey(Machine, host=args.machine))
-        if args.ready: await machine.async_become_ready()
+        if args.ready:
+            if isinstance(machine.model, AsyncInjectable): await machine.model.async_become_ready()
+            await machine.async_become_ready()
         await machine.start_machine()
 
     def setup_subparser(self, parser):
