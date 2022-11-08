@@ -26,6 +26,9 @@ local_type_map = dict(
         netdev = "bridge-netdev.mako",
         member_network = "bridge-network.mako",
 ),
+    xfrm = dict(
+        netdev='xfrm-netdev.mako',
+        ),
     physical = dict(
         link = "physical-link.mako",
     ),
@@ -75,7 +78,7 @@ class SystemdNetworkModelMixin(SetupTaskMixin, AsyncInjectable):
 
     @generate_network_config.hash()
     def generate_network_config(self):
-        return str(hash_network_links(self.network_links))
+        return "20221106"+str(hash_network_links(self.network_links))
     
 
     def _render_network_configuration(self, link: NetworkLink, dir: Path):

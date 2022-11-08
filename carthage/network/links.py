@@ -43,3 +43,12 @@ class VlanLink(NetworkLink):
 class NoLocalLink(NetworkLink):
     local_type = 'none'
     
+
+@dataclasses.dataclass(init=False, eq=False)
+class XfrmLocalLink(NetworkLink):
+
+    '''A link corresponding to a linux xfrm interface'''
+    interface_id: typing.Optional[int] = None
+    local_type = 'xfrm'
+
+    
