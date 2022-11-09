@@ -153,8 +153,7 @@ async def test_mako_task(ainjector):
 
         templates = mako_task("test.mako")
 
-        template_2 = inject(name = InjectionKey("name")) \
-            (mako_task("template-2.mako"))
+        template_2 = mako_task("template-2.mako", name=InjectionKey('name'))
 
     ainjector.add_provider(InjectionKey("name"), "the name")
     res = await ainjector(bar)
