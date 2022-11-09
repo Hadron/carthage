@@ -22,7 +22,7 @@ from ..oci import *
 from ..setup_tasks import setup_task, SetupTaskMixin
 
 logger = logging.getLogger('carthage.podman')
-c
+
 def podman_port_option(p: OciExposedPort):
     res = f'-p{p.host_ip}:{p.host_port}:{p.container_port}'
     if p.proto != 'tcp': res += f'/{p.proto}'
