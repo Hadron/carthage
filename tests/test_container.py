@@ -40,7 +40,7 @@ async def test_start_container(container, loop):
 
 @async_test
 async def test_container_running(container, loop):
-    async with container.container_running():
+    async with container.container_running(ssh_online=False):
         container.shell("/bin/ls")
         
 

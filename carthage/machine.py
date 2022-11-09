@@ -49,8 +49,9 @@ class MachineRunning:
 
 
     def __init__(self, machine, *,
-                 ssh_online = False):
+                 ssh_online = None):
         self.machine = machine
+        if ssh_online is None: ssh_online = machine.machine_running_ssh_online
         self.ssh_online = ssh_online
 
 ssh_origin = InjectionKey('ssh-origin')
@@ -241,6 +242,9 @@ class Machine(AsyncInjectable, SshMixin):
     name: str
     network_links: typing.Mapping[str, carthage.network.NetworkLink]
 
+    #: Should machine_running default to calling ssh_online
+    machine_running_ssh_online: bool = True
+    
     def __init__(self, name=None, **kwargs):
         super().__init__(**kwargs)
         if name is not None:
@@ -458,47 +462,48 @@ it works like :meth:`carthage.container.Container.container_command` and is used
         :returns: Path at which the filesystem can be accessed while in the context.
 
         '''
-        self.sshfs_count += 1
-        try:
-            # Argument for correctness of locking.  The goal of
-            # sshfs_lock is to make sure that two callers are not both
-            # trying to spin up sshfs at the same time.  The lock is
-            # never held when sshfs_count is < 1, so it will not block
-            # when the coroutine that actually starts sshfs acquires
-            # the lock.  Therefore the startup can actually proceed.
-            # It would be equally correct to grab the lock before
-            # incrementing sshfs_count, but more difficult to
-            # implement because the lock must be released by time of
-            # yield so other callers can concurrently access the filesystem.
-            async with self.sshfs_lock:
-                if self.sshfs_count == 1:
-                    self.sshfs_path = tempfile.mkdtemp(dir = self.config_layout.state_dir, prefix=self.name, suffix = "sshfs")
-                    self.sshfs_process = await self.sshfs_process_factory()
-                    for x in range(5):
-                        alive, *rest = self.sshfs_process.process.is_alive()
-                        if not alive:
-                            await self.sshfs_process
-                            raise RuntimeError #I'd expect that to have happened from an sh exit error already
-                        if os.path.exists(os.path.join(
-                                self.sshfs_path, "run")):
-                            break
-                        await asyncio.sleep(0.4)
-                    else:
-                        raise TimeoutError("sshfs failed to mount")
-            yield Path(self.sshfs_path)
-        finally:
-            self.sshfs_count -= 1
-            if self.sshfs_count <= 0:
-                self.sshfs_count = 0
-                try:
-                    self.sshfs_process.process.terminate()
-                except: pass
-                dir = self.sshfs_path
-                self.sshfs_path = None
-                self.sshfs_process = None
-                await asyncio.sleep(0.2)
-                with contextlib.suppress(OSError):
-                    os.rmdir(dir)
+        async with self.machine_running(ssh_online=True):
+            self.sshfs_count += 1
+            try:
+                # Argument for correctness of locking.  The goal of
+                # sshfs_lock is to make sure that two callers are not both
+                # trying to spin up sshfs at the same time.  The lock is
+                # never held when sshfs_count is < 1, so it will not block
+                # when the coroutine that actually starts sshfs acquires
+                # the lock.  Therefore the startup can actually proceed.
+                # It would be equally correct to grab the lock before
+                # incrementing sshfs_count, but more difficult to
+                # implement because the lock must be released by time of
+                # yield so other callers can concurrently access the filesystem.
+                async with self.sshfs_lock:
+                    if self.sshfs_count == 1:
+                        self.sshfs_path = tempfile.mkdtemp(dir = self.config_layout.state_dir, prefix=self.name, suffix = "sshfs")
+                        self.sshfs_process = await self.sshfs_process_factory()
+                        for x in range(5):
+                            alive, *rest = self.sshfs_process.process.is_alive()
+                            if not alive:
+                                await self.sshfs_process
+                                raise RuntimeError #I'd expect that to have happened from an sh exit error already
+                            if os.path.exists(os.path.join(
+                                    self.sshfs_path, "run")):
+                                break
+                            await asyncio.sleep(0.4)
+                        else:
+                            raise TimeoutError("sshfs failed to mount")
+                yield Path(self.sshfs_path)
+            finally:
+                self.sshfs_count -= 1
+                if self.sshfs_count <= 0:
+                    self.sshfs_count = 0
+                    try:
+                        self.sshfs_process.process.terminate()
+                    except: pass
+                    dir = self.sshfs_path
+                    self.sshfs_path = None
+                    self.sshfs_process = None
+                    await asyncio.sleep(0.2)
+                    with contextlib.suppress(OSError):
+                        os.rmdir(dir)
 
 
 
@@ -584,7 +589,7 @@ class MachineCustomization(BaseCustomization):
 
     @property
     def customization_context(self):
-        return self.host.machine_running(ssh_online = True)
+        return self.host.machine_running()
 
 class ContainerCustomization(BaseCustomization):
 
@@ -619,7 +624,7 @@ class FilesystemCustomization(BaseCustomization):
 
     @contextlib.asynccontextmanager
     async def _machine_context(self):
-        async with self.host.machine_running(ssh_online=True), self.host.filesystem_access() as path:
+        async with self.host.machine_running(), self.host.filesystem_access() as path:
             self.path = path
             yield
             return

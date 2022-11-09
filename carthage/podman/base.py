@@ -22,7 +22,7 @@ from ..oci import *
 from ..setup_tasks import setup_task, SetupTaskMixin
 
 logger = logging.getLogger('carthage.podman')
-
+c
 def podman_port_option(p: OciExposedPort):
     res = f'-p{p.host_ip}:{p.host_port}:{p.container_port}'
     if p.proto != 'tcp': res += f'/{p.proto}'
@@ -152,7 +152,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     #: Timeout in seconds to wait when stopping a container
     stop_timeout = 10
-
+machine_running_ssh_online = False
     @memoproperty
     def ssh_options(self):
         if not hasattr(self, 'ssh_port'):
