@@ -152,7 +152,8 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     #: Timeout in seconds to wait when stopping a container
     stop_timeout = 10
-machine_running_ssh_online = False
+    machine_running_ssh_online = False
+
     @memoproperty
     def ssh_options(self):
         if not hasattr(self, 'ssh_port'):
