@@ -144,6 +144,7 @@ __all__ += ['PodmanPod']
     oci_container_image=InjectionKey(oci_container_image, _optional=NotPresent),
     podman_restart=InjectionKey('podman_restart', _optional=NotPresent),
     pod=InjectionKey(PodmanPod, _optional=True),
+    podman_options=InjectionKey('podman_options', _optional=NotPresent),
     )
 class PodmanContainer(Machine, OciContainer):
 
@@ -157,7 +158,9 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     #: restart containers (no, always, on-failure)
     podman_restart = 'no'
-    
+
+    #:Extra options (as a list) to be passed into podman create
+    podman_options = []
     @memoproperty
     def ssh_options(self):
         if not hasattr(self, 'ssh_port'):
@@ -211,6 +214,10 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             raise ValueError(f'Invalid ISO string: {self.container_info["Created"]}')
 
     async def do_create(self):
+        image = self.oci_container_image
+        if isinstance(image,OciImage):
+            await image.async_become_ready()
+            image = image.oci_image_tag
         if self.pod: await self.pod.async_become_ready()
         command_options = []
         if self.oci_command:
@@ -219,7 +226,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             'container', 'create',
             f'--name={self.full_name}',
             *self._podman_create_options(),
-            self.oci_container_image,
+            image,
             *command_options,
             _bg=True, _bg_exc=False)
 
@@ -238,6 +245,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             options.append('--pod='+self.pod.name)
         for m in self.mounts:
             options.append(podman_mount_option(self.injector, m))
+        options.extend(self.podman_options)
         return options
         
     async def delete(self, force=True, volumes=True):
