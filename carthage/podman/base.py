@@ -98,8 +98,14 @@ class LocalPodmanContainerHost(PodmanContainerHost):
             yield path/'container.tar.gz'
 
 
+@inject(
+    podman_pod_options = InjectionKey('podman_pod_options', _optional=NotPresent),
+    )
 class PodmanPod(OciPod):
 
+    #: A list of extra options to pass to pod create
+    podman_pod_options = []
+    
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -122,6 +128,7 @@ class PodmanPod(OciPod):
         options = []
         for p in self.exposed_ports:
             options.append(podman_port_option(p))
+        options.extend(self.podman_pod_options)
         await self.podman(
             'pod', 'create',
             *options,
