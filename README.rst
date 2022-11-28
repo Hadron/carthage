@@ -26,9 +26,16 @@ You may also want either ``python3-pyvmomi`` or ``libvirt-daemon-system``.
 
 Then install Carthage like any other source distribution, perhaps using ``python3 setup.py install`` or ``python3 setup.py install --user``.
 
+Alternatively you can ``podman pull ghcr.io/hadron/carthage:latest``
+
 Learning Carthage
 *****************
 Documentation is available `here <https://carthage.readthedocs.io/>`_.
 
 
 For a look at a sample application take a look at https://github.com/hartmans/industrial-algebra.carthage .  This application configures the laptop of one of the Carthage developers.
+
+Join Us
+*******
+
+As you start to use Carthage, you will probably have questions.  The best approach is to discuss them in real time on our  `Matrix chat <https://matrix.to/#/#carthage-users:matrix.org>`.
