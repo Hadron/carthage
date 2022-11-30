@@ -38,7 +38,7 @@ def test_substitution_in_yaml(ainjector):
     injector = ainjector.injector(Injector)
     cl = injector(ConfigLayout)
     cl.load_yaml(open(os.path.join(resource_dir, "override-config.yml"), 'rt'))
-    assert cl.hadron_operations == "/srv/images/test/hadron-operations"
+    assert cl.hadron_operations == f"{cl.base_dir}/hadron-operations"
 
 
 def test_list_in_yaml(ainjector):
