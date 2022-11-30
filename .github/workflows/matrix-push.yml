@@ -5,9 +5,8 @@ jobs:
     runs-on: ubuntu-latest
     name: Notify room about push
     env:
-      separator: |
-
-        * 
+      separator: '
+        * '
     steps:
     - name: Send message to Carthage Room
       id: matrix-chat-message
