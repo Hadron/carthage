@@ -8,6 +8,7 @@
 
 import asyncio
 
+
 class Trigger:
 
     '''An awaitable that can be externally triggered and that by default asserts if not triggered when used as a context manager
@@ -29,7 +30,7 @@ class Trigger:
     def __enter__(self):
         return self
 
-    def __exit__(self,exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_val:
             if not self.future.done():
                 self.future.set_exception(exc_val)

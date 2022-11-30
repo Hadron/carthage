@@ -12,9 +12,9 @@ from .types import ConfigPath
 from . import base
 from ..dependency_injection import *
 
-def inject_config(injector):
-    injector.replace_provider(ConfigLayout, allow_multiple = True)
-        
 
-    
+def inject_config(injector):
+    injector.replace_provider(ConfigLayout, allow_multiple=True)
+
+
 __all__ = ("config_key", "ConfigSchema", "ConfigLayout", "inject_config", 'ConfigAccessor')

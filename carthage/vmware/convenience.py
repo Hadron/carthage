@@ -8,9 +8,11 @@
 
 import asyncio
 import itertools
-import asyncio, yaml
+import asyncio
+import yaml
 import urllib3
-import carthage, carthage.utils
+import carthage
+import carthage.utils
 
 from pyVmomi import vim, vmodl
 
@@ -30,6 +32,7 @@ from carthage.vmware.datacenter import VmwareDatacenter
 from carthage.vmware.cluster import VmwareCluster
 from carthage.vmware.utils import wait_for_task
 from carthage.utils import *
+
 
 def carthage_load_config(s):
     base_injector(ConfigLayout).load_yaml(s)

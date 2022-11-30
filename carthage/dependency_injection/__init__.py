@@ -20,5 +20,3 @@ __all__ = [
     'inject_autokwargs', 'injector_xref',
     'partial_with_dependencies', 'shutdown_injector',
     'injection_failed_unlogged']
-
-

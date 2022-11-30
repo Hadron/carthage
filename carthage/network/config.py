@@ -6,9 +6,11 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import copy, dataclasses
+import copy
+import dataclasses
 from ipaddress import *
 from ..dependency_injection import *
+
 
 @dataclasses.dataclass()
 class L3ConfigMixin:
@@ -19,15 +21,15 @@ class L3ConfigMixin:
         'network',
         'gateway',
         "dns_servers", "domains",
-        })
-    
+    })
+
     #: Set of DNS servers that should be made available to this link/network
     dns_servers: list = None
     domains: str = None
 
     def __post_init__(self):
         if self.dhcp_ranges:
-            for l,h in self.dhcp_ranges:
+            for l, h in self.dhcp_ranges:
                 if l > h:
                     raise ValueError(f'IN a dhcp range, the lower address {l} is not less than the upper address {h}')
                 if self.network and l not in self.network:
@@ -38,7 +40,7 @@ class L3ConfigMixin:
     def _handle_dhcp_ranges(self, func):
         def wrapper(ranges):
             result = []
-            for l,h in ranges:
+            for l, h in ranges:
                 result.append((func(l), func(h)))
             return result
         return wrapper
@@ -51,12 +53,12 @@ class L3ConfigMixin:
 
 '''
         res = copy.copy(self)
-        if merge_from is None: return res
+        if merge_from is None:
+            return res
         for a in self._attributes:
-            if getattr(res,a) is None:
+            if getattr(res, a) is None:
                 setattr(res, a, getattr(merge_from, a))
         return res
-    
 
 
 @dataclasses.dataclass()
@@ -70,23 +72,23 @@ class V4Config(L3ConfigMixin):
     masquerade: bool = False
 
     _attributes = L3ConfigMixin._attributes | {'masquerade'}
-    
-        
+
     def __post_init__(self):
         # The following depends on iteration happening in dictionary
         # order such that network is processed before dhcp_ranges
         for k, func in dict(
-                address = IPv4Address,
-                network = IPv4Network,
-                gateway = ipv4_gateway,
-                dhcp_ranges= self._handle_dhcp_ranges(IPv4Address)).items():
-            val = getattr(self,k)
+                address=IPv4Address,
+                network=IPv4Network,
+                gateway=ipv4_gateway,
+                dhcp_ranges=self._handle_dhcp_ranges(IPv4Address)).items():
+            val = getattr(self, k)
             if val is not None:
                 setattr(self, k, func(val))
 
         super().__post_init__()
 
+
 def ipv4_gateway(g):
-    if g is False: return False
+    if g is False:
+        return False
     return IPv4Address(g)
-    

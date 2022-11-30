@@ -24,11 +24,12 @@ __all__ += ['oci_container_image']
 
 @inject_autokwargs(
     oci_read_only=InjectionKey('oci_read_only', _optional=NotPresent)
-    )
+)
 class OciManaged(SetupTaskMixin, AsyncInjectable):
 
     #:Should this object be treated as read only
     oci_read_only = False
+
     async def find(self):
         '''Returns falsy if the object does not exist.  Ideally returns the creation time in unix time, otherwise returns True if the creation time cannot be determined.
         '''
@@ -36,12 +37,13 @@ class OciManaged(SetupTaskMixin, AsyncInjectable):
 
     @setup_task("Construct Object", order=400)
     async def find_or_create(self):
-    # Make sure we call find.  When called by setup_tasks,
-    # check_completed runs first and so we do not need to call, but
-    # for an explicit call we need to call find ourselves.
+        # Make sure we call find.  When called by setup_tasks,
+        # check_completed runs first and so we do not need to call, but
+        # for an explicit call we need to call find ourselves.
         if not hasattr(self, '_find_result'):
             self._find_result = await self.find()
-        if self._find_result: return #find was successful
+        if self._find_result:
+            return  # find was successful
         del self._find_result
         if self.oci_read_only:
             raise RuntimeError(f'{self} is read only but does not exist')
@@ -58,7 +60,9 @@ class OciManaged(SetupTaskMixin, AsyncInjectable):
     async def do_create(self):
         raise NotImplementedError
 
+
 __all__ += ['OciManaged']
+
 
 @dataclasses.dataclass
 class OciExposedPort(Injectable):
@@ -73,11 +77,14 @@ class OciExposedPort(Injectable):
             return InjectionKey(OciExposedPort, container_port=self.container_port, proto=self.proto)
         return InjectionKey(OciExposedPort, container_port=self.container_port)
 
+
 __all__ += ['OciExposedPort']
+
+
 @inject_autokwargs(
     oci_interactive=InjectionKey('oci_interactive', _optional=NotPresent),
     oci_tty=InjectionKey('oci_tty', _optional=NotPresent),
-        )
+)
 class OciContainer(OciManaged):
 
     #: Should stdin be kept open?
@@ -105,7 +112,6 @@ class OciContainer(OciManaged):
         results = self.injector.filter_instantiate(OciMount, ['destination'])
         return [i[1] for i in results]
 
-
     @memoproperty
     def oci_command(self):
         '''Override the container command if non-None.
@@ -116,15 +122,16 @@ class OciContainer(OciManaged):
         return None
 
 
-
 __all__ += ['OciContainer']
 
 
 class OciImage(OciManaged):
 
     def __init__(self, *, oci_image_tag=None, id=None, **kwargs):
-        if oci_image_tag: self.oci_image_tag = oci_image_tag
-        if id: self.id = id
+        if oci_image_tag:
+            self.oci_image_tag = oci_image_tag
+        if id:
+            self.id = id
         if not hasattr(self, 'oci_image_tag') and not hasattr(self, 'id'):
             raise TypeError('Either oci_image_tag or id is required')
         super().__init__(**kwargs)
@@ -134,11 +141,12 @@ class OciImage(OciManaged):
     oci_image_entry_point = None
     id = None
 
+
 __all__ += ['OciImage']
+
 
 @dataclasses.dataclass
 class OciMount(Injectable):
-
 
     destination: str
     source: str
@@ -154,26 +162,28 @@ class OciMount(Injectable):
 
     def source_resolved(self, injector):
         return injector(ConfigPath, self.source)
-    
 
-        
+
 __all__ += ['OciMount']
+
 
 class OciPod(OciManaged):
 
     #: The name of the pod
-    name:str = None
+    name: str = None
     #: the ID of the pod
-    id:str  = None
+    id: str = None
 
     def __init__(self, name=None, id=None, **kwargs):
-        if name: self.name  = name
-        if id: self.id = id
+        if name:
+            self.name = name
+        if id:
+            self.id = id
         if not (self.name or self.id):
             raise TypeError('Either name or id is mandatory')
         super().__init__(**kwargs)
-        if self.id: self.oci_read_only = True
-
+        if self.id:
+            self.oci_read_only = True
 
     @memoproperty
     def exposed_ports(self):
@@ -184,6 +194,7 @@ class OciPod(OciManaged):
         result = self.injector.filter_instantiate(OciExposedPort, ['container_port'])
         return [i[1] for i in result]
 
+
 __all__ += ['OciPod']
 
 
@@ -191,7 +202,7 @@ __all__ += ['OciPod']
 class OciEnviron(Injectable):
 
     assignment: str
-    scope: str = 'all' #: or exec or image or container
+    scope: str = 'all'  # : or exec or image or container
 
     def default_instance_injection_key(self):
         if self.scope == 'all':
@@ -204,11 +215,15 @@ class OciEnviron(Injectable):
         name, sep, value = self.assignment.partition('=')
         return name
 
+
 __all__ += ['OciEnviron']
+
 
 def host_mount(dir, readonly=False):
     options = []
-    if readonly: options.append('ro=true')
+    if readonly:
+        options.append('ro=true')
     return OciMount(dir, dir, mount_type='bind', options=','.join(options))
+
 
 __all__ += ['host_mount']

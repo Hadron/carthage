@@ -15,6 +15,7 @@ _current_instantiation = contextvars.ContextVar('current_instantiation', default
 
 __all__ = []
 
+
 class GetItemSet(set):
 
     def __getitem__(self, idx):
@@ -25,9 +26,11 @@ class GetItemSet(set):
             idx -= 1
         return result
 
+
 instantiation_roots = GetItemSet()
 
 __all__ += ['instantiation_roots']
+
 
 class BaseInstantiationContext:
 
@@ -39,16 +42,18 @@ class BaseInstantiationContext:
 
     def dependency_progress(self, key, context):
         '''Indicate that this instantiation has a dependency on *key*, currently in progress, with state tracked by *context*.'''
-        self.dependencies_waiting.setdefault(key,context)
+        self.dependencies_waiting.setdefault(key, context)
 
     def dependency_final(self, key, context):
         try:
             del self.dependencies_waiting[key]
-        except KeyError: pass
+        except KeyError:
+            pass
 
     def __enter__(self):
         self.parent = _current_instantiation.get()
-        if not self.parent: instantiation_roots.add(self)
+        if not self.parent:
+            instantiation_roots.add(self)
         self.reset_token = _current_instantiation.set(self)
         return self
 
@@ -60,17 +65,21 @@ class BaseInstantiationContext:
         '''Indicate that the instantiation has completed'''
         assert not self._done
         self._done = True
-        if not self.parent: instantiation_roots.remove(self)
+        if not self.parent:
+            instantiation_roots.remove(self)
 
     def __str__(self):
         res = self.description
-        if self.parent: res = f'{str(self.parent)} -> {res}'
+        if self.parent:
+            res = f'{str(self.parent)} -> {res}'
         return res
 
     def __repr__(self):
         return f'{self.__class__.__name__}<{str(self)}>'
 
+
 __all__ += ['BaseInstantiationContext']
+
 
 @dataclasses.dataclass
 class InjectedDependencyInspector:
@@ -80,28 +89,28 @@ class InjectedDependencyInspector:
     '''
 
     #: The :class:`Injector` that provides the dependency. *None* if the dependency is unresolved.
-    injector:typing.Optional[Injector]
+    injector: typing.Optional[Injector]
 
     provider: DependencyProvider
 
-    key: InjectionKey #: What dependency is injected
+    key: InjectionKey  # : What dependency is injected
 
     @property
     def is_provided(self):
         '''True if the dependency is provided; False if there is no injector in the chain providing this dependency.'''
         return self.provider is None
-    
+
     @property
     def is_final(self):
         '''True if the dependency has been fully instantiated.  If true, :meth:`get_value` will never raise *AsyncRequired*.
 '''
         return self.is_provided and not self.provider.is_factory
 
-
     def all_keys(self):
         '''Iterate over all keys that provide this dependency in the given injector.
 '''
-        if not self.is_provided: yield self.key
+        if not self.is_provided:
+            yield self.key
         else:
             yield from self.provider.keys
 
@@ -120,14 +129,16 @@ class InjectedDependencyInspector:
         from .base import AsyncInjector, InjectionKey
         ainjector = AsyncInjector(self.injector)
         key = self.key
-        if ready is not None: key = InjectionKey(key, _ready=ready)
+        if ready is not None:
+            key = InjectionKey(key, _ready=ready)
         return await ainjector.get_instance_async(key)
 
     @property
     def instantiation_contexts(self):
         '''Return any ongoing instantiations referencing this dependency.  Typically contexts are very short lived if :meth:`is_final` is true.  However if a dependency is itself waiting for dependencies, the contexts can be used to chain those dependencies.
 '''
-        if not self.provider: return frozenset()
+        if not self.provider:
+            return frozenset()
         return frozenset(self.provider.instantiation_contexts)
 
     def all_waiting_dependencies(self):
@@ -135,8 +146,10 @@ class InjectedDependencyInspector:
         for c in self.instantiation_contexts:
             result.update(c.dependencies_waiting)
         return result
-    
+
+
 __all__ += ['InjectedDependencyInspector']
+
 
 class InstantiationContext(BaseInstantiationContext, InjectedDependencyInspector):
 
@@ -144,24 +157,23 @@ class InstantiationContext(BaseInstantiationContext, InjectedDependencyInspector
     Represents the instantiation of an :class:`InjectionKey` in the scope of a :class:`Injector`.
     '''
 
-
-    def __init__(self, injector:injector, triggering_injector:Injector, key:InjectionKey,
-                 provider:DependencyProvider,
-                 ready:bool):
-        BaseInstantiationContext.__init__(self,injector)
+    def __init__(self, injector: injector, triggering_injector: Injector, key: InjectionKey,
+                 provider: DependencyProvider,
+                 ready: bool):
+        BaseInstantiationContext.__init__(self, injector)
         InjectedDependencyInspector.__init__(self, injector=injector, key=key, provider=provider)
         self.triggering_injector = triggering_injector
         self.ready = ready
-        
+
     def __hash__(self):
         return id(self)
 
     def __eq__(self, other):
         return self is other
-    
+
     def __enter__(self):
         for ctx in self.provider.instantiation_contexts:
-            #We only care about the first one
+            # We only care about the first one
             assert not self.dependencies_waiting
             self.dependencies_waiting = ctx.dependencies_waiting
             break
@@ -182,20 +194,22 @@ class InstantiationContext(BaseInstantiationContext, InjectedDependencyInspector
     def progress(self):
         for ctx in self.provider.instantiation_contexts:
             parent = ctx.parent
-            if not parent: continue
+            if not parent:
+                continue
             parent.dependency_progress(self.key, self)
         self.injector.emit_event(self.key, "dependency_progress",
                                  self,
-                                 adl_keys = self.provider.keys | {base.InjectionKey(base.Injector)})
-        
+                                 adl_keys=self.provider.keys | {base.InjectionKey(base.Injector)})
 
     def final(self):
         from .base import is_obj_ready
         obj_ready = is_obj_ready(self.provider.provider)
         for ctx in self.provider.instantiation_contexts:
             parent = ctx.parent
-            if parent is None: continue
-            if ctx.ready and not obj_ready: continue
+            if parent is None:
+                continue
+            if ctx.ready and not obj_ready:
+                continue
             # We try to avoid calling dependency_final when the object
             # is not ready yet.  However since instantiations can
             # share the dependencies_waiting dict, there are cases
@@ -206,18 +220,21 @@ class InstantiationContext(BaseInstantiationContext, InjectedDependencyInspector
         if obj_ready or not ctx.ready:
             self.injector.emit_event(self.key,
                                      "dependency_final", self,
-                                     adl_keys=self.provider.keys|{base.InjectionKey(base.Injector)})
-            
+                                     adl_keys=self.provider.keys | {base.InjectionKey(base.Injector)})
 
     def get_dependencies(self):
         return get_dependencies_for(self.provider.provider, self.injector)
-    
+
+
 __all__ += ['InstantiationContext']
+
 
 def current_instantiation():
     return _current_instantiation.get()
 
+
 __all__ += ['current_instantiation']
+
 
 class AsyncBecomeReadyContext(BaseInstantiationContext):
 
@@ -229,10 +246,10 @@ class AsyncBecomeReadyContext(BaseInstantiationContext):
     @property
     def description(self):
         return f'{self.obj}.async_become_ready()'
-    
+
     def __enter__(self):
         parent = _current_instantiation.get()
-        if isinstance(parent, InstantiationContext) and  parent.provider.provider is self.obj:
+        if isinstance(parent, InstantiationContext) and parent.provider.provider is self.obj:
             return parent
         self.entered = True
         return super().__enter__()
@@ -245,15 +262,17 @@ class AsyncBecomeReadyContext(BaseInstantiationContext):
 
     def get_dependencies(self):
         return get_dependencies_for(self.obj, self.obj.injector)
-    
+
+
 __all__ += ['AsyncBecomeReadyContext']
 
 
 def get_dependencies_for(obj, injector):
-    if not hasattr(obj, '_injection_dependencies'): return
+    if not hasattr(obj, '_injection_dependencies'):
+        return
     for injection_key in obj._injection_dependencies.values():
         try:
-            dp, satisfy_against  = injector._get_parent(injection_key)
+            dp, satisfy_against = injector._get_parent(injection_key)
             yield InjectedDependencyInspector(
                 injector=satisfy_against,
                 key=injection_key,
@@ -263,7 +282,8 @@ def get_dependencies_for(obj, injector):
                 injector=None,
                 key=injection_key,
                 provider=None)
-            
+
+
 __all__ += ['get_dependencies_for']
 
 

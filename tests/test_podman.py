@@ -23,6 +23,7 @@ from carthage.pytest import *
 
 state_dir = Path(__file__).parent.joinpath("test_state")
 
+
 @pytest.fixture()
 def ainjector(ainjector):
     ainjector = ainjector.claim("test_setup.py")
@@ -30,7 +31,8 @@ def ainjector(ainjector):
     config.state_dir = state_dir
     state_dir.mkdir(parents=True, exist_ok=True)
     yield ainjector
-    shutil.rmtree(state_dir, ignore_errors = True)
+    shutil.rmtree(state_dir, ignore_errors=True)
+
 
 class podman_layout(CarthageLayout):
     layout_name = 'podman'
@@ -38,17 +40,17 @@ class podman_layout(CarthageLayout):
     add_provider(machine_implementation_key, dependency_quote(PodmanContainer))
     add_provider(oci_container_image, 'debian:latest')
     #add_provider(ansible_log, "/tmp/ansible.log")
-    
+
     oci_interactive = True
 
     class FromScratchDebian(PodmanFromScratchImage):
-        oci_image_cmd ='bash'
+        oci_image_cmd = 'bash'
         oci_image_tag = 'localhost/from_scratch_debian'
-        
+
     class DebianWithAuthorizedKeys(PodmanImage):
         oci_image_tag = 'localhost/authorized-debian:latest'
         authorized_keys = image_layer_task(SshAuthorizedKeyCustomizations)
-        
+
     class foo(MachineModel):
 
         name = 'foo.com'
@@ -64,7 +66,7 @@ class podman_layout(CarthageLayout):
             mount_type='bind',
             destination='/host',
             source='/',
-))
+        ))
 
     class ansible_test(MachineModel):
 
@@ -74,23 +76,23 @@ class podman_layout(CarthageLayout):
             async def install_ansible(self):
                 await self.run_command('apt', 'update')
                 await self.run_command('apt', '-y', 'install', 'ansible')
-                
-            do_roles = ansible_role_task(os.path.dirname(__file__)+"/resources/test_ansible_role")
+
+            do_roles = ansible_role_task(os.path.dirname(__file__) + "/resources/test_ansible_role")
 
     class pod_group(ModelGroup):
         add_provider(OciExposedPort(22))
+
         @provides(InjectionKey(PodmanPod))
         class pod(PodmanPod):
             name = 'carthage-test-pod'
-            
 
-        class pod_member(MachineModel): pass
-        
+        class pod_member(MachineModel):
+            pass
 
 
 @async_test
 async def test_podman_create(ainjector):
-    l= await ainjector(podman_layout)
+    l = await ainjector(podman_layout)
     ainjector = l.ainjector
     machine = l.foo.machine
     await machine.async_become_ready()
@@ -100,7 +102,7 @@ async def test_podman_create(ainjector):
         assert await machine.is_machine_running()
     await machine.delete()
     assert not await machine.find()
-    
+
 
 @async_test
 async def test_container_exec(ainjector):
@@ -114,7 +116,8 @@ async def test_container_exec(ainjector):
             assert 'root' in str(await machine.container_exec('ls'))
     finally:
         await machine.delete()
-        
+
+
 @async_test
 async def test_container_ssh(ainjector):
     l = await ainjector(podman_layout)
@@ -134,13 +137,15 @@ async def test_container_ssh(ainjector):
             await machine.ssh_online()
     finally:
         await machine.delete()
-        
+
+
 @async_test
 async def test_podman_image(ainjector):
     l = await ainjector(podman_layout)
     ainjector = l.ainjector
     await l.DebianWithAuthorizedKeys.async_become_ready()
-    
+
+
 @async_test
 async def test_podman_mount(ainjector):
     l = await ainjector(podman_layout)
@@ -154,7 +159,8 @@ async def test_podman_mount(ainjector):
             await machine.container_exec('ls', '/host/etc')
     finally:
         await machine.delete()
-        
+
+
 @async_test
 async def test_from_scratch_image(test_ainjector):
     l = await test_ainjector(podman_layout)
@@ -163,6 +169,7 @@ async def test_from_scratch_image(test_ainjector):
     config.delete_volumes = False
     ainjector.add_provider(podman_image_volume_key, injector_access(container_image))
     await l.FromScratchDebian.async_become_ready()
+
 
 @async_test
 async def test_podman_ansible(ainjector):
@@ -173,7 +180,8 @@ async def test_podman_ansible(ainjector):
         await machine.async_become_ready()
     finally:
         await machine.delete()
-        
+
+
 @async_test
 async def test_podman_pod(ainjector):
     l = await ainjector(podman_layout)
@@ -183,6 +191,7 @@ async def test_podman_pod(ainjector):
     try:
         await machine.async_become_ready()
     finally:
-        try: await pg.pod.delete(force=True)
-        except Exception: pass
-        
+        try:
+            await pg.pod.delete(force=True)
+        except Exception:
+            pass

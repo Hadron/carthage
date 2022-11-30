@@ -15,14 +15,16 @@ __all__ = []
 
 logger = logging.getLogger('carthage.network')
 
+
 class DnsZone(AsyncInjectable):
 
     def __init__(self, name=None, **kwargs):
-        if name: self.name = name
+        if name:
+            self.name = name
         super().__init__(**kwargs)
         if not getattr(self, 'name', None):
             raise TypeError('Name must be specified or set in a subclass')
-        
+
     def contains(self, name):
         '''
         Returns `bool` representing whether or not zone should contain name
@@ -52,7 +54,9 @@ class DnsZone(AsyncInjectable):
 
         raise NotImplementedError
 
+
 __all__ += ['DnsZone']
+
 
 class PublicDnsManagement(AsyncInjectable):
 
@@ -81,11 +85,13 @@ Update a DNS zone when :class:`NetworkLinks` gain a public IP address.  This can
         else:
             logger.debug(f'{name} is at {str(link.public_v4_address)}')
             await zone.update_records((name, 'A', str(link.public_v4_address)),
-                                     ttl=30)
+                                      ttl=30)
 
     def __init__(self, attach_to=None, **kwargs):
         super().__init__(**kwargs)
-        if attach_to is None: attach_to = self.injector
+        if attach_to is None:
+            attach_to = self.injector
         attach_to.add_event_listener(InjectionKey(NetworkLink), 'public_address', self.public_ip_updated)
-        
+
+
 __all__ += ['PublicDnsManagement']

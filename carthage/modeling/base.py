@@ -6,12 +6,15 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import asyncio, logging, os, types
+import asyncio
+import logging
+import os
+import types
 import typing
 from pathlib import Path
 from .implementation import *
 from .decorators import *
-from carthage.dependency_injection import * #type: ignore
+from carthage.dependency_injection import *  # type: ignore
 from carthage.utils import when_needed, memoproperty
 from carthage import ConfigLayout, SetupTaskMixin
 import carthage.network
@@ -22,43 +25,45 @@ logger = logging.getLogger(__name__)
 
 __all__ = []
 
+
 def dependency_quote_class(c: type):
     "When *c* is injected in a model, dependency_quote the result"
     from .implementation import classes_to_quote
     classes_to_quote.add(c)
 
+
 __all__ += ['dependency_quote_class']
 
 
-
-
-@inject_autokwargs(injector = Injector)
-class InjectableModel(Injectable, metaclass = InjectableModelType):
+@inject_autokwargs(injector=Injector)
+class InjectableModel(Injectable, metaclass=InjectableModelType):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         injector = self.injector
-        dependency_providers: typing.Mapping[typing.Any,DependencyProvider] = {}
+        dependency_providers: typing.Mapping[typing.Any, DependencyProvider] = {}
         # This is complicated because we want to reuse the same
         # DependencyProvider when registering the same value more than
         # once so that instantiations alias and we don't accidentally
         # get multiple instances of the same type providing related
         # but different keys.
-        for k,info in self.__class__.__initial_injections__.items():
+        for k, info in self.__class__.__initial_injections__.items():
             v, options = info
-                
+
             try:
                 dp = dependency_providers[v]
             # TypeError: unhashable
             except (KeyError, TypeError):
                 dp = DependencyProvider(
-                    v, close = options['close'],
-                    allow_multiple = options['allow_multiple'])
-                try: dependency_providers[v] = dp
-                except TypeError: pass
+                    v, close=options['close'],
+                    allow_multiple=options['allow_multiple'])
+                try:
+                    dependency_providers[v] = dp
+                except TypeError:
+                    pass
             options = dict(options)
             try:
-                self.injector.add_provider(k, dp, replace = True, **options)
+                self.injector.add_provider(k, dp, replace=True, **options)
             except Exception as e:
                 raise RuntimeError(f'Failed registering {v} as provider for {k}') from e
 
@@ -67,23 +72,25 @@ class InjectableModel(Injectable, metaclass = InjectableModelType):
                 for cb in c._callbacks:
                     cb(self)
 
-    def __init_subclass__(cls, *args, template = False, **kwargs):
+    def __init_subclass__(cls, *args, template=False, **kwargs):
         super().__init_subclass__(*args, **kwargs)
 
-        
 
 __all__ += ['InjectableModel']
 
-class NetworkModel(carthage.Network, InjectableModel, metaclass = ModelingContainer):
+
+class NetworkModel(carthage.Network, InjectableModel, metaclass=ModelingContainer):
 
     def __init__(self, **kwargs):
         kwargs.update(gather_from_class(self, 'name', 'vlan_id'))
         super().__init__(**kwargs)
-        if hasattr(self,'bridge_name'):
+        if hasattr(self, 'bridge_name'):
             self.ainjector.add_provider(InjectionKey(carthage.network.BridgeNetwork),
-                                        when_needed(carthage.network.BridgeNetwork, bridge_name = self.bridge_name, delete_bridge = False))
+                                        when_needed(carthage.network.BridgeNetwork, bridge_name=self.bridge_name, delete_bridge=False))
+
 
 __all__ += ['NetworkModel']
+
 
 class NetworkConfigModelType(InjectableModelType):
 
@@ -98,65 +105,73 @@ class NetworkConfigModelType(InjectableModelType):
             if issubclass(net, NetworkModel) and hasattr(net, '__provides_dependencies_for__'):
                 kwargs['net'] = injector_access(net.__provides_dependencies_for__[0])
             else:
-                raise SyntaxError(f'net must be an instance of Network (or InjectionKey) not a {kwargs["net"]}; consider wrapping in injector_access')
-        
+                raise SyntaxError(
+                    f'net must be an instance of Network (or InjectionKey) not a {kwargs["net"]}; consider wrapping in injector_access')
+
         def callback(inst):
             nonlocal kwargs
             keys = kwargs.keys()
             values = key_from_injector_access(*kwargs.values())
-            kwargs = {k:v for k,v in zip(keys, values)}
+            kwargs = {k: v for k, v in zip(keys, values)}
             try:
                 inst.add(interface, **kwargs)
             except TypeError as e:
                 raise TypeError(f'Error constructing {interface} with arguments {kwargs}') from e
         cls._add_callback(ns, callback)
 
+
 class NetworkConfigModel(InjectableModel,
                          carthage.network.NetworkConfig,
-                         metaclass = NetworkConfigModelType
+                         metaclass=NetworkConfigModelType
                          ):
     pass
 
+
 __all__ += ['NetworkConfigModel']
 
-class ModelGroup(InjectableModel, AsyncInjectable, metaclass = ModelingContainer):
 
-    async def all_models(self, ready = None):
+class ModelGroup(InjectableModel, AsyncInjectable, metaclass=ModelingContainer):
+
+    async def all_models(self, ready=None):
         models = await self.ainjector.filter_instantiate_async(
             MachineModel, ['host'],
-            stop_at = self.injector,
-            ready = ready)
+            stop_at=self.injector,
+            ready=ready)
         return [m[1] for m in models]
 
-    async def resolve_networking(self, force = False):
+    async def resolve_networking(self, force=False):
         if hasattr(self, 'resolve_networking_models') and not force:
             return self.resolve_networking_models
+
         async def await_futures(pending_futures, event, target, **kwargs):
             if pending_futures:
                 await asyncio.gather(*pending_futures)
         if not hasattr(self, 'all_model_tasks'):
             model_tasks = await self.ainjector.filter_instantiate_async(
                 ModelTasks, ['name'],
-                ready = False)
+                ready=False)
             self.all_model_tasks = [m[1] for m in model_tasks]
-        models = await self.all_models(ready = False)
+        models = await self.all_models(ready=False)
         with self.injector.event_listener_context(
                 InjectionKey(carthage.network.NetworkConfig), "resolved",
                 await_futures) as event_futures:
             resolve_networking_futures = []
             for m in models:
                 resolve_networking_futures.append(asyncio.ensure_future(m.resolve_networking(force)))
-            if resolve_networking_futures: await asyncio.gather( *resolve_networking_futures)
-        if event_futures: await asyncio.gather(*event_futures)
+            if resolve_networking_futures:
+                await asyncio.gather(*resolve_networking_futures)
+        if event_futures:
+            await asyncio.gather(*event_futures)
         self.resolve_networking_models = models
         return models
 
-    def close(self, canceled_futures = None):
-        try: del self.resolved_networking_models
-        except: pass
+    def close(self, canceled_futures=None):
+        try:
+            del self.resolved_networking_models
+        except BaseException:
+            pass
         super().close(canceled_futures)
-        
-        
+
     async def generate(self):
         async def cb(m):
             try:
@@ -168,22 +183,20 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass = ModelingContainer
         models += self.all_model_tasks
         futures = []
         for m in models:
-            if not isinstance(m, AsyncInjectable): continue
+            if not isinstance(m, AsyncInjectable):
+                continue
             futures.append(asyncio.ensure_future(cb(m)))
-        if futures: await asyncio.gather(*futures)
+        if futures:
+            await asyncio.gather(*futures)
         if hasattr(super(), 'generate'):
             await super().generate()
-
 
     async def async_ready(self):
         await self.resolve_networking()
         return await super().async_ready()
-    
-            
-    
 
 
-class Enclave(ModelGroup, metaclass = ModelingContainer):
+class Enclave(ModelGroup, metaclass=ModelingContainer):
 
     domain: str
 
@@ -191,11 +204,12 @@ class Enclave(ModelGroup, metaclass = ModelingContainer):
     def our_key(self):
         return InjectionKey(Enclave, domain=self.domain)
 
+
 __all__ += ['ModelGroup', 'Enclave']
 
-machine_implementation_key = InjectionKey(carthage.machine.Machine, role = "implementation")
+machine_implementation_key = InjectionKey(carthage.machine.Machine, role="implementation")
 
-__all__ += [ 'machine_implementation_key']
+__all__ += ['machine_implementation_key']
 
 dependency_quote_class(carthage.machine.BaseCustomization)
 
@@ -204,9 +218,8 @@ class MachineModelType(ModelingContainer):
 
     classes_to_inject = (carthage.machine.BaseCustomization,)
 
-
     namespace_filters = [_handle_base_customization]
-    
+
     @staticmethod
     def calc_mixin_key(class_name, ns, bases):
         # if we had the class instantiated, we'd just look at
@@ -226,51 +239,56 @@ class MachineModelType(ModelingContainer):
             name = class_name.lower()
         if '.' not in name:
             try:
-                if ns['domain']: name += '.'+ns['domain']
-            except KeyError: pass
-            
+                if ns['domain']:
+                    name += '.' + ns['domain']
+            except KeyError:
+                pass
+
         return InjectionKey(MachineModelMixin, host=name)
 
-
-    def __new__(cls, name, bases, ns, mixin_key = None, **kwargs):
+    def __new__(cls, name, bases, ns, mixin_key=None, **kwargs):
         bases = adjust_bases_for_tasks(bases, ns)
         template = kwargs.get('template', False)
         if not template:
-            if mixin_key is None: mixin_key = cls.calc_mixin_key(name, ns, bases)
+            if mixin_key is None:
+                mixin_key = cls.calc_mixin_key(name, ns, bases)
             try:
                 if mixin_key:
                     mixin = ns.get_injected(mixin_key)
                     bases += (mixin,)
-            except KeyError: pass
+            except KeyError:
+                pass
         domain = ns.get('domain', None)
-        self =  super().__new__(cls, name, bases, ns, **kwargs)
+        self = super().__new__(cls, name, bases, ns, **kwargs)
         if not template:
             if not hasattr(self, 'name'):
                 self.name = self.__name__.lower()
             if domain and not '.' in self.name:
-                self.name += '.'+domain
+                self.name += '.' + domain
         return self
-
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not kwargs.get('template', False):
-            machine_key = InjectionKey(carthage.machine.Machine, host = self.name, _globally_unique=True)
+            machine_key = InjectionKey(carthage.machine.Machine, host=self.name, _globally_unique=True)
             self.__transclusions__ |= {
                 (machine_key, machine_key, self),
                 (self.our_key(), machine_key, self),
-                }
+            }
             self.__initial_injections__[machine_key] = (
-                    self.machine, dict(
-                        close = True, allow_multiple = False,
-))
+                self.machine, dict(
+                    close=True, allow_multiple=False,
+                ))
             self.__container_propagations__[machine_key] = \
                 self.__initial_injections__[machine_key]
 
-class MachineModelMixin: pass
 
-@inject_autokwargs(config_layout = ConfigLayout)
-class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metaclass = MachineModelType, template = True):
+class MachineModelMixin:
+    pass
+
+
+@inject_autokwargs(config_layout=ConfigLayout)
+class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metaclass=MachineModelType, template=True):
 
     '''
 
@@ -315,17 +333,15 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
     Then *server.machine* will have a method *install_software_task* which will run both ansible roles assuming they have not already been run.  *model.install_software* will produce an instance of the customization applied to *model.machine*.  *model.install_software.database_role()* is a method that will force the database_role to run even if it appears up to date.
 
     '''
-    
+
     @classmethod
     def our_key(cls):
         "Returns the globally unique InjectionKey by which this model is known."
-        return InjectionKey(MachineModel, host = cls.name, _globally_unique=True)
-
-
+        return InjectionKey(MachineModel, host=cls.name, _globally_unique=True)
 
     def __repr__(self):
         return f'<{self.__class__.__name__} model name: {self.name}>'
-    
+
     network_config = injector_access(InjectionKey(carthage.network.NetworkConfig))
 
     #: A set of ansible groups to add a model to; see :func:`carthage.modeling.ansible.enable_modeling_ansible`.
@@ -336,43 +352,46 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
         self.network_links = {}
         self.injector.add_provider(InjectionKey(MachineModel), dependency_quote(self))
         self.injector.add_provider(InjectionKey(carthage.machine.AbstractMachineModel), dependency_quote(self))
-        machine_key = InjectionKey(carthage.machine.Machine, host = self.name)
-        if machine_key in self.__class__.__initial_injections__: # not transcluded
+        machine_key = InjectionKey(carthage.machine.Machine, host=self.name)
+        if machine_key in self.__class__.__initial_injections__:  # not transcluded
             self.injector.add_provider(InjectionKey(carthage.machine.Machine), MachineImplementation)
         else:
             self.injector.add_provider(InjectionKey(carthage.machine.Machine), injector_access(machine_key))
-            
 
     machine = injector_access(InjectionKey(carthage.machine.Machine))
 
-
     #: Sequence of classes to be mixed into the resulting machine implementation
     machine_mixins = tuple()
-    
+
     @memoproperty
     def machine_type(self):
-        try: implementation = self.injector.get_instance(machine_implementation_key)
+        try:
+            implementation = self.injector.get_instance(machine_implementation_key)
         except AsyncRequired:
-            raise AsyncRequired('A provider registered for machine_implementation_key has asynchronous dependencies; did you forget a dependency_quote()')
+            raise AsyncRequired(
+                'A provider registered for machine_implementation_key has asynchronous dependencies; did you forget a dependency_quote()')
         bases = [implementation] + list(map(lambda x: x[1], self.injector.filter_instantiate(MachineMixin, ['name'])))
         bases += self.machine_mixins
         for b in bases:
-            assert isinstance(b, type) or hasattr(b, '__mro_entries__'), f'{b} is not a type; did you forget a dependency_quote'
-        res =  types.new_class(implementation.__qualname__, tuple(bases))
-        inject()(res) #Pick up any injections from extra bases
-        for k, customization in self.injector.filter_instantiate(carthage.machine.BaseCustomization, ['description'], stop_at = self.injector):
+            assert isinstance(
+                b, type) or hasattr(
+                b, '__mro_entries__'), f'{b} is not a type; did you forget a dependency_quote'
+        res = types.new_class(implementation.__qualname__, tuple(bases))
+        inject()(res)  # Pick up any injections from extra bases
+        for k, customization in self.injector.filter_instantiate(carthage.machine.BaseCustomization, [
+                                                                 'description'], stop_at=self.injector):
             name = customization.__name__
             task = carthage.machine.customization_task(customization)
             setattr(res, f'{name}_task', task)
             task.__set_name__(res, name)
-            
+
         res.model = self
         return res
 
     @memoproperty
     def stamp_path(self):
-        path = self.config_layout.output_dir+ f"/hosts/{self.name}"
-        os.makedirs(path, exist_ok = True)
+        path = self.config_layout.output_dir + f"/hosts/{self.name}"
+        os.makedirs(path, exist_ok=True)
         return Path(path)
 
     async def resolve_networking(self, *args, **kwargs):
@@ -387,23 +406,23 @@ then call :func:`carthage.local.process_local_network_config` to learn about loc
         try:
             if issubclass(self.machine_type, LocalMachineMixin):
                 process_local_network_config(self)
-        except KeyError: pass #no machine_implementation_key
+        except KeyError:
+            pass  # no machine_implementation_key
         return res
 
-    
 
-@inject(injector = Injector,
-            model = MachineModel,
-            )
+@inject(injector=Injector,
+        model=MachineModel,
+        )
 class MachineImplementation(AsyncInjectable):
 
     # Another class that is only a type because of how the injection
     # machineary works.
 
-    def __new__(cls, injector,  model):
+    def __new__(cls, injector, model):
         res = model.machine_type
         try:
-            return cls.prep(injector(res, name = model.name), model)
+            return cls.prep(injector(res, name=model.name), model)
         except AsyncRequired:
             self = super().__new__(cls)
             self.name = model.name
@@ -415,33 +434,38 @@ class MachineImplementation(AsyncInjectable):
     @staticmethod
     def prep(implementation: carthage.machine.Machine, model: MachineModel):
         implementation.model = model
-        try: implementation.short_name = model.short_name
-        except AttributeError: pass
+        try:
+            implementation.short_name = model.short_name
+        except AttributeError:
+            pass
         return implementation
 
     async def async_resolve(self):
-        return self.prep(await self.ainjector(self.res, name = self.name), self.model)
+        return self.prep(await self.ainjector(self.res, name=self.name), self.model)
 
 
 __all__ += ['MachineModel', 'MachineModelMixin']
+
 
 class CarthageLayout(ModelGroup):
 
     @classmethod
     def default_class_injection_key(cls):
         if cls.layout_name:
-            return InjectionKey(CarthageLayout, layout_name = cls.layout_name)
-        else: return InjectionKey(CarthageLayout)
-        
+            return InjectionKey(CarthageLayout, layout_name=cls.layout_name)
+        else:
+            return InjectionKey(CarthageLayout)
 
     layout_name = None
 
+
 __all__ += ['CarthageLayout']
 
+
 @inject(ainjector=AsyncInjector)
-async def instantiate_layout(layout_name = None, *, ainjector, optional=False):
+async def instantiate_layout(layout_name=None, *, ainjector, optional=False):
     if layout_name:
-        layout = await ainjector.get_instance_async(InjectionKey(CarthageLayout, layout_name = layout_name, _optional=optional))
+        layout = await ainjector.get_instance_async(InjectionKey(CarthageLayout, layout_name=layout_name, _optional=optional))
     else:
         layout = await ainjector.get_instance_async(InjectionKey(CarthageLayout, _optional=optional))
     return layout
@@ -449,9 +473,9 @@ async def instantiate_layout(layout_name = None, *, ainjector, optional=False):
 __all__ += ['instantiate_layout']
 
 
-@inject(injector = Injector)
+@inject(injector=Injector)
 def model_bases(host: str, *bases,
-                   injector):
+                injector):
     '''
 
     One common modeling pattern is to automatically generate  :class:`MachineModel`s for a number of systems from some sort of inventory database.  However, it is often desirable to add a override mechanism so that customizations can be added for a specific model.  This function adds a modeling mixin if one is registered in the injector.  In the automated code it is used like::
@@ -472,19 +496,21 @@ def model_bases(host: str, *bases,
     new_bases = list(bases)
     try:
         new_base = injector.get_instance(
-            InjectionKey(MachineModelMixin, host = host, ))
+            InjectionKey(MachineModelMixin, host=host, ))
         if issubclass(new_base, bases):
             new_bases.insert(0, new_base)
         else:
             new_bases.append(new_base)
-    except KeyError: pass
+    except KeyError:
+        pass
     return tuple(new_bases)
+
 
 __all__ += ['model_bases']
 
 
-@inject(config_layout = ConfigLayout)
-class ModelTasks(InjectableModel,  SetupTaskMixin, AsyncInjectable, metaclass=ModelingContainer):
+@inject(config_layout=ConfigLayout)
+class ModelTasks(InjectableModel, SetupTaskMixin, AsyncInjectable, metaclass=ModelingContainer):
 
     '''
     A grouping of tasks that will be run at generate time in a :class:`CarthageLayout`.  As part of :meth:`ModelGroup.generate`, the layout searches for any :class:`ModelTasks` provided by its injector and instantiates them.  This causes any setup_tasks to be run.
@@ -507,11 +533,12 @@ class ModelTasks(InjectableModel,  SetupTaskMixin, AsyncInjectable, metaclass=Mo
     @classmethod
     def our_key(cls):
         name = getattr(cls, 'name', cls.__name__)
-        return InjectionKey(ModelTasks, name = name)
+        return InjectionKey(ModelTasks, name=name)
 
     @memoproperty
     def stamp_path(self):
         name = getattr(self.__class__, 'name', self.__class__.__name__)
-        return Path(self.config_layout.output_dir)/name
+        return Path(self.config_layout.output_dir) / name
+
 
 __all__ += ['ModelTasks']

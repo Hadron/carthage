@@ -5,6 +5,7 @@ from carthage.container import Container, container_volume
 from carthage.image import ContainerVolume
 import carthage.utils
 
+
 @inject(ainjector=AsyncInjector)
 async def run(ainjector):
     container_dir = sys.argv[1]
@@ -17,4 +18,3 @@ async def run(ainjector):
 
 if __name__ == "__main__":
     carthage.utils.carthage_main_run(run)
-          

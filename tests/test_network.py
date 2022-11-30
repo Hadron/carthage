@@ -7,10 +7,12 @@
 # LICENSE for details.
 
 from carthage.pytest import *
-import pytest, posix
+import pytest
+import posix
 from carthage import base_injector
 from carthage.network import Network, BridgeNetwork
 from carthage.dependency_injection import *
+
 
 @pytest.fixture()
 def injector():
@@ -22,15 +24,15 @@ def injector():
 @async_test
 async def test_network_create(injector, loop):
     ainjector = injector(AsyncInjector)
-    net = await ainjector(Network, name = "testnet")
+    net = await ainjector(Network, name="testnet")
     net.close()
-    
+
+
 @pytest.mark.xfail(reason="Needs adjusting for namespace")
 @async_test
 async def test_network_veth(injector, loop):
     ainjector = injector(AsyncInjector)
-    net = await ainjector(Network, name = "testnet")
+    net = await ainjector(Network, name="testnet")
     net = await net.access_by(BridgeNetwork)
     ve = net.add_veth('database.hadronindustries.com')
     net.close()
-    

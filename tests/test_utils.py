@@ -8,6 +8,7 @@
 
 from carthage.utils import memoproperty
 
+
 def test_memo_prop():
     class m:
         @memoproperty
@@ -20,5 +21,4 @@ def test_memo_prop():
     assert isinstance(m.foo, memoproperty)
     mo = m()
     assert mo.foo == 99
-    assert mo.foo == 99 #and not called a second time
-    
+    assert mo.foo == 99  # and not called a second time

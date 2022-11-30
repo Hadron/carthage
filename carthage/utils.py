@@ -6,9 +6,20 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import argparse, asyncio, contextlib, fcntl, functools, logging, os, pathlib, re, typing, weakref
+import argparse
+import asyncio
+import contextlib
+import fcntl
+import functools
+import logging
+import os
+import pathlib
+import re
+import typing
+import weakref
 import importlib.resources
 import mako.lookup
+
 
 async def possibly_async(r):
     '''If r is a coroutine, await it.  Otherwise return it.  Used like the
@@ -22,11 +33,10 @@ async def possibly_async(r):
         return await r
     else:
         return r
-    
+
 
 class memoproperty:
     "A property that only supports getting and that stores the result the first time on the instance to avoid recomputation"
-
 
     def __init__(self, fun):
         functools.update_wrapper(self, fun)
@@ -34,13 +44,15 @@ class memoproperty:
         self.name = fun.__name__
 
     def __get__(self, instance, owner):
-        if instance is None: return self
-        #Because we don't define set or del, we should not be called
-        #if name is already set on instance.  So if we set name we
-        #will be bypassed in the future
+        if instance is None:
+            return self
+        # Because we don't define set or del, we should not be called
+        # if name is already set on instance.  So if we set name we
+        # will be bypassed in the future
         res = self.fun(instance)
         setattr(instance, self.name, res)
         return res
+
 
 class WhenNeededMeta(type):
 
@@ -51,20 +63,22 @@ class WhenNeededMeta(type):
         wraps, args, kwargs, injector = self.repr_info
         if isinstance(wraps, type):
             wraps_repr = wraps.__name__
-        else: wraps_repr = repr(wraps)
+        else:
+            wraps_repr = repr(wraps)
         s = "when_needed({}".format(wraps_repr)
         for a in args:
-            s +=", {}".format(a)
-        for k,v in kwargs.items():
+            s += ", {}".format(a)
+        for k, v in kwargs.items():
             s += ", {}={}".format(k, v)
-        s +=")"
+        s += ")"
         if injector is not None:
             s += ", injector ={}".format(repr(injector))
             s += ")"
         return s
 
-def when_needed(wraps, *args, injector = None,
-                addl_keys = [],
+
+def when_needed(wraps, *args, injector=None,
+                addl_keys=[],
                 **kwargs):
     '''Return an AsyncInjectable class that when resolved will instantiate
     'wraps' giving it *args and **kwargs.  This is only done once; if this
@@ -90,25 +104,28 @@ def when_needed(wraps, *args, injector = None,
     # and we may need to control which injector is used for the
     # dependencies.
     # We override the injector dependency to avoid autokwargs behavior because we do not want our injector claimed
-    @inject(injector = Injector)
+
+    @inject(injector=Injector)
     @functools.wraps(wraps,
-                     assigned = functools.WRAPPER_ASSIGNMENTS ,
-                     updated = tuple())
+                     assigned=functools.WRAPPER_ASSIGNMENTS,
+                     updated=tuple())
     class WhenNeeded(AsyncInjectable, metaclass=WhenNeededMeta):
 
         resolved_obj = None
         resolving = None
 
-        def __init__(self, *inside_args,   **inside_kwargs):
+        def __init__(self, *inside_args, **inside_kwargs):
             nonlocal args
             if args and inside_args:
-                raise RuntimeError("It does not make sense to specify args both in the call to when_needed and when it is resolved.")
+                raise RuntimeError(
+                    "It does not make sense to specify args both in the call to when_needed and when it is resolved.")
             if inside_args:
                 args = inside_args
             if injector is not None:
-                #override injector
+                # override injector
                 inside_kwargs['injector'] = injector
-            # We want to end up  with a copied injector but not one that is claimed so the resulting object can claim it.
+            # We want to end up  with a copied injector but not one that is claimed so
+            # the resulting object can claim it.
             self.injector = inside_kwargs.pop('injector')
             self.injector = self.injector(type(self.injector))
 # super will set up ainjector
@@ -123,21 +140,22 @@ def when_needed(wraps, *args, injector = None,
             yield from addl_keys
 
         @classmethod
-        def close(self, canceled_futures = None):
+        def close(self, canceled_futures=None):
             if self.resolved_obj:
                 _call_close(self.resolved_obj, canceled_futures)
             for ainjector in self.ainjector_set:
-                ainjector.close(canceled_futures = canceled_futures)
+                ainjector.close(canceled_futures=canceled_futures)
             self.ainjector_set.clear()
             if hasattr(self, 'resolving') and self.resolving:
                 self.resolving.cancel()
-                if canceled_futures: canceled_futures.append(self.resolving)
+                if canceled_futures:
+                    canceled_futures.append(self.resolving)
                 self.resolving = None
 
         # class level property to track all the injectors in use.
         ainjector_set = weakref.WeakSet()
         repr_info = (wraps, args, kwargs, injector)
-                
+
         async def async_resolve(self):
             nonlocal kwargs
             if self.resolved_obj:
@@ -162,41 +180,40 @@ def when_needed(wraps, *args, injector = None,
                 return res
             except Exception as e:
                 self.resolving.set_exception(e)
-                self.__class__.resolving = None # try again next time
+                self.__class__.resolving = None  # try again next time
                 raise
-                
 
     addl_keys = list(map(
         lambda k: k if isinstance(k, InjectionKey) else InjectionKey(k), addl_keys))
-    
+
     return WhenNeeded
+
 
 def permute_identifier(id, maxlen):
     "Add to or replace the last character of the identifier; use as generator and stop consuming when a unique one is found"
     yield id
     if len(id) < maxlen:
         for i in range(10):
-            yield id+chr(97+i)
+            yield id + chr(97 + i)
     else:
         id = id[:-1]
         for i in range(10):
-            yield id+chr(97+i)
+            yield id + chr(97 + i)
     raise ValueError("No unique combination found")
-
 
 
 def add_carthage_arguments(parser):
     parser.add_argument('--config',
-                        metavar = "file",
-                        default = [],
-                        type = argparse.FileType('rt'),
-                        action = 'append')
+                        metavar="file",
+                        default=[],
+                        type=argparse.FileType('rt'),
+                        action='append')
     parser.add_argument('--command-verbose',
-                        help = "Verbose command logging",
-                        action =argparse.BooleanOptionalAction)
+                        help="Verbose command logging",
+                        action=argparse.BooleanOptionalAction)
     parser.add_argument('--tasks-verbose',
-                        help = "Verbose logging for tasks",
-                        action = argparse.BooleanOptionalAction)
+                        help="Verbose logging for tasks",
+                        action=argparse.BooleanOptionalAction)
     parser.add_argument('--plugin',
                         dest='plugins',
                         default=[],
@@ -205,10 +222,12 @@ def add_carthage_arguments(parser):
                         metavar='plugin')
     return parser
 
+
 def carthage_main_argparser(*args, **kwargs):
     parser = argparse.ArgumentParser(*args, **kwargs)
     add_carthage_arguments(parser)
     return parser
+
 
 def carthage_main_setup(parser=None, unknown_ok=False):
     from . import base_injector, ConfigLayout
@@ -234,8 +253,10 @@ def carthage_main_setup(parser=None, unknown_ok=False):
     container_logger = logging.getLogger('carthage.container')
     container_logger.addHandler(logging.FileHandler('container.log'))
     container_logger.setLevel(10)
+
     def container_debug_filter(record):
-        if record.name == 'carthage.container' and record.levelno == 10: return 0
+        if record.name == 'carthage.container' and record.levelno == 10:
+            return 0
         return 1
     console_handler.addFilter(container_debug_filter)
     if not args.command_verbose:
@@ -245,8 +266,9 @@ def carthage_main_setup(parser=None, unknown_ok=False):
         logging.getLogger('urllib3.connectionpool').propagate = False
     if args.tasks_verbose:
         logging.getLogger('carthage.setup_tasks').setLevel(10)
-        
+
     return result
+
 
 def carthage_main_run(func, *args, **kwargs):
     loop = asyncio.get_event_loop()
@@ -259,10 +281,15 @@ def carthage_main_run(func, *args, **kwargs):
     finally:
         loop.run_until_complete(shutdown_injector(base_injector))
 
+
 shell_safe_re = re.compile(r'^[a-zA-Z0-9_./ ]*$')
+
+
 def validate_shell_safe(s):
-    if shell_safe_re.search(s): return True
+    if shell_safe_re.search(s):
+        return True
     return False
+
 
 @contextlib.contextmanager
 def TemporaryMountPoint(**kwargs):
@@ -286,10 +313,13 @@ def import_resources_files(package):
     except AttributeError:
         if isinstance(package, str):
             return pathlib.Path(importlib.import_module(package).__path__[0])
-        else: return pathlib.Path(package.__path__[0])
+        else:
+            return pathlib.Path(package.__path__[0])
 
-mako_lookup = mako.lookup.TemplateLookup([import_resources_files(__package__)/"resources/templates"],
-                                         strict_undefined = True)
+
+mako_lookup = mako.lookup.TemplateLookup([import_resources_files(__package__) / "resources/templates"],
+                                         strict_undefined=True)
+
 
 def is_optional_type(t):
     # support both python 3.7 and python 3.9
@@ -297,32 +327,41 @@ def is_optional_type(t):
     try:
         if t.__class__ == typing._UnionGenericAlias:
             t = typing.get_args(t)
-            if type(None) in t:  return True
+            if type(None) in t:
+                return True
     except AttributeError:
         if t.__class__ is typing._GenericAlias:
-            if type(None) in t.__args__: return True
+            if type(None) in t.__args__:
+                return True
     return False
 
+
 def get_type_args(t):
-    try: return typing.get_type_args(t)
-    except AttributeError: return t.__args__
+    try:
+        return typing.get_type_args(t)
+    except AttributeError:
+        return t.__args__
+
 
 @contextlib.asynccontextmanager
-async def file_locked(fd: typing.Union[int,str], mode=fcntl.LOCK_EX, unlock=False):
+async def file_locked(fd: typing.Union[int, str], mode=fcntl.LOCK_EX, unlock=False):
     loop = asyncio.get_event_loop()
     close = False
-    if isinstance(fd, str) or hasattr(fd,"__fspath__"):
-        fd = os.open(fd, os.O_CREAT|os.O_CLOEXEC|os.O_RDWR, 0o664)
+    if isinstance(fd, str) or hasattr(fd, "__fspath__"):
+        fd = os.open(fd, os.O_CREAT | os.O_CLOEXEC | os.O_RDWR, 0o664)
         close = True
+
     def lock(m):
         fcntl.lockf(fd, m)
     await loop.run_in_executor(None, lock, mode)
-    try:yield
+    try:
+        yield
     finally:
         if unlock:
             await loop.run_in_executor(None, lock, fcntl.LOCK_UN)
-        if close: os.close(fd)
-        
+        if close:
+            os.close(fd)
+
 
 class NotPresentType:
     '''A singleton value indicating that an dependency should not be injected into a function if if the dependency is not provided.  Used as the value for the *_optional* parameter to :func:`~carthage.dependency_injection.inject`
@@ -341,23 +380,27 @@ class NotPresentType:
     def __repr__(self):
         return 'NotPresent'
 
-NotPresent = object.__new__(NotPresentType) 
+
+NotPresent = object.__new__(NotPresentType)
+
 
 def relative_path(p):
     '''Returns a :class:`pathlib.Path` that is guaranteed to be relative.  Intended to be used to make sure that joining the return value to a filesystem root does not escape the filesystem.
     '''
     p = pathlib.Path(p)
-    if p.is_absolute(): return p.relative_to('/')
+    if p.is_absolute():
+        return p.relative_to('/')
     return p
+
 
 __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
            'add_carthage_arguments', 'carthage_main_argparser',
            'carthage_main_setup', 'carthage_main_run',
-                   'validate_shell_safe',
+           'validate_shell_safe',
            'is_optional_type',
-                   'TemporaryMountPoint',
+           'TemporaryMountPoint',
            'import_resources_files',
-                   'mako_lookup',
+           'mako_lookup',
            'file_locked',
            'relative_path',
-                   ]
+           ]

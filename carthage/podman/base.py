@@ -23,21 +23,29 @@ from ..setup_tasks import setup_task, SetupTaskMixin
 
 logger = logging.getLogger('carthage.podman')
 
+
 def podman_port_option(p: OciExposedPort):
     res = f'-p{p.host_ip}:{p.host_port}:{p.container_port}'
-    if p.proto != 'tcp': res += f'/{p.proto}'
+    if p.proto != 'tcp':
+        res += f'/{p.proto}'
     return res
 
-def podman_mount_option(injector:Injector, m: OciMount):
+
+def podman_mount_option(injector: Injector, m: OciMount):
     res = f'--mount=type={m.mount_type}'
-    if m.source: res += f',source={m.source_resolved(injector)}'
+    if m.source:
+        res += f',source={m.source_resolved(injector)}'
     if m.destination:
         res += f',destination={m.destination}'
-    else: raise TypeError('destination is required')
-    if m.options: res += f',{m.options}'
+    else:
+        raise TypeError('destination is required')
+    if m.options:
+        res += f',{m.options}'
     return res
 
+
 __all__ = []
+
 
 class PodmanContainerHost:
 
@@ -58,8 +66,8 @@ class PodmanContainerHost:
         On local systems this manages temporary directories.  For remote container hosts, this manages to get the tar file to the remote system and clean up later.
         '''
         raise NotImplementedError
-    
-        
+
+
 class LocalPodmanContainerHost(PodmanContainerHost):
 
     @contextlib.asynccontextmanager
@@ -72,8 +80,8 @@ class LocalPodmanContainerHost(PodmanContainerHost):
             path = str(result).strip()
             yield Path(path)
         finally:
-            pass #Perhaps we should unmount, but we'd need a refcount to do that.
-        
+            pass  # Perhaps we should unmount, but we'd need a refcount to do that.
+
     def podman(self, *args,
                _bg=True, _bg_exc=False):
         return sh.podman(
@@ -91,36 +99,36 @@ class LocalPodmanContainerHost(PodmanContainerHost):
                 "--xattrs",
                 "--xattrs-include=*.*",
                 "-czf",
-                str(path/"container.tar.gz"),
+                str(path / "container.tar.gz"),
                 ".",
-                _bg = True,
-                _bg_exc = False)
-            yield path/'container.tar.gz'
+                _bg=True,
+                _bg_exc=False)
+            yield path / 'container.tar.gz'
 
 
 @inject(
-    podman_pod_options = InjectionKey('podman_pod_options', _optional=NotPresent),
-    )
+    podman_pod_options=InjectionKey('podman_pod_options', _optional=NotPresent),
+)
 class PodmanPod(OciPod):
 
     #: A list of extra options to pass to pod create
     podman_pod_options = []
-    
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.injector.add_provider(InjectionKey(PodmanPod), dependency_quote(self))
-        
+
     async def find(self):
         if self.id:
             inspect_arg = self.id
-        else: inspect_arg = self.name
+        else:
+            inspect_arg = self.name
         try:
             result = await self.podman(
                 'pod', 'inspect', inspect_arg)
         except sh.ErrorReturnCode:
             return False
-        pod_info = json.loads(str(result.stdout,'utf-8'))
+        pod_info = json.loads(str(result.stdout, 'utf-8'))
         self.pod_info = pod_info
         return dateutil.parser.isoparse(pod_info['Created']).timestamp()
 
@@ -132,11 +140,12 @@ class PodmanPod(OciPod):
         await self.podman(
             'pod', 'create',
             *options,
-            '--name='+self.name)
+            '--name=' + self.name)
 
     async def delete(self, force=False):
         force_options = []
-        if force: force_options.append('--force')
+        if force:
+            force_options.append('--force')
         await self.podman(
             'pod', 'rm',
             *force_options,
@@ -145,18 +154,21 @@ class PodmanPod(OciPod):
     @memoproperty
     def podman(self):
         return LocalPodmanContainerHost().podman
+
+
 __all__ += ['PodmanPod']
-        
+
+
 @inject_autokwargs(
     oci_container_image=InjectionKey(oci_container_image, _optional=NotPresent),
     podman_restart=InjectionKey('podman_restart', _optional=NotPresent),
     pod=InjectionKey(PodmanPod, _optional=True),
     podman_options=InjectionKey('podman_options', _optional=NotPresent),
-    )
+)
 class PodmanContainer(Machine, OciContainer):
 
     '''
-An OCI container implemented using ``podman``.  While it is possible to set up a container to be accessible via ssh and to meet all the interfaces of :class:`~carthage.machine.SshMixin`, this is relatively uncommon.  Such containers often have an entry point that is not a full init, and only run one service or program.  Typically :meth:`container_exec` is used to execute an additional command in the scope of a container rather than using :meth:`ssh`.  
+An OCI container implemented using ``podman``.  While it is possible to set up a container to be accessible via ssh and to meet all the interfaces of :class:`~carthage.machine.SshMixin`, this is relatively uncommon.  Such containers often have an entry point that is not a full init, and only run one service or program.  Typically :meth:`container_exec` is used to execute an additional command in the scope of a container rather than using :meth:`ssh`.
     '''
 
     #: Timeout in seconds to wait when stopping a container
@@ -168,6 +180,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     #:Extra options (as a list) to be passed into podman create
     podman_options = []
+
     @memoproperty
     def ssh_options(self):
         if not hasattr(self, 'ssh_port'):
@@ -175,7 +188,6 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         return (
             *super().ssh_options,
             f'-p{self.ssh_port}')
-
 
     #:The port on which to connect to for ssh
     ssh_port: int
@@ -187,8 +199,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             ansible_pipelining=False,
             ansible_host=self.full_name,
         )
-    
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._operation_lock = asyncio.Lock()
@@ -200,8 +211,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
     @memoproperty
     def container_host(self):
         return LocalPodmanContainerHost()
-    
-    
+
     async def find(self):
         try:
             result = await self.podman(
@@ -222,10 +232,11 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     async def do_create(self):
         image = self.oci_container_image
-        if isinstance(image,OciImage):
+        if isinstance(image, OciImage):
             await image.async_become_ready()
             image = image.oci_image_tag
-        if self.pod: await self.pod.async_become_ready()
+        if self.pod:
+            await self.pod.async_become_ready()
         command_options = []
         if self.oci_command:
             command_options = list(self.oci_command)
@@ -239,26 +250,30 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     def _podman_create_options(self):
         options = []
-        options.append('--restart='+self.podman_restart)
-        if self.oci_interactive: options.append('-i')
-        if self.oci_tty: options.append('-t')
-        for k,v in self.injector.filter_instantiate(
-                OciEnviron, lambda k: 'name' in k.constraints and k.constraints.get('scope','all') in ('all,container')):
-            options.append('-e'+v.assignment)
+        options.append('--restart=' + self.podman_restart)
+        if self.oci_interactive:
+            options.append('-i')
+        if self.oci_tty:
+            options.append('-t')
+        for k, v in self.injector.filter_instantiate(
+                OciEnviron, lambda k: 'name' in k.constraints and k.constraints.get('scope', 'all') in ('all,container')):
+            options.append('-e' + v.assignment)
         if not self.pod:
             for p in self.exposed_ports:
                 options.append(podman_port_option(p))
-        else: #there is a pod
-            options.append('--pod='+self.pod.name)
+        else:  # there is a pod
+            options.append('--pod=' + self.pod.name)
         for m in self.mounts:
             options.append(podman_mount_option(self.injector, m))
         options.extend(self.podman_options)
         return options
-        
+
     async def delete(self, force=True, volumes=True):
         force_args = []
-        if force: force_args.append('--force')
-        if volumes: force_args.append('--volumes')
+        if force:
+            force_args.append('--force')
+        if volumes:
+            force_args.append('--volumes')
         await self.podman(
             'container', 'rm',
             *force_args, self.full_name,
@@ -266,13 +281,14 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     async def is_machine_running(self):
         assert await self.find()
-        self.running =  self.container_info['State']['Running']
+        self.running = self.container_info['State']['Running']
         return self.running
 
     async def start_machine(self):
         async with self._operation_lock:
             await self.is_machine_running()
-            if self.running: return
+            if self.running:
+                return
             await self.start_dependencies()
             await super().start_machine()
             logger.info(f'Starting {self.name}')
@@ -280,6 +296,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
                 'container', 'start', self.full_name,
                 _bg=True, _bg_exc=False)
         await self.is_machine_running()
+
     async def stop_machine(self):
         async with self._operation_lock:
             if not self.running:
@@ -296,11 +313,11 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         '''
 'Execute a command in a running container and return stdout.  This function intentionally has a differentname than :meth:`carthage.container.Container.container_command` because that method does not expect the container to be running.
 '''
-        result =  self.podman(
+        result = self.podman(
             'container', 'exec',
             self.full_name,
             *args,
-            )
+        )
         return result
 
     #: An alias to be more compatible with :class:`carthage.container.Container`
@@ -316,14 +333,14 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         customization.customization_context = customization_context()
         customization.run_command = self.container_exec
 
-
     def filesystem_access(self):
         return self.container_host.filesystem_access(self.full_name)
-    
-            
+
     def __repr__(self):
-        try: host = repr(self.container_host)
-        except Exception: host = "repr failed"
+        try:
+            host = repr(self.container_host)
+        except Exception:
+            host = "repr failed"
         return f'<{self.__class__.__name__} {self.name} on {host}>'
 
     @memoproperty
@@ -332,11 +349,12 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         result = state_dir.joinpath("podman", self.name)
         result.mkdir(exist_ok=True, parents=True)
         return result
-    
+
+
 __all__ += ['PodmanContainer']
 
-class PodmanImageBuilderContainer(PodmanContainer):
 
+class PodmanImageBuilderContainer(PodmanContainer):
 
     oci_command = ['sleep', '3600']
     stop_timeout = 0
@@ -349,12 +367,12 @@ class PodmanImageBuilderContainer(PodmanContainer):
                 yield
             return
         customization.customization_context = customization_context()
-        
-@inject_autokwargs(
-    base_image = InjectionKey(oci_container_image, _optional=NotPresent),
-    )
-class PodmanImage(OciImage, SetupTaskMixin):
 
+
+@inject_autokwargs(
+    base_image=InjectionKey(oci_container_image, _optional=NotPresent),
+)
+class PodmanImage(OciImage, SetupTaskMixin):
 
     '''
     Represents an OCI container image and provides facilities for building the image.
@@ -369,7 +387,8 @@ class PodmanImage(OciImage, SetupTaskMixin):
         if isinstance(self.base_image, OciImage):
             await self.base_image.async_become_ready()
             base_image = self.base_image.oci_image_tag
-        else: base_image = self.base_image
+        else:
+            base_image = self.base_image
         if not base_image.startswith('localhost/'):
             await self.podman(
                 'pull', base_image,
@@ -379,14 +398,13 @@ class PodmanImage(OciImage, SetupTaskMixin):
             base_image)
         image_info = json.loads(str(inspect_result))[0]
         self.parse_base_image_info(image_info)
-        
 
     def parse_base_image_info(self, image_info):
         config = image_info['Config']
-        if  not self.oci_image_command and 'Cmd' in config:
+        if not self.oci_image_command and 'Cmd' in config:
             self.oci_image_command = config['Cmd']
         if not self.oci_image_entry_point and 'EntryPoint' in config:
-            self.oci_image_entry_point  = config['EntryPoint']
+            self.oci_image_entry_point = config['EntryPoint']
         self.base_image_info = image_info
         self.last_layer = self.base_image_info['Id']
 
@@ -394,12 +412,14 @@ class PodmanImage(OciImage, SetupTaskMixin):
         if self.id:
             to_find = self.id
             self.oci_read_only = True
-        else: to_find = self.oci_image_tag
+        else:
+            to_find = self.oci_image_tag
         try:
             result = await self.podman(
                 'image', 'inspect', to_find,
             )
-        except sh.ErrorReturnCode: return False
+        except sh.ErrorReturnCode:
+            return False
         info = json.loads(str(result))[0]
         self.id = info['Id']
         self.image_info = info
@@ -414,7 +434,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
     async def image_layer_context(self, commit_message=""):
         '''
         Generate a container to produce  a new image layer:
-        
+
         * The image of the container will be either *self.last_layer* or *self.base_image* if *last_layer* is not set.
 
         * The container will be a :class:`PodmanImageBuilderContainer`, and as such will simply pause when started so that :meth:`container_exec` can be used to run commands in the container.
@@ -426,16 +446,17 @@ class PodmanImage(OciImage, SetupTaskMixin):
             #Now, self.last_layer is the image ID of the new layer
         '''
         def container_delete(future):
-            try: future.result()
+            try:
+                future.result()
             except Exception as e:
                 logger.error('Error deleting %s: %s', layer_container, str(e))
-                
-        base_image  = self.last_layer or self.base_image
+
+        base_image = self.last_layer or self.base_image
         layer_container = await self.ainjector(
             PodmanImageBuilderContainer,
             oci_container_image=base_image,
             name=f'carthage-image-build-{id(self)}',
-            )
+        )
         try:
             await layer_container.start_machine()
             yield layer_container
@@ -452,16 +473,19 @@ class PodmanImage(OciImage, SetupTaskMixin):
         if self.oci_image_command:
             cmd = json.dumps(self.oci_image_command)
         options = []
-        if cmd: options.append('--change=CMD '+cmd)
-        if entrypoint: options.append('--change=ENTRYPOINT '+entrypoint)
+        if cmd:
+            options.append('--change=CMD ' + cmd)
+        if entrypoint:
+            options.append('--change=ENTRYPOINT ' + entrypoint)
         return options
 
     async def commit_container(self, container, commit_message):
         options = self._commit_options()
-        if self.oci_image_author: options.append('--author='+self.oci_image_author)
+        if self.oci_image_author:
+            options.append('--author=' + self.oci_image_author)
         if commit_message:
             options.append('-fdocker')
-            options.append('--message='+commit_message)
+            options.append('--message=' + commit_message)
         # options must be quoted if it's going through ssh or something that can split args on space
         commit_result = await self.podman(
             'container', 'commit',
@@ -480,7 +504,8 @@ class PodmanImage(OciImage, SetupTaskMixin):
         Note that this is not a :func:`setup_task` even though it is in the parent.  This is always run from :meth:`async_ready`
         '''
         if await self.find():
-            if not await self.should_build(): return
+            if not await self.should_build():
+                return
         return await self.build_image()
 
     async def build_image(self):
@@ -499,7 +524,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
     async def async_ready(self):
         await self.find_or_create()
         return await AsyncInjectable.async_ready(self)
-    
+
     @memoproperty
     def podman(self):
         return self.container_host.podman
@@ -507,7 +532,8 @@ class PodmanImage(OciImage, SetupTaskMixin):
     @memoproperty
     def container_host(self):
         return LocalPodmanContainerHost()
-    
+
+
 __all__ += ['PodmanImage']
 podman_image_volume_key = InjectionKey('carthage.podman/image_volume')
 
@@ -515,9 +541,8 @@ podman_image_volume_key = InjectionKey('carthage.podman/image_volume')
 @inject(base_image=None)
 @inject_autokwargs(
     image_volume=podman_image_volume_key,
-    )
+)
 class PodmanFromScratchImage(PodmanImage):
-
 
     async def pull_base_image(self):
         await self.image_volume.async_become_ready()
@@ -526,7 +551,7 @@ class PodmanFromScratchImage(PodmanImage):
                 'image', 'import',
                 *self._commit_options(),
                 tar_path,
-                )
+            )
         id = str(result.stdout, 'utf-8').strip()
         inspect_result = await self.podman(
             'image', 'inspect',
@@ -535,10 +560,9 @@ class PodmanFromScratchImage(PodmanImage):
         self.last_layer = id
         self.parse_base_image_info(image_info)
 
+
 __all__ += ['PodmanFromScratchImage', 'podman_image_volume_key']
 
-        
-                   
 
 def image_layer_task(customization, **kwargs):
     '''Wrap a :class:`~carthage.machine.BaseCustomization` as a layer in a :class:`PodmanImage`.
@@ -546,15 +570,18 @@ def image_layer_task(customization, **kwargs):
     if getattr(customization, 'description', None):
         kwargs['description'] = customization.description
     if 'description' not in kwargs:
-        kwargs['description'] = 'Image Layer: '+customization.__name__
+        kwargs['description'] = 'Image Layer: ' + customization.__name__
+
     @setup_task(**kwargs)
     async def task(image):
         async with image.image_layer_context(kwargs['description']) as container:
             await container.apply_customization(customization)
+
     @task.check_completed()
     def task(image):
         # We always want to re-run layers
         return False
     return task
+
 
 __all__ += ['image_layer_task']

@@ -12,6 +12,7 @@ from ..dependency_injection import *
 from . import inventory
 from pyVmomi import vim
 
+
 class ConfigSpecMeta(type):
 
     def __repr__(self):
@@ -20,10 +21,11 @@ class ConfigSpecMeta(type):
             stage = getattr(stage, '__name__', stage)
         else:
             stage = "<abstract>"
-            
+
         return f'<{self.__name__} config stage order={self.order} for {stage}>'
-    
-class ConfigSpecStage(metaclass = ConfigSpecMeta):
+
+
+class ConfigSpecStage(metaclass=ConfigSpecMeta):
 
     '''
     Represents a Stage in building a Vmware configuration.  A number of factors influence which items need to be set in a configuration:
@@ -57,11 +59,11 @@ class ConfigSpecStage(metaclass = ConfigSpecMeta):
     scsi_key
         SCSI controller key
 
-        
-      
+
+
     '''
-    
-    def __init_subclass__(cls, stage_for, order = 100, mode = 'create'):
+
+    def __init_subclass__(cls, stage_for, order=100, mode='create'):
         '''
         :param stage_for: Which :class:`~inventory.VmwareSpecifiedObject` is this a configuration stage for?
 
@@ -70,18 +72,19 @@ class ConfigSpecStage(metaclass = ConfigSpecMeta):
 
 '''
         cls.order = order
-        if stage_for is None: return
+        if stage_for is None:
+            return
         cls.mode = mode
         if isinstance(stage_for, collections.abc.Sequence):
-            cls.stage_for = [ weakref.proxy(sf) for sf in stage_for ]
+            cls.stage_for = [weakref.proxy(sf) for sf in stage_for]
         else:
-            cls.stage_for = [ weakref.proxy(stage_for) ]
+            cls.stage_for = [weakref.proxy(stage_for)]
         for sf in cls.stage_for:
             assert issubclass(sf, inventory.VmwareSpecifiedObject)
             if 'config_stages' not in sf.__dict__:
                 setattr(sf, 'config_stages', sf.config_stages.copy())
             sf.config_stages.append(cls)
-            sf.config_stages.sort(key = lambda c: c.order)
+            sf.config_stages.sort(key=lambda c: c.order)
 
     def __init__(self, obj, bag):
         self.obj = obj
@@ -95,16 +98,14 @@ class ConfigSpecStage(metaclass = ConfigSpecMeta):
         else:
             self.oconfig = None
 
-        
     def apply_config(self, config):
         pass
 
     def __repr__(self):
         return f'<{self.__class__.__name__} config stage for {self.obj} order={self.order}>'
-    
-    
 
-class DeviceSpecStage(ConfigSpecStage, stage_for = None):
+
+class DeviceSpecStage(ConfigSpecStage, stage_for=None):
 
     def __init_subclass__(cls, stage_for, dev_classes,
                           **kwargs):
@@ -112,16 +113,18 @@ class DeviceSpecStage(ConfigSpecStage, stage_for = None):
         if not isinstance(dev_classes, (tuple, list)):
             dev_classes = (dev_classes,)
         cls.dev_classes = dev_classes
-        super().__init_subclass__(stage_for = stage_for, **kwargs)
+        super().__init_subclass__(stage_for=stage_for, **kwargs)
 
-    @inject(ainjector = AsyncInjector)
+    @inject(ainjector=AsyncInjector)
     async def apply_config(self, config, *, ainjector):
         if self.oconfig:
             for d in self.oconfig.hardware.device:
-                if not isinstance(d, self.dev_classes): continue
-                res = await ainjector(self.filter_device,d)
-                if res is True: continue
-                if isinstance(res,vim.vm.device.VirtualDevice):
+                if not isinstance(d, self.dev_classes):
+                    continue
+                res = await ainjector(self.filter_device, d)
+                if res is True:
+                    continue
+                if isinstance(res, vim.vm.device.VirtualDevice):
                     spec = vim.vm.device.VirtualDeviceSpec()
                     spec.fileOperation = getattr(self, 'file_operation', None)
                     spec.device = res
@@ -132,7 +135,8 @@ class DeviceSpecStage(ConfigSpecStage, stage_for = None):
                     spec.device = d
                     spec.operation = 'remove'
                     config.deviceChange.append(spec)
-                else: raise ValueError(f'Don\'t know how to handle filter_device of {res}')
+                else:
+                    raise ValueError(f'Don\'t know how to handle filter_device of {res}')
         # Handle new devices
         for d in await ainjector(self.new_devices, config):
             spec = vim.vm.device.VirtualDeviceSpec()
@@ -154,5 +158,6 @@ Return *True* to keep the device.
 
     def new_devices(self, config):
         return []
-    
+
+
 __all__ = ('ConfigSpecStage', 'DeviceSpecStage')

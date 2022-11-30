@@ -21,6 +21,7 @@ from . import image
 
 import carthage.vmware.network as network
 
+
 @carthage.dependency_injection.inject(injector=carthage.Injector)
 def enable_new_vmware_connection(injector):
     '''
@@ -32,20 +33,28 @@ def enable_new_vmware_connection(injector):
     from .datacenter import VmwareDatacenter
     injector.add_provider(VmFolder)
     injector.add_provider(vmware_trunk_key, network._vmware_trunk)
-    injector.add_provider(image.vm_datastore_key, partial_with_dependencies(image.produce_datastore_from_config, "vmware.datastore"))
+    injector.add_provider(
+        image.vm_datastore_key,
+        partial_with_dependencies(
+            image.produce_datastore_from_config,
+            "vmware.datastore"))
     injector.add_provider(VmwareDatacenter)
     injector.add_provider(VmwareCluster)
     injector.add_provider(DvSwitch)
     injector.add_provider(VmwareConnection)
-    injector.add_provider(image.image_datastore_key, partial_with_dependencies(image.produce_datastore_from_config, "vmware.image_datastore"))
+    injector.add_provider(
+        image.image_datastore_key,
+        partial_with_dependencies(
+            image.produce_datastore_from_config,
+            "vmware.image_datastore"))
+
 
 @carthage.dependency_injection.inject(
-    injector = carthage.dependency_injection.Injector)
+    injector=carthage.dependency_injection.Injector)
 def carthage_plugin(injector):
     from ..utils import when_needed
     from . import inventory
     from .datacenter import VmwareDatacenter
     injector.add_provider(inventory.custom_fields_key, inventory.default_custom_fields)
-    injector.add_provider(DistributedPortgroup, allow_multiple = True)
+    injector.add_provider(DistributedPortgroup, allow_multiple=True)
     injector(enable_new_vmware_connection)
-    

@@ -22,11 +22,12 @@ def getattr_path(o, attrs):
     except AttributeError:
         raise AttributeError(f'Unable to find {attrs}') from None
 
+
 @inject(
-        injector = Injector)
+    injector=Injector)
 class ConfigString(str):
 
-    '''A string that substitutes 
+    '''A string that substitutes
 
     * ``{key}`` with the result of that config key
 
@@ -35,7 +36,7 @@ class ConfigString(str):
     Backslash scapes the next character always; ``${var}`` is reserved for :ref:`ConfigPath` use.
 
     '''
-    
+
     @classmethod
     def parse(cls, s, config, injector):
         def tok(i, awaiting_brace):
@@ -44,24 +45,25 @@ class ConfigString(str):
             for c in i:
                 if lastch == '\\':
                     yield c
-                elif  c == '\\':
+                elif c == '\\':
                     # one backslash always eats itself.
                     pass
-                elif c == '{' :
-                    if  lastch == "$":
+                elif c == '{':
+                    if lastch == "$":
                         yield '{'
                         yield from tok(i, True)
                         yield "}"
                     else:
                         yield from iter(cls.subst(
                             "".join(tok(i, True)),
-                            config = config,
-                            injector = injector
+                            config=config,
+                            injector=injector
                         ))
                 elif c == '}':
                     if awaiting_brace:
-                        return # end of inner token
-                    else: raise ValueError(f"Unbalanced closing brace in `{s}'")
+                        return  # end of inner token
+                    else:
+                        raise ValueError(f"Unbalanced closing brace in `{s}'")
                 else:
                     yield c
                 lastch = c
@@ -77,30 +79,33 @@ class ConfigString(str):
         if sep == '':
             return getattr_path(config, s)
         else:
-            try: plugin = injector.get_instance(InjectionKey(ConfigLookupPlugin, name=plugin))
+            try:
+                plugin = injector.get_instance(InjectionKey(ConfigLookupPlugin, name=plugin))
             except KeyError:
-                raise KeyError( f'Config lookup plugin {plugin} not found') from None
+                raise KeyError(f'Config lookup plugin {plugin} not found') from None
             return plugin(selector)
-        
-    def __new__(cls, s, *,  injector):
+
+    def __new__(cls, s, *, injector):
         config = injector(ConfigLayout)
         return str.__new__(str, cls.parse(os.path.expandvars(s), config, injector))
 
+
 @inject(
-        injector = Injector)
+    injector=Injector)
 class ConfigPath(ConfigString):
 
     def __new__(cls, s, *, injector):
         return super().__new__(ConfigString, os.path.expanduser(s),
-                               injector = injector)
+                               injector=injector)
+
 
 class ConfigBool:
 
     "A type that can be subtyped to be injectable used instead of bool"
-    
+
     def __new__(cls, val):
         return bool(val)
-    
+
 
 class ConfigLookupPlugin (Injectable):
 
@@ -124,4 +129,3 @@ class ConfigLookupPlugin (Injectable):
         return the value looked up using the given selector.
 Must be overridden; this is abstract.
 '''
-        

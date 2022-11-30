@@ -34,11 +34,10 @@ class ModelingDecoratorWrapper:
             if self.value.handle(cls, ns, k, state):
                 raise TypeError("A decorator that suppresses assignment must be outermost")
             else:
-                self.value = state.value #in case superclasses care
+                self.value = state.value  # in case superclasses care
 
     @property
     def __provides_dependencies_for__(self): return self.value.__provides_dependencies_for__
-
 
 
 class injector_access(ModelingDecoratorWrapper):
@@ -51,26 +50,27 @@ class injector_access(ModelingDecoratorWrapper):
 
     '''
 
-    #Unlike most ModelingDecorators we want to get left in the
-    #namespace.  The only reason this is a ModelingDecorator is so we
-    #can clear the inject_by_name flag to avoid namespace polution and
-    #to minimize the probability of a circular references from
-    #something like ``internet = injector_access("internet")``
+    # Unlike most ModelingDecorators we want to get left in the
+    # namespace.  The only reason this is a ModelingDecorator is so we
+    # can clear the inject_by_name flag to avoid namespace polution and
+    # to minimize the probability of a circular references from
+    # something like ``internet = injector_access("internet")``
 
     key: InjectionKey
     name: str
     target: type
 
-    def __init__(self, key, target = None):
+    def __init__(self, key, target=None):
         super().__init__(key)
         if not isinstance(key, InjectionKey):
-            key = InjectionKey(key, _ready = False)
-        if key.ready is None: key = InjectionKey(key, _ready = False)
+            key = InjectionKey(key, _ready=False)
+        if key.ready is None:
+            key = InjectionKey(key, _ready=False)
         #: The injection key to be accessed.
         self.key = key
         self.target = target
         # Our __call__method needs an injector
-        inject_autokwargs(injector = Injector)(self)
+        inject_autokwargs(injector=Injector)(self)
 
     def handle(self, cls, ns, k, state):
         super().handle(cls, ns, k, state)
@@ -79,7 +79,8 @@ class injector_access(ModelingDecoratorWrapper):
 
     def __get__(self, inst, owner):
         if inst is None:
-            if self.target: return self.target
+            if self.target:
+                return self.target
             return self
         try:
             res = inst.injector.get_instance(self.key)
@@ -96,10 +97,9 @@ class injector_access(ModelingDecoratorWrapper):
 
     def __call__(self, injector: Injector):
         return injector.get_instance(self.key)
+
     def __repr__(self):
         return f'injector_access({repr(self.key)})'
-
-
 
 
 class ProvidesDecorator(ModelingDecoratorWrapper):
@@ -114,18 +114,21 @@ class ProvidesDecorator(ModelingDecoratorWrapper):
         super().handle(cls, ns, k, state)
         state.extra_keys.extend(self.keys)
 
+
 def provides(*keys):
     '''Indicate that the decorated value provides these InjectionKeys'''
-    keys = list(map( lambda k: InjectionKey(k), keys))
+    keys = list(map(lambda k: InjectionKey(k), keys))
+
     def wrapper(val):
         try:
             setattr_default(val, '__provides_dependencies_for__', [])
-            val.__provides_dependencies_for__ = keys+val.__provides_dependencies_for__
+            val.__provides_dependencies_for__ = keys + val.__provides_dependencies_for__
             return val
-        except:
+        except BaseException:
 
             return ProvidesDecorator(val, *keys)
     return wrapper
+
 
 class DynamicNameDecorator(ModelingDecoratorWrapper):
 
@@ -139,10 +142,11 @@ class DynamicNameDecorator(ModelingDecoratorWrapper):
         super().handle(cls, ns, k, state)
         value = self.value
         if hasattr(value, '__qualname__'):
-            value.__qualname__ = ns['__qualname__']+'.'+self.new_name
+            value.__qualname__ = ns['__qualname__'] + '.' + self.new_name
             value.__name__ = self.new_name
         state.value = value
         state.new_name = self.new_name
+
 
 def dynamic_name(name):
     '''A decorator to be used in a modeling type to supply a dynamic name.  Example::
@@ -154,14 +158,15 @@ def dynamic_name(name):
     Will define threevariables i1 through i3, with values of squares (i1 = 0, i2 =1, i3 = 4).
     '''
     name = fixup_dynamic_name(name)
+
     def wrapper(val):
         return DynamicNameDecorator(val, name)
     return wrapper
 
 
 def globally_unique_key(
-        key: typing.Union[InjectionKey, typing.Callable[[object], InjectionKey]],
-                          ):
+    key: typing.Union[InjectionKey, typing.Callable[[object], InjectionKey]],
+):
     '''Decorate a value to indicate that *key* is a globally unique
     :class:`~InjectionKey` that should provide the given value.
     Globally unique keys are not extended with additional constraints
@@ -188,22 +193,27 @@ class FlagClearDecorator(ModelingDecoratorWrapper):
     def __init__(self, value, flag: NSFlags):
         super().__init__(value)
         self.flag = flag
+
     def handle(self, cls, ns, k, state):
         super().handle(cls, ns, k, state)
         state.flags &= ~self.flag
+
 
 def no_instantiate():
     def wrapper(val):
         return FlagClearDecorator(val, NSFlags.instantiate_on_access)
     return wrapper
 
+
 def no_close():
     def wrapper(val):
         return FlagClearDecorator(val, NSFlags.close)
     return wrapper
 
+
 def allow_multiple():
     raise NotImplementedError("Need to write FlagSetDecorator")
+
 
 class MachineMixin(ModelingDecoratorWrapper):
 
@@ -218,10 +228,11 @@ class MachineMixin(ModelingDecoratorWrapper):
         super().handle(cls, ns, k. state)
         state.flags &= ~(NSFlags.inject_by_name | NsFlags.inject_by_class | NSFlags.instantiate_on_access)
         ns.to_inject[InjectionKey(MachineMixin,
-                                  name = self.name)] = (
+                                  name=self.name)] = (
                                       dependency_quote(state.value), state.injection_options)
 
-def machine_mixin(name = None):
+
+def machine_mixin(name=None):
     '''Mark a class (subclass of :class:`Machine` typically) as something that should be mixed in to any machine declared lower in the injector hierarchy withing modeling classes.  To accomplish the same thing outside of modeling classes::
 
         injector.add_provider(InjectionKey(MachineMixin, name = "some_name"), dependency_quote(mixin_class))
@@ -235,6 +246,7 @@ def machine_mixin(name = None):
         return MachineMixin(val, name or val.__name__)
     return wrapper
 
+
 class PropagateUpDecorator(ModelingDecoratorWrapper):
 
     name = "propagate_up"
@@ -243,6 +255,7 @@ class PropagateUpDecorator(ModelingDecoratorWrapper):
     def handle(self, cls, ns, k, state):
         super().handle(cls, ns, k, state)
         state.flags |= NSFlags.propagate_key
+
 
 def propagate_up():
     '''Indicate that an assignment should have its keys propagated up in
@@ -264,6 +277,7 @@ def propagate_up():
         return PropagateUpDecorator(val)
     return wrap
 
+
 class TranscludeOverrideDecorator(ModelingDecoratorWrapper):
 
     name = 'transclude_overrides'
@@ -276,10 +290,11 @@ class TranscludeOverrideDecorator(ModelingDecoratorWrapper):
         super().handle(cls, ns, k, state)
         state.flags |= NSFlags.instantiate_on_access
         state.transclusion_key = self.key
-        ns.transclusions.add((self.key,self.key))
-        
-def transclude_overrides(injector:Injector = None,
-                         key:InjectionKey = None):
+        ns.transclusions.add((self.key, self.key))
+
+
+def transclude_overrides(injector: Injector = None,
+                         key: InjectionKey = None):
     '''
     Decorator indicating that the decorated item should be overridden by one from the injector against which the containing layout is eventually instantiated.
 
@@ -321,12 +336,13 @@ def transclude_overrides(injector:Injector = None,
                 # results, but also ways in which it can provide the
                 # most consistent transclusions in common cases.
                 return injector_access(key, target._providers[key].provider)
-            else: #injector but doesn't contain key
-                handle_transclusions(val, injector = injector)
-                return val # not transcluded.
-        #no injector supplied
+            else:  # injector but doesn't contain key
+                handle_transclusions(val, injector=injector)
+                return val  # not transcluded.
+        # no injector supplied
         return TranscludeOverrideDecorator(val, key)
     return wrap
+
 
 def transclude_injector(injector):
     '''
@@ -334,9 +350,10 @@ def transclude_injector(injector):
 
     '''
     def wrap(val):
-        handle_transclusions(val, injector = injector)
+        handle_transclusions(val, injector=injector)
         return val
     return wrap
+
 
 def model_mixin_for(**constraints):
     '''
@@ -363,13 +380,15 @@ def model_mixin_for(**constraints):
 
     '''
     from .base import MachineModelMixin
+
     def wrap(val):
-        if isinstance(val,ModelingDecoratorWrapper):
+        if isinstance(val, ModelingDecoratorWrapper):
             # Assume it is already a model_mix in_for which we're stacking
             return provides(InjectionKey(MachineModelMixin, **constraints))(val)
         return provides(InjectionKey(
             MachineModelMixin, **constraints))(dependency_quote(val))
     return wrap
+
 
 class wrap_base_customization:
 
@@ -379,11 +398,11 @@ class wrap_base_customization:
         self.value = val
 
     def __get__(self, instance, owner):
-        if instance is None: return self.value
-        machine = instance.injector.get_instance(InjectionKey(carthage.machine.Machine, _ready = False))
-        return instance.injector(self.value, apply_to = machine, stamp=self.name)
+        if instance is None:
+            return self.value
+        machine = instance.injector.get_instance(InjectionKey(carthage.machine.Machine, _ready=False))
+        return instance.injector(self.value, apply_to=machine, stamp=self.name)
 
-    
 
 __all__ = ["ModelingDecoratorWrapper", "provides", 'dynamic_name',
            'injector_access', 'no_instantiate',

@@ -11,6 +11,8 @@ import asyncio
 import contextlib
 import weakref
 from .utils import possibly_async
+
+
 class EventScope:
 
     '''
@@ -32,8 +34,6 @@ class EventScope:
                     c._event_scope = self
                 else:
                     c._event_scope._update_parent(parent, self)
-                    
-                    
 
     def break_at(self, target: EventListener):
         '''
@@ -41,11 +41,11 @@ class EventScope:
 
         Returns an :class:`EventScope` that receives events for the given *target* and its children, but no parent objects.
         '''
-        if self.target() is target: return self
-        scope = type(self)(target, parent = self)
+        if self.target() is target:
+            return self
+        scope = type(self)(target, parent=self)
         target._event_scope = scope
         return scope
-
 
     def add_child(self, parent, child):
         '''Must be called for any object that has *self* as an *EventScope* and is not *self.target*.'''
@@ -56,17 +56,20 @@ class EventScope:
         fin = weakref.finalize(child, self._finalize_child, self.children, self.finalizers, id(child))
         fin.atexit = False
         self.finalizers[id(child)] = fin
-        
+
     def find_prune_children(self, new_target):
         children = {}
         finalizers = {}
+
         def recurse(elt):
             for c in self.children[id(elt)]:
                 recurse(c)
-            children[id(elt)] =  self.children[id(elt)]
+            children[id(elt)] = self.children[id(elt)]
             del self.children[id(elt)]
-            try: del self.finalizers[id(elt)]
-            except KeyError: pass
+            try:
+                del self.finalizers[id(elt)]
+            except KeyError:
+                pass
             fin = weakref.finalize(elt, self._finalize_child, children, finalizers, id(elt))
             fin.atexit = False
             finalizers[id(elt)] = fin
@@ -76,28 +79,29 @@ class EventScope:
 
     @staticmethod
     def _finalize_child(children, finalizers, id):
-        try: del children[id]
-        except: pass
-        try: del finalizers[id]
-        except: pass
+        try:
+            del children[id]
+        except BaseException:
+            pass
+        try:
+            del finalizers[id]
+        except BaseException:
+            pass
 
     def _update_parent(self, old_parent, new_parent):
         p = self.parent
         assert p is not old_parent
         while p is not None:
-            if p is new_parent: return
+            if p is new_parent:
+                return
             if p.parent is old_parent:
                 p.parent = new_parent
                 return
             p = p.parent
         raise ValueError('old_parent is not  in the parent chain')
-    
 
-            
-                
-        
     def add_listener(self, k, event, callback):
-        d = self.listeners.setdefault(k,{})
+        d = self.listeners.setdefault(k, {})
         d[callback] = (event, set())
 
     def remove_listener(self, k, callback):
@@ -111,37 +115,41 @@ class EventScope:
             raise KeyError(f'{callback} not registered as a listener for {k}') from None
 
     def emit(self, loop, k, event, target, *args,
-             adl_keys = set(),
+             adl_keys=set(),
              **kwargs):
         def gen_callback(futures):
             def callback(future):
                 # ignore the result
-                try: future.result()
-                except: pass
+                try:
+                    future.result()
+                except BaseException:
+                    pass
                 futures.remove(future)
             return callback
-        if not isinstance(adl_keys, set): adl_keys = set(adl_keys)
-        target_keys = {k }|adl_keys
+        if not isinstance(adl_keys, set):
+            adl_keys = set(adl_keys)
+        target_keys = {k} | adl_keys
         result_futures = []
         if self.parent:
             result_futures.append(self.parent.emit(
-                loop, k, event,target, adl_keys = adl_keys,
+                loop, k, event, target, adl_keys=adl_keys,
                 **kwargs))
         for ck in target_keys:
-            try: d = self.listeners[ck]
-            except KeyError: continue
+            try:
+                d = self.listeners[ck]
+            except KeyError:
+                continue
             for callback, (events, futures) in d.items():
                 if event in events:
                     future = loop.create_task(
                         possibly_async(callback(
-                            key = ck, event=event, target = target, *args,
-                                                 target_key=k, **kwargs)))
+                            key=ck, event=event, target=target, *args,
+                            target_key=k, **kwargs)))
                     result_futures.append(future)
                     futures.add(future)
                     future.add_done_callback(gen_callback(futures))
         del args
         del kwargs
-        
 
         if result_futures:
             return asyncio.gather(*result_futures)
@@ -150,28 +158,30 @@ class EventScope:
             future.set_result([])
             return future
 
-class EventListener:
 
+class EventListener:
 
     '''Represents an object to which event listeners can be attached using :meth:`add_event_listener`.  Events are dispatched using :meth:`emit_event`.  Events are named by a string, and dispatched to keys, typically :class:`carthage.InjectionKey`.
 
 '''
 
-    def __init__(self, event_scope = None):
+    def __init__(self, event_scope=None):
         super().__init__()
         if event_scope:
             self._event_scope = event_scope
             return
         er = getattr(self, '_event_scope', None)
-        if isinstance(er, EventScope): return
+        if isinstance(er, EventScope):
+            return
         try:
             self._event_scope = self.parent._event_scope
             self._event_scope.add_child(self.parent, self)
             return
-        except AttributeError: pass
+        except AttributeError:
+            pass
         self._event_scope = EventScope(self)
 
-    def add_event_listener(self,key, events, callback):
+    def add_event_listener(self, key, events, callback):
         '''
          :param key: an :class:`InjectionKey` or similar key toward which the event will be dispatched.
 
@@ -198,16 +208,18 @@ class EventListener:
 
     def emit_event(self, key, event, target,
                    *args,
-                   adl_keys = set(),
-                   loop = None,
+                   adl_keys=set(),
+                   loop=None,
                    **kwargs):
         if loop is None:
-            try:loop = self.loop
-            except: loop = asyncio.get_event_loop()
+            try:
+                loop = self.loop
+            except BaseException:
+                loop = asyncio.get_event_loop()
         return self._event_scope.emit(loop, key, event, target,
-                               *args,
-                               **kwargs,
-                                      adl_keys = adl_keys,
+                                      *args,
+                                      **kwargs,
+                                      adl_keys=adl_keys,
                                       scope=self)
 
     @contextlib.contextmanager
@@ -225,6 +237,6 @@ class EventListener:
             yield futures
         finally:
             self.remove_event_listener(key, callback)
-            
+
+
 __all__ = ['EventListener']
- 

@@ -11,24 +11,26 @@ import argparse
 from .console import CarthageRunnerCommand
 from . import *
 
+
 class MachineCommand(CarthageRunnerCommand):
 
     async def should_register(self):
         from .machine import Machine
-        return  any(self.ainjector.filter(Machine, ['host']))
+        return any(self.ainjector.filter(Machine, ['host']))
 
     def setup_subparser(self, subparser):
         subparser.add_argument('machine')
 
-        
+
 class StartCommand(MachineCommand):
 
     name = 'start'
 
-    async def run(self,args):
+    async def run(self, args):
         machine = await self.ainjector.get_instance_async(InjectionKey(Machine, host=args.machine))
         if args.ready:
-            if isinstance(machine.model, AsyncInjectable): await machine.model.async_become_ready()
+            if isinstance(machine.model, AsyncInjectable):
+                await machine.model.async_become_ready()
             await machine.async_become_ready()
         await machine.start_machine()
 
@@ -38,17 +40,19 @@ class StartCommand(MachineCommand):
                             help='Bring machine to async_ready before starting')
         super().setup_subparser(parser)
 
+
 class StopCommand(MachineCommand):
 
     name = 'stop'
 
-    async def run(self,args):
+    async def run(self, args):
         machine = await self.ainjector.get_instance_async(InjectionKey(Machine, host=args.machine))
         await machine.stop_machine()
 
+
 class ListMachines(MachineCommand):
 
-    name ='list-machines'
+    name = 'list-machines'
 
     def setup_subparser(self, parser): pass
 
@@ -56,9 +60,9 @@ class ListMachines(MachineCommand):
         machines = self.ainjector.filter(Machine, ['host'])
         for m in machines:
             print(m.host)
-            
+
+
 def enable_runner_commands(ainjector):
     ainjector.add_provider(StartCommand)
     ainjector.add_provider(ListMachines)
     ainjector.add_provider(StopCommand)
-    

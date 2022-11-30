@@ -17,6 +17,7 @@ from .modeling import PodmanPodModel, PodmanImageModel
 
 __all__ += ['PodmanPodModel', 'PodmanImageModel']
 
+
 @carthage.inject(injector=carthage.Injector)
 def carthage_plugin(injector):
     pass

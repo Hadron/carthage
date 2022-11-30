@@ -8,16 +8,19 @@
 
 import sys
 
+
 def get_tb(e):
     if isinstance(e, BaseException):
         return e.__traceback__
     return e
 
+
 def iter_tb(tb):
     while tb.tb_next:
         yield tb
         tb = tb.tb_next
-        
+
+
 def filter_before_here(e):
     tb = get_tb(e)
     frame = sys._getframe(1)
@@ -28,7 +31,8 @@ def filter_before_here(e):
             return tb
     return tb
 
-def filter_chatty_modules(e,module_list, level = 1):
+
+def filter_chatty_modules(e, module_list, level=1):
     '''
     Filter chatty modules from an exception or traceback
 
@@ -51,23 +55,24 @@ def filter_chatty_modules(e,module_list, level = 1):
     if level is not None:
         caller = sys._getframe(level)
         caller_found = False
-    else: caller_found = True
+    else:
+        caller_found = True
     module_filenos = frozenset(x.__file__ for x in module_list)
     while not caller_found and tb.tb_next is not None:
         if not caller_found:
             if caller is tb.tb_frame:
                 caller_found = True
-            else: tb = tb.tb_next
-        else: # caller already found
+            else:
+                tb = tb.tb_next
+        else:  # caller already found
             break
     if caller_found:
         while (tb.tb_next is not None) and tb.tb_next.tb_next is not None:
-            if  tb.tb_next.tb_frame.f_code.co_filename in module_filenos \
-                and tb.tb_next.tb_next.tb_frame.f_code.co_filename in module_filenos:
+            if tb.tb_next.tb_frame.f_code.co_filename in module_filenos \
+                    and tb.tb_next.tb_next.tb_frame.f_code.co_filename in module_filenos:
                 tb.tb_next = tb.tb_next.tb_next
             else:
                 tb = tb.tb_next
-
 
 
 __all__ = ('filter_before_here', 'filter_chatty_modules')

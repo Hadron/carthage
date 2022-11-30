@@ -23,8 +23,9 @@ class LocalMachineMixin:
 When testing whether a :class:`Machine` is local, test for ``isinstance(machine, LocalMachineMixin)``
 
     '''
-    
+
     ip_address = "127.0.0.1"
+
     @contextlib.asynccontextmanager
     async def filesystem_access(self):
         yield Path("/")
@@ -34,10 +35,11 @@ When testing whether a :class:`Machine` is local, test for ``isinstance(machine,
 
     @property
     def shell(self):
-        # We don't actually need to enter a namespace, but this provides similar semantics to what we get with containers
+        # We don't actually need to enter a namespace, but this provides similar
+        # semantics to what we get with containers
         return sh.nsenter.bake()
 
-    
+
 class LocalMachine(LocalMachineMixin, Machine, SetupTaskMixin):
 
     '''A machine representing the node on which carthage is running.
@@ -46,32 +48,29 @@ class LocalMachine(LocalMachineMixin, Machine, SetupTaskMixin):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.running = True
-        
 
     async def async_ready(self):
         await self.resolve_networking()
         await self.run_setup_tasks()
         await super().async_ready()
 
-
     async def start_machine(self):
         await self.start_dependencies()
         await super().start_machine()
         return
 
-
-
     async def is_machine_running(self):
         self.running = True
         return True
-    
+
     @memoproperty
     def stamp_path(self):
-        return Path(self.config_layout.state_dir+"/localhost")
+        return Path(self.config_layout.state_dir + "/localhost")
+
 
 def process_local_network_config(model):
     '''
-    Carthage uses :class:`~BridgeNetwork` to connecgt VMs and containers to networking on the local system.  When a network is contained entirely within one hypervisor, things are easy.  However, if the network configuration interacts with the :class:`~carthage.network.NetworkConfig` of the hypervisor, it's important that networks in NetworkConfigs of VMs on containers match up with networks in the hypervisor's network config.  
+    Carthage uses :class:`~BridgeNetwork` to connecgt VMs and containers to networking on the local system.  When a network is contained entirely within one hypervisor, things are easy.  However, if the network configuration interacts with the :class:`~carthage.network.NetworkConfig` of the hypervisor, it's important that networks in NetworkConfigs of VMs on containers match up with networks in the hypervisor's network config.
 
     One approach to accomplish this is to set the :obj:`~carthage.modeling.NetworkMobdel.bridge_name` property in the :class:`carthage.model.NetworkModel`.
 
@@ -79,14 +78,17 @@ However if Carthage is configuring the local networking on the hypervisor, then 
 
     '''
     def associate_bridge(net, bridge_name):
-        if hasattr(net, 'bridge_name'): return
+        if hasattr(net, 'bridge_name'):
+            return
         net.bridge_name = bridge_name
         net.ainjector.add_provider(InjectionKey(BridgeNetwork),
-                                   when_needed(BridgeNetwork, bridge_name = bridge_name, delete_bridge = False))
+                                   when_needed(BridgeNetwork, bridge_name=bridge_name, delete_bridge=False))
 
     from carthage.network.links import BridgeLink
     for l in model.network_links.values():
-        if not isinstance(l, BridgeLink): continue
+        if not isinstance(l, BridgeLink):
+            continue
         associate_bridge(l.net, l.interface)
-        
+
+
 __all__ = ['LocalMachineMixin', 'LocalMachine', 'process_local_network_config']

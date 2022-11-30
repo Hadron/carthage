@@ -6,9 +6,12 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import asyncio, logging, time
+import asyncio
+import logging
+import time
 from dataclasses import dataclass
-import carthage.ansible, carthage.network
+import carthage.ansible
+import carthage.network
 import os.path
 from ..machine import Machine
 from ..dependency_injection import *
@@ -23,17 +26,21 @@ from . import network
 
 logger = logging.getLogger('carthage.vmware')
 
+
 class VmwarePrincipal(object):
     def __init__(self, principal):
         self.principal = principal
-    
+
+
 class VmwareUser(VmwarePrincipal):
     @property
     def group(self): return False
 
+
 class VmwareGroup(VmwarePrincipal):
     @property
     def group(self): return True
+
 
 class VmwareAuthorizationRole(VmwareStampable, kind='authorization_role'):
 
@@ -41,7 +48,7 @@ class VmwareAuthorizationRole(VmwareStampable, kind='authorization_role'):
         self.name = name
         self.privIds = privIds
         VmwareStampable.__init__(self, *args, **kwargs)
-        
+
     @memoproperty
     def stamp_descriptor(self):
         return self.name
@@ -83,13 +90,15 @@ class VmwareAuthorizationRole(VmwareStampable, kind='authorization_role'):
                 return None
         return role
 
+
 @dataclass
 class VmwarePermission():
-    principal : VmwarePrincipal
-    role : VmwareAuthorizationRole
-    propagate : bool
+    principal: VmwarePrincipal
+    role: VmwareAuthorizationRole
+    propagate: bool
 
-@inject(ainjector = AsyncInjector, config = ConfigLayout)
+
+@inject(ainjector=AsyncInjector, config=ConfigLayout)
 async def create_roles(*, ainjector, config):
 
     cr = create_roles

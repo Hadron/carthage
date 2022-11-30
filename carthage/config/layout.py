@@ -6,7 +6,8 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import importlib, yaml
+import importlib
+import yaml
 from pathlib import Path
 from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies
 
@@ -14,20 +15,19 @@ from ..dependency_injection import inject, Injectable, InjectionKey, Injector, p
 from .schema import config_key, ConfigAccessor, ConfigSchema
 
 
-@inject(injector = Injector)
+@inject(injector=Injector)
 class ConfigLayout(ConfigAccessor, Injectable):
 
     def __init__(self, injector):
         super().__init__(injector, "")
-                                      
 
     def _load(self, d, injector, into, prefix):
-        for k,v in d.items():
-            full_key = prefix+k
+        for k, v in d.items():
+            full_key = prefix + k
             if full_key in ConfigSchema._schemas:
                 if not isinstance(v, dict):
                     raise ValueError("{} should be a dictionary".format(full_key))
-                self._load(v, injector, ConfigSchema._schemas[prefix+k], prefix+k+".")
+                self._load(v, injector, ConfigSchema._schemas[prefix + k], prefix + k + ".")
             else:
                 try:
                     schema_item = into[k]
@@ -42,8 +42,10 @@ class ConfigLayout(ConfigAccessor, Injectable):
                     # until it is used.  We do this by creating an
                     # injectible class that acts as a dependency
                     # provider for the configuration key.
+
                     class value(schema_item.type, Injectable):
                         new_value = v
+
                         def __new__(self, **kwargs):
                             return super().__new__(self, self.new_value, **kwargs)
 
@@ -58,27 +60,33 @@ class ConfigLayout(ConfigAccessor, Injectable):
                             # Injectable needs an __init__.  So if the
                             # underlying type is something like str,
                             # without __init__, then we need to not
-                            # pass args along to super().__init__.  If the underlying type is list or something with __init__ provided by C code, we need to pass along a value, but the only way we can detect this is if __init__ has no __function__ attribute.  If the underlying type is something that does have an __init__ written in python we need  to pass along args, but in that case, we detect a __function__ attribute that is not Injectable.__init__.
+                            # pass args along to super().__init__.  If the underlying type is list or
+                            # something with __init__ provided by C code, we need to pass along a
+                            # value, but the only way we can detect this is if __init__ has no
+                            # __function__ attribute.  If the underlying type is something that does
+                            # have an __init__ written in python we need  to pass along args, but in
+                            # that case, we detect a __function__ attribute that is not
+                            # Injectable.__init__.
                             sup_obj = super()
-                            if getattr(sup_obj.__init__,'__func__', None) == Injectable.__init__:
-                                #Nothing will eat the value, so it will pass along to Object.__init__ and fail
+                            if getattr(sup_obj.__init__, '__func__', None) == Injectable.__init__:
+                                # Nothing will eat the value, so it will pass along to Object.__init__ and fail
                                 sup_obj.__init__(**kwargs)
                             else:
                                 sup_obj.__init__(self.new_value, **kwargs)
-                            
+
                     injector.replace_provider(config_key(full_key), value)
                 except AttributeError:
                     raise AttributeError("{} is not a config attribute".format(full_key)) from None
 
-        
-
-    def load_yaml(self, y, *, injector = None, path = None):
-        if injector is None: injector = self._injector
+    def load_yaml(self, y, *, injector=None, path=None):
+        if injector is None:
+            injector = self._injector
         if path:
             base_path = Path(path).parent
-        else: base_path = Path(y.name).parent
+        else:
+            base_path = Path(y.name).parent
         d = yaml.safe_load(y)
-        assert isinstance(d,dict)
+        assert isinstance(d, dict)
         if 'plugins' in d:
             from .types import ConfigPath
             # The plugin loader needs checkout_dir, but we need to
@@ -88,10 +96,11 @@ class ConfigLayout(ConfigAccessor, Injectable):
             # substitutions to other items that are also in the
             # config.  Don't do that.
             for early_key in ('checkout_dir', 'base_dir'):
-                if early_key not in d: continue
+                if early_key not in d:
+                    continue
                 setattr(self, early_key,
                         injector(ConfigPath, d[early_key]))
-                
+
             for p in d['plugins']:
                 if (not ':' in p) and (p == '..' or p == '.' or '/' in p):
                     p = base_path.joinpath(p)
@@ -118,5 +127,6 @@ Load and enable a Carthage plugin.
     base_injector(load_plugin, plugin)
     from . import inject_config
     inject_config(base_injector)
+
 
 __all__ = ('ConfigLayout',)

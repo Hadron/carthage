@@ -6,7 +6,8 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-import asyncio, collections.abc
+import asyncio
+import collections.abc
 import logging
 
 from carthage import *
@@ -20,14 +21,23 @@ from .cluster import VmwareCluster
 
 from pyVmomi import vim
 
-__all__ = ('VmwareNetwork', 'DvSwitch', 'DistributedPortgroup', 'our_portgroups_for_switch', 'NetworkFolder', 'vmware_trunk_key')
+__all__ = (
+    'VmwareNetwork',
+    'DvSwitch',
+    'DistributedPortgroup',
+    'our_portgroups_for_switch',
+    'NetworkFolder',
+    'vmware_trunk_key')
 
-class VmwareNetworkConfig(ConfigSchema, prefix = "vmware"):
+
+class VmwareNetworkConfig(ConfigSchema, prefix="vmware"):
     distributed_switch: str
     trunk_interface: str
 
+
 class NetworkFolder(VmwareFolder, kind='network'):
     pass
+
 
 class DvSwitch(VmwareSpecifiedObject):
 
@@ -38,11 +48,12 @@ class DvSwitch(VmwareSpecifiedObject):
         if 'name' not in kwargs:
             config = kwargs['config_layout']
             name = config.vmware.distributed_switch
-            if name is None: raise ValueError(f'unable to create DvSwitch without name')
+            if name is None:
+                raise ValueError(f'unable to create DvSwitch without name')
             if not name.startswith('/'):
                 name = f'/{config.vmware.datacenter}/network/{name}'
             kwargs['name'] = name
-                
+
             kwargs['readonly'] = kwargs.get('readonly', True)
         super().__init__(*args, **kwargs)
 
@@ -50,7 +61,7 @@ class DvSwitch(VmwareSpecifiedObject):
 
         pspecs = []
         for pnic in pnics:
-            pspecs.append(vim.dvs.HostMember.PnicSpec(pnicDevice = pnic.device))
+            pspecs.append(vim.dvs.HostMember.PnicSpec(pnicDevice=pnic.device))
 
         cs = vim.dvs.HostMember.ConfigSpec()
         cs.operation = vim.ConfigSpecOperation.add
@@ -88,7 +99,7 @@ class DvSwitch(VmwareSpecifiedObject):
         config = vim.DistributedVirtualSwitch.ConfigSpec()
         config.name = self.name
         config.uplinkPortPolicy = vim.DistributedVirtualSwitch.NameArrayUplinkPortPolicy()
-        config.uplinkPortPolicy.uplinkPortName = [ 'uplink0', 'uplink1' ]
+        config.uplinkPortPolicy.uplinkPortName = ['uplink0', 'uplink1']
         config.maxPorts = 8000
         config.host = hostconfigs
 
@@ -99,24 +110,24 @@ class DvSwitch(VmwareSpecifiedObject):
         task = self.parent.mob.CreateDVS_Task(create)
         await wait_for_task(task)
 
-@inject_autokwargs( network=this_network)
+
+@inject_autokwargs(network=this_network)
 class VmwareNetwork(VmwareNamedObject, TechnologySpecificNetwork):
 
     '''Abstract Base class representing a VmwareNetwork'''
 
-
-
     def __repr__(self):
         return f"<{self.__class__.__name__} for {self.network.name}: {self.vmware_path}>"
 
+
 @inject(
-        dvswitch = DvSwitch)
+    dvswitch=DvSwitch)
 class DistributedPortgroup(VmwareNetwork):
 
     stamp_type = "portgroup"
 
     parent_type = NetworkFolder
-    
+
     def __init__(self, *args, config_layout, dvswitch, **kwargs):
         self.dvswitch = dvswitch
         if 'name' not in kwargs:
@@ -138,7 +149,7 @@ class DistributedPortgroup(VmwareNetwork):
         cs.policy = vim.dvs.VmwareDistributedVirtualSwitch.VMwarePortgroupPolicy()
         cs.policy.trafficFilterOverrideAllowed = True
         cs.policy.macManagementOverrideAllowed = True
-        default  = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
+        default = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
         default.macManagementPolicy = vim.dvs.VmwareDistributedVirtualSwitch.MacManagementPolicy()
         default.macManagementPolicy.forgedTransmits = True
         learning = vim.dvs.VmwareDistributedVirtualSwitch.MacLearningPolicy()
@@ -169,7 +180,8 @@ class DistributedPortgroup(VmwareNetwork):
         await wait_for_task(task)
         try:
             del self.__dict__['mob']
-        except KeyError: pass
+        except KeyError:
+            pass
 
     @memoproperty
     def full_name(self):
@@ -181,7 +193,7 @@ class DistributedPortgroup(VmwareNetwork):
             raise RuntimeError(f"{self} does not exist")
         task = self.mob.Destroy()
         await wait_for_task(task)
-        
+
     async def also_accessed_by(self, others):
         for n in others:
             if isinstance(n, BridgeNetwork):
@@ -192,16 +204,18 @@ class DistributedPortgroup(VmwareNetwork):
     async def _get_trunk(self):
         trunk_base = await self.ainjector.get_instance_async(vmware_trunk_key)
         return await trunk_base.access_by(BridgeNetwork)
-                
-@inject(config = ConfigLayout, connection = VmwareConnection)
-def our_portgroups_for_switch(switch = None, *, config, connection):
+
+
+@inject(config=ConfigLayout, connection=VmwareConnection)
+def our_portgroups_for_switch(switch=None, *, config, connection):
     '''
     :return: Yield  pyVmOmi portgroup objects that match the Carthage prefix for the switch.  The main purpose is for deleting objects.
 
     :param switch: Name of distributed virtual switch within the Datacenter; if None, uses the switch from the config.
 
     '''
-    if switch is None: switch = config.vmware.distributed_switch
+    if switch is None:
+        switch = config.vmware.distributed_switch
     dvs = connection.content.searchIndex.FindByInventoryPath(f"{config.vmware.datacenter}/network/{switch}")
     if dvs is None:
         raise LookupError(f"{switch} DVS not found")
@@ -210,8 +224,9 @@ def our_portgroups_for_switch(switch = None, *, config, connection):
         if p.name.startswith(prefix):
             yield p
 
+
 @when_needed
-@inject(config = ConfigLayout, injector = Injector)
+@inject(config=ConfigLayout, injector=Injector)
 async def _vmware_trunk(config, injector):
     trunk_interface = config.vmware.trunk_interface
     if trunk_interface is None:
@@ -220,7 +235,7 @@ async def _vmware_trunk(config, injector):
     # with the right interface name to keep track of vlan interfaces
     # so they can be deleted.
     net = injector(Network, "Vmware Trunk")
-    bridge = net.ainjector.injector(BridgeNetwork, bridge_name = trunk_interface, delete_bridge = False)
+    bridge = net.ainjector.injector(BridgeNetwork, bridge_name=trunk_interface, delete_bridge=False)
     net.ainjector.add_provider(bridge)
     return net
 

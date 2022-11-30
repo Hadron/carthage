@@ -15,6 +15,7 @@ from pathlib import Path
 
 dir = Path(__file__).parent
 
+
 @pytest.fixture()
 def injector(ainjector):
     return ainjector.injector
@@ -22,6 +23,7 @@ def injector(ainjector):
 
 def test_load_vmware(injector):
     injector(load_plugin, "carthage.vmware")
-    
+
+
 def test_dir_plugin(injector):
-    injector(load_plugin, dir/"test_plugin")
+    injector(load_plugin, dir / "test_plugin")

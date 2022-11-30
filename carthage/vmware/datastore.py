@@ -27,7 +27,6 @@ class VmwareDataStoreCluster(VmwareSpecifiedObject, kind='datastore'):
 
     parent_type = DataStoreFolder
 
-
     async def do_create(self):
         self.parent.mob.CreateStoragePod(name=self.name)
 
@@ -50,7 +49,7 @@ class VmwareDataStore(VmwareSpecifiedObject, kind='datastore'):
         if (hosts is not None) and (host is not None):
             raise ValueError('specify only one of host or hosts')
         elif (hosts is None) and (host is not None):
-            self.hosts = [ host ]
+            self.hosts = [host]
         elif (hosts is not None) and (host is None):
             self.hosts = None
         else:
@@ -62,21 +61,22 @@ class VmwareDataStore(VmwareSpecifiedObject, kind='datastore'):
             self.parent_type = DataStoreFolder
         kwargs['name'] = name
         self.local_path = local_path
-        super().__init__( **kwargs)
+        super().__init__(**kwargs)
 
     async def do_create(self):
 
         if self.hosts is None:
             raise ValueError(f'must specify host(s) when creating datastore {self.name}')
         if len(self.hosts) != 1:
-            raise NotImplementedError(f'support for multiple hosts is not yet implemented when creating datastore {self.name}')
+            raise NotImplementedError(
+                f'support for multiple hosts is not yet implemented when creating datastore {self.name}')
 
         ds = self.hosts[0].mob.configManager.datastoreSystem.CreateNasDatastore(spec=self.spec)
         return
         try:
             task = self.parent.mob.MoveIntoFolder_Task([ds])
             await carthage.vmware.utils.wait_for_task(task)
-        except:
+        except BaseException:
             ds.DestroyDatastore()
             raise
 
@@ -84,10 +84,8 @@ class VmwareDataStore(VmwareSpecifiedObject, kind='datastore'):
         task = self.mob.Destroy_Task()
         await carthage.vmware.utils.wait_for_task(task)
 
-
     #: List of ssh options to use when contacting a remote host
     ssh_opts = ('-oStrictHostKeyChecking=no', )
-
 
     @memoproperty
     def ssh_host(self):
@@ -95,35 +93,33 @@ class VmwareDataStore(VmwareSpecifiedObject, kind='datastore'):
         if sep != "":
             return host
 
-
     async def makedirs(self, dest):
         if self.ssh_host:
             host, sep, folder = self.local_path.partition(":")
-            folder = Path(folder)/dest
+            folder = Path(folder) / dest
             folder = folder.replace('"', '\\"')
             await sh.ssh(self.ssh_opts,
                          host, "mkdir", "-p",
                          f'"{folder}"',
-                         _bg = True,
-                         _bg_exc = False)
+                         _bg=True,
+                         _bg_exc=False)
         else:
-            os.makedirs(Path(self.local_path)/dest, exist_ok=True)
+            os.makedirs(Path(self.local_path) / dest, exist_ok=True)
 
     def upload_file(self, path, dest):
-        logger.info( f'Uploading {path} to {self.name}')
+        logger.info(f'Uploading {path} to {self.name}')
         params = dict(
-            dsName = self.name,
-            dcPath = self.config_layout.vmware.datacenter)
+            dsName=self.name,
+            dcPath=self.config_layout.vmware.datacenter)
         verify = self.config_layout.vmware.validate_certs
         host = self.config_layout.vmware.hostname
         url = f'https://{host}:443/folder/{dest}'
         with open(path, "rb") as f:
-            resp = requests.put(url, params = params,
-                                data = f, auth=self.auth_tuple,
-                                verify = verify)
+            resp = requests.put(url, params=params,
+                                data=f, auth=self.auth_tuple,
+                                verify=verify)
             if resp.status_code >= 400:
                 raise ValueError(f'Uploading {basename} failed: {resp.status_code}')
-
 
     async def copy_in(self, src, dest):
         '''
@@ -140,13 +136,12 @@ class VmwareDataStore(VmwareSpecifiedObject, kind='datastore'):
             await self.makedirs(dest.parent)
             logger.debug(f'copying {src} to {local_path}/{dest}')
             await sh.scp(self.ssh_opts, src, f'{local_path}/{dest}',
-                             _bg = True, _bg_exc = False)
+                         _bg=True, _bg_exc=False)
         elif self.local_path:
             await self.makedirs(dest.parent)
-            await asyncio.get_event_loop().run_in_executor(None, shutil.copy, src, Path(self.local_path)/dest)
+            await asyncio.get_event_loop().run_in_executor(None, shutil.copy, src, Path(self.local_path) / dest)
         else:
             await asyncio.get_event_loop().run_in_executor(None, self.upload_file, src, str(dest))
-
 
     @memoproperty
     def auth_tuple(self):

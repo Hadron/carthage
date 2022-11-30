@@ -8,7 +8,10 @@
 
 from carthage import *
 
-import datetime, time, os, types
+import datetime
+import time
+import os
+import types
 
 from pyVmomi import vim, vmodl
 
@@ -20,41 +23,42 @@ __all__ = "VmwareStampable VmwareManagedObject VmwareNamedObject VmwareSpecified
 custom_fields_key = InjectionKey('vmware.custom_fields_key')
 
 
-@inject(config = ConfigLayout)
+@inject(config=ConfigLayout)
 def vmware_dict(config, **kws):
     '''
 :returns: A dictionary containing vmware common parameters to pass into Ansible
 '''
     vconfig = config.vmware
     d = dict(
-        datacenter = vconfig.datacenter,
-        username = vconfig.username,
-        hostname = vconfig.hostname,
-        validate_certs = vconfig.validate_certs,
-        password = vconfig.password)
+        datacenter=vconfig.datacenter,
+        username=vconfig.username,
+        hostname=vconfig.hostname,
+        validate_certs=vconfig.validate_certs,
+        password=vconfig.password)
     d.update(kws)
     return d
 
-class NotFound(LookupError): pass
 
-@inject_autokwargs(config_layout = ConfigLayout,
-                   injector = Injector,
-                   connection = VmwareConnection)
+class NotFound(LookupError):
+    pass
+
+
+@inject_autokwargs(config_layout=ConfigLayout,
+                   injector=Injector,
+                   connection=VmwareConnection)
 class VmwareStampable(SetupTaskMixin, AsyncInjectable):
 
     def __init_subclass__(cls, *, kind=NotImplemented):
         if kind is not NotImplemented:
             cls.stamp_type = kind
 
-
-
     def __init__(self, **kwargs):
-        super().__init__( **kwargs)
+        super().__init__(**kwargs)
 
     @memoproperty
     def stamp_descriptor(self):
         raise NotImplementedError(type(self))
-    
+
     @memoproperty
     def stamp_path(self):
         p = self.config_layout.state_dir
@@ -64,13 +68,13 @@ class VmwareStampable(SetupTaskMixin, AsyncInjectable):
         os.makedirs(p, exist_ok=True)
         return p
 
+
 class VmwareManagedObject(VmwareStampable):
 
     '''Contains a reference to a VMware managed object.'''
 
     # custom fields
     created = 'com.hadronindustries.carthage.created'
-
 
     def __init__(self, *args, parent=None, mob=None, readonly=None, **kwargs):
         '''
@@ -81,7 +85,6 @@ class VmwareManagedObject(VmwareStampable):
 
         '''
 
-        
         if isinstance(parent, str):
             self.parent = None
             self.parent_path = self.canonicalize_path(parent)
@@ -91,14 +94,16 @@ class VmwareManagedObject(VmwareStampable):
             self.parent = parent
             if parent is not None:
                 self.parent_path = self.parent.vmware_path
-        if self.is_root: self.parent_path = ""
+        if self.is_root:
+            self.parent_path = ""
         if not hasattr(self, 'parent_path'):
             raise TypeError(f"Parent must be set for {type(self)}")
-        # If you need to be able to pass in mob without parent or parent path, I know how to do that but it's not yet implemented; ask
+        # If you need to be able to pass in mob without parent or parent path, I
+        # know how to do that but it's not yet implemented; ask
         self.mob = mob
         if self.parent and self.mob:
             assert self.mob.parent == self.parent.mob
-            
+
         self.writable = None if readonly is None else not readonly
         super().__init__(*args, **kwargs)
 
@@ -106,9 +111,9 @@ class VmwareManagedObject(VmwareStampable):
     def stamp_descriptor(self):
         return self.vmware_path
 
-
     #: False if this object should have a parent
     is_root = False
+
     @setup_task("Construct object")
     async def construct(self):
         if not self.mob:
@@ -125,27 +130,31 @@ class VmwareManagedObject(VmwareStampable):
         if not self.mob:
             self.mob = self._find_from_path()
         await self._find_parent()
-        if not self.mob: return False
+        if not self.mob:
+            return False
         v = self.get_field_value(self.created)
-        if v is None: return True #We don't know the dependency
+        if v is None:
+            return True  # We don't know the dependency
         return datetime.datetime.fromisoformat(v).timestamp()
 
     async def _find_parent(self):
-        if self.parent or self.is_root: return
-        parent_key = InjectionKey(self.parent_type, path =self.parent_path)
+        if self.parent or self.is_root:
+            return
+        parent_key = InjectionKey(self.parent_type, path=self.parent_path)
         try:
             self.parent = await self.ainjector.get_instance_async(parent_key)
             return
         except KeyError:
             connection_injector = self.ainjector.injector_containing(VmwareConnection)
-            connection_injector.add_provider(parent_key, when_needed(self.parent_type, name = self.parent_path))
+            connection_injector.add_provider(parent_key, when_needed(self.parent_type, name=self.parent_path))
             self.parent = await self.ainjector.get_instance_async(parent_key)
-            
+
     async def do_create(self):
         raise NotImplementedError
 
     def children(self, objtypes, recursive=True):
-        if self.mob is None: return
+        if self.mob is None:
+            return
         vm = self.connection.content.viewManager
         container = None
         try:
@@ -153,14 +162,14 @@ class VmwareManagedObject(VmwareStampable):
             for ref in container.view:
                 yield ref
         finally:
-            if container is not None: container.Destroy()
+            if container is not None:
+                container.Destroy()
 
     @staticmethod
     def canonicalize_path(path):
         parts = [x for x in path.split('/') if x != '']
-        return '/'+'/'.join(parts)
+        return '/' + '/'.join(parts)
 
-    
     @memoproperty
     def vmware_path(self):
         raise NotImplementedError
@@ -174,14 +183,14 @@ class VmwareManagedObject(VmwareStampable):
 
     async def set_permissions(self, permissions):
         am = self.connection.content.authorizationManager
-        vmware = [ vim.AuthorizationManager.Permission(
-            entity = self.mob,
-            principal = permission.principal.principal,
-            group = permission.principal.group,
-            roleId = permission.role.mob.roleId,
-            propagate = permission.propagate
+        vmware = [vim.AuthorizationManager.Permission(
+            entity=self.mob,
+            principal=permission.principal.principal,
+            group=permission.principal.group,
+            roleId=permission.role.mob.roleId,
+            propagate=permission.propagate
         )
-        for permission in permissions ]
+            for permission in permissions]
         am.SetEntityPermissions(self.mob, vmware)
 
     async def _find_by_name(self, name, vimtype):
@@ -203,11 +212,12 @@ class VmwareManagedObject(VmwareStampable):
 
     def set_custom_fields(self):
         entity = self.mob
-        if not self.writable: return
+        if not self.writable:
+            return
         fields = self.injector.get_instance(custom_fields_key)
         for name, val_func in fields.items():
             field = self._ensure_custom_field(name, vim.ManagedEntity)
-            self.set_custom_field( field, val_func(self))
+            self.set_custom_field(field, val_func(self))
 
     def _fetch_custom_field(self, fname):
         content = self.connection.content
@@ -231,7 +241,7 @@ class VmwareManagedObject(VmwareStampable):
         if isinstance(field, str):
             field = self._fetch_custom_field(field)
         content = self.connection.content
-        cfm  = content.customFieldsManager
+        cfm = content.customFieldsManager
         cfm.SetField(entity=self.mob, key=field.key, value=value)
 
     def get_field_value(self, field):
@@ -239,7 +249,7 @@ class VmwareManagedObject(VmwareStampable):
         '''
         if isinstance(field, str):
             field = self._ensure_custom_field(field, vim.ManagedEntity)
-            
+
         for val in self.mob.customValue:
             if (val.key == field.key) and (val.value != ''):
                 return val.value
@@ -250,24 +260,26 @@ class VmwareManagedObject(VmwareStampable):
         parts = []
         while mob:
             parts.append(mob.name)
-            if isinstance(mob,vim.Datacenter):
+            if isinstance(mob, vim.Datacenter):
                 mob = None
-            else: mob = mob.parent
-        return "/"+"/".join(reversed(parts))
-    
+            else:
+                mob = mob.parent
+        return "/" + "/".join(reversed(parts))
+
 
 class VmwareNamedObject(VmwareManagedObject):
 
     def __init__(self, name=None, *args, **kwargs):
         parent = kwargs.get('parent', None)
-        if name is None: raise ValueError(f'must specify name')
+        if name is None:
+            raise ValueError(f'must specify name')
         if parent and name.startswith('/'):
             raise TypeError("Cannot specify both a parent and a name containing a full path")
         elif parent and '/' in name:
             parent_add, sep, name = name.rpartition('/')
             if not isinstance(parent, str):
                 parent = parent.vmware_path
-            kwargs['parent'] = parent+'/'+parent_add
+            kwargs['parent'] = parent + '/' + parent_add
         elif parent is None and '/' in name:
             kwargs['parent'], sep, name = name.rpartition('/')
         if 'mob' in kwargs and name is None:
@@ -275,7 +287,6 @@ class VmwareNamedObject(VmwareManagedObject):
         #: The name of the object
         self.name = name
         super().__init__(*args, **kwargs)
-
 
     @memoproperty
     def vmware_path(self):
@@ -299,23 +310,26 @@ class VmwareSpecifiedObject(VmwareNamedObject):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    async def build_config(self, mode, oconfig = None, stagefilter = None):
+    async def build_config(self, mode, oconfig=None, stagefilter=None):
         if stagefilter is None:
-            stagefilter = lambda cs: mode in cs.mode
+            def stagefilter(cs): return mode in cs.mode
         ainjector = self.ainjector
-        bag = types.SimpleNamespace(mode = mode)
+        bag = types.SimpleNamespace(mode=mode)
         stages = []
         for cs in self.__class__.config_stages:
-            if not stagefilter(cs): continue
-            stages.append( cs(obj = self, bag = bag))
+            if not stagefilter(cs):
+                continue
+            stages.append(cs(obj=self, bag=bag))
         config = self.config_spec_class()
         if self.mob:
             config.version = self.mob.config.version
         for s in stages:
-            if oconfig: s.oconfig = oconfig
+            if oconfig:
+                s.oconfig = oconfig
             await ainjector(s.apply_config, config)
         return config
-    
+
+
 def all_objs(content, root, objtype):
     vm = content.viewManager
     container = vm.CreateContainerView(root, objtype, True)
@@ -323,8 +337,10 @@ def all_objs(content, root, objtype):
         yield ref
     container.Destroy()
 
+
 def created_current_time(_):
     return datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
+
 
 default_custom_fields = {
     VmwareManagedObject.created: created_current_time}

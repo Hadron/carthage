@@ -7,7 +7,14 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import abc, asyncio, contextlib, os, os.path, shlex, tempfile, typing
+import abc
+import asyncio
+import contextlib
+import os
+import os.path
+import shlex
+import tempfile
+import typing
 from pathlib import Path
 
 from .dependency_injection import *
@@ -20,6 +27,7 @@ from .setup_tasks import SetupTaskMixin, setup_task, TaskWrapperBase
 import logging
 logger = logging.getLogger("carthage")
 
+
 class MachineRunning:
 
     async def __aenter__(self):
@@ -27,17 +35,18 @@ class MachineRunning:
             if self.machine.running is None:
                 await self.machine.is_machine_running()
             self.machine.already_running = self.machine.running
-        self.machine.with_running_count +=1
+        self.machine.with_running_count += 1
         if self.machine.running:
             if self.machine._ssh_online_required and self.ssh_online:
                 await self.machine.ssh_online()
             return
         try:
             await self.machine.start_machine()
-            if self.ssh_online: await self.machine.ssh_online()
+            if self.ssh_online:
+                await self.machine.ssh_online()
             return
 
-        except:
+        except BaseException:
             self.machine.with_running_count -= 1
             raise
 
@@ -47,15 +56,18 @@ class MachineRunning:
             self.machine.with_running_count = 0
             await self.machine.stop_machine()
 
-
     def __init__(self, machine, *,
-                 ssh_online = None):
+                 ssh_online=None):
         self.machine = machine
-        if ssh_online is None: ssh_online = machine.machine_running_ssh_online
+        if ssh_online is None:
+            ssh_online = machine.machine_running_ssh_online
         self.ssh_online = ssh_online
+
 
 ssh_origin = InjectionKey('ssh-origin')
 ssh_origin_vrf = InjectionKey("ssh-origin-vrf")
+
+
 class SshMixin:
     '''An Item that can be sshed to.  Will look for the ssh_origin
     injection key.  If found, this should be a container.  The ssh will be
@@ -69,9 +81,10 @@ class SshMixin:
     @memoproperty
     def ip_address(self):
         '''The IP address or name at which this machine should be managed.'''
-        try: return self.model.ip_address
-        except AttributeError: raise NotImplementedError from None
-        
+        try:
+            return self.model.ip_address
+        except AttributeError:
+            raise NotImplementedError from None
 
     @memoproperty
     def ssh_options(self):
@@ -82,14 +95,14 @@ class SshMixin:
     @memoproperty
     def ssh_online_retries(self):
         if hasattr(self.model, 'ssh_online_retries'):
-            assert type(self.model.ssh_online_retries) is int,"ssh_online_retries must be `int`"
+            assert isinstance(self.model.ssh_online_retries, int), "ssh_online_retries must be `int`"
             return self.model.ssh_online_retries
         return 60
 
     @memoproperty
     def ssh_online_timeout(self):
         if hasattr(self.model, 'ssh_online_timeout'):
-            assert type(self.model.ssh_online_timeout) is int,"ssh_online_timeout must be `int`"
+            assert isinstance(self.model.ssh_online_timeout, int), "ssh_online_timeout must be `int`"
             return self.model.ssh_online_timeout
         return 5
 
@@ -104,33 +117,36 @@ class SshMixin:
         ssh_key = self.injector.get_instance(InjectionKey(carthage.ssh.SshKey, _optional=True))
         if ssh_key:
             ssh_agent = ssh_key.agent
-            if ssh_key.key_path: key_options = ("-i", ssh_key.key_path,)
-            else: key_options = ('',)
+            if ssh_key.key_path:
+                key_options = ("-i", ssh_key.key_path,)
+            else:
+                key_options = ('',)
         else:
             ssh_agent = self.injector.get_instance(carthage.ssh.SshAgent)
             key_options = tuple()
-        options = self.ssh_options + ('-oUserKnownHostsFile='+os.path.join(self.config_layout.state_dir, 'ssh_known_hosts'),)
+        options = self.ssh_options + ('-oUserKnownHostsFile=' +
+                                      os.path.join(self.config_layout.state_dir, 'ssh_known_hosts'),)
         if ssh_origin_container is not None:
             ip_address = self.ip_address
             ssh_origin_container.done_future().add_done_callback(self.ssh_recompute)
             return self.injector(access_ssh_origin).bake(
-                                   "/usr/bin/ssh",
+                "/usr/bin/ssh",
                 *key_options,
-                                   *options,
+                *options,
                 *self.config_layout.global_ssh_options.split(),
-                                   ip_address,
-                                   _env = ssh_agent.agent_environ)
+                ip_address,
+                _env=ssh_agent.agent_environ)
         else:
             return sh.ssh.bake(*key_options,
                                *options,
                                *self.config_layout.global_ssh_options.split(),
                                self.ip_address,
-                               _env = ssh_agent.agent_environ)
+                               _env=ssh_agent.agent_environ)
 
     def rsync(self, *args):
         '''
         Call rsync with given arguments.
-        An argument may be a :class:`.RsyncPath` generated by :meth:`rsync_path`.  Such a path encapsulates a host name and a path.  When *rsync* is called, Carthage 
+        An argument may be a :class:`.RsyncPath` generated by :meth:`rsync_path`.  Such a path encapsulates a host name and a path.  When *rsync* is called, Carthage
         finds the appropriate ssh_origin to select the right namespace for rsync.
 
         Typical usage::
@@ -150,14 +166,16 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
 
     #: The command run remotely by :meth:`ssh_online`
     ssh_online_command = 'date'
+
     async def ssh_online(self):
         logger.debug(f'Waiting for {self.name} to be ssh_online')
         online = False
         last_error = None
         for i in range(self.ssh_online_retries):
-            try: await self.ssh(self.ssh_online_command,
-                                _bg = True, _bg_exc = False,
-                                _timeout = self.ssh_online_timeout)
+            try:
+                await self.ssh(self.ssh_online_command,
+                               _bg=True, _bg_exc=False,
+                               _timeout=self.ssh_online_timeout)
             except (sh.TimeoutException, sh.ErrorReturnCode) as e:
                 last_error = e
                 await asyncio.sleep(1)
@@ -173,24 +191,31 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
     def ssh_recompute(self, *args):
         try:
             del self.__dict__['ssh']
-        except KeyError: pass
+        except KeyError:
+            pass
         self._ssh_online_required = True
 
     @classmethod
     def clear_ssh_known_hosts(cls, config_layout):
-        try: os.unlink(
+        try:
+            os.unlink(
                 os.path.join(config_layout.state_dir, "ssh_known_hosts"))
-        except FileNotFoundError: pass
+        except FileNotFoundError:
+            pass
 
     def ssh_rekeyed(self):
         "Indicate that this host has been rekeyed"
         try:
             self.ip_address
-        except NotImplementedError: return
-        try: sh.ssh_keygen(
+        except NotImplementedError:
+            return
+        try:
+            sh.ssh_keygen(
                 "-R", self.ip_address,
                 f=os.path.join(self.config_layout.state_dir, "ssh_known_hosts"))
-        except sh.ErrorReturnCode: pass
+        except sh.ErrorReturnCode:
+            pass
+
 
 class AbstractMachineModel(Injectable):
 
@@ -199,6 +224,7 @@ class AbstractMachineModel(Injectable):
 
     #: If True, :meth:`Machine.start_dependencies()` will stop collecting dependencies at the injector of this model.  In the normal situation where the :class:`Machine` is instantiated within the model's dependency context, what this means is that  only system dependencies declared on the model will be started.  This may also be an :class:`InjectionKey`, an :class:`Injector`, or an :class:`Injectable`.  Se the documentation of :meth:`Machine.start_dependencies()`.
     override_dependencies: typing.Union[bool, Injector, Injectable, InjectionKey] = False
+
     async def resolve_networking(self, force: bool = False):
         '''
             Adds all :class:`carthage.network.NetworkLink` objects specified in the :class:`carthage.network.NetworkConfig`  to the network_links property.
@@ -207,19 +233,22 @@ class AbstractMachineModel(Injectable):
 
         '''
         from carthage.network import NetworkConfig
-        if not force and self.network_links: return
+        if not force and self.network_links:
+            return
         try:
             if hasattr(self, 'ainjector'):
                 ainjector = self.ainjector
-            else: ainjector = self.injector(AsyncInjector)
+            else:
+                ainjector = self.injector(AsyncInjector)
             network_config = await ainjector.get_instance_async(NetworkConfig)
-        except KeyError: return
-        if network_config is None: return
-        result = await ainjector(network_config.resolve,  self)
+        except KeyError:
+            return
+        if network_config is None:
+            return
+        result = await ainjector(network_config.resolve, self)
 
 
-
-@inject_autokwargs(config_layout = ConfigLayout)
+@inject_autokwargs(config_layout=ConfigLayout)
 class Machine(AsyncInjectable, SshMixin):
 
     '''
@@ -244,19 +273,21 @@ class Machine(AsyncInjectable, SshMixin):
 
     #: Should machine_running default to calling ssh_online
     machine_running_ssh_online: bool = True
-    
+
     def __init__(self, name=None, **kwargs):
         super().__init__(**kwargs)
         if name is not None:
             self.name = name
         else:
-            if not hasattr(self, 'name'): raise TypeError(f'name must be supplied to constructor or set in the class')
+            if not hasattr(self, 'name'):
+                raise TypeError(f'name must be supplied to constructor or set in the class')
         self.with_running_count = 0
         self.already_running = False
         self.sshfs_count = 0
         self.sshfs_lock = asyncio.Lock()
         self.injector.add_provider(InjectionKey(Machine), self)
-        if not hasattr(self, 'model'): self.model = None
+        if not hasattr(self, 'model'):
+            self.model = None
         self.running = None
 
     def machine_running(self, **kwargs):
@@ -264,18 +295,19 @@ class Machine(AsyncInjectable, SshMixin):
 '''
         return MachineRunning(self, **kwargs)
 
-
     @property
     def full_name(self):
-        return self.config_layout.container_prefix+self.name
+        return self.config_layout.container_prefix + self.name
 
     @memoproperty
     def network_links(self):
-        if self.model: return self.model.network_links
+        if self.model:
+            return self.model.network_links
         return {}
 
     #: If true, use self.filesystem_access for rsync, otherwise use ssh.
     rsync_uses_filesystem_access = False
+
     async def start_dependencies(self):
         '''Interface point that should be called by :meth:`start_machine` to start any dependent machines such as routers needed by this machine.
 
@@ -307,25 +339,29 @@ class Machine(AsyncInjectable, SshMixin):
             Filter out dependencies between the machine model and the injector contained in the Injectable inclusive.
 
         an :class:`~InjectionKey`
-            Instantiate the key, and assume it is an Injectable.  Treat as that injectable 
+            Instantiate the key, and assume it is an Injectable.  Treat as that injectable
 
         For finer grain control, implementations can override this method.
 
         '''
         from carthage.system_dependency import MachineDependency, SystemDependency
+
         def callback(d):
             def cb(future):
                 try:
                     future.result()
-                except:
+                except BaseException:
                     logger.exception(f"Error resolving {d}:")
             return cb
 
         def filter_dependencies(k):
-            if 'name' not in k.constraints: return False
-            if k in filter_keys: return False
+            if 'name' not in k.constraints:
+                return False
+            if k in filter_keys:
+                return False
             return True
-        if not hasattr(self, 'model'): return
+        if not hasattr(self, 'model'):
+            return
         logger.debug(f'Starting dependencies for {self.name}')
         stop_at = None
         model = self.model
@@ -336,26 +372,25 @@ class Machine(AsyncInjectable, SshMixin):
         elif not override_dependencies:
             filter_keys = tuple()
         else:
-            if isinstance(override_dependencies,InjectionKey):
-                override_dependencies = await self.ainjector.get_instance_async(InjectionKey(override_dependencies, _ready = False))
+            if isinstance(override_dependencies, InjectionKey):
+                override_dependencies = await self.ainjector.get_instance_async(InjectionKey(override_dependencies, _ready=False))
             if isinstance(override_dependencies, Injectable):
                 override_dependencies = override_dependencies.injector
             if not isinstance(override_dependencies, Injector):
-                raise TypeError("override_dependencies must be boolean, an InjectionKey resolving to an INjectable, an Injectable, or an injector")
+                raise TypeError(
+                    "override_dependencies must be boolean, an InjectionKey resolving to an INjectable, an Injectable, or an injector")
             filter_keys = model.injector.parent_injector.filter(
                 SystemDependency, ['name'],
-                stop_at = override_dependencies)
+                stop_at=override_dependencies)
             logger.debug("Ignoring dependencies: %s", " ".join([k.name for k in filter_keys]))
-                         
-        results = await self.ainjector.filter_instantiate_async(SystemDependency, filter_dependencies, ready = True, stop_at = stop_at)
+
+        results = await self.ainjector.filter_instantiate_async(SystemDependency, filter_dependencies, ready=True, stop_at=stop_at)
         futures = []
-        for k,d in results:
+        for k, d in results:
             future = asyncio.ensure_future(d(self.ainjector))
             future.add_done_callback(callback(d))
             futures.append(future)
         await asyncio.gather(*futures)
-
-
 
     async def start_machine(self):
 
@@ -363,20 +398,18 @@ class Machine(AsyncInjectable, SshMixin):
         Must be overridden.  Start the machine.
         '''
         self.injector.emit_event(InjectionKey(Machine),
-                        "start_machine", self,
-                        adl_keys   = {InjectionKey(Machine,  host = self.name)} |
-                        set(self.supplementary_injection_keys(InjectionKey(Machine, host = self.name))))
-        
+                                 "start_machine", self,
+                                 adl_keys={InjectionKey(Machine, host=self.name)} |
+                                 set(self.supplementary_injection_keys(InjectionKey(Machine, host=self.name))))
 
     async def stop_machine(self):
         ''' Must be overridden; stop the machine.
         '''
         self.injector.emit_event(InjectionKey(Machine),
-                        "stop_machine", self,
-                        adl_keys   = {InjectionKey(Machine,  host = self.name)} |
-                        set(self.supplementary_injection_keys(InjectionKey(Machine, host = self.name))))
+                                 "stop_machine", self,
+                                 adl_keys={InjectionKey(Machine, host=self.name)} |
+                                 set(self.supplementary_injection_keys(InjectionKey(Machine, host=self.name))))
         self._ssh_online_required = True
-
 
     async def is_machine_running(self):
         '''
@@ -385,14 +418,13 @@ class Machine(AsyncInjectable, SshMixin):
         Probe whether the machine is running and set self.running appropriately.  It is most important that running be set accurately when :meth:`start_machine` and :meth:`stop_machine` can start or stop the machine.  For :class:`BareMetalMachine` it is reasonable to assume that the machine is running.  This interface point should not call :meth:`ssh_online` or confirm the machine is on the network.
         '''
         raise NotImplementedError
-    
-
 
     def __repr__(self):
-        res =  f"<{self.__class__.__name__} name:{self.name} "
+        res = f"<{self.__class__.__name__} name:{self.name} "
         try:
             res += f"ip_address:{self.ip_address}"
-        except Exception: pass
+        except Exception:
+            pass
         res += ">"
         return res
 
@@ -404,22 +436,24 @@ class Machine(AsyncInjectable, SshMixin):
 
         '''
         from carthage.network import NetworkConfig
-        if not force and self.network_links: return
-        try: network_config = await self.ainjector.get_instance_async(NetworkConfig)
-        except KeyError: return
-        if network_config is None: return
+        if not force and self.network_links:
+            return
+        try:
+            network_config = await self.ainjector.get_instance_async(NetworkConfig)
+        except KeyError:
+            return
+        if network_config is None:
+            return
         result = await self.ainjector(network_config.resolve, self.model or self)
 
-
-
-    async def apply_customization(self, cust_class, method = 'apply', **kwargs):
+    async def apply_customization(self, cust_class, method='apply', **kwargs):
         '''
         Apply a :class:`BaseCustomization` to this machine..
 
         :parameter stamp: A distinguisher for stamps created by the customization.  The stamp will include this value as well as the stamp from the :func:`setup_task`.
 
         '''
-        customization = await self.ainjector(cust_class, apply_to = self, **kwargs)
+        customization = await self.ainjector(cust_class, apply_to=self, **kwargs)
         meth = getattr(customization, method)
         return await meth()
 
@@ -433,7 +467,7 @@ class Machine(AsyncInjectable, SshMixin):
     def ssh_run_command(self,
                         *args,
                         _bg=True,
-                        _bg_exc = False):
+                        _bg_exc=False):
         '''
             Ssh has really bad quoting; it effectively  removes one level of quoting from the input.
 This handles quoting and  makes sure each argument is a separate argument on the eventual shell;
@@ -442,17 +476,16 @@ it works like :meth:`carthage.container.Container.container_command` and is used
         return self.ssh(
             shlex.join(args),
             _bg=_bg, _bg_exc=_bg_exc)
-        
 
     async def sshfs_process_factory(self):
         return sh.sshfs(
-            '-o' 'ssh_command='+" ".join(
-                str(self.ssh).split()[:-1]) ,
+            '-o' 'ssh_command=' + " ".join(
+                str(self.ssh).split()[:-1]),
             f'{self.ip_address}:/',
             self.sshfs_path,
             '-f',
-            _bg = True,
-            _bg_exc = False)
+            _bg=True,
+            _bg_exc=False)
 
     @contextlib.asynccontextmanager
     async def filesystem_access(self):
@@ -477,13 +510,14 @@ it works like :meth:`carthage.container.Container.container_command` and is used
                 # yield so other callers can concurrently access the filesystem.
                 async with self.sshfs_lock:
                     if self.sshfs_count == 1:
-                        self.sshfs_path = tempfile.mkdtemp(dir = self.config_layout.state_dir, prefix=self.name, suffix = "sshfs")
+                        self.sshfs_path = tempfile.mkdtemp(
+                            dir=self.config_layout.state_dir, prefix=self.name, suffix="sshfs")
                         self.sshfs_process = await self.sshfs_process_factory()
                         for x in range(5):
                             alive, *rest = self.sshfs_process.process.is_alive()
                             if not alive:
                                 await self.sshfs_process
-                                raise RuntimeError #I'd expect that to have happened from an sh exit error already
+                                raise RuntimeError  # I'd expect that to have happened from an sh exit error already
                             if os.path.exists(os.path.join(
                                     self.sshfs_path, "run")):
                                 break
@@ -497,7 +531,8 @@ it works like :meth:`carthage.container.Container.container_command` and is used
                     self.sshfs_count = 0
                     try:
                         self.sshfs_process.process.terminate()
-                    except: pass
+                    except BaseException:
+                        pass
                     dir = self.sshfs_path
                     self.sshfs_path = None
                     self.sshfs_process = None
@@ -506,24 +541,24 @@ it works like :meth:`carthage.container.Container.container_command` and is used
                         os.rmdir(dir)
 
 
-
-@inject_autokwargs( config_layout = ConfigLayout)
+@inject_autokwargs(config_layout=ConfigLayout)
 class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
     def __init__(self, apply_to: Machine,
-                  stamp=None, **kwargs):
+                 stamp=None, **kwargs):
         if isinstance(apply_to, BaseCustomization):
             apply_to = apply_to.host
         self.host = apply_to
-        if not getattr(self, 'description', None): self.description = self.__class__.__name__
+        if not getattr(self, 'description', None):
+            self.description = self.__class__.__name__
         self.stamp_stem = stamp or self.__class__.__name__
         super().__init__(**kwargs)
 
     @classmethod
     def default_class_injection_key(cls):
         description = cls.description or cls.__name__
-        return InjectionKey(cls, description = description)
-    
+        return InjectionKey(cls, description=description)
+
     # We do not run setup_tasks on construction
     async_ready = AsyncInjectable.async_ready
 
@@ -532,9 +567,11 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
     async def customization_context(self):
         '''Can be overridden; context in which customization tasks are run.
 '''
-        try: yield
-        finally: pass
-    
+        try:
+            yield
+        finally:
+            pass
+
     @property
     def stamp_path(self):
         return self.host.stamp_path
@@ -557,14 +594,14 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
         '''
         last_run = 0.0
         for t in self.setup_tasks:
-            run_task, last_run = await t.should_run_task(self,  last_run, ainjector = self.ainjector)
+            run_task, last_run = await t.should_run_task(self, last_run, ainjector=self.ainjector)
             if run_task:
-                return False #We're a check_completed function not a should_run function
+                return False  # We're a check_completed function not a should_run function
         return last_run
 
     async def apply(self):
         ''' Run setup tasks against host'''
-        return await self.ainjector(self.run_setup_tasks, context = self.customization_context)
+        return await self.ainjector(self.run_setup_tasks, context=self.customization_context)
 
     def __getattr__(self, a):
         if a in ('ssh', 'ip_address', 'start_machine', 'stop_machine',
@@ -583,6 +620,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
     #: A description of the customization for inclusion in task logging
     description = ""
 
+
 class MachineCustomization(BaseCustomization):
 
     '''A customization class for running customizations on running machines.'''
@@ -590,6 +628,7 @@ class MachineCustomization(BaseCustomization):
     @property
     def customization_context(self):
         return self.host.machine_running()
+
 
 class ContainerCustomization(BaseCustomization):
 
@@ -599,7 +638,7 @@ class ContainerCustomization(BaseCustomization):
     def __init__(self, apply_to, **kwargs):
         if not hasattr(apply_to, '_apply_to_container_customization'):
             raise TypeError(f'{self.__class__.__name__} can only be applied to Containers or ImageVolumes')
-        super().__init__(apply_to = apply_to, **kwargs)
+        super().__init__(apply_to=apply_to, **kwargs)
         apply_to._apply_to_container_customization(self)
 
     @property
@@ -609,7 +648,8 @@ class ContainerCustomization(BaseCustomization):
     def __getattr__(self, a):
         if a in ('container_command', ):
             return getattr(self.host, a)
-        else: return super().__getattr__(a)
+        else:
+            return super().__getattr__(a)
 
 
 class FilesystemCustomization(BaseCustomization):
@@ -637,31 +677,34 @@ class CustomizationWrapper(TaskWrapperBase):
     def __init__(self, customization, before=None, **kwargs):
         self.customization = customization
         if before:
-            kwargs['order'] = before.order-1
+            kwargs['order'] = before.order - 1
         try:
-            if kwargs['order'] is None: del kwargs['order']
-        except AttributeError: pass
+            if kwargs['order'] is None:
+                del kwargs['order']
+        except AttributeError:
+            pass
         kwargs['description'] = getattr(customization, 'description', None) or customization.__name__
         super().__init__(**kwargs)
-        
+
     @memoproperty
     def stamp(self):
         raise RuntimeError('This CustomizationTask was never assigned to a SetupTaskMixin')
-    
+
     async def func(self, machine):
         await machine.apply_customization(self.customization, stamp=self.stamp)
 
     async def check_completed_func(self, machine):
-        res = await machine.apply_customization(self.customization, method = "last_run", stamp=self.stamp)
+        res = await machine.apply_customization(self.customization, method="last_run", stamp=self.stamp)
         # unfortunately if we return a last_run and one of our
         # dependencies has run more recently, we will continue to
         # generate unneeded task runs because we never inject our
         # dependency's last run into the customization so we never
         # update our last_run time.
         return bool(res)
-    
-def customization_task    (c: BaseCustomization, order: int = None,
-                           before = None):
+
+
+def customization_task(c: BaseCustomization, order: int = None,
+                       before=None):
     '''
     :return: a setup_task for using a particular :class:`Customization` in a given :class:`Machine`.
 
@@ -675,9 +718,8 @@ def customization_task    (c: BaseCustomization, order: int = None,
                                 order=order,
                                 before=before)
 
-                                
 
-@inject_autokwargs(ssh_key =InjectionKey(SshKey, _ready=True))
+@inject_autokwargs(ssh_key=InjectionKey(SshKey, _ready=True))
 class BareMetalMachine(Machine, SetupTaskMixin):
 
     '''Represents physical hardware that Carthage cannot start or stop
@@ -686,7 +728,8 @@ class BareMetalMachine(Machine, SetupTaskMixin):
     running = False
 
     async def start_machine(self):
-        if self.running: return
+        if self.running:
+            return
         await self.start_dependencies()
         await super().start_machine()
         await self.ssh_online()
@@ -707,7 +750,8 @@ class BareMetalMachine(Machine, SetupTaskMixin):
     @memoproperty
     def stamp_path(self):
         return Path(f'{self.config_layout.state_dir}/machines/{self.name}')
-    
+
+
 def disk_config_from_model(model, default_disk_config):
     '''Return a :ref:`disk_config <disk_config>` specification from a model.  Handles *disk_sizes* and makes sure there is always an entry for the primary disk.
 '''
@@ -715,18 +759,17 @@ def disk_config_from_model(model, default_disk_config):
     if hasattr(model, 'disk_config'):
         for entry in model.disk_config:
             primary_disk_found = True
-            yield dict(entry) #copy the first level of the dict
+            yield dict(entry)  # copy the first level of the dict
     elif hasattr(model, 'disk_sizes'):
         for size in model.disk_sizes:
             primary_disk_found = True
             yield dict(size=size)
     if not primary_disk_found:
         yield from default_disk_config
-        
 
 
 __all__ = ['AbstractMachineModel',
-'Machine', 'MachineRunning', 'BareMetalMachine',
+           'Machine', 'MachineRunning', 'BareMetalMachine',
            'SshMixin', 'BaseCustomization', 'ContainerCustomization',
            'FilesystemCustomization',
            'MachineCustomization']

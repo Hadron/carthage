@@ -23,7 +23,7 @@ class VmwareHost(VmwareNamedObject, kind='host'):
 
     def __init__(self, name, **kwargs):
         if not name.startswith('/') and not 'parent' in kwargs:
-            self.connection = kwargs['connection'] # for _find_by_name
+            self.connection = kwargs['connection']  # for _find_by_name
             if not 'mob' in kwargs:
                 kwargs['mob'] = self._find_by_name(name)
             kwargs['parent'] = self._parent_path_from_mob(kwargs['mob'].parent)
@@ -34,7 +34,8 @@ class VmwareHost(VmwareNamedObject, kind='host'):
     def _find_parent(self):
         if (self.mob is not None) and isinstance(self.mob.parent, vim.ClusterComputeResource):
             self.parent_type = VmwareCluster
-        else: self.parent_type = HostFolder
+        else:
+            self.parent_type = HostFolder
         return super()._find_parent()
 
     def _find_by_name(self, name):

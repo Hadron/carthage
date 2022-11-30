@@ -14,6 +14,7 @@ from carthage.dependency_injection import *
 
 __all__ = []
 
+
 class PodmanPodModel(PodmanPod, InjectableModel, metaclass=carthage.modeling.implementation.ModelingContainer):
 
     '''A container that can group a number of :class:`MachineModels` representing Podman containers.
@@ -34,7 +35,7 @@ class PodmanPodModel(PodmanPod, InjectableModel, metaclass=carthage.modeling.imp
 
                 class container2(MachineModel): pass
 
-            # But this container is not in a pod.  
+            # But this container is not in a pod.
 
             class container3(MachineModel): pass
 
@@ -60,7 +61,7 @@ class PodmanPodModel(PodmanPod, InjectableModel, metaclass=carthage.modeling.imp
                 self.name = self.__class__.__name__
         super().__init__(**kwargs)
 
-    pod_name_global = False #: If True, the pod name is globally unique
+    pod_name_global = False  # : If True, the pod name is globally unique
 
     @classmethod
     def our_key(self):
@@ -71,9 +72,13 @@ class PodmanPodModel(PodmanPod, InjectableModel, metaclass=carthage.modeling.imp
         if k.constraints:
             yield InjectionKey(PodmanPod, **k.constraints)
             yield InjectionKey(PodmanPodModel, **k.constraints)
-    
+
+
 __all__ += ['PodmanPodModel']
 
-class PodmanImageModel(PodmanImage, InjectableModel): pass
+
+class PodmanImageModel(PodmanImage, InjectableModel):
+    pass
+
 
 __all__ += ['PodmanImageModel']

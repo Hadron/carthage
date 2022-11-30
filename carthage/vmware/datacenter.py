@@ -10,6 +10,7 @@ from carthage import *
 
 from .inventory import VmwareNamedObject
 
+
 class VmwareDatacenter(VmwareNamedObject, kind='datacenter'):
 
     def __init__(self, *args, config_layout, **kwargs):

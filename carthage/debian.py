@@ -7,7 +7,11 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import contextlib, logging , os, re, tempfile
+import contextlib
+import logging
+import os
+import re
+import tempfile
 from .utils import import_resources_files
 from pathlib import Path
 from .dependency_injection import *
@@ -23,19 +27,22 @@ file_re = re.compile(r'file:/+(/[^/]+.*)')
 
 __all__ = []
 
+
 def bind_args_for_mirror(mirror):
     match = file_re.match(mirror)
     if match:
         return [f'--bind={match.group(1)}']
     return []
 
+
 __all__ += ['bind_args_for_mirror']
 
-@inject_autokwargs(config_layout = ConfigLayout)
+
+@inject_autokwargs(config_layout=ConfigLayout)
 class DebianContainerCustomizations(ContainerCustomization):
 
     description = "Set up Debian for Carthage"
-    
+
     @setup_task("Turn on networkd")
     async def turn_on_networkd(self):
         await self.container_command("systemctl", "enable", "systemd-networkd", "systemd-resolved")
@@ -48,22 +55,23 @@ class DebianContainerCustomizations(ContainerCustomization):
                                          "apt", "update")
             await self.container_command(*bind_args,
                                          "apt-get", "-y", "install", "python3", "dbus")
-        
+
 
 class DebianContainerImage(ContainerImage):
 
     mirror: str
     distribution: str
-    include_security:bool
-    name:str = "base-debian"
+    include_security: bool
+    name: str = "base-debian"
 
-    def __init__(self, name:str=None,
-                 mirror: str=None, distribution: str=None,
-                 stage1_mirror: str=None,
-                 include_security:bool = None,
+    def __init__(self, name: str = None,
+                 mirror: str = None, distribution: str = None,
+                 stage1_mirror: str = None,
+                 include_security: bool = None,
                  **kwargs):
-        if name is None: name=self.__class__.name
-        super().__init__(name = name, **kwargs)
+        if name is None:
+            name = self.__class__.name
+        super().__init__(name=name, **kwargs)
         # Make sure our config layout points to our injector so we can
         # change things with only local effect.
         self.config_layout = self.injector(ConfigLayout)
@@ -74,17 +82,20 @@ class DebianContainerImage(ContainerImage):
         self.debootstrap_options = self.config_layout.debian.debootstrap_options
         if mirror:
             self.mirror = mirror
-            if not stage1_mirror: self.stage1_mirror = mirror
-        if distribution: self.distribution = distribution
-        if stage1_mirror: self.stage1_mirror = stage1_mirror
-        if include_security is not None: self.include_security = include_security
+            if not stage1_mirror:
+                self.stage1_mirror = mirror
+        if distribution:
+            self.distribution = distribution
+        if stage1_mirror:
+            self.stage1_mirror = stage1_mirror
+        if include_security is not None:
+            self.include_security = include_security
         # Make sure we save the right items in case a customization ends up calling update_mirror.
         dc = self.config_layout.debian
         dc.mirror = self.mirror
         dc.distribution = self.distribution
         dc.stage1_mirror = self.stage1_mirror
         dc.include_security = self.include_security
-        
 
     @setup_task("unpack using debootstrap")
     async def unpack_container_image(self):
@@ -92,15 +103,18 @@ class DebianContainerImage(ContainerImage):
                              *(self.debootstrap_options.split()),
                              self.distribution,
                              self.path, self.stage1_mirror,
-                             _bg = True,
-                             _bg_exc = False)
+                             _bg=True,
+                             _bg_exc=False)
         path = Path(self.path)
-        try: os.unlink(path/"etc/hostname")
-        except FileNotFoundError: pass
+        try:
+            os.unlink(path / "etc/hostname")
+        except FileNotFoundError:
+            pass
         try:
             with path.joinpath("etc/ssh/sshd_config").open("at") as f:
                 f.write("PasswordAuthentication no")
-        except FileNotFoundError: pass
+        except FileNotFoundError:
+            pass
 
     debian_customizations = customization_task(DebianContainerCustomizations)
 
@@ -108,15 +122,17 @@ class DebianContainerImage(ContainerImage):
     def update_mirror(self):
         update_mirror(self.path, self.mirror, self.distribution, self.include_security)
 
+
 __all__ += ['DebianContainerImage']
 
+
 def update_mirror(path, mirror, distribution, include_security):
-    etc_apt = Path(path)/"etc/apt"
-    sources_list = etc_apt/"sources.list"
+    etc_apt = Path(path) / "etc/apt"
+    sources_list = etc_apt / "sources.list"
     if sources_list.exists():
         os.unlink(sources_list)
-    debian_list = etc_apt/"sources.list.d/debian.list"
-    os.makedirs(debian_list.parent, exist_ok = True)
+    debian_list = etc_apt / "sources.list.d/debian.list"
+    os.makedirs(debian_list.parent, exist_ok=True)
     with debian_list.open("wt") as f:
         f.write(f'''
 deb {mirror} {distribution} main contrib non-free
@@ -129,17 +145,18 @@ deb-src {mirror} {distribution}-updates main contrib non-free
 
 deb https://security.debian.org/ {distribution}-security main
 ''')
-            
+
 
 @contextlib.asynccontextmanager
 async def use_stage1_mirror(machine):
     debian = machine.config_layout.debian
     async with machine.filesystem_access() as path:
         try:
-            update_mirror(path, debian.stage1_mirror, debian.distribution, (debian.include_security and (debian.mirror == debian.stage1_mirror)))
+            update_mirror(path, debian.stage1_mirror, debian.distribution,
+                          (debian.include_security and (debian.mirror == debian.stage1_mirror)))
             if machine.running:
                 await machine.ssh("apt", "update",
-                                  _bg = True, _bg_exc = False)
+                                  _bg=True, _bg_exc=False)
             else:
                 await machine.container_command(*bind_args_for_mirror(debian.stage1_mirror),
                                                 "apt", "update")
@@ -149,13 +166,15 @@ async def use_stage1_mirror(machine):
             try:
                 if machine.running:
                     await machine.ssh("apt", "update",
-                                      _bg = True, _bg_exc = False)
+                                      _bg=True, _bg_exc=False)
                 else:
                     await machine.container_command(*bind_args_for_mirror(debian.mirror),
                                                     "apt", "update")
-            except: logger.exception("Error cleaning up mirror")
-            
+            except BaseException:
+                logger.exception("Error cleaning up mirror")
+
 __all__ += ['use_stage1_mirror']
+
 
 def install_stage1_packages_task(packages):
     @setup_task(f'Install {packages} using stage 1 mirror')
@@ -168,9 +187,11 @@ def install_stage1_packages_task(packages):
                 'install', *packages)
     return install_task
 
+
 __all__ += ['install_stage1_packages_task']
 
-@inject(ainjector = AsyncInjector, config = ConfigLayout)
+
+@inject(ainjector=AsyncInjector, config=ConfigLayout)
 async def debian_container_to_vm(
         volume: ContainerVolume,
         output: str,
@@ -178,7 +199,7 @@ async def debian_container_to_vm(
         classes: str = None,
         *,
         config,
-        image_volume_class = ImageVolume,
+        image_volume_class=ImageVolume,
         ainjector):
     '''
 
@@ -201,6 +222,7 @@ async def debian_container_to_vm(
 
     '''
     from .container import logger
+
     def out_cb(data):
         data = data.strip()
         logger.debug("Image Creation: %s", data)
@@ -208,48 +230,48 @@ async def debian_container_to_vm(
     async def unpack_callback():
         nonlocal volume
         if isinstance(volume, type):
-            #Allow usage specifying volume in a when_needed
+            # Allow usage specifying volume in a when_needed
             volume = await ainjector(volume)
         await volume.async_become_ready()
-        os.makedirs(output_path.parent, exist_ok = True)
-        with tempfile.TemporaryDirectory(dir = output_path.parent,
-                                             prefix = "container-to-vm-") as tmp_d:
+        os.makedirs(output_path.parent, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=output_path.parent,
+                                         prefix="container-to-vm-") as tmp_d:
             tmp = Path(tmp_d).absolute()
             await sh.tar(
                 "-C", str(volume.path),
                 "--xattrs",
                 "--xattrs-include=*.*",
                 "-czf",
-                str(tmp/"base.tar.gz"),
+                str(tmp / "base.tar.gz"),
                 ".",
-                _bg = True,
-                _bg_exc = False)
+                _bg=True,
+                _bg_exc=False)
             env = os.environ.copy()
-            env['FAI_BASE'] = str(tmp/"base.tar.gz")
+            env['FAI_BASE'] = str(tmp / "base.tar.gz")
             await sh.fai_diskimage(
                 '-S', size,
                 '-s', str(fai_configspace),
                 '-c', classes,
-                str(tmp/"image.raw"),
-                _env = env,
-                _bg = True,
-                _bg_exc = False,
-                _encoding = 'UTF-8',
-                _out = out_cb)
-            os.rename(tmp/"image.raw", output_path)
+                str(tmp / "image.raw"),
+                _env=env,
+                _bg=True,
+                _bg_exc=False,
+                _encoding='UTF-8',
+                _out=out_cb)
+            os.rename(tmp / "image.raw", output_path)
 
     default_classes = "DEFAULT,CONTAINER2VM,GRUB_EFI"
-    if classes is None: classes = default_classes
+    if classes is None:
+        classes = default_classes
     elif classes[0] == "+":
-        classes = default_classes+','+classes[1:]
+        classes = default_classes + ',' + classes[1:]
 
     output_path = Path(config.vm_image_dir).joinpath(output)
-    return await ainjector(image_volume_class, name = output_path.absolute(),
-                               unpack = unpack_callback,
-                               )
+    return await ainjector(image_volume_class, name=output_path.absolute(),
+                           unpack=unpack_callback,
+                           )
 
 __all__ += ['debian_container_to_vm']
 
 #: The Carthage FAI configuration space
-fai_configspace = import_resources_files(__package__)/"resources/fai"
-
+fai_configspace = import_resources_files(__package__) / "resources/fai"

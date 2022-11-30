@@ -7,7 +7,5 @@
 # LICENSE for details.
 
 
-
 def test_true():
     return True
-

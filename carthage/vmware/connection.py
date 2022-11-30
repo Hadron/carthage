@@ -13,7 +13,8 @@ from ssl import create_default_context
 
 import logging
 
-@inject(config = ConfigLayout)
+
+@inject(config=ConfigLayout)
 class VmwareConnection(Injectable):
 
     def __init__(self, config):
@@ -25,9 +26,9 @@ class VmwareConnection(Injectable):
         self.connection = None
         logging.debug(f'connecting to {self.config.hostname} as {self.config.username}')
         self.connection = SmartConnect(host=self.config.hostname,
-                                  user=self.config.username,
-                                  pwd=self.config.password,
-                                  sslContext=ssl_context)
+                                       user=self.config.username,
+                                       pwd=self.config.password,
+                                       sslContext=ssl_context)
         self.content = self.connection.content
         logging.debug(f'connected to {self.config.hostname}')
 

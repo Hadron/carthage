@@ -7,22 +7,26 @@
 # LICENSE for details.
 
 from __future__ import annotations
-import dataclasses, typing, weakref
+import dataclasses
+import typing
+import weakref
 from .base import NetworkLink
 from ..dependency_injection import *
+
 
 class BondLink(NetworkLink):
 
     local_type = "bond"
-    
+
 
 class BridgeLink(NetworkLink):
 
-    local_type  = "bridge"
+    local_type = "bridge"
 
     vlan_filter: typing.Optional[bool] = False
 
-@dataclasses.dataclass(eq = False)
+
+@dataclasses.dataclass(eq=False)
 class VlanLink(NetworkLink):
 
     local_type = "vlan"
@@ -39,10 +43,11 @@ class VlanLink(NetworkLink):
         if 'vlan_id' not in args:
             args['vlan_id'] = args['net'].vlan_id
         super().__init__(connection, interface, args)
-        
+
+
 class NoLocalLink(NetworkLink):
     local_type = 'none'
-    
+
 
 @dataclasses.dataclass(init=False, eq=False)
 class XfrmLocalLink(NetworkLink):
@@ -50,5 +55,3 @@ class XfrmLocalLink(NetworkLink):
     '''A link corresponding to a linux xfrm interface'''
     interface_id: typing.Optional[int] = None
     local_type = 'xfrm'
-
-    
