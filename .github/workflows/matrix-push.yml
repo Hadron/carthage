@@ -1,0 +1,17 @@
+on: [push]
+
+jobs:
+  send-message:
+    runs-on: ubuntu-latest
+    name: Notify room about push
+    steps:
+    - name: Send message to Carthage Room
+      id: matrix-chat-message
+      uses: fadenb/matrix-chat-message@v0.0.6
+      with:
+        homeserver: 'matrix.hadronindustries.com'
+        token: ${{ secrets.MATRIX_TOKEN }}
+        channel: '!pRocQwztEahrdeuXTK:matrix.org'
+        message: |
+          ${github.actor} pushed to [${github.repository}](https://github.com/${github.repository}): [${github.sha}](${github.event.compare}) | ${github.event.commits[0].message}
+          
