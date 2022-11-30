@@ -13,5 +13,5 @@ jobs:
         token: ${{ secrets.MATRIX_TOKEN }}
         channel: '!pRocQwztEahrdeuXTK:matrix.org'
         message: |
-          ${github.actor} pushed to [${github.repository}](https://github.com/${github.repository}): [${github.sha}](${github.event.compare}) | ${github.event.commits[0].message}
+          ${{github.actor}} pushed to [${{github.repository}}](https://github.com/${{github.repository}}): [${{github.sha}}](${{github.event.compare}}) | ${{github.event.commits[0].message}}
           
