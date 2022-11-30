@@ -1,1 +1,2 @@
 authorized_keys: /dev/null
+base_dir: /srv/images/testing
