@@ -24,7 +24,7 @@ class BaseSchema(ConfigSchema, prefix = ""):
     #: Ssh options that are always included
     global_ssh_options:str = '-oStrictHostKeyChecking=no'
 
-    base_dir: ConfigPath = "/srv/images/test"
+    base_dir: ConfigPath = "~/.carthage"
     checkout_dir:ConfigPath = "{base_dir}/checkout"
     output_dir: ConfigPath = "{base_dir}/output"
     image_dir:ConfigPath = "{base_dir}"
