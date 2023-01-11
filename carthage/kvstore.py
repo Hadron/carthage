@@ -6,6 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import yaml
 from pathlib import Path
 import lmdb
 
@@ -34,16 +35,54 @@ class KvStore(Injectable):
     def close(self):
         self.environment.close()
 
-    def domain(self, d:str):
+    def domain(self, d:str, include_in_dump):
         '''Return a :class:`KvDomain` for accessing a domain of keys in the Store.  Typical usage::
 
             kvstore = KvStore(path)
-            domain = kvstore.domain('network/foo_net/addresses')
+            domain = kvstore.domain('network/foo_net/addresses', True)
             domain.put('30', 'foo.com')   # foo.com is address 30 on this network
 
+        :param include_in_dump: If True, then the contents of this domain should be included in the results of a call to :meth:`dump`
         '''
+        if include_in_dump:
+            with self.environment.begin(write=True) as txn:
+                assert txn.put(b'dump:'+bytes(d, 'utf-8'), b'true', True)
         return KvDomain(self, d)
 
+    def dump(self, file):
+        domains = set()
+        file = Path(file)
+        result = dict()
+        with self.environment.begin() as txn, txn.cursor() as csr:
+            csr.set_range(b'dump')
+            for key, value in csr:
+                if not key.startswith(b'dump:'): break
+                domains.add(key[5:])
+            for d in domains:
+                domain_key = d+b':'
+                csr.set_range(domain_key)
+                domain_result = dict()
+                for key, value in csr:
+                    if not key.startswith(domain_key): continue
+                    key = key[len(domain_key):]
+                    domain_result[str(key, 'utf-8')] = str(value, 'utf-8')
+                result[str(d, 'utf-8')] = domain_result
+        file.write_text(yaml.dump(result, default_flow_style=False))
+
+    def load(self, file):
+        '''Load a dump file produced by :meth:`dump`.  Values aready in the :class:`KvStore` override values in the dump.
+
+        The intent is that a dump file can be checked into a layout repository as an initial set of assignments for things like IP addresses and MAC addresses.  An actual running state_dir for the layout may diverge from the initial hints contained in the dump.  Periodically the layout repository can be updated.
+        '''
+        file = Path(file)
+        result = yaml.safe_load(file.read_text())
+        with self.environment.begin(write=True) as txn:
+            for domain, domain_dict in result.items():
+                for k,v in domain_dict.items():
+                    txn.put(kv_key(domain, k), bytes(v, 'utf-8'))
+                    # Does not overwrite existing values
+                    
+    
 
 __all__ += ['KvStore']
 
@@ -140,8 +179,8 @@ class HintedAssignments(Injectable):
 
     def __init__(self, domain, **kwargs):
         super().__init__(**kwargs)
-        self._assignments = self.store.domain(domain+'/assignments')
-        self._hints = self.store.domain(domain+'/hints')
+        self._assignments = self.store.domain(domain+'/assignments', False)
+        self._hints = self.store.domain(domain+'/hints', True)
         self._can_validate_assignments = False
         self.prefer_reallocate = False #: move things around when the preferred assignment changes
         self.new_assignments()

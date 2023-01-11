@@ -152,3 +152,27 @@ async def test_reallocation_minimized(ainjector):
     assignments.do_assignments()
     assert o4.assignment == 1
     assignments.check_consistency()
+
+@async_test
+async def test_dump_load(ainjector):
+    o1 = AssignedObj(1,5)
+    o2 = AssignedObj(2,6)
+    o3 = AssignedObj(1,6)
+    o4 = AssignedObj(3,5)
+    objs = [o1, o2, o3, o4]
+    assignments = await ainjector(TestAssignments, objs)
+    assignments.do_assignments()
+    kvstore = ainjector.get_instance(KvStore)
+    kvstore.dump(state_dir/'dump.yml')
+    correct_assignments = {o.key:o.assignment for o in objs}
+    with kvstore.environment.begin(write=True) as txn, txn.cursor() as csr:
+        csr.first()
+        while csr.delete(): pass
+    kvstore.load(state_dir/'dump.yml')
+    assignments2 = await ainjector(TestAssignments, objs)
+    for o in objs: o.hash = 1 # so that without db do_assignments produces different results.
+    assignments2.do_assignments()
+    for o in objs:
+        assert o.assignment == correct_assignments[o.key]
+        
+    
