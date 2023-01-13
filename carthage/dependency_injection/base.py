@@ -703,7 +703,7 @@ Return the first injector in our parent chain containing *k* or None if there is
         except Exception as e:
             if filter_tracebacks:
                 tb_utils.filter_chatty_modules(e, _chatty_modules, None)
-            raise e from None
+            raise
         finally:
             if mark_instantiation_done and current_instantiation():
                 current_instantiation().done()
@@ -1217,7 +1217,7 @@ class AsyncInjector(Injectable):
         except Exception as e:
             if filter_tracebacks:
                 tb_utils.filter_chatty_modules(e, _chatty_modules, 1)
-            raise e from None
+            raise
 
     async def get_instance_async(self, k):
         futures = []
