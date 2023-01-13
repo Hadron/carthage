@@ -6,6 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import collections.abc
 import copy
 import dataclasses
 from ipaddress import *
@@ -45,6 +46,14 @@ class L3ConfigMixin:
             return result
         return wrapper
 
+    def _handle_pool(self, func):
+        def wrapper(pool):
+            assert isinstance(pool, collections.abc.Sequence)
+            assert len(pool) == 2, "Format of pool is (low, high)"
+            low, high = func(pool[0]), func(pool[1])
+            return low, high
+        return wrapper
+    
     def merge(self, merge_from):
         '''
         Return a new instance of a Networkconfig where values from *merge_from* augment values not set in *self*.  Typical usage::
@@ -70,8 +79,10 @@ class V4Config(L3ConfigMixin):
     address: IPv4Address = None
     gateway: IPv4Address = None
     masquerade: bool = False
-
-    _attributes = L3ConfigMixin._attributes | {'masquerade'}
+    #: Takes a lower bound and a upper bound, both specified as V4 addresses.  If specified and address is None, will assign the address between the lower and upper bound.  This allows addresses to be dynamically managed at modeling time rather than by DHCP at run time.  DHCP can still be used, but at least for models whose config includes *pool*, addresses will be statically configured in the dhcp server.
+    pool: tuple = None
+    
+    _attributes = L3ConfigMixin._attributes | {'masquerade', 'pool'}
 
     def __post_init__(self):
         # The following depends on iteration happening in dictionary
@@ -80,7 +91,9 @@ class V4Config(L3ConfigMixin):
                 address=IPv4Address,
                 network=IPv4Network,
                 gateway=ipv4_gateway,
-                dhcp_ranges=self._handle_dhcp_ranges(IPv4Address)).items():
+                dhcp_ranges=self._handle_dhcp_ranges(IPv4Address),
+                pool = self._handle_pool(IPv4Address),
+        ).items():
             val = getattr(self, k)
             if val is not None:
                 setattr(self, k, func(val))

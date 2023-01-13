@@ -7,13 +7,13 @@
 # LICENSE for details.
 
 import contextlib
-import fcntl
 import os
 import random
 import yaml
 from pathlib import Path
 from ..dependency_injection import *
 from ..config import ConfigLayout
+import carthage.kvstore
 
 
 def random_mac_addr():
@@ -27,29 +27,22 @@ __all__ = ['random_mac_addr']
 
 
 @inject_autokwargs(config_layout=ConfigLayout,
-                   injector=Injector)
-class MacStore(Injectable, dict):
+                   injector=Injector,
+                   kvstore=carthage.kvstore.KvStore)
+class MacStore(Injectable):
+
+    # If dealing with potential MAC conflicts is important, then
+    # rather than using KvStore directly, rewrite to use
+    # HintedAssignments.
 
     def __init__(self, **kwargs):
         from .base import NetworkConfig
         super().__init__(**kwargs)
         state_dir = Path(self.config_layout.state_dir)
         self.path = state_dir / "macs.yml"
+        self.domain = self.kvstore.domain('mac', True)
         self.load()
-        self.injector.parent_injector.add_event_listener(InjectionKey(NetworkConfig),
-                                                         "resolved", self._resolved_event)
-
-    def _resolved_event(self, key, event, target, *args, **kwargs):
-        self.persist()
-
-    @contextlib.contextmanager
-    def locked(self):
-        fd = os.open(self.path.with_suffix('.yml.lock'), os.O_CREAT | os.O_CLOEXEC | os.O_RDWR, 0o664)
-        try:
-            fcntl.lockf(fd, fcntl.LOCK_EX)
-            yield
-        finally:
-            os.close(fd)
+        
 
     def load(self):
         def recurse(current, base_key):
@@ -60,37 +53,29 @@ class MacStore(Injectable, dict):
                     self[base_key + (k,)] = v
 
         if self.path.exists():
-            with self.locked():
-                yaml_dict = yaml.safe_load(self.path.read_text())
+            yaml_dict = yaml.safe_load(self.path.read_text())
             assert isinstance(yaml_dict, dict)
             recurse(yaml_dict, tuple())
 
-    def persist(self):
-        def recurse(key, current, value):
-            if isinstance(key, tuple):
-                if len(key) == 1:
-                    current[key[0]] = value
-                else:
-                    current = current.setdefault(key[0], {})
-                    recurse(key[1:], current, value)
-            else:
-                current[key] = value
-        new_path = self.path.with_suffix(".yml.new")
-        os.makedirs(self.path.parent, exist_ok=True)
-        result = {}
-        for k, v in self.items():
-            recurse(k, result, v)
-        with self.locked():
-            new_path.write_text(yaml.dump(result, default_flow_style=False))
-            new_path.replace(self.path)
 
     def __getitem__(self, k):
-        if k in self:
-            return super().__getitem__(k)
-        res = self[k] = random_mac_addr()
+        k = self.handle_tuple_key(k)
+        res = self.domain.get(k)
+        if res: return res
+        res = random_mac_addr()
+        self[k] = res
         return res
 
+    def __setitem__(self, k, v):
+        k = self.handle_tuple_key(k)
+        self.domain[k] = v
+        return v
 
+    def handle_tuple_key(self, k):
+        if not isinstance(k, collections.abc.Sequence): return k
+        k_new = tuple(map( lambda component: component.replace('|','||'), k))
+        return "|".join(k)
+    
 __all__ += ['MacStore']
 
 from ..machine import AbstractMachineModel

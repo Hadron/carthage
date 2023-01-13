@@ -14,6 +14,7 @@ import carthage
 from carthage.pytest import *
 from carthage import *
 from carthage.kvstore import *
+from carthage.modeling import *
 
 class TestAssignments(HashedRangeAssignments):
 
@@ -175,4 +176,29 @@ async def test_dump_load(ainjector):
     for o in objs:
         assert o.assignment == correct_assignments[o.key]
         
+    
+class layout(CarthageLayout):
+    class config(NetworkConfigModel):
+        add('eth0', mac=None, net=injector_access('pool_network'),
+            )
+
+    @provides('pool_network')
+    class pool_network(NetworkModel):
+        v4_config = V4Config(
+            network='192.168.1.0/24',
+            dhcp=True,
+            pool=(
+                '192.168.1.10', '192.168.1.90'),
+        )
+
+    class a(MachineModel): pass
+    class b(MachineModel): pass
+
+@async_test
+async def test_network_pool(ainjector):
+    ainjector.add_provider(layout)
+    l = await ainjector.get_instance_async(layout)
+    kvstore = ainjector.get_instance(KvStore)
+    l.pool_network.assign_addresses()
+    breakpoint()
     

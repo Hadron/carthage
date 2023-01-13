@@ -143,13 +143,36 @@ class Network(AsyncInjectable):
     network_links: weakref.WeakSet
 
     def __init__(self, name, vlan_id=None, **kwargs):
+        import carthage.kvstore
         super().__init__(**kwargs)
         self.name = name
         self.vlan_id = vlan_id
         self.injector.add_provider(this_network, self)
+        self.injector.add_provider(carthage.kvstore.V4Pool)
         self.technology_networks = []
         self.network_links = weakref.WeakSet()
 
+    def add_network_link(self, link:NetworkLink):
+        '''Indicate that  a network link has been added.  After this function teruns *link* in in *self.network_links*.
+        '''
+        self.network_links.add(link)
+        self.injector.emit_event(
+            InjectionKey(Network), "add_link",
+            self, link=link,
+            adl_keys={InjectionKey(Network, name=self.name)})
+
+    def assign_addresses(self, link:NetworkLink=None):
+        '''If links have addresses assigned from a :class:`carthage.kvstore.V4Pool`, assign those addresses.
+
+        :param link: If non-None, only assign addresses for the given link.
+        '''
+        import carthage.kvstore
+        pool = self.injector.get_instance(carthage.kvstore.V4Pool)
+        if link:
+            return pool.assignment_loop([link])
+        pool.new_assignments()
+        pool.assignment_loop(self.network_links)
+        
     async def access_by(self, cls: TechnologySpecificNetwork):
         '''Request a view of *self* using *cls* as a technology-specific lens.
 
@@ -611,7 +634,7 @@ class NetworkLink:
         self.machine = connection
         self.interface = interface
         self.__dict__.update(args)
-        self.net.network_links.add(self)
+        self.net.add_network_link(self)
         for k in NetworkLink.__annotations__:
             if not hasattr(self, k):
                 setattr(self, k, None)
