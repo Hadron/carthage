@@ -45,6 +45,10 @@ class DebianContainerCustomizations(ContainerCustomization):
 
     @setup_task("Turn on networkd")
     async def turn_on_networkd(self):
+        root = Path(self.path)
+        if not root.joinpath("usr/bin/resolvectl").exists():
+            await self.container_command('apt', 'update')
+            await self.container_command('apt', '-y', 'install', 'systemd-resolved')
         await self.container_command("systemctl", "enable", "systemd-networkd", "systemd-resolved")
 
     @setup_task("Install python and dbus")
@@ -99,7 +103,7 @@ class DebianContainerImage(ContainerImage):
 
     @setup_task("unpack using debootstrap")
     async def unpack_container_image(self):
-        await sh.debootstrap('--include=openssh-server',
+        await sh.debootstrap('--include=openssh-server,ca-certificates',
                              *(self.debootstrap_options.split()),
                              self.distribution,
                              self.path, self.stage1_mirror,
@@ -116,11 +120,12 @@ class DebianContainerImage(ContainerImage):
         except FileNotFoundError:
             pass
 
-    debian_customizations = customization_task(DebianContainerCustomizations)
 
     @setup_task("Update mirror")
     def update_mirror(self):
         update_mirror(self.path, self.mirror, self.distribution, self.include_security)
+
+    debian_customizations = customization_task(DebianContainerCustomizations)
 
 
 __all__ += ['DebianContainerImage']
