@@ -88,6 +88,15 @@ class Injectable:
     This class does not have :class:`Injector` as an injected dependency.  It is possible to have injected dependencies without doing so.  However, in a dependency is *Injector*, then that injector will be :meth:`claimed <Injector.claim>`.
 
     '''
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Call inject to deal better with multiple inheritance and dependencies
+        try: inject()(cls)
+        except NameError:
+            if 'inject' not in globals():
+                #inject not yet defined
+                return
+            raise
 
     def __init__(self, *args, **kwargs):
         autokwargs = set(getattr(self, '_injection_autokwargs', set()))
