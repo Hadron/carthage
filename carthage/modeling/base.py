@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -17,6 +17,7 @@ from .decorators import *
 from carthage.dependency_injection import *  # type: ignore
 from carthage.utils import when_needed, memoproperty
 from carthage import ConfigLayout, SetupTaskMixin
+import carthage.kvstore
 import carthage.network
 import carthage.machine
 from .utils import *
@@ -447,6 +448,7 @@ class MachineImplementation(AsyncInjectable):
 __all__ += ['MachineModel', 'MachineModelMixin']
 
 
+@inject(persistent_seed_path=InjectionKey(carthage.kvstore.persistent_seed_path, _optional=True))
 class CarthageLayout(ModelGroup):
 
     @classmethod
@@ -458,6 +460,15 @@ class CarthageLayout(ModelGroup):
 
     layout_name = None
 
+    def __init__(self, persistent_seed_path=None, **kwargs):
+        super().__init__(**kwargs)
+        if persistent_seed_path:
+            seed_path = Path(persistent_seed_path)
+            if path.exists(seed_path):
+                kvstore = self.injector.get_instance(carthage.kvstore.KvStore)
+                if not kvstore.persistent_seed_path:
+                    kvstore.load(str(seed_path))
+                    
 
 __all__ += ['CarthageLayout']
 
