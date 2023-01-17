@@ -6,6 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import collections.abc
 import contextlib
 import os
 import random
@@ -68,7 +69,7 @@ class MacStore(Injectable):
 
     def __setitem__(self, k, v):
         k = self.handle_tuple_key(k)
-        self.domain[k] = v
+        self.domain.put(k, v, overwrite=True)
         return v
 
     def handle_tuple_key(self, k):

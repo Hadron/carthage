@@ -16,7 +16,7 @@ import lmdb
 from .dependency_injection import *
 from .config import ConfigLayout
 from .utils import memoproperty
-import carthage.network
+
 
 __all__ = []
 
@@ -52,7 +52,7 @@ class KvStore(Injectable):
         self.environment = lmdb.Environment(
             str(store_path), subdir=True,
             max_dbs=512,
-            map_size=maxsize,
+            map_size=max_size,
             create=True,
             writemap=True)
         if self.persistent_seed_path:
@@ -306,7 +306,7 @@ Called in subclasses to indicate that an assignment should be made.  :meth:`reco
         self._assignments_made[key] = str(assignment)
         return True
 
-    def force_assignment(key, obj, assignment):
+    def force_assignment(self, key, obj, assignment):
         '''Force recording within the data store that *obj* identified by *key* has *assignment* as its assignment.  This is intended for dealing with statically assigned assignments that fall into the range that is automatically managed.  Does not call :meth:`record_assignment`
         '''
         self._assignments.put(key, str(assignment), overwrite=True)
@@ -415,72 +415,3 @@ class HashedRangeAssignments(HintedAssignments):
 
 __all__ += ['HashedRangeAssignments']
 
-@inject_autokwargs(
-    injector=Injector,
-    network=carthage.network.this_network)
-class V4Pool(HashedRangeAssignments):
-
-    def __init__(self, domain=None, **kwargs):
-        network = kwargs['network']
-        if domain is None:
-            domain = network.name+'/v4_pool'
-        super().__init__(domain=domain, **kwargs)
-        self.network = network
-        self.network.injector.add_event_listener(InjectionKey(carthage.Network), 'add_link', self._invalidate_caches_cb)
-        # It is not guaranteed that all models will be instantiated
-        # prior to address assignment, but in the common cases such as
-        # CarthageLayout's async_ready calling layout level
-        # resolve_networking, that will be the case.  The consequences
-        # if we get this wrong are limited if prefer_reallocation is
-        # False (the default).  We will prefer to use up all the
-        # addresses before reusing them.  It would be possible to more
-        # accurately set this setting, for example by looking up
-        # CarthageLayout and triggering on resolve_networking or
-        # similar.  Doing so would require a dependency on the
-        # modeling layer (or some abstract base class to use) and a
-        # way to do downward-directed events, which is not easy in
-        # January of 2023.
-        self.enable_key_validation()
-
-    def close(self):
-        try:
-            self.network.remove_event_listener(InjectionKey(Network), self._invalidate_caches_cb)
-        except BaseException: pass
-
-    def _invalidate_caches_cb(self, *args, **kwargs):
-        try: del self.valid_keys
-        except AttributeError: pass
-
-    @memoproperty
-    def valid_keys(self):
-        keys = set()
-        for l in self.network.network_links:
-            keys.add(self.link_key(l))
-        return frozenset(keys)
-
-    def find_bounds(self, link):
-        v4_config = link.merged_v4_config
-        if v4_config is None: return
-        if v4_config.pool is None: return None
-        return v4_config.pool
-
-    def record_assignment(self, key, obj, assignment):
-        if obj.v4_config is None:
-            obj.v4_config = carthage.network.V4Config()
-        obj.v4_config.address = IPv4Address(assignment)
-        try: del obj.merged_v4_config
-        except AttributeError: pass
-
-    def link_key(self, link):
-        return f'{link.machine.name}|{link.interface}'
-
-    def assignment_loop(self, links):
-        for link in links:
-            bounds = self.find_bounds(link)
-            if not bounds: continue
-            key = self.link_key(link)
-            if link.v4_config and link.v4_config.address:
-                self.force_assignment(key, link, link.v4_config.address)
-            else:
-                self._assign(key, link)
-                

@@ -20,6 +20,7 @@ from .. import sh
 from ..dependency_injection import *
 from ..config import ConfigLayout
 from ..utils import permute_identifier, when_needed, memoproperty, is_optional_type, get_type_args
+import carthage.kvstore
 from ..machine import ssh_origin, ssh_origin_vrf, Machine, AbstractMachineModel
 from .config import V4Config
 ssh_origin_vrf_key = ssh_origin_vrf
@@ -148,7 +149,7 @@ class Network(AsyncInjectable):
         self.name = name
         self.vlan_id = vlan_id
         self.injector.add_provider(this_network, self)
-        self.injector.add_provider(carthage.kvstore.V4Pool)
+        self.injector.add_provider(V4Pool)
         self.technology_networks = []
         self.network_links = weakref.WeakSet()
 
@@ -167,7 +168,7 @@ class Network(AsyncInjectable):
         :param link: If non-None, only assign addresses for the given link.
         '''
         import carthage.kvstore
-        pool = self.injector.get_instance(carthage.kvstore.V4Pool)
+        pool = self.injector.get_instance(V4Pool)
         if link:
             return pool.assignment_loop([link])
         pool.new_assignments()
@@ -912,5 +913,78 @@ VlanList collect_vlans
 hash_network_links
 this_network
     '''.split()
+@inject_autokwargs(
+    injector=Injector,
+    network=this_network)
+class V4Pool(carthage.kvstore.HashedRangeAssignments):
+
+    def __init__(self, domain=None, **kwargs):
+        network = kwargs['network']
+        if domain is None:
+            domain = network.name+'/v4_pool'
+        super().__init__(domain=domain, **kwargs)
+        self.network = network
+        self.network.injector.add_event_listener(InjectionKey(carthage.Network), 'add_link', self._invalidate_caches_cb)
+        # It is not guaranteed that all models will be instantiated
+        # prior to address assignment, but in the common cases such as
+        # CarthageLayout's async_ready calling layout level
+        # resolve_networking, that will be the case.  The consequences
+        # if we get this wrong are limited if prefer_reallocation is
+        # False (the default).  We will prefer to use up all the
+        # addresses before reusing them.  It would be possible to more
+        # accurately set this setting, for example by looking up
+        # CarthageLayout and triggering on resolve_networking or
+        # similar.  Doing so would require a dependency on the
+        # modeling layer (or some abstract base class to use) and a
+        # way to do downward-directed events, which is not easy in
+        # January of 2023.
+        self.enable_key_validation()
+
+    def close(self):
+        try:
+            self.network.remove_event_listener(InjectionKey(Network), self._invalidate_caches_cb)
+        except BaseException: pass
+
+    def _invalidate_caches_cb(self, *args, **kwargs):
+        try: del self.valid_keys
+        except AttributeError: pass
+
+    @memoproperty
+    def valid_keys(self):
+        keys = set()
+        for l in self.network.network_links:
+            keys.add(self.link_key(l))
+        return frozenset(keys)
+
+    def find_bounds(self, link):
+        v4_config = link.merged_v4_config
+        if v4_config is None: return
+        if v4_config.pool is None: return None
+        return v4_config.pool
+
+    def record_assignment(self, key, obj, assignment):
+        if obj.v4_config is None:
+            obj.v4_config = carthage.network.V4Config()
+        obj.v4_config.address = IPv4Address(assignment)
+        try: del obj.merged_v4_config
+        except AttributeError: pass
+
+    def link_key(self, link):
+        return f'{link.machine.name}|{link.interface}'
+
+    def assignment_loop(self, links):
+        for link in links:
+            bounds = self.find_bounds(link)
+            if not bounds: continue
+            key = self.link_key(link)
+            if link.v4_config and link.v4_config.address:
+                self.force_assignment(key, link, link.v4_config.address)
+            else:
+                self._assign(key, link)
+    def str_to_assignment(self, assignment):
+        return IPv4Address(assignment)
+    
+                
+__all__ += ['V4Pool']
 
 from . import links as network_links
