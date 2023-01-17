@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -25,9 +25,15 @@ __all__ += carthage.dependency_injection.__all__
 
 from .config import ConfigLayout, config_key, ConfigSchema
 __all__ += ['ConfigLayout', 'config_key', 'ConfigSchema']
-from .network import Network, NetworkConfig, MacStore, V4Config
 
-__all__ += ['Network', 'NetworkConfig', 'MacStore', 'V4Config']
+
+from .kvstore import KvStore, KvConsistency,AssignmentsExhausted
+
+from .network import Network, NetworkConfig, MacStore, V4Config, V4Pool
+
+__all__ += ['Network', 'NetworkConfig', 'MacStore', 'V4Config', 'V4Pool']
+
+
 
 from .machine import Machine, AbstractMachineModel, MachineCustomization, ContainerCustomization, FilesystemCustomization, customization_task, BareMetalMachine
 import carthage.ssh  # ssh import must come after machine
@@ -84,6 +90,7 @@ carthage.config.inject_config(base_injector)
 base_injector.add_provider(ssh.SshKey)
 base_injector.add_provider(ssh.AuthorizedKeysFile)
 base_injector.add_provider(asyncio.get_event_loop(), close=False)
+base_injector.add_provider(KvStore)
 base_injector.add_provider(MacStore)
 base_injector.add_provider(ansible.AnsibleConfig)
 base_injector.add_provider(carthage.network.external_network)
