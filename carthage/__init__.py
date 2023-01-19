@@ -27,7 +27,11 @@ from .config import ConfigLayout, config_key, ConfigSchema
 __all__ += ['ConfigLayout', 'config_key', 'ConfigSchema']
 
 
-from .kvstore import KvStore, KvConsistency,AssignmentsExhausted
+from .kvstore import KvStore, KvConsistency,AssignmentsExhausted, persistent_seed_path
+
+__all__ += ['persistent_seed_path']
+
+
 
 from .network import Network, NetworkConfig, MacStore, V4Config, V4Pool
 

@@ -78,7 +78,7 @@ class KvStore(Injectable):
                 assert txn.put(b'dump:'+bytes(d, 'utf-8'), b'true', True)
         return KvDomain(self, d)
 
-    def dump(self, file):
+    def dump(self, file, filter):
         domains = set()
         file = Path(file)
         result = dict()
@@ -94,7 +94,10 @@ class KvStore(Injectable):
                 for key, value in csr:
                     if not key.startswith(domain_key): continue
                     key = key[len(domain_key):]
-                    domain_result[str(key, 'utf-8')] = str(value, 'utf-8')
+                    key_str = str(key, 'utf-8')
+                    value_str = str(value, 'utf-8')
+                    if filter(str(d, 'utf-8'), key_str, value_str):
+                        domain_result[key_str] = value_str
                 result[str(d, 'utf-8')] = domain_result
         file.write_text(yaml.dump(result, default_flow_style=False))
 
