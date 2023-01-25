@@ -73,6 +73,7 @@ class MacStore(Injectable):
         return v
 
     def handle_tuple_key(self, k):
+        if isinstance(k, str): return k
         if not isinstance(k, collections.abc.Sequence): return k
         k_new = tuple(map( lambda component: component.replace('|','||'), k))
         return "|".join(k)
