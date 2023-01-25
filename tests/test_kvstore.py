@@ -164,7 +164,7 @@ async def test_dump_load(ainjector):
     assignments = await ainjector(TestAssignments, objs)
     assignments.do_assignments()
     kvstore = ainjector.get_instance(KvStore)
-    kvstore.dump(state_dir/'dump.yml')
+    kvstore.dump(state_dir/'dump.yml', lambda d, k,v: True)
     correct_assignments = {o.key:o.assignment for o in objs}
     with kvstore.environment.begin(write=True) as txn, txn.cursor() as csr:
         csr.first()
@@ -200,5 +200,4 @@ async def test_network_pool(ainjector):
     l = await ainjector.get_instance_async(layout)
     kvstore = ainjector.get_instance(KvStore)
     l.pool_network.assign_addresses()
-    breakpoint()
     
