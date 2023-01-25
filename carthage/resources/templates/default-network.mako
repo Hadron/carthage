@@ -4,6 +4,8 @@
 <%
 from carthage.systemd import NotNeeded
 v4_config = link.merged_v4_config
+if v4_config.pool:
+    link.net.assign_addresses(link)
 %>\
 <% nontrivial = False %>\
 %if v4_config.dhcp:
