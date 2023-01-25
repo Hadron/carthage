@@ -30,7 +30,7 @@ async def test_async_test():
 
 @async_test
 async def test_async_test_with_loop(loop):
-    return True
+    assert loop
 
 
 @async_test
