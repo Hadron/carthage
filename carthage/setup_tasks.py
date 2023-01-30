@@ -377,6 +377,7 @@ class SetupTaskMixin:
             if stamp:
                 task.stamp = stamp
         self.setup_tasks.append(task)
+        # xxx reorder either here or in run_setup_tasks
 
     async def run_setup_tasks(self, context=None):
         '''Run the set of collected setup tasks.  If context is provided, it
