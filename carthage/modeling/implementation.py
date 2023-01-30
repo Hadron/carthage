@@ -19,6 +19,7 @@ from carthage.dependency_injection.base import InjectorXrefMarker
 from .utils import *
 from carthage.network import NetworkConfig
 import carthage.machine
+import carthage.console
 # There is a circular import of decorators at the end.
 
 thread_local = threading.local()
@@ -346,7 +347,7 @@ __all__ += ["ModelingBase"]
 
 class InjectableModelType(ModelingBase):
 
-    classes_to_inject: typing.Sequence[type] = (NetworkConfig, )
+    classes_to_inject: typing.Sequence[type] = (NetworkConfig, carthage.console.CarthageRunnerCommand)
     _callbacks: typing.List[typing.Callable]
 
     def _handle_provides(target_cls, ns, k, state):
@@ -421,8 +422,9 @@ class InjectableModelType(ModelingBase):
             None, dict(close=False, allow_multiple=False))
 
     @modelmethod
-    def self_provider(cls, ns, k: InjectionKey):
+    def self_provider(cls, ns, k: InjectionKey=None):
         def callback(inst):
+            if k is None: k = inst.default_instance_injection_key()
             inst.injector.add_provider(k, dependency_quote(inst))
         cls._add_callback(ns, callback)
 

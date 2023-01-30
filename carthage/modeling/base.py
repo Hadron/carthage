@@ -215,9 +215,11 @@ __all__ += ['machine_implementation_key']
 dependency_quote_class(carthage.machine.BaseCustomization)
 
 
-class MachineModelType(ModelingContainer):
+class RoleType(ModelingContainer):
 
     classes_to_inject = (carthage.machine.BaseCustomization,)
+
+class MachineModelType(RoleType):
 
     namespace_filters = [_handle_base_customization]
 
@@ -447,6 +449,9 @@ class MachineImplementation(AsyncInjectable):
 
 __all__ += ['MachineModel', 'MachineModelMixin']
 
+class ImageRole(InjectableModel, metaclass=RoleType): pass
+
+__all__ += ['ImageRole']
 
 @inject(persistent_seed_path=InjectionKey(carthage.kvstore.persistent_seed_path, _optional=True))
 class CarthageLayout(ModelGroup):
@@ -462,6 +467,7 @@ class CarthageLayout(ModelGroup):
 
     def __init__(self, persistent_seed_path=None, **kwargs):
         super().__init__(**kwargs)
+        self.injector.add_provider(InjectionKey(CarthageLayout), dependency_quote(self))
         if persistent_seed_path:
             seed_path = Path(persistent_seed_path)
             if path.exists(seed_path):
