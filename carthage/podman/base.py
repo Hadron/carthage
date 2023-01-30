@@ -1,4 +1,4 @@
-# Copyright (C)  2022, Hadron Industries, Inc.
+# Copyright (C)  2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -174,6 +174,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
     #: Timeout in seconds to wait when stopping a container
     stop_timeout = 10
     machine_running_ssh_online = False
+    rsync_uses_filesystem_access = True
 
     #: restart containers (no, always, on-failure)
     podman_restart = 'no'
@@ -368,6 +369,9 @@ class PodmanImageBuilderContainer(PodmanContainer):
             return
         customization.customization_context = customization_context()
 
+    @memoproperty
+    def model(self):
+        return self.injector.get_instance(InjectionKey(PodmanImage, _ready=False))
 
 @inject_autokwargs(
     base_image=InjectionKey(oci_container_image, _optional=NotPresent),
@@ -382,6 +386,10 @@ class PodmanImage(OciImage, SetupTaskMixin):
     '''
 
     last_layer = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.layer_number = 1
 
     async def pull_base_image(self):
         if isinstance(self.base_image, OciImage):
@@ -455,8 +463,9 @@ class PodmanImage(OciImage, SetupTaskMixin):
         layer_container = await self.ainjector(
             PodmanImageBuilderContainer,
             oci_container_image=base_image,
-            name=f'carthage-image-build-{id(self)}',
+            name=f'carthage-image-build-{id(self)}-l{self.layer_number}',
         )
+        self.layer_number += 1
         try:
             await layer_container.start_machine()
             yield layer_container

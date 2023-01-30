@@ -1,10 +1,11 @@
-# Copyright (C)  2022, Hadron Industries, Inc.
+# Copyright (C)  2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
+import typing
 
 from carthage.modeling import *
 import carthage.modeling.implementation
@@ -77,8 +78,48 @@ class PodmanPodModel(PodmanPod, InjectableModel, metaclass=carthage.modeling.imp
 __all__ += ['PodmanPodModel']
 
 
-class PodmanImageModel(PodmanImage, InjectableModel):
-    pass
+class PodmanImageModel(PodmanImage, ImageRole):
 
+    '''
+    Like a :class:`PodmanImage` excetp:
+
+    * This is an :class:`InjectableModel` so modeling language constructs can be used
+
+    * Any :class:`FilesystemCustomization` or :class:`ContainerCustomization` that are registered with the injector are automatically treated as image layers **after** any explicit setup_tasks.
+
+    '''
+
+    # We need to have some of the attributes from AbstractMachineModel so that start_machine can work
+    override_dependencies: typing.Union[bool, Injector, Injectable, InjectionKey] = False
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.injected_tasks_added = False
+        self.injector.add_provider(InjectionKey(PodmanImageModel), self)
+
+    def add_injected_tasks(self):
+        for k, customization in self.injector.filter_instantiate(
+                carthage.machine.BaseCustomization, [
+                    'description'], stop_at=self.injector):
+            if issubclass(customization, (
+                    carthage.machine.ContainerCustomization,
+                    carthage.machine.FilesystemCustomization,
+                    )):
+                self.add_setup_task(image_layer_task(customization))
+            else:
+                logger.warn(f'{customization} is an inappropriate customization for {self}')
+        self.injected_tasks_added = True
+
+    async def build_image(self):
+        if not self.injected_tasks_added:
+            self.add_injected_tasks()
+        return await super().build_image()
+
+    def __init_subclass__(cls, **kwargs):
+        if issubclass(cls, MachineModel):
+            raise TypeError(cls.__name__+' should not be both a PodmanImageModel and MachineModel.  This probably means you tried to add a role that is not an ImageRole to a PodmanImageModel')
+        super().__init_subclass__(**kwargs)
+        
+        
 
 __all__ += ['PodmanImageModel']
