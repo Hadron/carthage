@@ -109,15 +109,14 @@ class TaskWrapperBase:
             context.done()
 
         def callback(fut):
-            try:
-                res = fut.result()
+            exc = fut.exception()
+            if exc is None:
                 success()
-            except SkipSetupTask:
+            elif isinstance(exc,SkipSetupTask):
                 pass
-            except Exception:
+            else:
                 fail()
-            finally:
-                final()
+            final()
         mark_context_done = True
         with contextlib.ExitStack() as stack:
             context = current_instantiation()
