@@ -1,0 +1,5 @@
+name: oci_images
+config:
+  plugins:
+    - carthage.podman
+    - https://github.com/hadron/carthage_base
