@@ -1,4 +1,4 @@
-# Copyright (C) 2021, Hadron Industries, Inc.
+# Copyright (C) 2021, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -30,6 +30,12 @@ def injector():
     config.base_dir = str(base_dir)
     yield injector
     injector.close()
+    try: shutil.rmtree(base_dir)
+    except Exception: pass
+
+@pytest.fixture()
+def ainjector(injector):
+    return injector(AsyncInjector)
 
 
 def test_modeling_class_injection(injector):
@@ -397,3 +403,37 @@ async def test_globally_unique_with_name(ainjector):
     l = await ainjector(outer)
     ainjector = l.ainjector
     await ainjector.get_instance_async('comcast_net')
+@async_test
+async def test_task_ordering(ainjector):
+    "Test that role tasks follow the order of python inheritance"
+    class Layout(CarthageLayout):
+        class first(MachineModel, template=True):
+            class first_cust(BaseCustomization):
+                @setup_task("Should run first")
+                def first_task(self):
+                    nonlocal first_run
+                    first_run = True
+
+        class second(MachineModel, template=True):
+
+            class cust(BaseCustomization):
+                @setup_task("Should run second")
+                def second_task(self):
+                    nonlocal second_run
+                    assert first_run
+                    second_run = True
+
+        # Assume first and second are roles.  The left most (least
+        # inherited) role should have its tasks run last
+        class machine(second, first):
+            pass
+
+    first_run = False
+    second_run = False
+    ainjector.add_provider(Layout)
+    ainjector.add_provider(machine_implementation_key, dependency_quote(LocalMachine))
+    layout = await ainjector.get_instance_async(Layout)
+    await layout.machine.machine.async_become_ready()
+    assert first_run
+    assert second_run
+    

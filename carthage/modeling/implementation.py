@@ -378,7 +378,7 @@ class InjectableModelType(ModelingBase):
             transclusions_initial.add((ko, ki, self))
         self.__transclusions__ = transclusions_initial
         initial_injections = dict()
-        for c in bases:
+        for c in reversed(bases):
             if hasattr(c, '__initial_injections__'):
                 initial_injections.update(c.__initial_injections__)
         initial_injections.update(to_inject)
