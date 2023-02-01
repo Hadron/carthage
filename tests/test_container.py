@@ -61,7 +61,7 @@ class LayoutTest(ModelGroup):
             await super().async_ready()
             from carthage.network import BridgeNetwork
             net = await self.ainjector(self.access_by, BridgeNetwork)
-            sh.ip(
+            await sh.ip(
                 "addr",
                 "add", "10.2.0.1/24", "dev", net.bridge_name)
 

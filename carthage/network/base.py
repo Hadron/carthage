@@ -87,7 +87,7 @@ class NetworkInterface:
 
     def delete_networking():
         try:
-            sh.ip("link", "del", self.ifname)
+            sh.ip("link", "del", self.ifname, _bg=False)
         except sh.ErrorReturnCode:
             pass
         self.closed = True
@@ -242,13 +242,13 @@ class BridgeNetwork(TechnologySpecificNetwork):
 
     async def async_ready(self):
         try:
-            sh.ip('link', 'show', self.bridge_name)
+            sh.ip('link', 'show', self.bridge_name, _bg=False)
         except sh.ErrorReturnCode_1:
-            sh.ip('link', 'add', self.bridge_name, 'type', 'bridge')
+            sh.ip('link', 'add', self.bridge_name, 'type', 'bridge', _bg=False)
             sh.ip("link", "set", self.bridge_name,
                   "type", "bridge", "stp_state", "1",
-                  "forward_delay", "3")
-            sh.ip("link", "set", self.bridge_name, "up")
+                  "forward_delay", "3", _bg=False)
+            sh.ip("link", "set", self.bridge_name, "up", _bg=False)
         return await super().async_ready()
 
     def close(self):
@@ -269,7 +269,7 @@ class BridgeNetwork(TechnologySpecificNetwork):
                 logger.debug("Error deleting interface {}".format(i))
         if self.delete_bridge:
             logger.info("Network {} bringing down {}".format(self.name, self.bridge_name))
-            sh.ip('link', 'del', self.bridge_name)
+            sh.ip('link', 'del', self.bridge_name, _bg=False)
             self.closed = True
 
     def __del__(self):
@@ -278,7 +278,7 @@ class BridgeNetwork(TechnologySpecificNetwork):
     def add_member(self, interface):
         sh.ip("link", "set",
               interface.ifname,
-              "master", self.bridge_name, "up")
+              "master", self.bridge_name, "up", _bg=False)
         # We also keep a reference so that if it is a weak interface off another object it is not GC'd
         self.members.append(interface)
 
@@ -295,13 +295,13 @@ class BridgeNetwork(TechnologySpecificNetwork):
         logger.debug('Network {} creating virtual ethernet for {}'.format(self.name, link.machine.name))
         try:
             sh.ip('link', 'add', 'dev', bridge_member,
-                  *args)
+                  *args, _bg=False)
         except sh.ErrorReturnCode_2:
             logger.warn("Network {}: {} appears to exist; deleting".format(self.name, bridge_member))
-            sh.ip('link', 'del', bridge_member)
+            sh.ip('link', 'del', bridge_member, _bg=False)
             sh.ip('link', 'add', 'dev', bridge_member,
                   *args)
-        sh.ip('link', 'set', bridge_member, 'master', self.bridge_name, 'up')
+        sh.ip('link', 'set', bridge_member, 'master', self.bridge_name, 'up', _bg=False)
         ve = VethInterface(network=self, ifname=bridge_member, internal_name=link.interface, delete_interface=False)
         self.interfaces[bridge_member] = ve
         return ve
@@ -314,7 +314,7 @@ class BridgeNetwork(TechnologySpecificNetwork):
                   "link", self.bridge_name,
                   "name", ifname,
                   "type", "vlan",
-                  "id", id)
+                  "id", id, _bg=False)
         except sh.ErrorReturnCode_2:
             logger.warn("{} appears to already exist".format(ifname))
         self.interfaces[ifname] = iface
