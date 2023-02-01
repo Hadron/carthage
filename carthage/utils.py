@@ -260,7 +260,7 @@ def carthage_main_setup(parser=None, unknown_ok=False):
         return 1
     console_handler.addFilter(container_debug_filter)
     if not args.command_verbose:
-        logging.getLogger('carthage.sh').setLevel(logging.ERROR)
+        logging.getLogger('sh').setLevel(logging.ERROR)
         logging.getLogger('carthage.sh').propagate = False
         logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
         logging.getLogger('urllib3.connectionpool').propagate = False
