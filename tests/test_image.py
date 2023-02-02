@@ -33,7 +33,7 @@ def a_injector():
 async def test_btrfs_volume_base(a_injector, loop):
     cl = await a_injector(ConfigLayout)
     try:
-        sh.btrfs("filesystem", "df", cl.image_dir)
+        sh.btrfs("filesystem", "df", cl.image_dir, _bg=False)
     except sh.ErrorReturnCode:
         pytest.skip("image_dir not on btrfs volume")
     assert not os.path.exists(os.path.join(cl.image_dir, "foo")), "The volume directory already exists"
@@ -48,7 +48,7 @@ async def test_btrfs_volume_base(a_injector, loop):
 async def test_btrfs_clone(a_injector, loop):
     cl = await a_injector(ConfigLayout)
     try:
-        sh.btrfs("filesystem", "df", cl.image_dir)
+        sh.btrfs("filesystem", "df", cl.image_dir, _bg=False)
     except sh.ErrorReturnCode:
         pytest.skip("image_dir is not btrfs")
     vol = await a_injector(ContainerVolume, implementation=BtrfsVolume, name="foo2")
