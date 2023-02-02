@@ -287,7 +287,7 @@ class Container(Machine, SetupTaskMixin):
     def container_leader(self):
         return str(sh.machinectl('-pLeader', '--value', 'show', self.full_name,
                                  _in="/dev/null",
-                                 _tty_out=False,
+                                 _tty_out=False, _bg=False
                                  ).stdout,
                    'utf-8').strip()
 

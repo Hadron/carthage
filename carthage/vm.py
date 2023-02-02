@@ -139,14 +139,14 @@ class VM(Machine, SetupTaskMixin):
             for i in range(10):
                 await asyncio.sleep(5)
                 try:
-                    sh.virsh('domid', self.full_name)
+                    sh.virsh('domid', self.full_name, _bg=False)
                 except sh.ErrorReturnCode_1:
                     # it's shut down
                     self.running = False
                     break
             if self.running:
                 try:
-                    sh.virsh('destroy', self.full_name)
+                    sh.virsh('destroy', self.full_name, _bg=False)
                 except sh.ErrorReturnCode:
                     pass
                 self.running = False
@@ -160,7 +160,7 @@ class VM(Machine, SetupTaskMixin):
         if (not self.config_layout.persist_local_networking) or self.config_layout.delete_volumes:
             if self.running:
                 try:
-                    sh.virsh("destroy", self.full_name)
+                    sh.virsh("destroy", self.full_name, _bg=False)
                     self.running = False
                 except Exception:
                     pass
@@ -195,7 +195,7 @@ class VM(Machine, SetupTaskMixin):
 
     async def is_machine_running(self):
         try:
-            sh.virsh('domid', self.full_name)
+            sh.virsh('domid', self.full_name, _bg=False)
             self.running = True
         except sh.ErrorReturnCode_1:
             self.running = False
@@ -238,7 +238,7 @@ class VM(Machine, SetupTaskMixin):
             "password": "aces",
             "user": "aces",
             "port": self.console_port.port,
-            "host": sh.hostname('--fqdn', _encoding='utf-8').strip(),
+            "host": sh.hostname('--fqdn', _encoding='utf-8', _bg=False).strip(),
             "description": self.full_name,
             "type": "spice",
             "ca": self.vm_ca(),

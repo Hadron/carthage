@@ -70,7 +70,7 @@ class BtrfsVolume(ContainerVolumeImplementation):
                         subvols.append(dir)
 
             for vol in reversed(subvols):
-                sh.btrfs('subvolume', 'delete', vol, )
+                sh.btrfs('subvolume', 'delete', vol, _bg=False)
         self.closed = True
         super().close(canceled_futures)
 
@@ -78,7 +78,7 @@ class BtrfsVolume(ContainerVolumeImplementation):
         try:
             if os.path.exists(self.path):
                 try:
-                    sh.btrfs("subvolume", "show", str(self.path))
+                    sh.btrfs("subvolume", "show", str(self.path), _bg=False)
                 except sh.ErrorReturnCode:
                     raise RuntimeError("{} is not a btrfs subvolume but already exists".format(self.path))
                 # If we're here it is a btrfs subvolume
@@ -141,7 +141,7 @@ class ContainerVolume(AsyncInjectable, SetupTaskMixin):
             try:
                 sh.btrfs(
                     "filesystem", "df", str(path.parent),
-                )
+                    _bg=False)
                 implementation = BtrfsVolume
             except sh.ErrorReturnCode:
                 implementation = ReflinkVolume
@@ -274,7 +274,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
             if create_size:
                 with open(self.path, "w") as f:
                     try:
-                        sh.chattr("+C", self.path)
+                        sh.chattr("+C", self.path, _bg=False)
                     except sh.ErrorReturnCode_1:
                         pass
             self.create_size = create_size
@@ -363,16 +363,16 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         with image_mounted(self.path, mount=False) as i:
             with TemporaryDirectory() as d:
                 sh.mount('-osubvol=@',
-                         i.rootdev, d)
+                         i.rootdev, d, _bg=False)
                 i.rootdir = d
                 try:
                     yield i
                 finally:
                     for i in range(5):
                         try:
-                            sh.sync()
-                            sh.umount(d)
-                            sh.sync()
+                            sh.sync(_bg=False)
+                            sh.umount(d,_bg=False)
+                            sh.sync(_bg=False)
                             time.sleep(5)
                             break
                         except sh.ErrorReturnCode as e:
@@ -431,7 +431,7 @@ class QcowCloneVolume(Injectable):
             sh.qemu_img(
                 'create', '-fqcow2',
                 '-obacking_file=' + volume.path,
-                str(self.path))
+                str(self.path),_bg=False)
 
     def delete_volume(self):
         try:
