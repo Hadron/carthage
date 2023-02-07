@@ -57,7 +57,7 @@ source_suffix = ['.rst', '.md']
 # The master toctree document.
 master_doc = 'index'
 
-autodoc_mock_imports = r'mako iso8601 OpenSSL yaml'.split()
+autodoc_mock_imports = r'mako iso8601 OpenSSL'.split()
 autodoc_default_flags = ['members', 'show-inheritance']
 
 # General information about the project.

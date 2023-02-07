@@ -2,3 +2,4 @@ mako
 sphinx
 python-dateutil
 lmdb
+pyyaml
