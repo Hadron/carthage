@@ -431,6 +431,7 @@ class QcowCloneVolume(Injectable):
             sh.qemu_img(
                 'create', '-fqcow2',
                 '-obacking_file=' + volume.path,
+                '-obacking_fmt='+volume.qemu_config(dict())['driver'],
                 str(self.path),_bg=False)
 
     def delete_volume(self):

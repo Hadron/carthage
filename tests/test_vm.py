@@ -61,7 +61,7 @@ async def test_vm_test(request, ainjector, vm_image):
         async with vm.machine_running():
             await vm.ssh_online()
             await vm.ssh("apt-get update")
-            await vm.ssh("apt-get -y install python3-pytest ansible rsync python3-mako")
+            await vm.ssh("apt-get -y install python3-pytest ansible rsync python3-mako python3-sh python3-lmdb")
             await ainjector(rsync_git_tree, resource_dir, vm.rsync_path('/carthage'))
             await subtest_controller(request, vm, "/carthage/tests/inner_plugin_test.py",
                                      python_path="/carthage")
