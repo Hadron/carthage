@@ -456,6 +456,18 @@ __all__ += ['ImageRole']
 @inject(persistent_seed_path=InjectionKey(carthage.kvstore.persistent_seed_path, _optional=True))
 class CarthageLayout(ModelGroup):
 
+    '''
+    *CarthageLayout* is typically the top level class in a set of Carthage models.  It is a :class:`ModelGroup` that represents a complete collection of objects modeled by Carthage.  The primary purpose of this class is to signify the top of a collection of objects; the layout is generally the place to start when examining a collection of models.
+
+    However, a layout differs from a *ModelGroup* in two ways:
+
+    #. :ref:`carthage-runner <carthage_runner>` looks for a :class:`CarthageLayout` to instantiate after loading plugins.  If the console is used, the layout is made available in the *layout* local variable of the console.  If a command is run, the command is run in the context of the layout.
+
+    #. Layouts that set the `carthage.kvstore.persistent_seed_path` in the context of their :class:`Injector` will have persistent assignments of things like IP addresses and MAC addresses loaded from the seed path when instantiated.
+
+    '''
+    
+
     @classmethod
     def default_class_injection_key(cls):
         if cls.layout_name:
