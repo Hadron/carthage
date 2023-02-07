@@ -19,6 +19,8 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath('..'))
+import carthage
+import carthage.modeling
 
 # from recommonmark.parser import CommonMarkParser
 # source_parsers = {
