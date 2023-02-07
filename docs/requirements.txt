@@ -3,3 +3,4 @@ sphinx
 python-dateutil
 lmdb
 pyyaml
+sh
