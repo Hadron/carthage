@@ -424,6 +424,7 @@ class InjectableModelType(ModelingBase):
     @modelmethod
     def self_provider(cls, ns, k: InjectionKey=None):
         def callback(inst):
+            nonlocal k
             if k is None: k = inst.default_instance_injection_key()
             inst.injector.add_provider(k, dependency_quote(inst))
         cls._add_callback(ns, callback)
