@@ -109,6 +109,8 @@ def key_from_injector_access(*accesses):
     for k in accesses:
         if isinstance(k, injector_access):
             k = k.key
+        elif  hasattr(k, '__provides_dependencies_for__'):
+            k = k.__provides_dependencies_for__[0]
         result.append(k)
     return result
 

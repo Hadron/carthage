@@ -679,6 +679,11 @@ class NetworkLink:
         if 'member' in args:
             args['members'] = [args['member']]
             del args['member']
+        # Support things like a VpcAddress being assigned to a public_v4_address.
+        if 'public_v4_address' in args and \
+           hasattr(args['public_v4_address'], 'ip_address') and \
+           args['public_v4_address'].ip_address:
+            args['public_v4_address'] = IPv4Address(args['public_v4_address'].ip_address)
         for k, t in hints.items():
             if k in ('machine', 'connection', 'interface', 'member_of'):
                 if k in args:
