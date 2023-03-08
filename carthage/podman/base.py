@@ -491,7 +491,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
             options.append('--change=ENTRYPOINT ' + entrypoint)
         for k, v in self.injector.filter_instantiate(
                 OciEnviron, lambda k: 'name' in k.constraints and k.constraints.get('scope', 'all') in ('all','image')):
-            options.append('--change=ENV'+v.assignment)
+            options.append('--change=ENV '+v.assignment)
         return options
 
     async def commit_container(self, container, commit_message):
