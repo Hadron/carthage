@@ -48,6 +48,8 @@ class layout(CarthageLayout):
         oci_image_tag = 'localhost/carthage:latest'
         oci_image_command = ['/bin/systemd']
 
+        add_provider(OciEnviron('PYTHONPATH=/carthage'))
+
         class customize_for_oci(FilesystemCustomization):
 
             @setup_task("Remove Software")
