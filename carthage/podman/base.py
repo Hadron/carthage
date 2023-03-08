@@ -257,7 +257,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         if self.oci_tty:
             options.append('-t')
         for k, v in self.injector.filter_instantiate(
-                OciEnviron, lambda k: 'name' in k.constraints and k.constraints.get('scope', 'all') in ('all,container')):
+                OciEnviron, lambda k: 'name' in k.constraints and k.constraints.get('scope', 'all') in ('all','container')):
             options.append('-e' + v.assignment)
         if not self.pod:
             for p in self.exposed_ports:
@@ -489,6 +489,9 @@ class PodmanImage(OciImage, SetupTaskMixin):
             options.append('--change=CMD ' + cmd)
         if entrypoint:
             options.append('--change=ENTRYPOINT ' + entrypoint)
+        for k, v in self.injector.filter_instantiate(
+                OciEnviron, lambda k: 'name' in k.constraints and k.constraints.get('scope', 'all') in ('all','image')):
+            options.append('--change=ENV'+v.assignment)
         return options
 
     async def commit_container(self, container, commit_message):
