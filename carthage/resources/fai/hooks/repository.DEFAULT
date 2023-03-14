@@ -2,3 +2,4 @@
 fcopy /etc/resolv.conf
 
 skiptask repository
+skiptask chboot
