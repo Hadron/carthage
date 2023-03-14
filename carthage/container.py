@@ -342,3 +342,5 @@ class Container(Machine, SetupTaskMixin):
     def _apply_to_filesystem_customization(self, customization):
         customization.path = self.volume.path
         customization.run_command = self.container_command
+
+__all__ = ['container_volume', 'container_image', 'Container']
