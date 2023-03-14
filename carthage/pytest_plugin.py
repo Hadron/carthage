@@ -77,7 +77,7 @@ def pytest_configure(config):
     json_log = config.getoption('carthage_json')
     json_out = []
     if not config.getoption('carthage_commands_verbose'):
-        logging.getLogger('carthage.sh').setLevel(logging.ERROR)
+        logging.getLogger('sh').setLevel(logging.ERROR)
         logging.getLogger('carthage.sh').propagate = False
         carthage_config = config.getoption('carthage_config')
     if carthage_config:
