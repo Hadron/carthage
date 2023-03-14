@@ -9,7 +9,7 @@
 import pytest
 import asyncio
 from pathlib import Path
-
+import shutil
 from carthage.pytest import *
 from carthage.dependency_injection import *
 from carthage import base_injector, Machine, setup_task, ConfigLayout, LocalMachine
@@ -30,8 +30,9 @@ def injector():
     config.base_dir = str(base_dir)
     yield injector
     injector.close()
-    try: shutil.rmtree(base_dir)
-    except Exception: pass
+    try:
+        shutil.rmtree(base_dir)
+    except OSError: pass
 
 @pytest.fixture()
 def ainjector(injector):
