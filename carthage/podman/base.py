@@ -226,6 +226,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         if not hasattr(self, 'ssh_port') and '22/tcp' in ports:
             self.ssh_port = ports['22/tcp'][0]['HostPort']
         self.id = self.container_info['Id']
+        self.running = self.container_info['State']['Running']
         try:
             return dateutil.parser.isoparse(containers[0]['Created']).timestamp()
         except Exception as e:
@@ -281,7 +282,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             _bg=True, _bg_exc=False)
 
     async def is_machine_running(self):
-        assert await self.find()
+        assert await self.find(), "Container does not exist"
         self.running = self.container_info['State']['Running']
         return self.running
 
@@ -292,7 +293,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
                 return
             await self.start_dependencies()
             await super().start_machine()
-            logger.info(f'Starting {self.name}')
+            logger.info(f'Starting {self.full_name}')
             await self.podman(
                 'container', 'start', self.full_name,
                 _bg=True, _bg_exc=False)
@@ -351,6 +352,13 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         result.mkdir(exist_ok=True, parents=True)
         return result
 
+
+    def check_stamp(self, stamp, raise_on_error=False):
+        mtime, text = super().check_stamp(stamp, raise_on_error)
+        creation = getattr(self, '_find_result', None)
+        if creation and mtime < creation:
+            return False, "" #stamp predates container creation
+        return mtime, result
 
 __all__ += ['PodmanContainer']
 

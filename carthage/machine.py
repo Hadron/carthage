@@ -578,15 +578,15 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
     def create_stamp(self, stamp, contents):
         stamp = f'{self.stamp_stem}-{stamp}'
-        return super().create_stamp(stamp, contents)
+        return self.host.create_stamp(stamp, contents)
 
     def check_stamp(self, stamp):
         stamp = f'{self.stamp_stem}-{stamp}'
-        return super().check_stamp(stamp)
+        return self.host.check_stamp(stamp)
 
     def delete_stamp(self, stamp):
         stamp = f'{self.stamp_stem}-{stamp}'
-        return super().delete_stamp(stamp)
+        return self.host.delete_stamp(stamp)
 
     async def last_run(self):
         '''

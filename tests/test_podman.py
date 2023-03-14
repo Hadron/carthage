@@ -1,4 +1,4 @@
-# Copyright (C)  2022, Hadron Industries, Inc.
+# Copyright (C)  2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -79,6 +79,16 @@ class podman_layout(CarthageLayout):
 
             do_roles = ansible_role_task(os.path.dirname(__file__) + "/resources/test_ansible_role")
 
+    class stamps_discarded(MachineModel):
+
+        #A machine to confirm that stamps are ignored after a machine is deleted
+        task_called = False
+        class cust(FilesystemCustomization):
+
+            @setup_task("Set variable")
+            def set_variable(self):
+                self.host.model.task_called = True
+                
     class pod_group(ModelGroup):
         add_provider(OciExposedPort(22))
 
@@ -195,3 +205,23 @@ async def test_podman_pod(ainjector):
             await pg.pod.delete(force=True)
         except Exception:
             pass
+
+@async_test
+async def test_stamps_ignored(ainjector):
+    l = await ainjector(podman_layout)
+    ainjector = l.ainjector
+    assert l.stamps_discarded.task_called is False
+    await l.stamps_discarded.machine.async_become_ready()
+    assert l.stamps_discarded.task_called is True
+    await l.stamps_discarded.machine.delete()
+    # Podman doesn't work very well if you do something to an instance after delete
+    # So we instantiate a second instance directly with the class.
+    # Note that we're instantiating to ready since we call the injector directly
+    stamps_discarded_2 = await ainjector(podman_layout.stamps_discarded)
+    try:
+        await stamps_discarded_2.machine.async_become_ready()
+        assert stamps_discarded_2.task_called
+    finally:
+        try: await stamps_discarded_2.machine.delete()
+        except Exception: pass
+        
