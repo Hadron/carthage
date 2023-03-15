@@ -131,6 +131,9 @@ class CarthageConsole(code.InteractiveConsole):
         self.history_file = history_file
 
     def interact(self, *args, **kwargs):
+        kwargs  = dict(kwargs)
+        if self.subcommands and 'banner' not in kwargs:
+            kwargs['banner'] = "Carthage console.  Type Python expressions or use !help for Carthage commands."
         try:
             asyncio.get_event_loop()
         except Exception:  # Running in thread without loop
