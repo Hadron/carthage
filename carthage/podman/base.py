@@ -651,7 +651,26 @@ class ContainerfileImage(OciImage):
             self.container_context)
 
     async def find(self):
-        return False
+        try: inspect_result = await self.container_host.podman(
+                'image', 'inspect',
+                self.oci_image_tag)
+        except sh.ErrorReturnCode: return False
+        inspect_json = json.loads(str(inspect_result.stdout, 'utf-8'))
+        created = dateutil.parser.isoparse(inspect_json[0]['Created']).timestamp()
+        if self.container_context_mtime > created:
+            return False
+        return created
+
+    @property
+    def container_context_mtime(self):
+        context = Path(self.container_context)
+        mtime = 0.0
+        for p in context.iterdir():
+            stat = p.stat()
+            if stat.st_mtime >mtime: mtime = stat.st_mtime
+        return mtime
+    
+    
 
     async def _build_options(self):
         options = []
