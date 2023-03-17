@@ -12,6 +12,7 @@ import carthage.modeling.implementation
 from .base import *
 from carthage import *
 from carthage.dependency_injection import *
+from carthage.oci import OciImage
 
 __all__ = []
 
@@ -22,7 +23,7 @@ class PodmanPodModel(PodmanPod, InjectableModel, metaclass=carthage.modeling.imp
 
     * By default, ``machine_implementation_key`` within a :class:`PodmanPodModel` is :class:`PodmanContainer`.
 
-    * By default, when added to an enclosing injector, this model does not provide :class:`PodmanPod` in that context, although it does provide :class:`PodmanPod` within its own injector.  An example illlustrates::
+    * By default, when added to an enclosing injector, this model does not provide :class:`PodmanPod` in that context, although it does provide :class:`PodmanPod` within its own injector.  An example illustrates::
 
         class Layout(CarthageLayout):
 
@@ -124,7 +125,13 @@ class PodmanImageModel(PodmanImage, ImageRole):
 
 __all__ += ['PodmanImageModel']
 
-class ContainerfileImageModel(ContainerfileImage, InjectableModel): pass
+class ContainerfileImageModel(ContainerfileImage, InjectableModel):
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if cls.oci_image_tag:
+            provides(InjectionKey(OciImage, tag=cls.oci_image_tag))(cls)
+                     
 
 __all__ += ['ContainerfileImageModel']
 
