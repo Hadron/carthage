@@ -123,3 +123,8 @@ class PodmanImageModel(PodmanImage, ImageRole):
         
 
 __all__ += ['PodmanImageModel']
+
+class ContainerfileImageModel(ContainerfileImage, InjectableModel): pass
+
+__all__ += ['ContainerfileImageModel']
+

@@ -11,11 +11,11 @@ import carthage
 from .base import *
 __all__ += ['PodmanPod', 'PodmanContainer', 'PodmanImage',
             'PodmanFromScratchImage', 'podman_image_volume_key',
-            'image_layer_task']
+            'image_layer_task', 'ContainerfileImage']
 
-from .modeling import PodmanPodModel, PodmanImageModel
+from .modeling import PodmanPodModel, PodmanImageModel, ContainerfileImageModel
 
-__all__ += ['PodmanPodModel', 'PodmanImageModel']
+__all__ += ['PodmanPodModel', 'PodmanImageModel', 'ContainerfileImageModel']
 
 
 @carthage.inject(injector=carthage.Injector)

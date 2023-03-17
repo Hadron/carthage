@@ -89,6 +89,16 @@ class podman_layout(CarthageLayout):
             def set_variable(self):
                 self.host.model.task_called = True
                 
+    class TrueImage(ContainerfileImageModel):
+
+        oci_image_tag = 'localhost/true:latest'
+        container_context = 'resources/true_container'
+
+    class true_machine(MachineModel):
+        add_provider(oci_container_image, TrueImage)
+
+        name = 'true-machine'
+
     class pod_group(ModelGroup):
         add_provider(OciExposedPort(22))
 
@@ -225,3 +235,12 @@ async def test_stamps_ignored(ainjector):
         try: await stamps_discarded_2.machine.delete()
         except Exception: pass
         
+@async_test
+async def test_containerfile_image(ainjector):
+    l = await ainjector(podman_layout)
+    ainjector = l.ainjector
+    try:
+        await l.true_machine.machine.async_become_ready()
+    finally:
+        try: await l.true_machine.machine.delete()
+        except Exception: pass

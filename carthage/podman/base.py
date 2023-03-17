@@ -258,7 +258,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         if self.oci_tty:
             options.append('-t')
         for k, v in self.injector.filter_instantiate(
-                OciEnviron, lambda k: 'name' in k.constraints and k.constraints.get('scope', 'all') in ('all','container')):
+                OciEnviron, lambda k: 'name' in k.constraints and k.constraints.get('scope', 'all') in ('all', 'container')):
             options.append('-e' + v.assignment)
         if not self.pod:
             for p in self.exposed_ports:
@@ -608,3 +608,62 @@ def image_layer_task(customization, **kwargs):
 
 
 __all__ += ['image_layer_task']
+
+class ContainerfileImage(OciImage):
+
+    '''
+    Build an image using ``podman build`` from a context directory with a ``Containerfile``.
+
+    :param container_context: A directory with a Containerfile and potentially other files used by the Containerfile.  This can be specified either in a call to the constructor or in a subclass definition.  In the constructor, this is resolved relative to the current directory.  In a subclass, this is resolved relative to the package (or module) in which the class is defined.
+
+    This class does respect :class:`OciMount` and :class:`OciEnviron` in the injector hierarchy.
+
+    '''
+
+    def __init__(self, container_context=None, **kwargs):
+        if container_context: self.container_context = container_context
+        else:
+            if not hasattr(self, 'container_context'):
+                raise TypeError('container_context must be set on the class or in the constructor')
+            try:
+                import sys
+                module = sys.modules[self.__class__.__module__]
+            except Exception as e:
+                module = None
+                warnings.warn(f'Unable to find module for {self.__class__.__qualname__}: {e}')
+            if module:
+                try: path = Path(module.__path__[0])
+                except Exception:
+                    path = Path(module.__file__).parent
+                self.container_context = path/self.container_context
+        super().__init__(**kwargs)
+
+    @memoproperty
+    def container_host(self):
+        return LocalPodmanContainerHost()
+
+    async def do_create(self):
+        options = await self._build_options()
+        return await self.container_host.podman(
+            'build',
+            '-t'+self.oci_image_tag,
+            *options,
+            self.container_context)
+
+    async def find(self):
+        return False
+
+    async def _build_options(self):
+        options = []
+        # Instantiate a container simply so we can ask it for volume, mount, and environment options.
+        with instantiation_not_ready():
+            container = await self.ainjector(PodmanContainer, name='image_options')
+        for k, v in self.injector.filter_instantiate(
+                OciEnviron, lambda k: 'name' in k.constraints and k.constraints.get('scope', 'all') in ('all','image')):
+            options.append('-e' + v.assignment)
+        for m in container.mounts:
+            options.append(podman_mount_option(self.injector, m))
+            options.extend(self.podman_options)
+        return options
+
+__all__ += ['ContainerfileImage']
