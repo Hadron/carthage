@@ -19,4 +19,4 @@ __all__ = [
     'current_instantiation', 'dependency_quote', 'inject',
     'inject_autokwargs', 'injector_xref',
     'partial_with_dependencies', 'shutdown_injector',
-    'injection_failed_unlogged']
+    'injection_failed_unlogged', 'instantiation_not_ready']

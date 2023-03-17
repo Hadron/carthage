@@ -1468,6 +1468,35 @@ def injection_failed_unlogged():
     finally:
         log_injection_failed.reset(reset)
 
+@contextlib.contextmanager
+def instantiation_not_ready(ready=False):
+    '''
+    In this context, calling an :class:`Injector`, or calling methods like :meth:`Injector.get_instance` will not bring objects to ``async_ready`` state unless the *ready* parameter is True.
+
+    This can be overridden in the key of a dependency.  For example::
+
+        @inject_autokwargs(bar=InjectionKey(Bar, _ready=True))
+        class Foo(AsyncInjectable):
+
+            async def async_ready(self): pass # do stuff in this method
+
+    And then later::
+
+        with instantiation_not_ready():
+            foo = await ainjector(Foo)
+
+    The *bar* dependency of *foo* will be brought to *async_ready* state.  However, *foo* itself will not be ready: *foo.async_ready()* will not be called.
+
+    Do not confuse this function with :var:`instantitate_to_ready`.  This is a context manager to manipulate the desired ready state.  *instantiate_to_ready* is an internal context variable that tracks desired ready state.
+    Calling ``instantiation_not_ready(ready=True)`` may be a bit counter-intuitive; it will reverse the effect of calling ``instantiation_not_ready()`` and turn on default ready state.
+    
+    '''
+    reset = instantiate_to_ready.set(ready)
+    try:
+        yield
+    finally:
+        instantiate_to_ready.reset(reset)
+        
 
 __all__ = [
     'AsyncInjectable', 'AsyncInjector', 'AsyncRequired',
@@ -1478,4 +1507,4 @@ __all__ = [
     'dependency_quote', 'inject',
     'inject_autokwargs', 'injector_xref',
     'partial_with_dependencies', 'shutdown_injector',
-    'injection_failed_unlogged']
+    'injection_failed_unlogged', 'instantiation_not_ready']
