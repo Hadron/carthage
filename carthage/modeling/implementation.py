@@ -1,4 +1,4 @@
-# Copyright (C) 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -91,13 +91,13 @@ class ModelingNamespace(dict):
 
     * filters to change the value or name that an item is injected under
 
-    * Handling managing inejectionkeys
+    * Handling managing InjectionKeys
 
     '''
 
     to_inject: typing.Dict[InjectionKey, typing.Tuple[typing.Any, dict]]
     #: The set of keys that may be transcluded introduced in this
-    # namespace.  Notice that __tranclusions__ in the resulting class
+    # namespace.  Notice that __transclusions__ in the resulting class
     # has a slightly different format.
     transclusions: typing.Set[typing.Tuple[InjectionKey, InjectionKey]]
     initial: typing.Dict[str, typing.Any]
@@ -111,16 +111,18 @@ class ModelingNamespace(dict):
         self.cls = cls
         self.filters = list(reversed(filters))
         self.classes_to_inject = frozenset(classes_to_inject)
-        self.to_inject = {}
         self.transclusions = set()
         super().__init__()
         self.initial = {}
         for k, v in initial.items():
-            if isinstance(v, modelmethod):
+            if k.startswith('_'):
+                self.setitem(k,v)
+            elif isinstance(v, modelmethod):
                 v = functools.partial(v.method, cls, self)
             self.initial[k] = v
         self.parent_context = thread_local.current_context
         self.context_imported = False
+        self.to_inject = dict()
         self.setitem('__transclusions__', set())
 
     def keys_for(self, name, state):
@@ -364,8 +366,16 @@ class InjectableModelType(ModelingBase):
         ns.setdefault('_callbacks', [])
         ns['_callbacks'].append(cb)
 
-    def __new__(cls, name, bases, namespace, **kwargs):
+    @classmethod
+    def __prepare__(cls, name, bases, **kwargs):
+        namespace = super().__prepare__(cls, name, bases, **kwargs)
         to_inject = namespace.to_inject
+        namespace.setitem('__initial_injections__', to_inject)
+        for c in reversed(bases):
+            if hasattr(c, '__initial_injections__'):
+                to_inject.update(c.__initial_injections__)
+        return namespace
+    def __new__(cls, name, bases, namespace, **kwargs):
         namespace.setdefault('_callbacks', [])
         transclusions_initial = set()
         for b in bases:
@@ -377,12 +387,6 @@ class InjectableModelType(ModelingBase):
         for ko, ki in namespace.transclusions:
             transclusions_initial.add((ko, ki, self))
         self.__transclusions__ = transclusions_initial
-        initial_injections = dict()
-        for c in reversed(bases):
-            if hasattr(c, '__initial_injections__'):
-                initial_injections.update(c.__initial_injections__)
-        initial_injections.update(to_inject)
-        self.__initial_injections__ = initial_injections
         return self
 
     def __init_subclass__(cls, *args, **kwargs):
