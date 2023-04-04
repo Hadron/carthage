@@ -9,7 +9,7 @@
 import functools
 import typing
 from carthage.dependency_injection import Injector, InjectionKey, inject_autokwargs, dependency_quote
-from .implementation import ModelingBase, InjectableModelType, ModelingContainer, NSFlags, handle_transclusions
+from .implementation import ModelingBase, InjectableModelType, ModelingContainer, NSFlags
 from .utils import setattr_default, fixup_dynamic_name
 from ..dependency_injection import InjectionKey
 import carthage.machine
@@ -278,43 +278,25 @@ def propagate_up():
     return wrap
 
 
-class TranscludeOverrideDecorator(ModelingDecoratorWrapper):
-
-    name = 'transclude_overrides'
-
-    def __init__(self, val, key):
-        super().__init__(val)
-        self.key = key
-
-    def handle(self, cls, ns, k, state):
-        super().handle(cls, ns, k, state)
-        state.flags |= NSFlags.instantiate_on_access
-        state.transclusion_key = self.key
-        ns.transclusions.add((self.key, self.key))
-
-
-def transclude_overrides(injector: Injector = None,
-                         key: InjectionKey = None):
+def transclude_overrides(
+        key: InjectionKey = None):
     '''
-    Decorator indicating that the decorated item should be overridden by one from the injector against which the containing layout is eventually instantiated.
+    Decorator indicating that the decorated item should be overridden by one from the injector against which the containing layout is eventually instantiated.  When a :class:`InjectableModel` is eventually instantiated, before an overridable key is added to the local injector, it is searched for in the instantiating injector.  If it is found, the  key is not registered.  This has the effect of using the dependency provider in the instantiating injector rather than the one included in the layout.
 
     :param key: If supplied, is the key expected to be registered with the transcluding injector to override  this object.  If not supplied, the object must have a globally unique key.
 
-    :param injector: If supplied, and the key exists in the injector
-      or its parents, then replace this object at modeling time with the
-      uninstantiated provider of  the key from *injector*.  This does not
-      affect which object is chosen at run time, but rather affects
-      which object is used for class attribute access on the resulting
-      modeling class.
 
-    Ultimately the key will be looked up in the injector supplied as a dependency to the instantiated class.  Whether the transclusion happens is entirely dependent on what keys are in the injector at modeling time.
 
-    If *injector* is not supplied, then the transclusions will
-    propagate up.  They will be resolved when a containing class is
-    decorated either with *transclude_overrides* with an injector
-    supplied or is decorated with *transclude_injector*.  If a
-    containing class is never decorated with one of these decorators,
-    transclusion never happens.
+    Example usage::
+
+        class layout(CarthageLayout):
+
+            @transclude_overrides(key=InjectionKey("network"))
+            class network(NetworkModel):
+                # ...
+
+    If ``layout`` is instantiated in a injector that provides a dependency for ``InjectionKey('network')``, then that object will be used rather than the ``network`` class within the layout.  Since the ``network`` property is an :func:`injector_acess`, ``layout_instance.network`` will refer to the object in the instantiating injector rather than an instance of ``layout.network``.
+
 
     '''
     def wrap(val):
@@ -326,33 +308,10 @@ def transclude_overrides(injector: Injector = None,
                     break
             if key is None:
                 raise ValueError('A globally unique key is required')
-        if injector:
-            target = injector.injector_containing(key)
-            if target:
-                # We intentionally throw away val.  We break the
-                # abstraction of the injector, because we want to get
-                # a potentially uninstantiated provider.  There are
-                # various ways in which this can give disappointing
-                # results, but also ways in which it can provide the
-                # most consistent transclusions in common cases.
-                return injector_access(key, target._providers[key].provider)
-            else:  # injector but doesn't contain key
-                handle_transclusions(val, injector=injector)
-                return val  # not transcluded.
-        # no injector supplied
-        return TranscludeOverrideDecorator(val, key)
-    return wrap
-
-
-def transclude_injector(injector):
-    '''
-    Decorator indicating that the supplied injector should be used to resolve :func:`transclusions <transclude_overrides>`.
-
-    '''
-    def wrap(val):
-        handle_transclusions(val, injector=injector)
+        val.__transclusion_key__ = key
         return val
     return wrap
+
 
 
 def model_mixin_for(**constraints):
@@ -410,6 +369,6 @@ __all__ = ["ModelingDecoratorWrapper", "provides", 'dynamic_name',
            'globally_unique_key',
            'MachineMixin', 'machine_mixin',
            'propagate_up',
-           'transclude_overrides', 'transclude_injector',
+           'transclude_overrides',
            'model_mixin_for',
            ]

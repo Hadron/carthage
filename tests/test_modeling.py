@@ -186,7 +186,6 @@ async def test_transclusion(ainjector):
     first_layout = await ainjector(FirstLayout)
     injector = first_layout.injector
 
-    @transclude_injector(injector)
     class Layout(ModelGroup):
 
         @transclude_overrides()

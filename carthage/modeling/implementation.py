@@ -75,10 +75,10 @@ class NsEntry:
            (self.transclusion_key or isinstance(self.value, type)):
             if self.transclusion_key:
                 key = self.transclusion_key
-            elif self.flags & NSFlags.inject_by_name:
-                key = InjectionKey(name)
             elif self.extra_keys:
                 key = self.extra_keys[0]
+            elif self.flags & NSFlags.inject_by_name:
+                key = InjectionKey(name)
             else:
                 return self.value
             return decorators.injector_access(key, self.value)
@@ -96,10 +96,8 @@ class ModelingNamespace(dict):
     '''
 
     to_inject: typing.Dict[InjectionKey, typing.Tuple[typing.Any, dict]]
-    #: The set of keys that may be transcluded introduced in this
-    # namespace.  Notice that __transclusions__ in the resulting class
-    # has a slightly different format.
-    transclusions: typing.Set[typing.Tuple[InjectionKey, InjectionKey]]
+    #: A mapping from keys that can be transcluded in this injector to a set of keys in self.to_inject that should not be provided by the injector in an :class:`InjectableModelType` if the mapped key is transcluded.
+    transclusions: typing.Mapping[InjectionKey, typing.Set[InjectionKey]]
     initial: typing.Dict[str, typing.Any]
 
     def __init__(self, cls: type,
@@ -111,7 +109,7 @@ class ModelingNamespace(dict):
         self.cls = cls
         self.filters = list(reversed(filters))
         self.classes_to_inject = frozenset(classes_to_inject)
-        self.transclusions = set()
+        self.transclusions = dict()
         super().__init__()
         self.initial = {}
         for k, v in initial.items():
@@ -123,7 +121,7 @@ class ModelingNamespace(dict):
         self.parent_context = thread_local.current_context
         self.context_imported = False
         self.to_inject = dict()
-        self.setitem('__transclusions__', set())
+
 
     def keys_for(self, name, state):
         # returns key, (value, options)
@@ -136,6 +134,7 @@ class ModelingNamespace(dict):
                     return value
             return decorators.injector_access(state.transclusion_key)
         options = state.injection_options
+        state.extra_keys.sort(key=lambda k:k.globally_unique, reverse=True)
         if state.flags & NSFlags.inject_by_name:
             name_key = InjectionKey(name)
             # If name_key is in extra_keys, use that, so we avoid
@@ -206,8 +205,13 @@ class ModelingNamespace(dict):
             if k == "__qualname__":
                 self.import_context()
             return state.value
+        transclusion_keys = None
+        if state.transclusion_key: transclusion_keys = {state.transclusion_key}
         for k, info in self.keys_for(name=k, state=state):
             self.to_inject[k] = info
+            if transclusion_keys: transclusion_keys.add(k)
+        if transclusion_keys:
+            self.transclusions[state.transclusion_key] = frozenset(transclusion_keys)
         return state.value
 
     def __delitem__(self, k):
@@ -346,6 +350,11 @@ class ModelingBase(type):
 
 __all__ += ["ModelingBase"]
 
+not_transcluded_key = InjectionKey('carthage.modeling.not_transcluded', _optional=True)
+#: An injection key to store the set of keys that could have been transcluded but were not so that container propagation does not  transclude
+
+__all__ += ['not_transcluded_key']
+
 
 class InjectableModelType(ModelingBase):
 
@@ -355,9 +364,11 @@ class InjectableModelType(ModelingBase):
     def _handle_provides(target_cls, ns, k, state):
         if hasattr(state.value, '__provides_dependencies_for__'):
             state.extra_keys.extend(state.value.__provides_dependencies_for__)
-            if isinstance(state.value, InjectableModelType):
-                ns.setdefault('__transclusions__', set())
-                ns['__transclusions__'] |= state.value.__transclusions__
+        if hasattr(state.value, '__transclusion_key__'):
+            assert state.value.__transclusion_key__ in state.extra_keys, \
+                f'{state.value.__transclusion_key__} must be provided by {state.value}'
+            state.transclusion_key = state.value.__transclusion_key__
+            
 
     namespace_filters = [_handle_provides]
 
@@ -370,6 +381,9 @@ class InjectableModelType(ModelingBase):
     def __prepare__(cls, name, bases, **kwargs):
         namespace = super().__prepare__(cls, name, bases, **kwargs)
         to_inject = namespace.to_inject
+        transclusions = namespace.transclusions
+        transclusions.update(combine_mro_mapping(cls, InjectableModelType, '__transclusions__'))
+        namespace.setitem('__transclusions__', transclusions)
         namespace.setitem('__initial_injections__', to_inject)
         for c in reversed(bases):
             if hasattr(c, '__initial_injections__'):
@@ -377,16 +391,11 @@ class InjectableModelType(ModelingBase):
         return namespace
     def __new__(cls, name, bases, namespace, **kwargs):
         namespace.setdefault('_callbacks', [])
-        transclusions_initial = set()
-        for b in bases:
-            if isinstance(b, InjectableModelType):
-                transclusions_initial |= b.__transclusions__
-        if '__transclusions__' in namespace:
-            transclusions_initial |= namespace['__transclusions__']
+
         self = super(InjectableModelType, cls).__new__(cls, name, bases, namespace, **kwargs)
-        for ko, ki in namespace.transclusions:
-            transclusions_initial.add((ko, ki, self))
-        self.__transclusions__ = transclusions_initial
+        if self.__transclusions__:
+            inject(_not_transcluded=not_transcluded_key)(self)
+
         return self
 
     def __init_subclass__(cls, *args, **kwargs):
@@ -411,7 +420,7 @@ class InjectableModelType(ModelingBase):
                 stacklevel=2)
             k = InjectionKey(k, _globally_unique=True)
         if transclusion_overrides:
-            ns.transclusions.add((k, k))
+            ns.transclusions[k] = {k}
         ns.to_inject[k] = (v, dict(
             close=close,
             allow_multiple=allow_multiple,
@@ -437,21 +446,6 @@ class InjectableModelType(ModelingBase):
 __all__ += ['InjectableModelType']
 
 
-def handle_transclusions(val, injector):
-    try:
-        transclusions = val.__transclusions__
-    except AttributeError:
-        return
-    for ko, ki, o in transclusions:
-        target = injector.injector_containing(ko)
-        if target:
-            try:
-                del o.__initial_injections__[ki]
-            except KeyError:
-                pass
-    del val.__transclusions__
-    return val
-
 
 class ModelingContainer(InjectableModelType):
 
@@ -469,8 +463,9 @@ class ModelingContainer(InjectableModelType):
             # injector.  We pick one outer key just for simplicity; it
             # could be made to work with more.
             globally_unique = k_inner.globally_unique
-            inner_transcludable = (k_inner, k_inner, val) in val.__transclusions__
             if not globally_unique:
+                if k_inner in val.__transclusions__:
+                    raise TypeError(f'{k_inner} cannot be transcluded and propagated unless it is globally unique')
                 outer_constraints = outer_key.constraints
                 if set(outer_constraints) & set(k_inner.constraints):
                     return
@@ -478,6 +473,8 @@ class ModelingContainer(InjectableModelType):
             else:
                 k_new = k_inner  # globally unique
             # Must be after we have chosen a globally unique key if there is one.
+            if k_new not in ns.to_inject:
+                inner_key_map[k_inner] = k_new
             if isinstance(v, decorators.injector_access):
                 # Normally injector_access will not actually get a key
                 # in __initial_injections__, but there are important
@@ -501,14 +498,10 @@ class ModelingContainer(InjectableModelType):
             if k_new not in ns.to_inject:
                 ns.to_inject[k_new] = (v, options)
                 ns.to_propagate[k_new] = (v, options)
-                if inner_transcludable:
-                    ns.transclusions.add((k_new, k_new))
-                if (outer_key, outer_key) in ns.transclusions:
-                    ns.transclusions.add((k_new, k_new))
-                    ns.transclusions.add((outer_key, k_new))
 
         if not isinstance(state.value, ModelingContainer):
             return
+        inner_key_map = {}
         val = state.value
         outer_key = None
         if hasattr(val, '__provides_dependencies_for__'):
@@ -526,6 +519,7 @@ class ModelingContainer(InjectableModelType):
         for k, info in to_propagate.items():
             v, options = info
             propagate_provider(k, v, options)
+        map_transclusions(ns.transclusions, val, inner_key_map)
 
     def _propagate_filter(target_cls, ns, k, state):
         if isinstance(state.value, ModelingContainer) or (state.flags & NSFlags.propagate_key):
@@ -670,4 +664,20 @@ This must happen prior to the first instantiation of a subclass, and for propaga
         cls.__container_propagations__[k] = cls.__initial_injections__[k]
 
 
+def map_transclusions(container_transclusions, contained, inner_key_map):
+    '''
+    Consider the case when *contained* is added to *container*.  *contained*  provides a dependency *k*, but that dependency permits transclusion.  That means that if *contained* is instantiated in an injector  that already provides *k*, then the instantiating injector's version of *k* is used.
+
+    It's an error for *k* not to be globally unique.  Transcluded keys must either be globally unique or not propagated, because transclusion always happens in the scope of the instantiating injector, and the only time when that naming is the same as the inner injector (for objects provided by the inner injector) is for globally unique keys.  However, when *k* is transcluded, there may be extra keys *k_1* that are also suppressed because they are provided by the same object as *k*.  These keys need to be remapped from *contained*'s transclusions to *container*'s transclusions.
+
+    :param inner_key_map: A mapping from inner keys to outer keys.
+
+    :param container_transclusions:  The **__transclusions__* mapping of the namespace that will become *container*.
+    '''
+    transclusions = container_transclusions
+    inner_transclusions = contained.__transclusions__
+    for transcluded_key in set(inner_transclusions) & set(inner_key_map):
+        transcluded_keys = transclusions.setdefault(transcluded_key, set())
+        transcluded_keys.update({inner_key_map[ik] for ik in inner_transclusions[transcluded_key]})
+    
 from . import decorators

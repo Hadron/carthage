@@ -39,10 +39,20 @@ __all__ += ['dependency_quote_class']
 @inject_autokwargs(injector=Injector)
 class InjectableModel(Injectable, metaclass=InjectableModelType):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, _not_transcluded=None, **kwargs):
         super().__init__(*args, **kwargs)
         injector = self.injector
         dependency_providers: typing.Mapping[typing.Any, DependencyProvider] = {}
+        ignored_keys = set()
+        parent_injector = injector.parent_injector
+        not_transcluded = set()
+        if _not_transcluded: not_transcluded.update(_not_transcluded)
+        for k, to_ignore in self.__transclusions__.items():
+            if k in not_transcluded: continue
+            target = parent_injector.injector_containing(k)
+            if target: ignored_keys |= to_ignore
+            else: not_transcluded |= to_ignore
+        if not_transcluded: self.injector.add_provider(not_transcluded_key, not_transcluded)
         # This is complicated because we want to reuse the same
         # DependencyProvider when registering the same value more than
         # once so that instantiations alias and we don't accidentally
@@ -50,7 +60,7 @@ class InjectableModel(Injectable, metaclass=InjectableModelType):
         # but different keys.
         for k, info in self.__class__.__initial_injections__.items():
             v, options = info
-
+            if k in ignored_keys: continue
             try:
                 dp = dependency_providers[v]
             # TypeError: unhashable
@@ -274,10 +284,8 @@ class MachineModelType(RoleType):
         super().__init__(*args, **kwargs)
         if not kwargs.get('template', False):
             machine_key = InjectionKey(carthage.machine.Machine, host=self.name, _globally_unique=True)
-            self.__transclusions__ |= {
-                (machine_key, machine_key, self),
-                (self.our_key(), machine_key, self),
-            }
+            self.__transclusions__[machine_key] = frozenset({machine_key})
+            self.__transclusion_key__ = self.our_key()
             self.__initial_injections__[machine_key] = (
                 self.machine, dict(
                     close=True, allow_multiple=False,
@@ -290,7 +298,11 @@ class MachineModelMixin:
     pass
 
 
-@inject_autokwargs(config_layout=ConfigLayout)
+@inject(
+    _not_transcluded=not_transcluded_key)
+@inject_autokwargs(
+    config_layout=ConfigLayout,
+                   )
 class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metaclass=MachineModelType, template=True):
 
     '''
@@ -356,7 +368,8 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
         self.injector.add_provider(InjectionKey(MachineModel), dependency_quote(self))
         self.injector.add_provider(InjectionKey(carthage.machine.AbstractMachineModel), dependency_quote(self))
         machine_key = InjectionKey(carthage.machine.Machine, host=self.name)
-        if machine_key in self.__class__.__initial_injections__:  # not transcluded
+        target = self.injector.injector_containing(machine_key)
+        if target is self.injector:
             self.injector.add_provider(InjectionKey(carthage.machine.Machine), MachineImplementation)
         else:
             self.injector.add_provider(InjectionKey(carthage.machine.Machine), injector_access(machine_key))
