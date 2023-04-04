@@ -116,7 +116,7 @@ class ModelingNamespace(dict):
             if k.startswith('_'):
                 self.setitem(k,v)
             elif isinstance(v, modelmethod):
-                v = functools.partial(v.method, cls, self)
+                v = functools.partial(v,  cls, self)
             self.initial[k] = v
         self.parent_context = thread_local.current_context
         self.context_imported = False
@@ -281,19 +281,63 @@ class ModelingNamespace(dict):
             parent = parent.parent_context
         raise KeyError
 
+class ModelingNamespaceProxy:
+
+
+    local_attributes = frozenset({
+        '_metaclass',
+        '_namespace',
+        '_add_callback',
+        '__namespace__',
+        '__metaclass__',
+        '__class__',
+                })
+
+    def _add_callback(self, callback):
+        self._metaclass._add_callback(self._namespace, callback)
+
+    def __init__(self, metaclass, namespace):
+        self._metaclass = metaclass
+        self._namespace = namespace
+
+    @property
+    def __namespace__(self): return self._namespace
+
+    @property
+    def __metaclass__(self): return self._metaclass
+    
+    def __getattribute__(self, attr):
+        if attr in __class__.local_attributes:
+            return super().__getattribute__(attr)
+        try:         return self._namespace[attr]
+        except KeyError:
+            raise AttributeError(attr) from None
+        
+
+    def __setattr__(self, attr, value):
+        if attr in __class__.local_attributes:
+            return super().__setattr__(attr, value)
+        self._namespace[attr] = value
+
+    def __delattr__(self, attr):
+        try: del self._namespace[attr]
+        except KeyError:
+            raise AttributeError(attr) from None
+        
+    
+    
 
 class modelmethod:
 
     '''Usage within the body of a :class:`ModelingBase` subclass::
 
         @modelmethod
-def method(cls, ns, *args, **kwargs):
+def method(cls, *args, **kwargs):
 
-    Will add ``meth`` to any class using the class where this modelmethod is added as a metaclass.
+    Will add ``meth`` to any class using the class where this modelmethod is added as a metaclass.  The method can be called in the class body, in which case it will receive a :class:`ModelingNamespaceProxy` rather than a completed class.  Alternatively after the class body is completed, the method can be called on the class as a classmethod, in which case it will receive the class.  It is an error to call a modelmethod on a class after it  has been instantiated.
 
-    :param cls: The metaclass in use
 
-    :param ns: The namespace of the class being defined
+    :param cls: The namespace proxy or class.
 
     Remaining parameters are passed from the call to modelmethod.
 
@@ -306,6 +350,16 @@ def method(cls, ns, *args, **kwargs):
         return f'<modelmethod: {repr(self.method)}>'
 
 
+    def __call__(self, metaclass, ns, *args, **kwargs):
+        proxy = ModelingNamespaceProxy(metaclass, ns)
+        return self.method(proxy, *args, **kwargs)
+
+    def __get__(self, _class, owner):
+        if _class is None: return self
+        if _class._already_instantiated:
+            raise AttributeError('modelmethods cannot be called after instantiation')
+        return functools.partial(self.method, _class)
+    
 __all__ += ['modelmethod']
 
 
@@ -332,6 +386,7 @@ class ModelingBase(type):
 
     def __new__(cls, name, bases, namespace, **kwargs):
         namespace.initial.clear()
+        namespace.setitem('_already_instantiated', False)
         thread_local.current_context = None
         try:
             return super(ModelingBase, cls).__new__(cls, name, bases, namespace, **kwargs)
@@ -404,12 +459,16 @@ class InjectableModelType(ModelingBase):
         super().__init_subclass__(*args, **kwargs)
 
     @modelmethod
-    def add_provider(cls, ns, k: InjectionKey,
+    def add_provider(cls,  k: InjectionKey,
                      v: typing.Any = None,
                      close=True,
                      allow_multiple=False, globally_unique=False,
                      propagate=False,
                      transclusion_overrides=False):
+        to_inject = cls.__initial_injections__
+        to_propagate = getattr(cls, '__container_propagations__', None)
+        transclusions = cls.__transclusions__
+        metaclass = getattr(cls, '__metaclass__', cls.__class__)
         if not isinstance(k, InjectionKey) and v is None:
             v = k
             k = default_injection_key(k)
@@ -420,27 +479,27 @@ class InjectableModelType(ModelingBase):
                 stacklevel=2)
             k = InjectionKey(k, _globally_unique=True)
         if transclusion_overrides:
-            ns.transclusions[k] = {k}
-        ns.to_inject[k] = (v, dict(
+            transclusions[k] = {k}
+        to_inject[k] = (v, dict(
             close=close,
             allow_multiple=allow_multiple,
         ))
         if propagate:
-            assert issubclass(cls, ModelingContainer), "Only ModelingContainers accept propagation"
-            ns.to_propagate[k] = ns.to_inject[k]
+            assert issubclass(metaclass, ModelingContainer), "Only ModelingContainers accept propagation"
+            to_propagate[k] = to_inject[k]
 
     @modelmethod
-    def disable_system_dependency(cls, ns, dependency):
-        ns.to_inject[dependency.default_instance_injection_key()] = (
+    def disable_system_dependency(cls, dependency):
+        cls.__initial_injections__[dependency.default_instance_injection_key()] = (
             None, dict(close=False, allow_multiple=False))
 
     @modelmethod
-    def self_provider(cls, ns, k: InjectionKey=None):
+    def self_provider(cls,  k: InjectionKey=None):
         def callback(inst):
             nonlocal k
             if k is None: k = inst.default_instance_injection_key()
             inst.injector.add_provider(k, dependency_quote(inst))
-        cls._add_callback(ns, callback)
+        cls._add_callback( callback)
 
 
 __all__ += ['InjectableModelType']
@@ -532,11 +591,11 @@ class ModelingContainer(InjectableModelType):
     def __prepare__(cls, *args, **kwargs):
         ns = super().__prepare__(*args, **kwargs)
         ns.to_propagate = {}
+        ns.setitem('__container_propagations__', ns.to_propagate)
         return ns
 
     def __new__(cls, name, bases, ns, **kwargs):
         to_propagate = ns.to_propagate
-        ns['__container_propagations__'] = to_propagate
         self = super().__new__(cls, name, bases, ns, **kwargs)
         for k in list(to_propagate.keys()):
             if k not in self.__initial_injections__:
@@ -555,11 +614,14 @@ class ModelingContainer(InjectableModelType):
             pass
 
     @modelmethod
-    def include_container(cls, ns, obj,
+    def include_container(cls, obj,
                           *, close=True,
                           allow_multiple=False,
                           dynamic_name=None,
                           **kwargs):
+        if not hasattr(cls, '__namespace__'):
+            raise TypeError('include_container can only be called within a class body')
+        ns = cls.__namespace__
         def handle_function(func):
             params = set(inspect.signature(func).parameters.keys())
             open_params = params - set(kwargs.keys())

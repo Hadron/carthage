@@ -40,6 +40,7 @@ __all__ += ['dependency_quote_class']
 class InjectableModel(Injectable, metaclass=InjectableModelType):
 
     def __init__(self, *args, _not_transcluded=None, **kwargs):
+        self._already_instantiated = True # no more calling modelmethods
         super().__init__(*args, **kwargs)
         injector = self.injector
         dependency_providers: typing.Mapping[typing.Any, DependencyProvider] = {}
@@ -106,7 +107,7 @@ __all__ += ['NetworkModel']
 class NetworkConfigModelType(InjectableModelType):
 
     @modelmethod
-    def add(cls, ns, interface, *, mac, **kwargs):
+    def add(cls,  interface, *, mac, **kwargs):
         kwargs['mac'] = mac
         if 'net' not in kwargs:
             raise SyntaxError('net is required')
@@ -128,7 +129,7 @@ class NetworkConfigModelType(InjectableModelType):
                 inst.add(interface, **kwargs)
             except TypeError as e:
                 raise TypeError(f'Error constructing {interface} with arguments {kwargs}') from e
-        cls._add_callback(ns, callback)
+        cls._add_callback(callback)
 
 
 class NetworkConfigModel(InjectableModel,
