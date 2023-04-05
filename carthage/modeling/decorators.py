@@ -63,7 +63,11 @@ class injector_access(ModelingDecoratorWrapper):
     def __init__(self, key, target=None):
         super().__init__(key)
         if not isinstance(key, InjectionKey):
-            key = InjectionKey(key, _ready=False)
+            if isinstance(key, InjectableModelType) and key.__provides_dependencies_for__ and target is None:
+                key = key.__provides_dependencies_for__[0]
+                target = key
+            else:
+                key = InjectionKey(key, _ready=False)
         if key.ready is None:
             key = InjectionKey(key, _ready=False)
         #: The injection key to be accessed.
@@ -96,7 +100,14 @@ class injector_access(ModelingDecoratorWrapper):
         self.name = name
 
     def __call__(self, injector: Injector):
-        return injector.get_instance(self.key)
+        try:
+            return injector.get_instance(self.key)
+        except AsyncRequired:
+            class Xref(carthage.dependency_injection.base.InjectorXrefMarker):
+                target_key = self.key
+
+            return Xref(injector)
+        
 
     def __repr__(self):
         return f'injector_access({repr(self.key)})'

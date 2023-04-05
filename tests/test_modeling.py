@@ -437,3 +437,22 @@ async def test_task_ordering(ainjector):
     assert first_run
     assert second_run
     
+@async_test
+async def test_async_injector_access(ainjector):
+    class layout(CarthageLayout):
+        @provides("async")
+        class async_injectable(AsyncInjectable):
+
+            async def async_ready(self):
+                nonlocal async_ready
+                async_ready = True
+                await super().async_ready()
+
+
+
+    async_ready = False
+    l = await ainjector(layout)
+    access = injector_access("async")
+    await l.ainjector(access)
+    assert async_ready is True
+    
