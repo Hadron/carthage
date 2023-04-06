@@ -281,6 +281,17 @@ class ModelingNamespace(dict):
             parent = parent.parent_context
         raise KeyError
 
+def check_already_provided(metaclass_proxy, v):
+    if not hasattr(metaclass_proxy, '__namespace__'):
+        return None
+    namespace = metaclass_proxy.__namespace__
+    for k in getattr(v, '__provides_dependencies_for__', []):
+        try:
+            namespace.get_injected(k)
+            return k
+        except KeyError: continue
+    return None
+
 class ModelingNamespaceProxy:
 
 
@@ -464,7 +475,20 @@ class InjectableModelType(ModelingBase):
                      close=True,
                      allow_multiple=False, globally_unique=False,
                      propagate=False,
-                     transclusion_overrides=False):
+                     transclusion_overrides=False,
+                     force_multiple_instantiate=False):
+        '''
+
+        Similar to :meth:`Injector.add_provider` except as a model method.  *close* and *allow_multiple* work the same as on an Injector.
+
+        :param propagate: If ``True``, then perform container propagation as this dependency moves up to ward the base injector.
+
+        :param transclude_overrides: If ``True``,  when this :class:`InjectableModel` is instantiated, only add *k* as a provided depedency if *k* is not already in the injector hierarchy.  In effect, allow an existing provider for *k* to mask *p* at instantiation time; see :func:`transclude_overrides`.
+
+        :param force_multiple_instantiate: Normally it is an error to call *add_provider* where the provider is itself a subclass of :class:`InjectableModel` that provides its own dependencies.  Were that to be allowed, multiple instances of the same model would be instantiated; wrapping the provider in :class:`injector_access` is almost certainly what is desired.  But if it actually is desirable to instantiate multiple instances of the same model, setting *force_multiple_instantiate* will suppress the error.
+
+        '''
+
         to_inject = cls.__initial_injections__
         to_propagate = getattr(cls, '__container_propagations__', None)
         transclusions = cls.__transclusions__
@@ -478,6 +502,11 @@ class InjectableModelType(ModelingBase):
                 DeprecationWarning,
                 stacklevel=2)
             k = InjectionKey(k, _globally_unique=True)
+        if isinstance(v,InjectableModelType) and not force_multiple_instantiate:
+            existing_key = check_already_provided(cls, v)
+            if existing_key:
+                raise SyntaxError(f'{v} is already provided by {existing_key}; wrap it in injector_access, or in the unlikely case that multiple instantiation is desired, set force_multiple_instantiate')
+            
         if transclusion_overrides:
             transclusions[k] = {k}
         to_inject[k] = (v, dict(

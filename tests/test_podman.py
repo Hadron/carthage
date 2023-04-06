@@ -95,7 +95,7 @@ class podman_layout(CarthageLayout):
         container_context = 'resources/true_container'
 
     class true_machine(MachineModel):
-        add_provider(oci_container_image, TrueImage)
+        add_provider(oci_container_image, injector_access(TrueImage))
 
         name = 'true-machine'
 

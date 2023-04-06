@@ -436,7 +436,7 @@ async def test_task_ordering(ainjector):
     await layout.machine.machine.async_become_ready()
     assert first_run
     assert second_run
-    
+
 @async_test
 async def test_async_injector_access(ainjector):
     class layout(CarthageLayout):
@@ -455,4 +455,13 @@ async def test_async_injector_access(ainjector):
     access = injector_access("async")
     await l.ainjector(access)
     assert async_ready is True
-    
+
+@async_test
+async def test_detects_class_multi_instantiate(ainjector):
+    with pytest.raises(SyntaxError):
+        class layout(CarthageLayout):
+
+            @provides("model")
+            class a(InjectableModel):
+                pass
+            add_provider(InjectionKey("b"), a) #should raise
