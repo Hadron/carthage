@@ -35,7 +35,7 @@ class PkiManager(Injectable):
 
     def _certify(self, host):
         self.ca_cert
-        sh.entanglement_pki(host, d=self.pki_dir)
+        sh.entanglement_pki(host, d=self.pki_dir, _bg=False)
 
     @memoproperty
     def pki_dir(self):
@@ -44,7 +44,7 @@ class PkiManager(Injectable):
     @property
     def ca_cert(self):
         sh.entanglement_pki('-d', self.pki_dir,
-                            '--ca-name', "Carthage Root CA")
+                            '--ca-name', "Carthage Root CA", _bg=False)
         with open(self.pki_dir + '/ca.pem', 'rt') as f:
             return f.read()
 
