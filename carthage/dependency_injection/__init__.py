@@ -17,6 +17,7 @@ __all__ = [
     'InjectionKey', 'Injector', 'InstantiationContext', 'aspect_for',
     'NotPresent',
     'current_instantiation', 'dependency_quote', 'inject',
+    'resolve_deferred',
     'inject_autokwargs', 'injector_xref',
     'partial_with_dependencies', 'shutdown_injector',
     'injection_failed_unlogged', 'instantiation_not_ready']

@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -622,3 +622,26 @@ def test_optional_not_present(injector):
     injector.add_provider(InjectionKey('foo'), 42)
     instance2 = injector(AnotherDependency)
     assert instance2.dep == 42
+@async_test
+async def test_resolve_deferred(ainjector):
+    foo = InjectionKey('foo')
+    bar = InjectionKey('bar')
+    baz = InjectionKey('baz')
+    @inject(baz=baz)
+    def func(baz, quux):
+        return baz*quux
+    args = dict(quux=10)
+    ainjector.add_provider(foo, 'foo')
+    ainjector.add_provider(bar, 'bar')
+    ainjector.add_provider(baz, 4)
+    result = await ainjector(
+        resolve_deferred, ainjector, [
+        90,
+        dict(a=10,b=20),
+        dict(c=foo,d=func),
+        bar], args=args)
+    assert result == [
+        90,
+        dict(a=10, b=20),
+        dict(c='foo', d=40),
+        'bar']

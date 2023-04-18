@@ -1496,7 +1496,81 @@ def instantiation_not_ready(ready=False):
         yield
     finally:
         instantiate_to_ready.reset(reset)
-        
+
+
+async def resolve_deferred(ainjector, item, args:dict):
+    '''
+    Often it is desirable to have a data structure that has some elements dynamically calculated.  For example looking up something in the environment of an injector, or calling some function that takes dependencies from an injector.
+    Examples of where this is used include :class:`~carthage.network.NetworkConfig`.
+
+    This function traverses a data structure starting at an atomic element, list, or dict.  It returns a copy where:
+
+    *  :class:`InjectionKey` are replaced with :meth:`AsyncInjector.get_instance_async` in the context of the current injector
+
+    * A *callable* is called in the context of the current injector.  If the callable has a signature, and if items in *args* match keys in the signature, the value from *args* is plugged into the call.  An injected dependency could be used instead, but in some cases the performance of setting up an injector just for one parameter value doesn't make sense.
+    
+
+    * dicts, lists, and tuples are recursed, although tuples become lists.
+
+    * Other items are not modified.
+
+    '''
+    # This effectively uses cps internally.  The result argument to the inner functions is a callback that takes the result and puts it in the right place.
+    def handle_list(l, result):
+        def place_list(idx):
+            def place(elt):
+                out[idx] = elt
+            return place
+        out = [None]*len(l)
+        for i, elt in enumerate(l):
+            handle(elt, place_list(i))
+        result(out)
+    def handle_dict(d, result):
+        def place_dict(k):
+            def place(elt):
+                out[k] = elt
+            return place
+        out = {k:None for k in d} # preserve order
+        for k,v in d.items():
+            handle(v, place_dict(k))
+        result(out)
+    def handle_injection(k, result):
+        fut = asyncio.ensure_future(ainjector.get_instance_async(k))
+        def done(f):
+            result(f.result())
+        fut.add_done_callback(done)
+        futures.append(fut)
+    def handle_callable(c, result):
+        signature = inspect.signature(c)
+        keys = signature.parameters.keys()
+        in_args = {}
+        for k in set(keys)& args_keys:
+            in_args[k] = args[k]
+        fut = asyncio.ensure_future(ainjector(c, **in_args))
+        def done(f):
+            result(f.result())
+        fut.add_done_callback(done)
+        futures.append(fut)
+    def handle(elt, result):
+        if isinstance(elt, dict):
+            handle_dict(elt, result)
+        elif isinstance(elt, (list,tuple)):
+            handle_list(elt, result)
+        elif isinstance(elt, InjectionKey):
+            handle_injection(elt, result)
+        elif callable(elt):
+            handle_callable(elt, result)
+        else:result(elt)
+    futures = []
+    args_keys = frozenset(args.keys())
+    def base_result(elt):
+        nonlocal to_return
+        to_return = elt
+    to_return = None
+    handle(item, base_result)
+    if futures: await asyncio.gather(*futures)
+    return to_return
+
 
 __all__ = [
     'AsyncInjectable', 'AsyncInjector', 'AsyncRequired',
@@ -1507,4 +1581,5 @@ __all__ = [
     'dependency_quote', 'inject',
     'inject_autokwargs', 'injector_xref',
     'partial_with_dependencies', 'shutdown_injector',
+    'resolve_deferred',
     'injection_failed_unlogged', 'instantiation_not_ready']
