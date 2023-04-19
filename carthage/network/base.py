@@ -210,6 +210,28 @@ class Network(AsyncInjectable):
                 logger.exception(f'Error closing link for {repr(self)}')
 
 
+    @property
+    def v4_config(self):
+        '''
+        The :class:`V4Config` for this network.  When assigned to a *Network*, a *V4Config* cannot have any deferred elements.
+        '''
+        return self._v4_config
+
+    @v4_config.setter
+    def v4_config(self, config):
+        assert isinstance(config, V4Config)
+        config.after_resolve()
+        self._v4_config = config
+
+    def __init_subclass__(cls, **kwargs):
+        if 'v4_config' in cls.__dict__:
+            config = cls.v4_config
+            del cls.v4_config
+            config.after_resolve()
+            cls._v4_config = config
+        super().__init_subclass__(**kwargs)
+            
+
 this_network = InjectionKey(Network, role="this_network")
 
 
@@ -423,6 +445,9 @@ class NetworkConfig:
             other_interface = other_args.pop('other_interface')
             if 'other_member_of' in other_args:
                 raise ValueError('You cannot set member_of on the other side of a link.')
+            if 'other_v4_config' in other_args:
+                # It's possible to implement this.  We need to make sure after_resolve gets called all the time and resolve gets called on a new v4_config.  Since this function is not async, that gets messy.
+                raise NotImplementedError('Currently you cannot set other_v4_config')
             for k in list(other_args):
                 k_new = k[6:]
                 other_args[k_new] = other_args.pop(k)
@@ -478,6 +503,7 @@ class NetworkConfig:
                         f'At least other_interface and other must be specified when specifying the other side of a link; {i} link on {connection}')
             try:
                 link = NetworkLink(connection, i, args)
+                await link.resolve(ainjector=ainjector, interface=i)
                 result[i] = link
             except Exception:
                 logger.exception(f"Error constructing {i} link on {connection}")
@@ -604,7 +630,6 @@ class NetworkLink:
     machine: object
     mtu: typing.Optional[int]
     local_type: typing.Optional[str]
-    #: In NAT situations, the public IPv4 address
     untagged_vlan: typing.Optional[int]
     allowed_vlans: typing.Optional[VlanList]
     v4_config: typing.Optional[V4Config] = None
@@ -614,6 +639,7 @@ class NetworkLink:
     precious: typing.Optional[bool] = dataclasses.field(default=False, repr=False)
 
     admin_status: typing.Optional[str] = dataclasses.field(default='up', repr=False)
+    #: In NAT situations, the public IPv4 address
     public_v4_address: typing.Optional[IPv4Address] = dataclasses.field(default=None, repr=False)
     #: Sometimes it is desirable to have a different dns entry for an
     # interface than for the host as a whole. If set to a string, this
@@ -662,6 +688,10 @@ class NetworkLink:
         self.net_instance = await self.net.access_by(cls)
         return self.net_instance
 
+    async def resolve(self, ainjector, interface):
+        if self.v4_config is not None:
+            await self.v4_config.resolve(ainjector=ainjector, interface=interface)
+            
     def __init_subclass__(cls, **kwargs):
         if hasattr(cls, 'local_type') and cls.local_type:
             NetworkLink.local_type_registry[cls.local_type] = cls
@@ -740,6 +770,15 @@ class NetworkLink:
 
     @memoproperty
     def merged_v4_config(self):
+        '''Takes *self.v4_config* as a starting point, filling in any values specified on the network's *v4_config* that are not overridden in *self*.
+
+        The merged config may be further modified by values discovered operationally.  As an example, if STUN or instance inspection discoveres the public address of some NAT connection, then that may be filled in by an implementation of :class:`~carthage.machine.Machine`.
+
+        The merged configuration is guaranteed to be a (possibly shallow) copy of the link's *v4_config*.  That is changing a value directly on *self.merged_v4_config* will not change *self.v4_config*.
+        
+
+        '''
+        
         if self.v4_config:
             merged = self.v4_config.merge(getattr(self.net, 'v4_config', None))
             if merged.address == merged.gateway:

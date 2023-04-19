@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2021, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -9,6 +9,7 @@
 import collections.abc
 import copy
 import dataclasses
+import typing
 from ipaddress import *
 from ..dependency_injection import *
 
@@ -21,6 +22,7 @@ class L3ConfigMixin:
         'address',
         'network',
         'gateway',
+        'secondary_addresses',
         "dns_servers", "domains",
     })
 
@@ -28,7 +30,15 @@ class L3ConfigMixin:
     dns_servers: list = None
     domains: str = None
 
-    def __post_init__(self):
+    async def resolve(self, ainjector, interface):
+        args = dict(interface=interface)
+        for a in self._attributes:
+            if getattr(self,a, None) is not None:
+                setattr(self, a,
+                        await resolve_deferred(ainjector, getattr(self, a), args))
+        self.after_resolve();
+
+    def after_resolve(self):
         if self.dhcp_ranges:
             for l, h in self.dhcp_ranges:
                 if l > h:
@@ -46,6 +56,28 @@ class L3ConfigMixin:
             return result
         return wrapper
 
+    def _handle_secondary_addresses(self, func):
+        def func_or_none(a):
+            if a is None: return None
+            return func(a)
+        def wrapper(l):
+            result = []
+            for a in l:
+                if not isinstance(a, (SecondaryAddress, dict)):
+                    elt = SecondaryAddress(private=func(a))
+                elif isinstance(a, dict):
+                    elt = SecondaryAddress(
+                        public=func_or_none(a.get('public')),
+                        private=func_or_none(a.get('private')),
+                    )
+                elif isinstance(a, SecondaryAddress):
+                    elt = a
+                else: raise TypeError('Don\'t know how to handle secondary address'+repr(a))
+                result.append(elt)
+            return result
+        return wrapper
+
+    
     def _handle_pool(self, func):
         def wrapper(pool):
             assert isinstance(pool, collections.abc.Sequence)
@@ -69,6 +101,13 @@ class L3ConfigMixin:
                 setattr(res, a, getattr(merge_from, a))
         return res
 
+@dataclasses.dataclass()
+class SecondaryAddress:
+    _address = typing.Union[IPv4Address, IPv6Address, None]
+    private: _address
+    public: _address = None
+    del _address
+    
 
 @dataclasses.dataclass()
 class V4Config(L3ConfigMixin):
@@ -76,6 +115,7 @@ class V4Config(L3ConfigMixin):
     network: IPv4Network = None
     dhcp: bool = None
     dhcp_ranges: list = None
+    secondary_addresses: list[IPv4Address] = dataclasses.field(default_factory=lambda: [])
     address: IPv4Address = None
     gateway: IPv4Address = None
     masquerade: bool = False
@@ -84,7 +124,7 @@ class V4Config(L3ConfigMixin):
     
     _attributes = L3ConfigMixin._attributes | {'masquerade', 'pool'}
 
-    def __post_init__(self):
+    def after_resolve(self):
         # The following depends on iteration happening in dictionary
         # order such that network is processed before dhcp_ranges
         for k, func in dict(
@@ -92,13 +132,14 @@ class V4Config(L3ConfigMixin):
                 network=IPv4Network,
                 gateway=ipv4_gateway,
                 dhcp_ranges=self._handle_dhcp_ranges(IPv4Address),
+                secondary_addresses=self._handle_secondary_addresses(IPv4Address),
                 pool = self._handle_pool(IPv4Address),
         ).items():
             val = getattr(self, k)
             if val is not None:
                 setattr(self, k, func(val))
 
-        super().__post_init__()
+        super().after_resolve()
 
 
 def ipv4_gateway(g):
