@@ -769,6 +769,7 @@ def disk_config_from_model(model, default_disk_config):
 
 
 __all__ = ['AbstractMachineModel',
+           'ssh_origin',
            'Machine', 'MachineRunning', 'BareMetalMachine',
            'SshMixin', 'BaseCustomization', 'ContainerCustomization',
            'FilesystemCustomization',
