@@ -1514,6 +1514,7 @@ async def resolve_deferred(ainjector, item, args:dict):
 
     * Other items are not modified.
 
+    This function does not deal with recursive data structures.
     '''
     # This effectively uses cps internally.  The result argument to the inner functions is a callback that takes the result and puts it in the right place.
     def handle_list(l, result):
@@ -1541,8 +1542,10 @@ async def resolve_deferred(ainjector, item, args:dict):
         fut.add_done_callback(done)
         futures.append(fut)
     def handle_callable(c, result):
-        signature = inspect.signature(c)
-        keys = signature.parameters.keys()
+        try:
+            signature = inspect.signature(c)
+            keys = signature.parameters.keys()
+        except Exception: keys = set()
         in_args = {}
         for k in set(keys)& args_keys:
             in_args[k] = args[k]

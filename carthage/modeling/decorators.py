@@ -8,7 +8,7 @@
 
 import functools
 import typing
-from carthage.dependency_injection import Injector, InjectionKey, inject_autokwargs, dependency_quote
+from carthage.dependency_injection import Injector, InjectionKey, inject_autokwargs, dependency_quote, AsyncRequired, inject
 from .implementation import ModelingBase, InjectableModelType, ModelingContainer, NSFlags
 from .utils import setattr_default, fixup_dynamic_name
 from ..dependency_injection import InjectionKey
@@ -103,10 +103,12 @@ class injector_access(ModelingDecoratorWrapper):
         try:
             return injector.get_instance(self.key)
         except AsyncRequired:
+            @inject(injector=None,
+                    injectable=InjectionKey(Injector))
             class Xref(carthage.dependency_injection.base.InjectorXrefMarker):
                 target_key = self.key
 
-            return Xref(injector)
+            return Xref(injectable=injector)
         
 
     def __repr__(self):
