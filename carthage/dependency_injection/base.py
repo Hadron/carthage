@@ -1081,7 +1081,7 @@ Indicate that a value (or dependency provider) should not be subject to injcoter
 
 '''
 
-    __slots__ = ['value']
+    __slots__ = ['value', '__transclusion_key__']
 
     def __init__(self, value):
         self.value = value

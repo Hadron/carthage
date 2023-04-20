@@ -25,6 +25,6 @@ resolved
     This event is typically used to collect the set of futures for other_links.  When all these futures are *done*, then all effects from resolution of the :class:`NetworkConfig` have been realized.
 
 public_address
-    Emitted toward ``InjectionKey(NetworkLink)`` and ``InjectionKey(NetworkLink, host=model.name)`` when some part of the system becomes aware of the public address of a link behind a NAT.  A *public_v4_address* property is set on the link prior to emitting the event.
+    Emitted toward ``InjectionKey(NetworkLink)`` and ``InjectionKey(NetworkLink, host=model.name)`` when some part of the system becomes aware of the public address of a link behind a NAT.  A *public_address* property is set on the link's *merged_v4_config* prior to emitting the event.
 
     

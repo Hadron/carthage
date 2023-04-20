@@ -83,8 +83,8 @@ Update a DNS zone when :class:`NetworkLinks` gain a public IP address.  This can
         if not zone.contains(name):
             logger.warning(f'Not setting DNS for {model}: {name} does not fall within {zone.name}')
         else:
-            logger.debug(f'{name} is at {str(link.public_v4_address)}')
-            await zone.update_records((name, 'A', str(link.public_v4_address)),
+            logger.debug(f'{name} is at {str(link.merged_v4_config.public_address)}')
+            await zone.update_records((name, 'A', [str(link.merged_v4_config.public_address)]),
                                       ttl=30)
 
     def __init__(self, attach_to=None, **kwargs):

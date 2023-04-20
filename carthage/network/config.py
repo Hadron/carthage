@@ -20,6 +20,7 @@ class L3ConfigMixin:
         'dhcp',
         'dhcp_ranges',
         'address',
+        'public_address',
         'network',
         'gateway',
         'secondary_addresses',
@@ -36,7 +37,7 @@ class L3ConfigMixin:
             if getattr(self,a, None) is not None:
                 setattr(self, a,
                         await resolve_deferred(ainjector, getattr(self, a), args))
-        self.after_resolve();
+        self.after_resolve()
 
     def after_resolve(self):
         if self.dhcp_ranges:
@@ -59,6 +60,7 @@ class L3ConfigMixin:
     def _handle_secondary_addresses(self, func):
         def func_or_none(a):
             if a is None: return None
+            if hasattr(a, 'ip_address'): a = a.ip_address
             return func(a)
         def wrapper(l):
             result = []
@@ -120,11 +122,15 @@ class V4Config(L3ConfigMixin):
     gateway: IPv4Address = None
     masquerade: bool = False
     #: Takes a lower bound and a upper bound, both specified as V4 addresses.  If specified and address is None, will assign the address between the lower and upper bound.  This allows addresses to be dynamically managed at modeling time rather than by DHCP at run time.  DHCP can still be used, but at least for models whose config includes *pool*, addresses will be statically configured in the dhcp server.
-    pool: tuple = None
+    pool: tuple = dataclasses.field(default=None, repr=False)
+    public_address: IPv4Address = dataclasses.field(default=None, repr=False)
     
     _attributes = L3ConfigMixin._attributes | {'masquerade', 'pool'}
 
     def after_resolve(self):
+        # Support things like a VpcAddress being assigned to public_address
+        if hasattr(self.public_address, 'ip_address'):
+            self.public_address = self.public_address.ip_address
         # The following depends on iteration happening in dictionary
         # order such that network is processed before dhcp_ranges
         for k, func in dict(
@@ -134,6 +140,7 @@ class V4Config(L3ConfigMixin):
                 dhcp_ranges=self._handle_dhcp_ranges(IPv4Address),
                 secondary_addresses=self._handle_secondary_addresses(IPv4Address),
                 pool = self._handle_pool(IPv4Address),
+                public_address=IPv4Address,
         ).items():
             val = getattr(self, k)
             if val is not None:

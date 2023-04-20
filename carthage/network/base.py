@@ -639,8 +639,6 @@ class NetworkLink:
     precious: typing.Optional[bool] = dataclasses.field(default=False, repr=False)
 
     admin_status: typing.Optional[str] = dataclasses.field(default='up', repr=False)
-    #: In NAT situations, the public IPv4 address
-    public_v4_address: typing.Optional[IPv4Address] = dataclasses.field(default=None, repr=False)
     #: Sometimes it is desirable to have a different dns entry for an
     # interface than for the host as a whole. If set to a string, this
     # is the (potentially unqualified) dns name for the interface.  If
@@ -709,11 +707,6 @@ class NetworkLink:
         if 'member' in args:
             args['members'] = [args['member']]
             del args['member']
-        # Support things like a VpcAddress being assigned to a public_v4_address.
-        if 'public_v4_address' in args and \
-           hasattr(args['public_v4_address'], 'ip_address') and \
-           args['public_v4_address'].ip_address:
-            args['public_v4_address'] = IPv4Address(args['public_v4_address'].ip_address)
         for k, t in hints.items():
             if k in ('machine', 'connection', 'interface', 'member_of'):
                 if k in args:
@@ -784,7 +777,9 @@ class NetworkLink:
             if merged.address == merged.gateway:
                 merged.gateway = None
             return merged
-        return getattr(self.net, 'v4_config', V4Config())
+        if self.v4_config:
+            return copy.copy(self.v4_config)
+        return V4Config()
 
     def close(self):
         if self.net:
