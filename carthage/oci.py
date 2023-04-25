@@ -12,6 +12,7 @@ from carthage.dependency_injection import *
 from .setup_tasks import setup_task, SetupTaskMixin
 from .utils import memoproperty
 from .config.types import ConfigPath
+import carthage.machine
 
 
 __all__ = []
@@ -227,3 +228,7 @@ def host_mount(dir, readonly=False):
 
 
 __all__ += ['host_mount']
+
+container_host_model_key = InjectionKey(carthage.machine.AbstractMachineModel, role='container_host')
+
+__all__ += ['container_host_model_key']

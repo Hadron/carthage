@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 import logging
-from .dependency_injection import AsyncInjectable, inject_autokwargs, InjectionKey
+from .dependency_injection import AsyncInjectable, inject_autokwargs, InjectionKey, inject, AsyncInjector
 from .network import NetworkLink
 
 __all__ = []
@@ -95,3 +95,27 @@ Update a DNS zone when :class:`NetworkLinks` gain a public IP address.  This can
 
 
 __all__ += ['PublicDnsManagement']
+
+@inject(ainjector=AsyncInjector)
+async def update_dns_for(name, records, *,
+                         ainjector, ttl=300,
+                         ):
+    '''
+    Look up the zone for *name*, and update records within it.
+
+    :param records: A sequence of (rrtype, values)
+
+    Example Usage::
+
+        await ainjector(update_dns_for,
+            "www.foo.com", [('CNAME', 'foo.com')])
+
+    '''
+    head, sep, domain = name.partition('.')
+    zone = await ainjector.get_instance_async(InjectionKey(DnsZone, domain=domain))
+    args = []
+    for type, value in records:
+        args.append((name, type, value))
+    await zone.update_records(args)
+
+__all__ += ['update_dns_for']

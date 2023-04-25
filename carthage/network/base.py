@@ -781,6 +781,18 @@ class NetworkLink:
             return copy.copy(self.v4_config)
         return V4Config()
 
+    @memoproperty
+    def private_to_public_map(self):
+        result = {}
+        def add(private, public):
+            if private and public: result[private] = public
+        config = self.merged_v4_config
+        add(config.address, config.public_address)
+        for a in config.secondary_addresses:
+            add(a.private, a.public)
+        return result
+    
+
     def close(self):
         if self.net:
             try:

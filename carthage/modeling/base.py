@@ -419,7 +419,7 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
 then call :func:`carthage.local.process_local_network_config` to learn about local bridges.
         '''
         res = await super().resolve_networking(*args, **kwargs)
-        from carthage.local import LocalMachineMixin, process_local_network_config
+        from carthage.local import LocalMachineMixin, process_local_network_config, LocalMachine
         try:
             if issubclass(self.machine_type, LocalMachineMixin):
                 process_local_network_config(self)

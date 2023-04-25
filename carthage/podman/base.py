@@ -21,6 +21,7 @@ from ..utils import memoproperty
 from ..oci import *
 from ..setup_tasks import setup_task, SetupTaskMixin
 
+
 logger = logging.getLogger('carthage.podman')
 
 
@@ -47,7 +48,7 @@ def podman_mount_option(injector: Injector, m: OciMount):
 __all__ = []
 
 
-class PodmanContainerHost:
+class PodmanContainerHost(AsyncInjectable):
 
     def podman(self, *args,
                _bg=True, _bg_exc=True):
@@ -70,6 +71,8 @@ class PodmanContainerHost:
 
 class LocalPodmanContainerHost(PodmanContainerHost):
 
+        
+    
     @contextlib.asynccontextmanager
     async def filesystem_access(self, container):
         result = await self.podman(
@@ -153,7 +156,7 @@ class PodmanPod(OciPod):
 
     @memoproperty
     def podman(self):
-        return LocalPodmanContainerHost().podman
+        return self.injector(LocalPodmanContainerHost).podman
 
 
 __all__ += ['PodmanPod']
@@ -211,7 +214,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     @memoproperty
     def container_host(self):
-        return LocalPodmanContainerHost()
+        return self.injector(LocalPodmanContainerHost)
 
     async def find(self):
         try:
@@ -358,7 +361,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         creation = getattr(self, '_find_result', None)
         if creation and mtime < creation:
             return False, "" #stamp predates container creation
-        return mtime, result
+        return mtime, text
 
 __all__ += ['PodmanContainer']
 
@@ -554,7 +557,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
 
     @memoproperty
     def container_host(self):
-        return LocalPodmanContainerHost()
+        return self.injector(LocalPodmanContainerHost)
 
 
 __all__ += ['PodmanImage']
@@ -640,7 +643,7 @@ class ContainerfileImage(OciImage):
 
     @memoproperty
     def container_host(self):
-        return LocalPodmanContainerHost()
+        return self.injector(LocalPodmanContainerHost)
 
     async def do_create(self):
         options = await self._build_options()
