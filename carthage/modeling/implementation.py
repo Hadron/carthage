@@ -694,17 +694,20 @@ If the namespace includes any setup_tasks, then add SetupTaskMixin to the basese
     from ..setup_tasks import SetupTaskMixin, TaskWrapper
     if SetupTaskMixin in bases:
         return bases
+    for b in bases:
+        if SetupTaskMixin in b.__mro__: return bases
     for v in namespace.values():
         if isinstance(v, TaskWrapper):
             break
     else:
         return bases
-    new_bases = [*bases, SetupTaskMixin]
-    for c in new_bases:
+    new_bases = [*bases]
+    for i, c in enumerate(new_bases):
         if AsyncInjectable in c.__mro__:
-            break
+            new_bases.insert(i, SetupTaskMixin)
+            return tuple(new_bases)
     else:
-        new_bases.append(AsyncInjectable)
+        new_bases.extend([SetupTaskMixin,AsyncInjectable])
     return tuple(new_bases)
 
 
