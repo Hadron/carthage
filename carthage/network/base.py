@@ -779,7 +779,9 @@ class NetworkLink:
             return merged
         if self.v4_config:
             return copy.copy(self.v4_config)
-        return V4Config()
+        elif hasattr(self.net, 'v4_config'):
+            return copy.copy(self.net.v4_config)
+        else: return V4Config()
 
     @memoproperty
     def private_to_public_map(self):
