@@ -116,6 +116,6 @@ async def update_dns_for(name, records, *,
     args = []
     for type, value in records:
         args.append((name, type, value))
-    await zone.update_records(args)
+    await zone.update_records(*args)
 
 __all__ += ['update_dns_for']
