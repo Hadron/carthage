@@ -179,7 +179,7 @@ class TaskWrapperBase:
             last_run = await ainjector(self.check_completed_func, obj)
             hash_contents = ""
             if last_run is True:
-                obj.logger_for().debug(f"Task {self.description} for {obj} run without providing timing information")
+                obj.logger_for().debug(f"Task {self.description} for {obj} determined complete by check_completed_func(); no timestamp provided")
                 return (False, dependency_last_run)
         else:
             last_run, hash_contents = obj.check_stamp(self.stamp)
@@ -190,17 +190,16 @@ class TaskWrapperBase:
             obj.logger_for().debug(
                 f"Task {self.description} last run {_iso_time(last_run)}, but dependency run more recently at {_iso_time(dependency_last_run)}")
             return (True, dependency_last_run)
-        obj.logger_for().debug(f"Task {self.description} last run for {obj} at {_iso_time(last_run)}")
         if not self.check_completed_func:
             actual_hash_contents = await ainjector(self.hash_func, obj)
             if actual_hash_contents != hash_contents:
-                obj.logger_for().debug(
-                    f'Task {self.description} old_hash: `{hash_contents}`, new_hash: `{actual_hash_contents}`')
+                obj.logger_for().info(f'Task {self.description} invalidated by hash_func() change from `{hash_contents}` to `{actual_hash_contents}`; last run {_iso_time(last_run)}')
                 return (True, dependency_last_run)
         if self.invalidator_func:
             if not await ainjector(self.invalidator_func, obj, last_run=last_run):
-                obj.logger_for().info(f"Task {self.description} invalidated for {obj}; last run {_iso_time(last_run)}")
+                obj.logger_for().info(f"Task {self.description} invalidated for {obj} by invalidator_func(); last run {_iso_time(last_run)}")
                 return (True, time.time())
+        obj.logger_for().debug(f"Task {self.description} last run for {obj} at {_iso_time(last_run)}; re-running not required")
         return (False, last_run)
 
     def invalidator(self, slow=False):
@@ -407,6 +406,7 @@ class SetupTaskMixin:
                         with SetupTaskContext(self, t):
                             await ainjector(t, self)
                         dependency_last_run = time.time()
+                        self.logger_for().info(f"Finished running {t.description} task for {self} at {dependency_last_run}")
                     else:
                         self.logger_for().info(f'Would run {t.description} task for {self}')
                 except SkipSetupTask:
