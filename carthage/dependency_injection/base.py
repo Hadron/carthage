@@ -828,7 +828,8 @@ Return the first injector in our parent chain containing *k* or None if there is
                 claim_str = f'claimed by {repr(self.claimed_by())}'
             except Exception:
                 claim_str = f'claimed by object with id {id(self.claimed_by())}'
-        return f'<{self.__class__.__name__} {claim_str}>'
+        closed_str = 'CLOSED ' if self.closed else ''
+        return f'<{closed_str}{self.__class__.__name__} {claim_str}>'
 
     @property
     def is_claimed(self):
