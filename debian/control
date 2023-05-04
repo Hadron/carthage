@@ -1,8 +1,8 @@
 Source: hadron-carthage
-Section: proprietary/devel
+Section: devel
 Priority: optional
 Maintainer: Sam Hartman <sam.hartman@hadronindustries.com>
-Build-Depends: debhelper (>= 9), dh-python, python3-all (>= 3.5), python3-openssl, python3-sqlalchemy, python3-setuptools, python3-pytest, python3-mako, python3-yaml, python3-pyvmomi
+Build-Depends: debhelper-compat  (= 13), dh-python, python3-all (>= 3.5), python3-openssl, python3-sqlalchemy, python3-setuptools, python3-pytest, python3-mako, python3-yaml, python3-pyvmomi, python3-sh, python3-lmdb
 Standards-Version: 3.9.6
 X-Python3-Version: >= 3.7
 
@@ -10,11 +10,11 @@ X-Python3-Version: >= 3.7
 Package: python3-carthage
 Architecture: all
 Multi-Arch: foreign
-Depends: ${misc:Depends}, ${python3:Depends}, socat, systemd-container,  python3-hadron-inventory-admin, socat, libvirt-clients, hadron-entanglement-cli (>= 0.10~), qemu-utils, python3-mako, bridge-utils, python3-yaml, python3-pyvmomi, fai-setup-storage, 
+Depends: ${misc:Depends}, ${python3:Depends}, socat, systemd-container,  python3-hadron-inventory-admin, socat, libvirt-clients, hadron-entanglement-cli (>= 0.10~), qemu-utils, python3-mako, bridge-utils, python3-yaml, python3-pyvmomi, fai-setup-storage, python3-sh, sshfs, python3-lmdb
 Description: Burn it to the ground and Rebuild it Framework
 
 Package: hadron-carthage-cli
-Section: proprietary/net
+Section: net
 Architecture: all
 Multi-Arch: foreign
 Depends: python3-carthage(= ${binary:Version}), ${python3:Depends}

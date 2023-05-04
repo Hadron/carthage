@@ -12,17 +12,19 @@ from setuptools import setup
 
 setup(
     name = "carthage",
-    license = "proprietary",
+    license = "LGPL-3",
     include_package_data = True,
     maintainer = "Sam Hartman",
     maintainer_email = "sam.hartman@hadronindustries.com",
-    url = "http://www.hadronindustries.com/",
+    url = "https://github.com/hadron/carthage",
     packages = ["carthage",
                 'carthage.config',
+                'carthage.dependency_injection',
                 'carthage.network',
                 'carthage.extra_packages',
                 "carthage.modeling",
                 'carthage.vault',
+                'carthage.podman',
                 "carthage.vmware"],
     install_requires = ['pytest', ],
     scripts = ['bin/carthage-runner',
@@ -33,6 +35,6 @@ setup(
                                  'resources/*',],
                     'carthage.extra_packages': ['resources/*'],
     },
-    version = "0.13",
+    version = "0.20",
 )
 
