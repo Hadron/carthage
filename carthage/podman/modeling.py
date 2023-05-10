@@ -79,7 +79,7 @@ class PodmanPodModel(PodmanPod, InjectableModel, metaclass=carthage.modeling.imp
 __all__ += ['PodmanPodModel']
 
 
-class PodmanImageModel(PodmanImage, ImageRole):
+class PodmanImageModel(ImageRole, PodmanImage):
 
     '''
     Like a :class:`PodmanImage` excetp:
