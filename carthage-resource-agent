@@ -64,7 +64,7 @@ async def monitor(config, machines):
     try:
         layout = await get_layout(config)
     except FileNotFoundError:
-        return ocf.OCF_NOT_IMPLEMENTED
+        return ocf.OCF_ERR_UNIMPLEMENTED
     models = await get_machines(layout, machines)
     probe = ocf.is_probe()
     all_running = True
@@ -115,7 +115,7 @@ async def stop(config, machines):
     try:
         layout = await get_layout(config)
     except FileNotFoundError:
-        return ocf.OCF_NOT_IMPLEMENTED
+        return ocf.OCF_ERR_UNIMPLEMENTED
     ainjector = layout.ainjector
     config_layout = await ainjector(ConfigLayout)
     async with file_locked(Path(config_layout.output_dir)/"generation_lock"):
