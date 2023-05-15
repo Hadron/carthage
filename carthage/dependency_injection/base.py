@@ -403,10 +403,10 @@ Return the first injector in our parent chain containing *k* or None if there is
         if isinstance(predicate, list):
             constraints = predicate
             predicate = filter_for_constraints
-        if stop_at and not self.parent_injector:
-            raise ValueError(f'{stop_at} was not in the parent chain')
-        elif stop_at == self:
+        if stop_at == self:
             result = {}  # stop here
+        elif stop_at and not self.parent_injector:
+            raise ValueError(f'{stop_at} was not in the parent chain')
         elif self.parent_injector:
             result = {k: True for k in self.parent_injector.filter(target, predicate, stop_at=stop_at)}
         else:  # no stop_at; ended chain
