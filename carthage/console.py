@@ -225,7 +225,11 @@ class CarthageConsole(code.InteractiveConsole):
         if self.subcommands:
             match = subcommands_re.match(source)
             if match:
-                args = self.subcommands_parser.parse_args(shlex.split(match.group(1)))
+                try:
+                    args = self.subcommands_parser.parse_args(shlex.split(match.group(1)))
+                except argparse.ArgumentError as e:
+                    print(e)
+                    return
                 if args.cmd == 'help':
                     self.subcommands_parser.print_help()
                     return
