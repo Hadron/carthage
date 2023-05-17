@@ -138,6 +138,15 @@ class podman_layout(CarthageLayout):
                 net=podman_net)
             
 
+    class net_pod(PodmanPodModel):
+
+        name = 'net_test'
+        class config(NetworkConfigModel):
+            add('eth0', mac=None, net=podman_net)
+
+        class container(MachineModel):
+            pass
+        
 @async_test
 async def test_podman_create(ainjector):
     l = await ainjector(podman_layout)
@@ -281,5 +290,17 @@ async def test_podman_container_network(layout_fixture):
         await layout.networked_container.machine.async_become_ready()
     finally:
         try: await layout.networked_container.machine.delete()
+        except Exception: pass
+        
+@async_test
+async def test_podman_pod_network(layout_fixture):
+    "Test networking in a pod"
+    layout = layout_fixture
+    try:
+        await layout.net_pod.container.machine.async_become_ready()
+        async with layout.net_pod.container.machine.machine_running():
+            await layout.net_pod.container.machine.container_exec('apt', 'update')
+    finally:
+        try: await layout.net_pod.container.machine.delete()
         except Exception: pass
         

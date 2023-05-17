@@ -14,6 +14,7 @@ import logging
 from pathlib import Path
 import tempfile
 import dateutil.parser
+import carthage.machine
 from carthage.dependency_injection import *
 from .. import sh
 from ..machine import AbstractMachineModel, Machine
@@ -125,10 +126,15 @@ class PodmanNetworkMixin:
             options.extend(['--network', l.net_instance.link_options(l)])
         return options
 
+    async def resolve_networking(self, force:bool = False):
+        await super().resolve_networking(force=force)
+        for net in set(map( lambda l:l.net, self.network_links.values())):
+            net.assign_addresses()
+            
 @inject(
     podman_pod_options=InjectionKey('podman_pod_options', _optional=NotPresent),
 )
-class PodmanPod(OciPod):
+class PodmanPod(OciPod, PodmanNetworkMixin, carthage.machine.NetworkedModel):
 
     #: A list of extra options to pass to pod create
     podman_pod_options = []
@@ -136,6 +142,7 @@ class PodmanPod(OciPod):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.injector.add_provider(InjectionKey(PodmanPod), dependency_quote(self))
+        self.network_links = {}
 
     async def find(self):
         if self.id:
@@ -152,7 +159,7 @@ class PodmanPod(OciPod):
         return dateutil.parser.isoparse(pod_info['Created']).timestamp()
 
     async def do_create(self):
-        options = []
+        options = await self._network_options()
         for p in self.exposed_ports:
             options.append(podman_port_option(p))
         options.extend(self.podman_pod_options)
@@ -185,7 +192,7 @@ __all__ += ['PodmanPod']
     pod=InjectionKey(PodmanPod, _optional=True),
     podman_options=InjectionKey('podman_options', _optional=NotPresent),
 )
-class PodmanContainer(Machine, OciContainer, PodmanNetworkMixin):
+class PodmanContainer(PodmanNetworkMixin, Machine, OciContainer):
 
     '''
 An OCI container implemented using ``podman``.  While it is possible to set up a container to be accessible via ssh and to meet all the interfaces of :class:`~carthage.machine.SshMixin`, this is relatively uncommon.  Such containers often have an entry point that is not a full init, and only run one service or program.  Typically :meth:`container_exec` is used to execute an additional command in the scope of a container rather than using :meth:`ssh`.

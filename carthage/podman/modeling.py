@@ -74,7 +74,16 @@ class PodmanPodModel(PodmanPod, InjectableModel, metaclass=carthage.modeling.imp
         if k.constraints:
             yield InjectionKey(PodmanPod, **k.constraints)
             yield InjectionKey(PodmanPodModel, **k.constraints)
+            if 'name' in k.constraints:
+                yield InjectionKey(carthage.machine.ResolvableModel, name=k.constraints['name']+'-pod',
+                                   _globally_unique=self.pod_name_global)
 
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if cls.name:
+            globally_unique_key(InjectionKey(
+            carthage.machine.ResolvableModel, name=cls.name+'-pod'))(cls)
+            
 
 __all__ += ['PodmanPodModel']
 
