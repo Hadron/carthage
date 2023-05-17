@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -216,14 +216,29 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
         except sh.ErrorReturnCode:
             pass
 
+class ResolvableModel(Injectable):
 
-class AbstractMachineModel(Injectable):
+    '''
+    In a :class:`carthage.modeling.CarthageLayout` all the models are instantiated as part of bringing the layout to ready.  This permits models to contribute to a shared understanding of networking and other global aspects of the layout.
+
+    This class represents  a model that can be instantiated and *resolved*.  A layout will instantiate all :class:`ResolvableModel` objects in the scope of its injector that have a name constraint on their :class:`InjectionKey`.
+
+    This class is defined here rather than in the modeling layer so that :class:`AbstractMachineModel` does not need to depend on the modeling layer.
+
+    Subclasses of this model will typically need to override default_class_injection_key and probably supplimentary_injection_keys.
+    
+    '''
+
+    async def resolve_model(self, force):
+        pass
+
+class NetworkedModel(ResolvableModel):
+
+    '''Represents something like a :class:`AbstractMachineModel` or a :class:`carthage.podman.PodmanPod` that generates a set of network_links from a :class:`~NetworkConfig`.
+
+    '''
 
     network_links: typing.Mapping[str, carthage.network.NetworkLink]
-    name: str
-
-    #: If True, :meth:`Machine.start_dependencies()` will stop collecting dependencies at the injector of this model.  In the normal situation where the :class:`Machine` is instantiated within the model's dependency context, what this means is that  only system dependencies declared on the model will be started.  This may also be an :class:`InjectionKey`, an :class:`Injector`, or an :class:`Injectable`.  Se the documentation of :meth:`Machine.start_dependencies()`.
-    override_dependencies: typing.Union[bool, Injector, Injectable, InjectionKey] = False
 
     async def resolve_networking(self, force: bool = False):
         '''
@@ -246,6 +261,44 @@ class AbstractMachineModel(Injectable):
         if network_config is None:
             return
         result = await ainjector(network_config.resolve, self)
+
+    async def resolve_model(self, force:bool=False):
+        await self.resolve_networking(force=force)
+        return await super().resolve_model(force=force)
+    
+
+class AbstractMachineModel(NetworkedModel):
+
+    '''
+    Represents properties of a machine that do not involve interacting with an implementation of that machine.  All the *AbstractMachineModels* in a layout can be instantiated to reason about things like network connections, configuration, and what machines will be built without instantiating any of the machines.  Typically if a :class:`Machine` has a model, the model will be made available either by setting the *model* property on the machine, or by providing a dependency for :class:`AbstractModel` in the injector in which the machine is instantiated.
+
+    The most common concrete implementation of a machine model is :class:`carthage.modeling.MachineModel`.
+
+    '''
+    
+    name: str
+
+    #: If True, :meth:`Machine.start_dependencies()` will stop collecting dependencies at the injector of this model.  In the normal situation where the :class:`Machine` is instantiated within the model's dependency context, what this means is that  only system dependencies declared on the model will be started.  This may also be an :class:`InjectionKey`, an :class:`Injector`, or an :class:`Injectable`.  Se the documentation of :meth:`Machine.start_dependencies()`.
+    override_dependencies: typing.Union[bool, Injector, Injectable, InjectionKey] = False
+
+    @classmethod
+    def default_class_injection_key(self):
+        if hasattr(self, 'name'):
+            return InjectionKey(AbstractMachineModel, host=self.name)
+        else:
+            return super().default_class_injection_key()
+
+    @classmethod
+    def supplementary_injection_keys(cls, k):
+        name = None
+        if 'host' in k.constraints:
+            name =k.constraints['host']
+        elif 'name' in k.constraints:
+            name = k.constraints['name']
+        if name:
+            yield InjectionKey(ResolvableModel, name=name)
+        yield from super().supplementary_injection_keys(k)
+        
 
 
 @inject_autokwargs(config_layout=ConfigLayout)
@@ -771,6 +824,7 @@ def disk_config_from_model(model, default_disk_config):
 __all__ = ['AbstractMachineModel',
            'ssh_origin',
            'Machine', 'MachineRunning', 'BareMetalMachine',
+           'ResolvableModel', 'NetworkedModel',
            'SshMixin', 'BaseCustomization', 'ContainerCustomization',
            'FilesystemCustomization',
            'MachineCustomization']

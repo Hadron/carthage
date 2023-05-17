@@ -152,7 +152,7 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass=ModelingContainer):
 
     async def all_models(self, ready=None):
         models = await self.ainjector.filter_instantiate_async(
-            MachineModel, ['host'],
+            carthage.machine.ResolvableModel, ['name'],
             stop_at=self.injector,
             ready=ready)
         return [m[1] for m in models]
@@ -173,11 +173,11 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass=ModelingContainer):
         with self.injector.event_listener_context(
                 InjectionKey(carthage.network.NetworkConfig), "resolved",
                 await_futures) as event_futures:
-            resolve_networking_futures = []
+            resolve_model_futures = []
             for m in models:
-                resolve_networking_futures.append(asyncio.ensure_future(m.resolve_networking(force)))
-            if resolve_networking_futures:
-                await asyncio.gather(*resolve_networking_futures)
+                resolve_model_futures.append(asyncio.ensure_future(m.resolve_model(force)))
+            if resolve_model_futures:
+                await asyncio.gather(*resolve_model_futures)
         if event_futures:
             await asyncio.gather(*event_futures)
         self.resolve_networking_models = models
@@ -299,6 +299,9 @@ class MachineModelType(RoleType):
                 ))
             self.__container_propagations__[machine_key] = \
                 self.__initial_injections__[machine_key]
+            globally_unique_key(InjectionKey(
+                carthage.machine.ResolvableModel,
+                name=self.name))(self)
 
 
 class MachineModelMixin:
@@ -486,7 +489,7 @@ class CarthageLayout(ModelGroup):
     #. Layouts that set the `carthage.kvstore.persistent_seed_path` in the context of their :class:`Injector` will have persistent assignments of things like IP addresses and MAC addresses loaded from the seed path when instantiated.
 
     '''
-    
+
 
     @classmethod
     def default_class_injection_key(cls):
@@ -506,7 +509,7 @@ class CarthageLayout(ModelGroup):
                 kvstore = self.injector.get_instance(carthage.kvstore.KvStore)
                 if not kvstore.persistent_seed_path:
                     kvstore.load(str(seed_path))
-                    
+
 
 __all__ += ['CarthageLayout']
 
