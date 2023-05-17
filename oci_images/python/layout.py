@@ -34,7 +34,7 @@ class layout(CarthageLayout):
         install = wrap_container_customization(install_stage1_packages_task(['ansible']))
 
     oci_interactive = True
-    # We could simply use the 'debain:bookworm' docker image.  That
+    # We could simply use the 'debian:bookworm' docker image.  That
     # may even be a better choice.  However in an attempt to change
     # only one thing at a time migrating from the old image building,
     # I'm doing this.
