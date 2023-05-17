@@ -51,7 +51,13 @@ class InjectableModel(Injectable, metaclass=InjectableModelType):
         for k, to_ignore in self.__transclusions__.items():
             if k in not_transcluded: continue
             target = parent_injector.injector_containing(k)
-            if target: ignored_keys |= to_ignore
+            if target:
+                ignored_keys |= to_ignore
+                # For each alias that a transcluded item may be known by, set up an injector_xref back to the base transcluded key
+                for alias in to_ignore:
+                    if alias is k: continue # It's the primary key
+                    try: injector.add_provider(alias, injector_xref(None, k))
+                    except ExistingProvider: pass
             else: not_transcluded |= to_ignore
         if not_transcluded: self.injector.add_provider(not_transcluded_key, not_transcluded)
         # This is complicated because we want to reuse the same

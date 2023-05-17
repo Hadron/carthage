@@ -126,13 +126,12 @@ class ModelingNamespace(dict):
     def keys_for(self, name, state):
         # returns key, (value, options)
         def val(k):
-            if k == state.transclusion_key or state.transclusion_key is None:
-                value = state.value
-                if state.flags & NSFlags.dependency_quote:
-                    return dependency_quote(value)
-                else:
-                    return value
-            return decorators.injector_access(state.transclusion_key)
+            value = state.value
+            if state.flags & NSFlags.dependency_quote:
+                return dependency_quote(value)
+            else:
+                return value
+
         options = state.injection_options
         state.extra_keys.sort(key=lambda k:k.globally_unique, reverse=True)
         if state.flags & NSFlags.inject_by_name:
