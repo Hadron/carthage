@@ -18,6 +18,7 @@ from carthage.dependency_injection import *
 from .. import sh
 from ..machine import AbstractMachineModel, Machine
 from ..utils import memoproperty
+from ..network import TechnologySpecificNetwork, Network, V4Config, this_network
 from ..oci import *
 from ..setup_tasks import setup_task, SetupTaskMixin
 
@@ -108,6 +109,21 @@ class LocalPodmanContainerHost(PodmanContainerHost):
                 _bg_exc=False)
             yield path / 'container.tar.gz'
 
+class PodmanNetworkMixin:
+
+    async def _setup_networks(self):
+        for l in self.network_links.values():
+            if l.local_type: continue
+            await l.instantiate(PodmanNetwork)
+
+    async def _network_options(self):
+        await self._setup_networks()
+        options = []
+        for l in self.network_links.values():
+            if l.local_type: continue
+            l.net.assign_addresses()
+            options.extend(['--network', l.net_instance.link_options(l)])
+        return options
 
 @inject(
     podman_pod_options=InjectionKey('podman_pod_options', _optional=NotPresent),
@@ -161,6 +177,7 @@ class PodmanPod(OciPod):
 
 __all__ += ['PodmanPod']
 
+   
 
 @inject_autokwargs(
     oci_container_image=InjectionKey(oci_container_image, _optional=NotPresent),
@@ -168,7 +185,7 @@ __all__ += ['PodmanPod']
     pod=InjectionKey(PodmanPod, _optional=True),
     podman_options=InjectionKey('podman_options', _optional=NotPresent),
 )
-class PodmanContainer(Machine, OciContainer):
+class PodmanContainer(Machine, OciContainer, PodmanNetworkMixin):
 
     '''
 An OCI container implemented using ``podman``.  While it is possible to set up a container to be accessible via ssh and to meet all the interfaces of :class:`~carthage.machine.SshMixin`, this is relatively uncommon.  Such containers often have an entry point that is not a full init, and only run one service or program.  Typically :meth:`container_exec` is used to execute an additional command in the scope of a container rather than using :meth:`ssh`.
@@ -235,6 +252,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         except Exception as e:
             raise ValueError(f'Invalid ISO string: {self.container_info["Created"]}')
 
+            
     async def do_create(self):
         image = self.oci_container_image
         if isinstance(image, OciImage):
@@ -245,10 +263,15 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         command_options = []
         if self.oci_command:
             command_options = list(self.oci_command)
+        if self.pod:
+            network_options = [] # podman_create_options sets --pod
+        else:
+            network_options = await self._network_options()
         await self.podman(
             'container', 'create',
             f'--name={self.full_name}',
             *self._podman_create_options(),
+            *network_options,
             image,
             *command_options,
             _bg=True, _bg_exc=False)
@@ -689,3 +712,67 @@ class ContainerfileImage(OciImage):
         return options
 
 __all__ += ['ContainerfileImage']
+
+@inject_autokwargs(network=this_network)
+class PodmanNetwork(TechnologySpecificNetwork, OciManaged):
+
+    @memoproperty
+    def container_host(self):
+        return self.injector(LocalPodmanContainerHost)
+
+    @property
+    def podman(self):
+        return self.container_host.podman
+    
+    async def find(self):
+        try:
+            inspect_result = await self.podman(
+                'network', 'inspect', self.network.name)
+        except Exception: return False
+        info = json.loads(str(inspect_result))[0]
+        return dateutil.parser.isoparse(info['created']).timestamp()
+
+    async def do_create(self):
+        options = ['-d', 'bridge']
+        v4_config = getattr(self.network, 'v4_config', None)
+        if v4_config:
+            if v4_config.network:
+                options.extend([
+                    '--subnet', str(v4_config.network)])
+            if v4_config.gateway is False:
+                options.append('--internal')
+            elif v4_config.gateway and v4_config.gateway  is not True:
+                options.extend([
+                    '--gateway', str(v4_config.gateway)])
+            if v4_config.dhcp:
+                options.extend(['--ipam-driver=dhcp'])
+        await self.podman(
+            'network',
+            'create', self.network.name,
+            *options)
+
+    async def delete(self, force=True):
+        if force:
+            force_options = ['--force']
+        else: force_options = []
+        await self.podman(
+            'network', 'rm', *force_options,
+            self.network.name)
+        
+    def link_options(self, link):
+        def safe(s):
+            assert ',' not in s
+            assert '=' not in s
+            return s
+        v4_config = link.merged_v4_config
+        options = ['interface_name='+safe(link.interface)]
+        if v4_config.address:
+            options.append('ip='+safe(str(v4_config.address)))
+        if link.mac:
+            options.append('mac='+safe(link.mac))
+        if link.mtu:
+            options.append('mtu='+safe(link.mtu))
+        assert ':' not in self.network.name
+        return safe(self.network.name)+':'+','.join(options)
+
+__all__ += ['PodmanNetwork']

@@ -23,9 +23,13 @@ from carthage.pytest import *
 
 state_dir = Path(__file__).parent.joinpath("test_state")
 
+@pytest.fixture(scope='session')
+def enable_podman():
+    import carthage.plugins
+    base_injector(carthage.plugins.load_plugin, 'carthage.podman')
 
 @pytest.fixture()
-def ainjector(ainjector):
+def ainjector(ainjector, enable_podman):
     ainjector = ainjector.claim("test_setup.py")
     config = ainjector.injector(carthage.ConfigLayout)
     config.state_dir = state_dir
@@ -33,6 +37,16 @@ def ainjector(ainjector):
     yield ainjector
     shutil.rmtree(state_dir, ignore_errors=True)
 
+@pytest.fixture()
+def layout_fixture(ainjector):
+    loop = ainjector.loop
+    ainjector.add_provider(podman_layout)
+    layout = loop.run_until_complete(ainjector.get_instance_async(CarthageLayout))
+    yield layout
+    try: loop.run_until_complete(
+            layout.podman_net.instantiated.delete(force=True))
+    except Exception: pass
+    
 
 class podman_layout(CarthageLayout):
     layout_name = 'podman'
@@ -43,6 +57,13 @@ class podman_layout(CarthageLayout):
 
     oci_interactive = True
 
+    @provides('podman_net')
+    class podman_net(NetworkModel):
+        v4_config = V4Config(
+            network='10.66.0.0/24',
+            pool=('10.66.0.5', '10.66.0.20'))
+
+        instantiated = injector_access(carthage.podman.PodmanNetwork)
     class FromScratchDebian(PodmanFromScratchImage):
         oci_image_cmd = 'bash'
         oci_image_tag = 'localhost/from_scratch_debian'
@@ -109,6 +130,13 @@ class podman_layout(CarthageLayout):
         class pod_member(MachineModel):
             pass
 
+    class networked_container(MachineModel):
+
+        class config(NetworkConfigModel):
+            add('eth0',
+                mac=None,
+                net=podman_net)
+            
 
 @async_test
 async def test_podman_create(ainjector):
@@ -244,3 +272,14 @@ async def test_containerfile_image(ainjector):
     finally:
         try: await l.true_machine.machine.delete()
         except Exception: pass
+
+@async_test
+async def test_podman_container_network(layout_fixture):
+    "Test networking on a single container"
+    layout = layout_fixture
+    try:
+        await layout.networked_container.machine.async_become_ready()
+    finally:
+        try: await layout.networked_container.machine.delete()
+        except Exception: pass
+        
