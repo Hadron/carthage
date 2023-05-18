@@ -56,6 +56,7 @@ class PodmanPodModel(PodmanPod, InjectableModel, metaclass=carthage.modeling.imp
     '''
 
     add_provider(machine_implementation_key, dependency_quote(PodmanContainer))
+    self_provider(carthage.machine.network_namespace_key)
 
     def __init__(self, **kwargs):
         if ('id' not in kwargs) and ('name' not in kwargs):

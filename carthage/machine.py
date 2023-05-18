@@ -232,9 +232,15 @@ class ResolvableModel(Injectable):
     async def resolve_model(self, force):
         pass
 
+#: If this key is provided in the injector context of a :class:`NetworkedModel`, then that model assumes it is in the namespace of the :class:`NetworkedModel` or :class:`Machine` providing this key.  Rather than resolving the network config, the *network_links* property of the object providing this key is reused.
+network_namespace_key = InjectionKey('carthage.machine.network_namespace', _ready=False)
+
 class NetworkedModel(ResolvableModel):
 
     '''Represents something like a :class:`AbstractMachineModel` or a :class:`carthage.podman.PodmanPod` that generates a set of network_links from a :class:`~NetworkConfig`.
+
+    When :meth:`resolve_networking` is called, if *self.injector* provides :ref:`network_namespace_key`,  then the network_links are reused from the object providing that dependency.  Typical usage is for a :class:`~carthage.oci.OciPod` or similar network namespace in which a :class:`AbstractMachineModel` will be run to provide *network_namespace_key*.
+    
 
     '''
 
@@ -255,6 +261,11 @@ class NetworkedModel(ResolvableModel):
                 ainjector = self.ainjector
             else:
                 ainjector = self.injector(AsyncInjector)
+            network_namespace = await ainjector.get_instance_async(InjectionKey(network_namespace_key, _optional=True, _ready=False))
+            if network_namespace and network_namespace is not self:
+                await network_namespace.resolve_networking(force=force)
+                self.network_links = network_namespace.network_links
+                return
             network_config = await ainjector.get_instance_async(NetworkConfig)
         except KeyError:
             return

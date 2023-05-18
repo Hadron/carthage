@@ -126,6 +126,20 @@ class PodmanNetworkMixin:
             options.extend(['--network', l.net_instance.link_options(l)])
         return options
 
+    async def _container_network_options(self):
+        # Like network_options but handles network_namespace_key
+        try:
+            network_namespace = await self.ainjector.get_instance_async(carthage.machine.network_namespace_key)
+        except KeyError: network_namespace = False
+        if self.pod and self.network_links and network_namespace is False:
+            logger.error(f"{self.name} will not join network of {self.pod}; if this is intended then add_provider(network_namespace_key, dependency_quote(None) in {self.name}'s model.  If it is not, then set network_namespace_key to {self.pod}")
+        if network_namespace:
+            if isinstance(network_namespace, PodmanContainer):
+                await network_namespace.find_or_create()
+                return ['--network', 'container:'+network_namespace.id]
+            return []           # Joining a pod
+        return await self._network_options() # Creating our own namespace
+           
     async def resolve_networking(self, force:bool = False):
         await super().resolve_networking(force=force)
         for net in set(map( lambda l:l.net, self.network_links.values())):
@@ -270,10 +284,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         command_options = []
         if self.oci_command:
             command_options = list(self.oci_command)
-        if self.pod:
-            network_options = [] # podman_create_options sets --pod
-        else:
-            network_options = await self._network_options()
+        network_options = await self._container_network_options()
         await self.podman(
             'container', 'create',
             f'--name={self.full_name}',
