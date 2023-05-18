@@ -19,7 +19,7 @@ from carthage.dependency_injection import *
 from .. import sh
 from ..machine import AbstractMachineModel, Machine
 from ..utils import memoproperty
-from ..network import TechnologySpecificNetwork, Network, V4Config, this_network
+from ..network import TechnologySpecificNetwork, Network, V4Config, this_network, NetworkConfig
 from ..oci import *
 from ..setup_tasks import setup_task, SetupTaskMixin
 
@@ -428,6 +428,9 @@ class PodmanImageBuilderContainer(PodmanContainer):
         if res is None: raise AttributeError
         return res
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.add_provider(InjectionKey(NetworkConfig), dependency_quote(None))
 @inject_autokwargs(
     base_image=InjectionKey(oci_container_image, _optional=NotPresent),
 )

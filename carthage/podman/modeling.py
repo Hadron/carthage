@@ -108,6 +108,7 @@ class PodmanImageModel(ImageRole, PodmanImage):
         super().__init__(**kwargs)
         self.injected_tasks_added = False
         self.injector.add_provider(InjectionKey(PodmanImageModel), self)
+        self.network_links = {}
 
     def add_injected_tasks(self):
         for k, customization in self.injector.filter_instantiate(
