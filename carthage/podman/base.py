@@ -430,7 +430,7 @@ class PodmanImageBuilderContainer(PodmanContainer):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.add_provider(InjectionKey(NetworkConfig), dependency_quote(None))
+        self.injector.add_provider(InjectionKey(NetworkConfig), dependency_quote(None))
 @inject_autokwargs(
     base_image=InjectionKey(oci_container_image, _optional=NotPresent),
 )
