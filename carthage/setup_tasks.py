@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -644,6 +644,7 @@ def install_mako_task(relationship, cross_dependency=True):
         @inject(ainjector=AsyncInjector)
         async def install(self, ainjector, last_run, **kwargs):
             related = getattr(self, relationship)
+            await related.async_become_ready()
             last = 0.0
             for mt in find_mako_tasks(related.setup_tasks):
                 run, last = await mt.should_run_task(related, dependency_last_run=last, ainjector=ainjector)
