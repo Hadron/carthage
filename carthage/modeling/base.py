@@ -192,11 +192,13 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass=ModelingContainer):
 
     async def generate(self):
         async def cb(m):
-            try:
-                await m.async_become_ready()
-            except Exception:
-                logger.exception(f"Error generating for {repr(m)}")
-                raise
+            # For now we don't want to async_become_ready PodmanPodModels at generate time because that instantiates the Pod.  Long term we may want to separate out PodmanPod from PodmanPodModel.
+            if isinstance(m,MachineModel): 
+                try:
+                    await m.async_become_ready()
+                except Exception:
+                    logger.exception(f"Error generating for {repr(m)}")
+                    raise
         models = await self.resolve_networking()
         models += self.all_model_tasks
         futures = []
