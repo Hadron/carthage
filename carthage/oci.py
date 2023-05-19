@@ -61,6 +61,16 @@ class OciManaged(SetupTaskMixin, AsyncInjectable):
     async def do_create(self):
         raise NotImplementedError
 
+    def __repr__(self):
+        res = f'<{self.__class__.__name__} '
+        try: res += f'name:{self.name} '
+        except Exception: pass
+        try:
+            if self.id:
+                res += f'id: {self.id} '
+        except Exception: pass
+        return res+'>'
+    
 
 __all__ += ['OciManaged']
 
