@@ -381,7 +381,10 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
         machine_key = InjectionKey(carthage.machine.Machine, host=self.name)
         target = self.injector.injector_containing(machine_key)
         if target is self.injector:
-            self.injector.add_provider(InjectionKey(carthage.machine.Machine), MachineImplementation)
+            try:
+                self.injector.add_provider(InjectionKey(carthage.machine.Machine), MachineImplementation)
+            except ExistingProvider:
+                raise SyntaxError('carthage.machine.Machine already registered; typically this means a missing dependency_quote when setting machine_implementation_key')
         else:
             self.injector.add_provider(InjectionKey(carthage.machine.Machine), injector_access(machine_key))
 
