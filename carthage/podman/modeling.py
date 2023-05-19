@@ -17,7 +17,7 @@ from carthage.oci import OciImage
 __all__ = []
 
 
-class PodmanPodModel(PodmanPod, InjectableModel, metaclass=carthage.modeling.implementation.ModelingContainer):
+class PodmanPodModel( carthage.machine.NetworkedModel, InjectableModel, metaclass=carthage.modeling.implementation.ModelingContainer):
 
     '''A container that can group a number of :class:`MachineModels` representing Podman containers.
 
@@ -58,17 +58,38 @@ class PodmanPodModel(PodmanPod, InjectableModel, metaclass=carthage.modeling.imp
     add_provider(machine_implementation_key, dependency_quote(PodmanContainer))
     self_provider(carthage.machine.network_namespace_key)
 
+    @classmethod
+    def name_for(cls):
+        return getattr(cls, 'name', cls.__name__)
+    
     def __init__(self, **kwargs):
-        if ('id' not in kwargs) and ('name' not in kwargs):
-            if not self.id and not self.name:
-                self.name = self.__class__.__name__
+        self.name = self.name_for()
         super().__init__(**kwargs)
+        self.network_links = {}
+        pod_key = InjectionKey(PodmanPod, name=self.name, _globally_unique=self.pod_name_global)
+        if pod_key in self.ignored_by_transclusion:
+            self.injector.add_provider(InjectionKey(PodmanPod), injector_access(pod_key), close=False)
+        else:
+            class Pod(PodmanPod):
+                name = self.name
+            self.injector.add_provider(InjectionKey(PodmanPod), Pod)
 
-    pod_name_global = False  # : If True, the pod name is globally unique
+    def __init_subclass__(cls, template=False, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if not template:
+            cls.add_provider(InjectionKey(PodmanPod, name=cls.name_for(), _globally_unique=cls.pod_name_global),
+                         injector_access(InjectionKey(PodmanPod)),
+                         close=False,
+                         propagate=cls.pod_name_global,
+                         transclusion_overrides=cls.pod_name_global)
+            globally_unique_key(InjectionKey(carthage.machine.ResolvableModel, name=cls.name_for()+'-pod'))(cls)
+                                         
+                                          
+    pod_name_global = True  # : If True, the pod name is globally unique
 
     @classmethod
     def our_key(self):
-        name = self.name or self.__name__
+        name = self.name_for()
         return InjectionKey(self.__class__, name=name)
 
     @classmethod
@@ -80,12 +101,11 @@ class PodmanPodModel(PodmanPod, InjectableModel, metaclass=carthage.modeling.imp
                 yield InjectionKey(carthage.machine.ResolvableModel, name=k.constraints['name']+'-pod',
                                    _globally_unique=self.pod_name_global)
 
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        if cls.name:
-            globally_unique_key(InjectionKey(
-            carthage.machine.ResolvableModel, name=cls.name+'-pod'))(cls)
-            
+    pod = injector_access(InjectionKey(PodmanPod))
+
+    def __repr__(self):
+        return f'<{self.__class__.__name__} name:{self.name}>'
+    
 
 __all__ += ['PodmanPodModel']
 

@@ -40,7 +40,7 @@ __all__ += ['dependency_quote_class']
 class InjectableModel(Injectable, metaclass=InjectableModelType):
 
     def __init__(self, *args, _not_transcluded=None, **kwargs):
-        self._already_instantiated = True # no more calling modelmethods
+        self.__class__._already_instantiated = True # no more calling modelmethods
         super().__init__(*args, **kwargs)
         injector = self.injector
         dependency_providers: typing.Mapping[typing.Any, DependencyProvider] = {}
@@ -60,6 +60,7 @@ class InjectableModel(Injectable, metaclass=InjectableModelType):
                     except ExistingProvider: pass
             else: not_transcluded |= to_ignore
         if not_transcluded: self.injector.add_provider(not_transcluded_key, not_transcluded)
+        self.ignored_by_transclusion = frozenset(ignored_keys)
         # This is complicated because we want to reuse the same
         # DependencyProvider when registering the same value more than
         # once so that instantiations alias and we don't accidentally
@@ -192,13 +193,11 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass=ModelingContainer):
 
     async def generate(self):
         async def cb(m):
-            # For now we don't want to async_become_ready PodmanPodModels at generate time because that instantiates the Pod.  Long term we may want to separate out PodmanPod from PodmanPodModel.
-            if isinstance(m,MachineModel): 
-                try:
-                    await m.async_become_ready()
-                except Exception:
-                    logger.exception(f"Error generating for {repr(m)}")
-                    raise
+            try:
+                await m.async_become_ready()
+            except Exception:
+                logger.exception(f"Error generating for {repr(m)}")
+                raise
         models = await self.resolve_networking()
         models += self.all_model_tasks
         futures = []
