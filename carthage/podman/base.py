@@ -695,7 +695,7 @@ class ContainerfileImage(OciImage):
         return await self.container_host.podman(
             'build',
             '--annotation', 'com.hadronindustries.carthage.image_mtime='+ \
-            datetime.datetime.fromtimestamp(self.container_context_mtime,datetime.UTC).isoformat(),
+            datetime.datetime.fromtimestamp(self.container_context_mtime,datetime.timezone.utc).isoformat(),
             '-t'+self.oci_image_tag,
             *options,
             self.container_context)
