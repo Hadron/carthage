@@ -9,6 +9,7 @@
 from __future__ import annotations
 import asyncio
 import contextlib
+import datetime
 import json
 import logging
 from pathlib import Path
@@ -693,6 +694,8 @@ class ContainerfileImage(OciImage):
         options = await self._build_options()
         return await self.container_host.podman(
             'build',
+            '--annotation', 'com.hadronindustries.carthage.image_mtime='+ \
+            datetime.datetime.fromtimestamp(self.container_context_mtime,datetime.UTC).isoformat(),
             '-t'+self.oci_image_tag,
             *options,
             self.container_context)
@@ -704,6 +707,11 @@ class ContainerfileImage(OciImage):
         except sh.ErrorReturnCode: return False
         inspect_json = json.loads(str(inspect_result.stdout, 'utf-8'))
         created = dateutil.parser.isoparse(inspect_json[0]['Created']).timestamp()
+        hadron_mtime_str = inspect_json[0]['Annotations'].get('com.hadronindustries.carthage.image_mtime')
+        if hadron_mtime_str:
+            hadron_mtime = dateutil.parser.isoparse(hadron_mtime_str).timestamp()
+            if self.container_context_mtime > hadron_mtime+5: return False
+            return hadron_mtime
         if self.container_context_mtime > created:
             return False
         return created
