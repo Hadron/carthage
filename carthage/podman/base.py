@@ -175,7 +175,6 @@ class PodmanPod(OciPod, PodmanNetworkMixin, carthage.machine.NetworkedModel):
 
     async def do_create(self):
         await self.resolve_networking()
-        breakpoint()
         options = await self._network_options()
         for p in self.exposed_ports:
             options.append(podman_port_option(p))
