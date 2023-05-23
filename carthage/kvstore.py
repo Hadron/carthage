@@ -48,7 +48,7 @@ class KvStore(Injectable):
         store_path = Path(store_dir)
         if not store_path.is_absolute():
             store_path = Path(self.config_layout.state_dir)/store_path
-    
+            Path(self.config_layout.state_dir).mkdir(parents=True, exist_ok=True)
         self.environment = lmdb.Environment(
             str(store_path), subdir=True,
             max_dbs=512,
