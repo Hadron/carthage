@@ -5,6 +5,7 @@
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
+import json
 import os
 import pytest
 import shutil
@@ -46,7 +47,7 @@ def layout_fixture(ainjector):
     try: loop.run_until_complete(
             layout.podman_net.instantiated.delete(force=True))
     except Exception: pass
-    
+
 
 class podman_layout(CarthageLayout):
     layout_name = 'podman'
@@ -109,7 +110,7 @@ class podman_layout(CarthageLayout):
             @setup_task("Set variable")
             def set_variable(self):
                 self.host.model.task_called = True
-                
+
     class TrueImage(ContainerfileImageModel):
 
         oci_image_tag = 'localhost/true:latest'
@@ -136,7 +137,7 @@ class podman_layout(CarthageLayout):
             add('eth0',
                 mac=None,
                 net=podman_net)
-            
+
 
     class net_pod(PodmanPodModel):
 
@@ -146,7 +147,7 @@ class podman_layout(CarthageLayout):
 
         class container(MachineModel):
             pass
-        
+
 @async_test
 async def test_podman_create(ainjector):
     l = await ainjector(podman_layout)
@@ -271,7 +272,7 @@ async def test_stamps_ignored(ainjector):
     finally:
         try: await stamps_discarded_2.machine.delete()
         except Exception: pass
-        
+
 @async_test
 async def test_containerfile_image(ainjector):
     l = await ainjector(podman_layout)
@@ -291,7 +292,7 @@ async def test_podman_container_network(layout_fixture):
     finally:
         try: await layout.networked_container.machine.delete()
         except Exception: pass
-        
+
 @async_test
 async def test_podman_pod_network(layout_fixture):
     "Test networking in a pod"
@@ -300,7 +301,10 @@ async def test_podman_pod_network(layout_fixture):
         await layout.net_pod.container.machine.async_become_ready()
         async with layout.net_pod.container.machine.machine_running():
             await layout.net_pod.container.machine.container_exec('apt', 'update')
+            machine = layout.net_pod.container.machine
+            address =machine.network_links['eth0'].merged_v4_config.address
+            assert address
+            assert str(address) in json.dumps(machine.container_info)
     finally:
-        try: await layout.net_pod.container.machine.delete()
+        try: await layout.net_pod.pod.delete(force=True)
         except Exception: pass
-        
