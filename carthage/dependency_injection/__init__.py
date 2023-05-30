@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 from .base import *
-from .base import InjectorClosed, _call_close, is_obj_ready
+from .base import InjectorClosed, _call_close, is_obj_ready, instantiate_to_ready
 from .introspection import *
 
 __all__ = [
@@ -20,4 +20,6 @@ __all__ = [
     'resolve_deferred',
     'inject_autokwargs', 'injector_xref',
     'partial_with_dependencies', 'shutdown_injector',
-    'injection_failed_unlogged', 'instantiation_not_ready']
+    'injection_failed_unlogged', 'instantiation_not_ready',
+    'instantiate_to_ready'
+]
