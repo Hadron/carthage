@@ -304,6 +304,7 @@ async def test_podman_pod_network(layout_fixture):
             machine = layout.net_pod.container.machine
             address =machine.network_links['eth0'].merged_v4_config.address
             assert address
+            print(json.dumps(machine.container_info)) # Trying to figure out why this fails on old ubuntu
             assert str(address) in json.dumps(machine.container_info)
     finally:
         try: await layout.net_pod.pod.delete(force=True)
