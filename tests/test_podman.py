@@ -302,10 +302,11 @@ async def test_podman_pod_network(layout_fixture):
         async with layout.net_pod.container.machine.machine_running():
             await layout.net_pod.container.machine.container_exec('apt', 'update')
             machine = layout.net_pod.container.machine
+            await machine.container_exec('apt', '-y', 'install', 'iproute2')
+            result = await machine.container_exec('ip', 'addr', 'show')
             address =machine.network_links['eth0'].merged_v4_config.address
             assert address
-            print(json.dumps(machine.container_info)) # Trying to figure out why this fails on old ubuntu
-            assert str(address) in json.dumps(machine.container_info)
+            assert str(address) in str(result.stdout, 'utf-8')
     finally:
         try: await layout.net_pod.pod.delete(force=True)
         except Exception: pass
