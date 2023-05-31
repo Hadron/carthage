@@ -632,7 +632,7 @@ class NetworkLink:
     local_type: typing.Optional[str]
     untagged_vlan: typing.Optional[int]
     allowed_vlans: typing.Optional[VlanList]
-    v4_config: typing.Optional[V4Config] = None
+    v4_config: typing.Optional[V4Config] = dataclasses.field(default=None, repr=False)
     lldp: typing.Optional[bool] = dataclasses.field(default=True, repr=False)
     required: typing.Optional[bool] = dataclasses.field(default=True, repr=False)
     #: If true, this interface is essential and networkd should keep it up even if a dhcp lease expires or networkd is stopped
@@ -760,7 +760,7 @@ class NetworkLink:
         if hasattr(self, a):
             res.update(getattr(self, a))
         return res
-
+    merged_v4_config: typing.Optional[V4Config]
     @memoproperty
     def merged_v4_config(self):
         '''Takes *self.v4_config* as a starting point, filling in any values specified on the network's *v4_config* that are not overridden in *self*.
