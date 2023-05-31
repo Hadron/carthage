@@ -289,6 +289,8 @@ async def test_podman_container_network(layout_fixture):
     layout = layout_fixture
     try:
         await layout.networked_container.machine.async_become_ready()
+    except NotImplementedError:
+        pytest.xfail('Podman is too old')
     finally:
         try: await layout.networked_container.machine.delete()
         except Exception: pass
@@ -298,7 +300,9 @@ async def test_podman_pod_network(layout_fixture):
     "Test networking in a pod"
     layout = layout_fixture
     try:
-        await layout.net_pod.container.machine.async_become_ready()
+        try: await layout.net_pod.container.machine.async_become_ready()
+        except NotImplementedError:
+            pytest.xfail('podman too old')
         async with layout.net_pod.container.machine.machine_running():
             await layout.net_pod.container.machine.container_exec('apt', 'update')
             machine = layout.net_pod.container.machine

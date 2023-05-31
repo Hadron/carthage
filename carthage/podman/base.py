@@ -764,7 +764,8 @@ class PodmanNetwork(TechnologySpecificNetwork, OciManaged):
             return dateutil.parser.isoparse(info['created']).timestamp()
         except (KeyError, ValueError):
             logger.error('Unable to understand network inspection result: %s', info)
-            return True
+            raise NotImplementedError('Podman too old')
+        
 
     async def do_create(self):
         options = ['-d', 'bridge']
