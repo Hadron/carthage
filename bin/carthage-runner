@@ -184,10 +184,6 @@ if 'TMUX' not in os.environ and  args.tmux:
                        ]+sys.argv)
 
     
-if args.start is not None:
-    args.actions.append('start')
-if args.stop is not None:
-    args.actions.append('stop')
 
 layout = None
 loop.run_until_complete(setup_layout())
@@ -216,7 +212,12 @@ if args.help:
     parser.print_help()
     sys.exit(2)
 args = parser.parse_args()
-    
+
+if args.start is not None:
+    args.actions.append('start')
+if args.stop is not None:
+    args.actions.append('stop')
+
 
 console.process_arguments(args)
 loop.run_until_complete(
