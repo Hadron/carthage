@@ -87,20 +87,19 @@ class ConfigLayout(ConfigAccessor, Injectable):
             base_path = Path(y.name).parent
         d = yaml.safe_load(y)
         assert isinstance(d, dict)
+        from .types import ConfigPath
+        # The plugin loader needs checkout_dir, but we need to
+        # load plugins before loading config because plugins can
+        # introduce new schema.  This is not strictly correct
+        # because the loaded value for checkout_dir may include
+        # substitutions to other items that are also in the
+        # config.  Don't do that.
+        for early_key in ('checkout_dir', 'base_dir'):
+            if early_key not in d:
+                continue
+            setattr(self, early_key,
+                    injector(ConfigPath, d[early_key]))
         if 'plugins' in d:
-            from .types import ConfigPath
-            # The plugin loader needs checkout_dir, but we need to
-            # load plugins before loading config because plugins can
-            # introduce new schema.  This is not strictly correct
-            # because the loaded value for checkout_dir may include
-            # substitutions to other items that are also in the
-            # config.  Don't do that.
-            for early_key in ('checkout_dir', 'base_dir'):
-                if early_key not in d:
-                    continue
-                setattr(self, early_key,
-                        injector(ConfigPath, d[early_key]))
-
             for p in d['plugins']:
                 if (not ':' in p) and (p == '..' or p == '.' or '/' in p):
                     p = base_path.joinpath(p)
