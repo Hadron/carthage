@@ -152,6 +152,8 @@ class DistributedPortgroup(VmwareNetwork):
         default = vim.dvs.VmwareDistributedVirtualSwitch.VmwarePortConfigPolicy()
         default.macManagementPolicy = vim.dvs.VmwareDistributedVirtualSwitch.MacManagementPolicy()
         default.macManagementPolicy.forgedTransmits = True
+        default.macManagementPolicy.allowPromiscuous = True
+        default.macManagementPolicy.macChanges = True
         learning = vim.dvs.VmwareDistributedVirtualSwitch.MacLearningPolicy()
         learning.enabled = True
         learning.allowUnicastFlooding = True
