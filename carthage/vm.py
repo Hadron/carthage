@@ -184,11 +184,6 @@ class VM(Machine, SetupTaskMixin):
     async def async_ready(self):
         await self.write_config()
         await self.is_machine_running()
-        if self.running and (self.__class__.ip_address is Machine.ip_address):
-            try:
-                self.ip_address
-            except NotImplementedError:
-                await self._find_ip_address()
 
         await self.run_setup_tasks(context=self.machine_running(ssh_online=True))
         return await super().async_ready()
@@ -197,6 +192,11 @@ class VM(Machine, SetupTaskMixin):
         try:
             sh.virsh('domid', self.full_name, _bg=False)
             self.running = True
+            if self.running and (self.__class__.ip_address is Machine.ip_address):
+                try:
+                    self.ip_address
+                except NotImplementedError:
+                    await self._find_ip_address()
         except sh.ErrorReturnCode_1:
             self.running = False
         return self.running
