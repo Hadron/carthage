@@ -153,7 +153,6 @@ async def update_dns_for(name, *,
             args.append((name, type, value))
         futures.append(asyncio.ensure_future(private_zone.update_records(*args, ttl=ttl)))
 
-    breakpoint()
     if private_zone is None and public_zone is None:
         logger.warning(f'No DNS zone for {name}')
     if futures:
