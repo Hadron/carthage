@@ -1,4 +1,4 @@
-# Copyright (C) 2022, Hadron Industries, Inc.
+# Copyright (C) 2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -7,6 +7,8 @@
 # LICENSE for details.
 
 from __future__ import annotations
+import asyncio
+
 import logging
 from .dependency_injection import AsyncInjectable, inject_autokwargs, InjectionKey, inject, AsyncInjector
 from .network import NetworkLink
@@ -67,7 +69,7 @@ Update a DNS zone when :class:`NetworkLinks` gain a public IP address.  This can
         class some_enclave(Enclave, PublicDnsManagement):
 
             domain = "machines.example.com"
-            add_provider(InjectionKey(DnsZone, role='public_zone'), some_dns_zone)
+            add_provider(InjectionKey(DnsZone, name='machines.example.com', addressing='public'), some_dns_zone)
 
             class some_machine(MachineModel): ...
 
@@ -79,9 +81,22 @@ Update a DNS zone when :class:`NetworkLinks` gain a public IP address.  This can
         link = target
         model = link.machine
         zone = await self.ainjector.get_instance_async(InjectionKey(DnsZone, role='public_zone', _ready=True))
-        name = link.dns_name or model.name
+        name = link.public_dns_name
+        if name is None: name = model.name
+        if not name: return     # public_dns_name = ''
+        name, sep, domain = name.partition('.')
+        if not domain: return
+        zone = await self.ainjector.get_instance_async(InjectionKey(
+            DnsZone, name=domain, addressing='public', _ready=True, _optional=True))
+        if zone is None:
+            zone = await self.ainjector.get_instance_async(InjectionKey(DnsZone, role='public_zone', _ready=True))
+        if zone is None and link.public_dns_name:
+            logger.error(f'No public zone found for {name}')
+        elif zone is None:
+            logger.debug(f'No public zone found for {name}, but it may not be required')
+            
         if not zone.contains(name):
-            logger.warning(f'Not setting DNS for {model}: {name} does not fall within {zone.name}')
+            logger.error(f'Not setting DNS for {model}: {name} does not fall within {zone.name}')
         else:
             logger.debug(f'{name} is at {str(link.merged_v4_config.public_address)}')
             await zone.update_records((name, 'A', [str(link.merged_v4_config.public_address)]),
@@ -97,25 +112,52 @@ Update a DNS zone when :class:`NetworkLinks` gain a public IP address.  This can
 __all__ += ['PublicDnsManagement']
 
 @inject(ainjector=AsyncInjector)
-async def update_dns_for(name, records, *,
+async def update_dns_for(name, *,
+                         public_records,
+                         private_records,
                          ainjector, ttl=300,
                          ):
     '''
     Look up the zone for *name*, and update records within it.
+    For public records,  ``InjectionKey(DnsZone, name=domain, addressing='public')`` is used.
+
+    If a public zone is found, then ``InjectionKey(DnsZone, name=domain, addressing='private')`` is used for private records.  If a public zone is not found, then ``InjectionKey(DnsZone, name=domain)`` will also be accepted for private records.
+
+    The zone keys used are dependent on what zones are registered in the injector hierarchy, **not** on what parameters are passed in.  That is, if a public zone exists, and only private records are passed in, private dns will only be updated if an explicit ``addressing='private'`` zone is provided by the injector.
+    
 
     :param records: A sequence of (rrtype, values)
 
     Example Usage::
 
         await ainjector(update_dns_for,
-            "www.foo.com", [('CNAME', 'foo.com')])
+            "www.foo.com", public_records=[('CNAME', 'foo.com')])
 
     '''
     head, sep, domain = name.partition('.')
-    zone = await ainjector.get_instance_async(InjectionKey(DnsZone, domain=domain))
-    args = []
-    for type, value in records:
-        args.append((name, type, value))
-    await zone.update_records(*args, ttl=ttl)
+    public_zone = await ainjector.get_instance_async(InjectionKey(DnsZone, name=domain, addressing='public', _optional=True))
+    private_zone = await ainjector.get_instance_async(InjectionKey(DnsZone, name=domain, addressing='private', _optional=True))
+    if (not public_zone) and (not private_zone):
+        private_zone = await ainjector.get_instance_async(InjectionKey(DnsZone, name=domain, _optional=True))
+    futures = []
+    if public_records and public_zone:
+        args = []
+        for type, value in public_records:
+            args.append((name, type, value))
+        futures.append(asyncio.ensure_future(public_zone.update_records(*args, ttl=ttl)))
+    elif public_records:
+        logger.warning(f'No public zone for {name}')
+    if private_zone and private_records:
+        args = []
+        for type, value in private_records:
+            args.append((name, type, value))
+        futures.append(asyncio.ensure_future(private_zone.update_records(*args, ttl=ttl)))
+
+    breakpoint()
+    if private_zone is None and public_zone is None:
+        logger.warning(f'No DNS zone for {name}')
+    if futures:
+        await asyncio.gather(*futures)
+        
 
 __all__ += ['update_dns_for']
