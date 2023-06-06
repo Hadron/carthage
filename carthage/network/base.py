@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -687,6 +687,8 @@ class NetworkLink:
         return self.net_instance
 
     async def resolve(self, ainjector, interface):
+        if 'merged_v4_config' in self.__dict__:
+            raise ValueError('resolve called too late.')
         if self.v4_config is not None:
             await self.v4_config.resolve(ainjector=ainjector, interface=interface)
             
@@ -725,6 +727,34 @@ class NetworkLink:
         if subclass:
             subclass.validate_subclass(args, unresolved=unresolved)
 
+    def __repr__(self):
+        cls = self.__class__
+        result = f'<{cls.__name__} '
+        try:
+            hints = typing.get_type_hints(cls)
+            attributes = set(hints.keys())
+            attributes -= {'local_type_registry', 'v4_config'}
+            attributes |= {'merged_v4_config'}
+            not_in_dict = set() #Attributes that are not in self.__dict__ before being queried.
+            for k in attributes:
+                if k not in self.__dict__: not_in_dict.add(k)
+                if k == 'net':
+                    result += f"net={self.net.name}"
+                elif k == 'machine':
+                    result += f'machine={self.machine.name}'
+                else:
+                    val = getattr(self, k, None)
+                    if val is not None:
+                        result += ' '+k+'='+repr(val)
+        except Exception:
+            result += 'repr failed'
+        finally:
+            for k in not_in_dict & set(self.__dict__.keys()):
+                del self.__dict__[k]
+        result += '>'
+        return result
+    
+                
     @classmethod
     def validate_subclass(cls, args, unresolved: bool): pass
 
@@ -760,7 +790,8 @@ class NetworkLink:
         if hasattr(self, a):
             res.update(getattr(self, a))
         return res
-    merged_v4_config: typing.Optional[V4Config]
+
+
     @memoproperty
     def merged_v4_config(self):
         '''Takes *self.v4_config* as a starting point, filling in any values specified on the network's *v4_config* that are not overridden in *self*.
@@ -771,7 +802,6 @@ class NetworkLink:
         
 
         '''
-        
         if self.v4_config:
             merged = self.v4_config.merge(getattr(self.net, 'v4_config', None))
             if merged.address == merged.gateway:
