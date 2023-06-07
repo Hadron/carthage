@@ -1,4 +1,4 @@
-# Copyright (C) 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -59,6 +59,11 @@ class MacStore(Injectable):
             recurse(yaml_dict, tuple())
 
 
+    def __contains__(self, k):
+        k = self.handle_tuple_key(k)
+        res = self.domain.get(k)
+        return True if res else False
+    
     def __getitem__(self, k):
         k = self.handle_tuple_key(k)
         res = self.domain.get(k)
@@ -81,11 +86,26 @@ class MacStore(Injectable):
 __all__ += ['MacStore']
 
 from ..machine import AbstractMachineModel
+from ..local import LocalMachineMixin
 
 
 @inject(model=AbstractMachineModel,
         store=MacStore)
+def persistent_random_mac_always(interface, model, store):
+    '''Return a persistant random mac address, even for LocalMachine'''
+    return store[(model.name, interface)]
+
+__all__ += ['persistent_random_mac_always']
+
+@inject(model=AbstractMachineModel,
+        store=MacStore)
 def persistent_random_mac(interface, model, store):
+    '''Return a persistent random MAC address if one is already stored, or if the machine type is not a local machine.  In other words, unless the database is pre-seeded, return None for LocalMachine.'''
+    if (model.name, interface) in store: return store[(model.name, interface)]
+    try:
+        machine_type = model.machine_type
+        if issubclass(machine_type, LocalMachineMixin): return None
+    except AttributeError: pass
     return store[(model.name, interface)]
 
 

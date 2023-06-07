@@ -104,6 +104,7 @@ However if Carthage is configuring the local networking on the hypervisor, then 
             link.merged_v4_config.address = IPv4Address(address)
             if interface == v4_gateway_interface:
                 link.merged_v4_config.gateway = IPv4Address(gateways['default'][netifaces.AF_INET][0])
+                if mac and link.mac is None: link.mac = mac
             # we could also handle secondary addresses.
             
     for l in model.network_links.values():
