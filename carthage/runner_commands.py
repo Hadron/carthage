@@ -87,7 +87,7 @@ class DumpAssignmentsCommand(CarthageRunnerCommand):
         store = await self.ainjector.get_instance_async(kvstore.KvStore)
         layout = await self.ainjector.get_instance_async(CarthageLayout)
         models = await layout.all_models(ready=False)
-        self.model_names = set((m.name for m in models))
+        self.model_names = set((getattr(m, 'name',"") for m in models))
         store.dump(args.path, self.dump_filter)
 
     def dump_filter(self, domain, key, value):
