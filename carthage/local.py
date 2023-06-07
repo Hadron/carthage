@@ -1,4 +1,4 @@
-# Copyright (C) 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -7,13 +7,14 @@
 # LICENSE for details.
 
 import contextlib
+from ipaddress import IPv4Address
 from pathlib import Path
 from .machine import Machine
 from .dependency_injection import *
 from . import sh
 from .utils import memoproperty, when_needed
 from .setup_tasks import SetupTaskMixin
-from .network import NetworkLink, BridgeNetwork
+from .network import NetworkLink, BridgeNetwork, match_link
 
 
 class LocalMachineMixin:
@@ -85,6 +86,26 @@ However if Carthage is configuring the local networking on the hypervisor, then 
                                    when_needed(BridgeNetwork, bridge_name=bridge_name, delete_bridge=False))
 
     from carthage.network.links import BridgeLink
+    import netifaces
+    excluded_links = set()
+    gateways = netifaces.gateways()
+    try: v4_gateway_interface = gateways['default'][netifaces.AF_INET][1]
+    except (KeyError, IndexError): v4_gateway_interface = None
+    for interface in netifaces.interfaces():
+        addresses = netifaces.ifaddresses(interface)
+        try: mac = addresses[netifaces.AF_LINK][0]['addr']
+        except KeyError: mac = None
+        try: address = addresses[netifaces.AF_INET][0]['addr']
+        except KeyError: address = None
+        link = match_link(model.network_links, interface,
+                          mac=mac, address=address,
+                          excluded_links=excluded_links)
+        if link and address:
+            link.merged_v4_config.address = IPv4Address(address)
+            if interface == v4_gateway_interface:
+                link.merged_v4_config.gateway = IPv4Address(gateways['default'][netifaces.AF_INET][0])
+            # we could also handle secondary addresses.
+            
     for l in model.network_links.values():
         if not isinstance(l, BridgeLink):
             continue

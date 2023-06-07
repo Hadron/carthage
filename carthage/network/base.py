@@ -1070,4 +1070,66 @@ class V4Pool(carthage.kvstore.HashedRangeAssignments):
                 
 __all__ += ['V4Pool']
 
+def match_link(links: dict[str,NetworkLink], 
+               interface, *,
+               mac=None, net:Network=None, address=None,
+               excluded_links=None):
+    '''Attempt to find the :class:`NetworkLink` corresponding to an interface on a VM.
+    Ideally, links can be matched by name.  However, not all :class:`~carthage.machine.Machine` implementations will preserve link names in all situations.
+
+    The following matches are tried in order:
+
+    #. A link with interface of *interface* and compatible *net* and *mac*.  
+
+    #. A link with mac address of *mac* and compatible *net*.
+
+    #. A link with address of *address* and compatible *net* and *mac*.
+
+    In the above, compatible means that either one property is None or the two properties are equal.
+
+    :return: A matching link from *links* or None.
+
+    :param excluded_links: A set of interface names that will not be
+    matched.  It is an error if *interface* is in *excluded_links*.
+    If a matching link is found and *excluded_links* is specified, it
+    will be added to *excluded_links*.  That way, when this function
+    is used in a a loop, links are matched at most once.
+    '''
+    def compatible(a,b):
+        if a is None or b is None: return True
+        return a == b
+    if address: address = IPv4Address(address)
+    if excluded_links is None: excluded_links = set()
+    assert interface not in excluded_links
+    match = None
+    # try explicit name match
+    try: match = links[interface]
+    except KeyError: pass
+    if match:
+        if not (compatible(match.mac, mac) and compatible(match.net, net)):
+            match = None
+    # if we did not find a match,  enumerate if we have a mac address
+    if mac is not None and match is None:
+        for match in links.values():
+            if match.interface in excluded_links: continue
+            if match.mac != mac: continue
+            if compatible(match.net, net): break
+        else: match = None
+    # Now try address matching
+    if match is None and address is not None:
+        for match in links.values():
+            if match.interface in excluded_links: continue
+            if match.merged_v4_config.address != address: continue
+            if compatible(mac, match.mac) and compatible(net, match.net): break
+        else: match = None
+    if match:
+        excluded_links.add(match.interface)
+    logger.debug("Matching link %s, mac %s, net %s, address %s: %s",
+                 interface, mac, net, address, match)
+    return match
+
+__all__ += ['match_link']
+
+
 from . import links as network_links
+logger.setLevel(10)
