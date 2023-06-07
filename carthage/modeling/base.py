@@ -480,7 +480,7 @@ class ImageRole(InjectableModel, metaclass=RoleType): pass
 
 __all__ += ['ImageRole']
 
-@inject(persistent_seed_path=InjectionKey(carthage.kvstore.persistent_seed_path, _optional=True))
+
 class CarthageLayout(ModelGroup):
 
     '''
@@ -504,12 +504,13 @@ class CarthageLayout(ModelGroup):
 
     layout_name = None
 
-    def __init__(self, persistent_seed_path=None, **kwargs):
+    def __init__(self,  **kwargs):
         super().__init__(**kwargs)
         self.injector.add_provider(InjectionKey(CarthageLayout), dependency_quote(self))
+        persistent_seed_path = self.injector.get_instance(InjectionKey(carthage.kvstore.persistent_seed_path, _optional=True))
         if persistent_seed_path:
             seed_path = Path(persistent_seed_path)
-            if path.exists(seed_path):
+            if seed_path.exists():
                 kvstore = self.injector.get_instance(carthage.kvstore.KvStore)
                 if not kvstore.persistent_seed_path:
                     kvstore.load(str(seed_path))
