@@ -1,0 +1,142 @@
+#!/usr/bin/python3
+
+import argparse
+import pathlib
+import mako.template
+import os
+import re
+import string
+import sys
+import yaml
+
+import sh
+from sh import git
+
+
+try:
+    import carthage
+except ModuleNotFoundError:
+    import importlib.machinery
+    import importlib.util
+
+    class CarthagePathFinder(importlib.machinery.PathFinder):
+        @classmethod
+        def find_spec(cls, fullname, path=None, target=None):
+            if fullname.startswith("carthage"):
+                MODULE_PATH = pathlib.Path(sys.argv[0]).absolute().parent.parent / "carthage"
+                if not MODULE_PATH.is_dir():
+                    raise ImportError(f"No directory `carthage` at {str(MODULE_PATH)}")
+                if not (MODULE_PATH / "__init__.py").is_file():
+                    raise ImportError(f"No __init__ file in {str(MODULE_PATH)}")
+                return importlib.util.spec_from_file_location(
+                    "carthage",
+                    str(MODULE_PATH / "__init__.py"),
+                )
+    sys.meta_path.append(CarthagePathFinder)
+    import carthage
+
+
+def _new(args):
+    from carthage.resources import SkelLoader
+    from carthage.config.base import BaseSchema
+
+    carthage_plugin_py = mako.template.Template(SkelLoader.load("carthage_plugin.py.mako"))
+    layout_py = mako.template.Template(SkelLoader.load("layout.py.mako"))
+
+    if args.git:
+        r = git("status", _ok_code=[0, 128])
+        if r.exit_code == 0:
+            raise FileExistsError(
+                "Refusing to create a new .git repository as a child of an existing repository"
+            )
+
+    BASE_PATH = pathlib.Path(os.environ["PWD"])
+
+    LAYOUT_PATH = BASE_PATH / args.name
+    if LAYOUT_PATH.is_dir():
+        raise ValueError(f"A directory named {args.name} already exists")
+
+    plugin = dict(name=args.name)
+
+    if args.plugin:
+        sname = re.sub(fr"[ {string.punctuation.replace('_', '')}]", "_", args.name.lower())
+        cname = ""
+        for i in range(len(sname)-1):
+            if sname[i] == "_" and sname[i+1] == "_": continue
+            cname += sname[i]
+        if sname[-1] != "_":
+            cname += sname[-1]
+        if not re.match(fr"[a-z][{string.ascii_lowercase+string.digits}]", cname):
+            raise ValueError(f"Name {cname} is not a supported package name")
+        plugin = dict(name=cname)
+        plugin["package"] = cname
+        plugin["python"] = "."
+
+        LAYOUT_PATH = BASE_PATH / cname
+        if LAYOUT_PATH.is_dir():
+            raise ValueError(f"A directory named {cname} already exists")
+
+
+        (LAYOUT_PATH / cname).mkdir(parents=True)
+        (LAYOUT_PATH / f"{cname}/__init__.py").touch()
+
+    elif args.function:
+        plugin["config"] = dict(layout_name=args.name)
+
+    else:
+        plugin["config"] = dict(layout_name=args.name)
+
+        (LAYOUT_PATH / "python").mkdir(parents=True)
+
+        with (LAYOUT_PATH / "carthage_plugin.py").open("w") as fp:
+            fp.write(carthage_plugin_py.render(base=str(BASE_PATH), name=args.name))
+        with (LAYOUT_PATH / "python/layout.py").open("w") as fp:
+            fp.write(layout_py.render(base=str(BASE_PATH), name=args.name))
+
+
+    with (LAYOUT_PATH / "carthage_plugin.yaml").open("w") as f:
+        f.write(yaml.dump(plugin, sort_keys=False))
+
+    if args.git:
+        git("-C", f"{str(LAYOUT_PATH)}", "init")
+        git("-C", f"{str(LAYOUT_PATH)}", "add", "-A")
+        git("-C", f"{str(LAYOUT_PATH)}", "commit", "-am", f"Init {args.name}")
+
+
+def _plugin(args):
+    print("This does nothing for now.")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    sp = ap.add_subparsers(dest="cmd")
+
+    new = sp.add_parser("new", help="Create a new layout")
+    new.add_argument("name", help="The layout name")
+    new.add_argument("--git", "-G", help="Setup git", action="store_true")
+
+    new_group = new.add_mutually_exclusive_group()
+    new_group.add_argument(
+        "-F",
+        "--function",
+        help="Generate a default function-based layout",
+        action="store_true",
+    )
+    new_group.add_argument(
+        "-P", "--plugin", help="Generate a carthage-plugin", action="store_true"
+    )
+
+    new.set_defaults(func=_new)
+
+    plugin = sp.add_parser("plugin", help="Manage plugins")
+    plugin.set_defaults(func=_plugin)
+
+    args = ap.parse_args()
+
+    if args.cmd == None:
+        ap.print_help()
+    else:
+        args.func(args)
+
+
+main()
