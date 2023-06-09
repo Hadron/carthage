@@ -31,7 +31,8 @@ setup(
                         "pytest",
                         "pyyaml",
                         "sh"]
-    scripts = ['bin/carthage-runner',
+    scripts = ['bin/carthage-new',
+               'bin/carthage-runner',
                'bin/carthage-console',
                'bin/carthage-vault-tool',
                'bin/btrfs-rmrf'],
