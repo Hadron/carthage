@@ -26,7 +26,11 @@ setup(
                 'carthage.vault',
                 'carthage.podman',
                 "carthage.vmware"],
-    install_requires = ['pytest', ],
+    install_requires = ["lmdb",
+                        "mako",
+                        "pytest",
+                        "pyyaml",
+                        "sh"]
     scripts = ['bin/carthage-runner',
                'bin/carthage-console',
                'bin/carthage-vault-tool',
