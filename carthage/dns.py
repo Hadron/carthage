@@ -80,7 +80,6 @@ Update a DNS zone when :class:`NetworkLinks` gain a public IP address.  This can
     async def public_ip_updated(self, target, **kwargs):
         link = target
         model = link.machine
-        zone = await self.ainjector.get_instance_async(InjectionKey(DnsZone, role='public_zone', _ready=True))
         name = link.public_dns_name
         if name is None: name = model.name
         if not name: return     # public_dns_name = ''
