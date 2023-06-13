@@ -9,7 +9,6 @@ ${package_to_dir(args.package)}/layout.py
 python/layout.py
 %endif
 </%def>\
-
 from carthage import *
 from carthage.modeling import *
 from carthage.ansible import *
