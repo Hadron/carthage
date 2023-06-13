@@ -6,6 +6,10 @@
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
+import sys
+from pathlib import Path
+if Path(__file__).parents[1].joinpath('carthage').exists():
+    sys.path.insert(0, str(Path(__file__).parents[1].absolute()))
 
 
 import carthage.utils

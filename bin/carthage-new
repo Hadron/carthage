@@ -9,7 +9,12 @@
 import argparse
 import shutil
 import sh #We do not want carthage.sh
+import sys
 from pathlib import Path
+
+if Path(__file__).parents[1].joinpath('carthage').exists():
+    sys.path.insert(0, str(Path(__file__).parents[1].absolute()))
+
 from carthage.skeleton import *
 from carthage.utils import carthage_main_setup
 

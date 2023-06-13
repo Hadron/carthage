@@ -9,6 +9,12 @@
 
 import argparse, functools, os, sys, gc, traceback, warnings, yaml
 import asyncio, logging
+from pathlib import Path
+import sys
+
+if Path(__file__).parents[1].joinpath('carthage').exists():
+    sys.path.insert(0, str(Path(__file__).parents[1].absolute()))
+
 import  carthage.console
 import carthage.runner_commands
 
