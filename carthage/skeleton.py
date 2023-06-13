@@ -75,19 +75,3 @@ __all__ += ['render_skeleton']
 def package_to_dir(p):
     return p.replace('.','/')
 
-if __name__ == '__main__':
-    parser = skeleton_subparser_setup()
-    parser.add_argument('--name', required=True)
-    parser.add_argument('--copyright',
-                        help='Who is the copyright holder',
-                        default='Hadron Industries',
-                        )
-    parser.add_argument('--proprietary',
-                        help='Do not include LGPL-3 license block',
-                        action='store_true',
-                        )
-    
-    from .utils import carthage_main_setup
-    args = carthage_main_setup(parser)
-    render_skeleton(args.skel, "out", args)
-    

@@ -29,6 +29,7 @@ setup(
     install_requires = ['pytest', ],
     scripts = ['bin/carthage-runner',
                'bin/carthage-console',
+               'bin/carthage-new',
                'bin/carthage-vault-tool',
                'bin/btrfs-rmrf'],
     package_data = {'carthage': ['resources/templates/**',
