@@ -49,25 +49,44 @@ class PkiManager(Injectable):
             return f.read()
 
 
-@inject_autokwargs(
+__all__ = ['PkiManager']
+
+def install_root_cert_customization(get_certificate_info):
+    '''
+    Return a customization that installs one or more root certificates.
+
+    :param get_get_certificate_info: A callback function resolved in the context of the customization's :class:`AsyncInjector` that returns a sequence of [certificate_name, pem_certificate].  The *certificate_name* uniquely identifies the certificate and *pem_certificate* is the root certificate to add.
+
+    '''
+    class InstallRootCertCustomization(machine.FilesystemCustomization):
+
+        @setup_task("Install  Root Certs")
+        async def install_root_cert(self):
+            cert_info = await self.ainjector(get_certificate_info)
+            carthage_cert_dir = os.path.join(
+                    self.path,
+                    "usr/share/ca-certificates/carthage")
+            os.makedirs(carthage_cert_dir, exist_ok=True)
+            for name, pem_cert in certificates_to_install:
+                with open(os.path.join(
+                        carthage_cert_dir, f"{name}.crt"),
+                          "wt") as f:
+                    f.write(pem_cert)
+                with open(os.path.join(
+                        self.path, "etc/ca-certificates.conf"),
+                          "ta") as f:
+                    f.write(f"carthage/{name}.crt\n")
+            await self.run_command("/usr/sbin/update-ca-certificates")
+
+    return InstallRootCertCustomization
+
+__all__ += ['install_root_cert_customization']
+
+@inject(
     pki=PkiManager)
-class PkiCustomizations(machine.FilesystemCustomization):
+def pki_manager_certificate_info(pki):
+    return ('carthage_pki', pki.ca_cert)
 
-    @setup_task("Install Carthage Root Cert")
-    async def install_carthage_root_cert(self):
-        carthage_cert_dir = os.path.join(
-                self.path,
-                "usr/share/ca-certificates/carthage")
-        os.makedirs(carthage_cert_dir, exist_ok=True)
-        with open(os.path.join(
-                    carthage_cert_dir, "carthage.crt"),
-                  "wt") as f:
-            f.write(self.pki.ca_cert)
-        with open(os.path.join(
-                    self.path, "etc/ca-certificates.conf"),
-                  "ta") as f:
-            f.write("carthage/carthage.crt\n")
-        await self.run_command("/usr/sbin/update-ca-certificates")
+PkiCustomizations = install_root_cert_customization(pki_manager_certificate_info)
 
-
-__all__ = ["PkiManager", "PkiCustomizations"]
+__all__ += ["PkiCustomizations"]
