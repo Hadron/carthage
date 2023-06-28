@@ -494,24 +494,35 @@ class cross_object_dependency(TaskWrapper):
         # in a client machine's class
         fileserver_dependency = cross_object_dependency(FileServer.update_files, 'fileserver')
 
-    :param task: a :class:`TaskWrapper`, typically associated with another class.
+    :param task: a :class:`TaskWrapper`, typically associated with another class, or alternatively the name of an attribute on *relationship* containing either a :class:`TaskWrapper` or :class:`TaskMethod`.
 
     :param relationship: The string name of a relationship such that calling the *relationship* method on an instance containing this dependency will yield the instance containing *task* that we want to depend on.
 
     '''
 
-    dependent_task: TaskWrapper
+    dependent_task: typing.Union[TaskWrapper, TaskMethod, str]
     relationship: str
 
     def __init__(self, task, relationship, **kwargs):
+        if isinstance(task,str):
+            description = task
+        else: description=task.description
         super().__init__(func=lambda self: None,
-                         description=f'Dependency on `{task.description}\' task of {relationship}',
+                         description=f'Dependency on `{description}\' task of {relationship}',
                          **kwargs)
         self.dependent_task = task
         self.relationship = relationship
 
+    def _handle_task(self, instance):
+        if isinstance(self.dependent_task, str):
+            relationship = getattr(instance, self.relationship)
+            self.dependent_task = getattr(relationship, self.dependent_task)
+            if isinstance(self.dependent_task, TaskMethod):
+                self.dependent_task = self.dependent_task.task
+                
     @inject(ainjector=AsyncInjector)
     async def check_completed_func(self, instance, ainjector):
+        self._handle_task(instance)
         task = self.dependent_task
         should_run, last_run = await task.should_run_task(getattr(instance, self.relationship), ainjector=ainjector)
         # We don't care about whether the task would run again, only when it last run.
@@ -521,7 +532,10 @@ class cross_object_dependency(TaskWrapper):
         return True
 
     def __repr__(self):
-        return f'<Depend on {self.dependent_task.description} task of {self.relationship}>'
+        if isinstance(self.task,str):
+            description = self.dependent_task
+        else: description = self.dependent_task.description
+        return f'<Depend on {description} task of {self.relationship}>'
 
 
 class mako_task(TaskWrapper):
