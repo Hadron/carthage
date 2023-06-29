@@ -757,14 +757,17 @@ class CustomizationWrapper(TaskWrapperBase):
     async def func(self, machine):
         await machine.apply_customization(self.customization, stamp=self.stamp)
 
-    async def check_completed_func(self, machine):
-        res = await machine.apply_customization(self.customization, method="last_run", stamp=self.stamp)
+    async def should_run_task(self, obj, dependency_last_run=0.0, *, ainjector):
+        res = await obj.apply_customization(self.customization, method="last_run", stamp=self.stamp)
         # unfortunately if we return a last_run and one of our
         # dependencies has run more recently, we will continue to
         # generate unneeded task runs because we never inject our
         # dependency's last run into the customization so we never
         # update our last_run time.
-        return bool(res)
+        if not res: return True, dependency_last_run
+        if res > dependency_last_run:
+            dependency_last_run = res
+        return False, dependency_last_run
 
 
 def customization_task(c: BaseCustomization, order: int = None,
