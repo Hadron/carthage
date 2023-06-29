@@ -62,7 +62,7 @@ def install_root_cert_customization(get_certificate_info):
 
         @setup_task("Install  Root Certs")
         async def install_root_cert(self):
-            cert_info = await self.ainjector(get_certificate_info)
+            certificates_to_install = await self.ainjector(get_certificate_info)
             carthage_cert_dir = os.path.join(
                     self.path,
                     "usr/share/ca-certificates/carthage")
@@ -85,7 +85,7 @@ __all__ += ['install_root_cert_customization']
 @inject(
     pki=PkiManager)
 def pki_manager_certificate_info(pki):
-    return ('carthage_pki', pki.ca_cert)
+    return [('carthage_pki', pki.ca_cert)]
 
 PkiCustomizations = install_root_cert_customization(pki_manager_certificate_info)
 
