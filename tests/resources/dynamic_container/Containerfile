@@ -1,0 +1,4 @@
+FROM debian:latest
+ADD script /script
+RUN chmod 766 /script
+CMD ["/script"]

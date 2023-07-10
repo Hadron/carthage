@@ -14,10 +14,11 @@ import json
 import logging
 from pathlib import Path
 import tempfile
+import shutil
 import dateutil.parser
 import carthage.machine
 from carthage.dependency_injection import *
-from .. import sh
+from .. import sh, ConfigLayout
 from ..machine import AbstractMachineModel, Machine
 from ..utils import memoproperty
 from ..network import TechnologySpecificNetwork, Network, V4Config, this_network, NetworkConfig
@@ -662,6 +663,8 @@ class ImageLayerTask(TaskWrapperBase):
         # We always want to rerun images
         return False
     
+@inject_autokwargs(
+    config_layout=ConfigLayout)
 class ContainerfileImage(OciImage):
 
     '''
@@ -688,19 +691,52 @@ class ContainerfileImage(OciImage):
                 try: path = Path(module.__path__[0])
                 except Exception:
                     path = Path(module.__file__).parent
-                self.container_context = path/self.container_context
+                self.source_container_context = self.container_context = path/self.container_context
         super().__init__(**kwargs)
+        if len(self.setup_tasks) > 2:
+            # More than just find_or_create and copy_context_if_needed
+            self.setup_tasks.sort(key=lambda t: 1 if t.func == OciManaged.find_or_create.func else 0)
+            self.container_context = self.output_path
+            
 
     @memoproperty
     def container_host(self):
         return self.injector(LocalPodmanContainerHost)
 
+    @memoproperty
+    def output_path(self):
+        path = Path(self.config_layout.output_dir)/'images'
+        tag = self.oci_image_tag.replace('/', '_')
+        path /= tag
+        path.mkdir(exist_ok=True, parents=True)
+        return path
+
+    stamp_path = output_path
+
+    @setup_task("Copy Context if Needed", order=10)
+    def copy_context_if_needed(self):
+        if len(self.setup_tasks) > 2:
+            #More than just this task and find_or_create
+            logger.info('copying container context for %s image', self.oci_image_tag)
+            shutil.rmtree(self.output_path)
+            shutil.copytree(self.source_container_context, self.output_path, symlinks=True)
+        else:
+            raise SkipSetupTask
+
+    @copy_context_if_needed.invalidator()
+    def copy_context_if_needed(self, last_run):
+        source_mtime = self.container_context_mtime(self.source_container_context)
+        if source_mtime > last_run: return False
+        return False
+    
+        
     async def do_create(self):
         options = await self._build_options()
         return await self.container_host.podman(
             'build',
             '--annotation', 'com.hadronindustries.carthage.image_mtime='+ \
-            datetime.datetime.fromtimestamp(self.container_context_mtime,datetime.timezone.utc).isoformat(),
+            datetime.datetime.fromtimestamp(
+                self.container_context_mtime(self.container_context),datetime.timezone.utc).isoformat(),
             '-t'+self.oci_image_tag,
             *options,
             self.container_context)
@@ -715,15 +751,15 @@ class ContainerfileImage(OciImage):
         hadron_mtime_str = inspect_json[0]['Annotations'].get('com.hadronindustries.carthage.image_mtime')
         if hadron_mtime_str:
             hadron_mtime = dateutil.parser.isoparse(hadron_mtime_str).timestamp()
-            if self.container_context_mtime > hadron_mtime+5: return False
+            if self.container_context_mtime(self.container_context) > hadron_mtime+5: return False
             return hadron_mtime
-        if self.container_context_mtime > created:
+        if self.container_context_mtime(self.container_context) > created:
             return False
         return created
 
-    @property
-    def container_context_mtime(self):
-        context = Path(self.container_context)
+    @staticmethod
+    def container_context_mtime(container_context):
+        context = Path(container_context)
         mtime = 0.0
         for p in context.iterdir():
             stat = p.stat()

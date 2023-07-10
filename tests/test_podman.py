@@ -116,11 +116,28 @@ class podman_layout(CarthageLayout):
         oci_image_tag = 'localhost/true:latest'
         container_context = 'resources/true_container'
 
+    class DynamicContainerFileImage(ContainerfileImage):
+        oci_image_tag = 'localhost/dynamic:latest'
+        container_context = 'resources/dynamic_container'
+
+        @setup_task('Create dynamic script')
+        def create_dynamic_script(self):
+            self.output_path.joinpath('script').write_text('''\
+#!/bin/sh
+exit 0
+            ''')
+            
+            
     class true_machine(MachineModel):
         add_provider(oci_container_image, injector_access(TrueImage))
 
         name = 'true-machine'
 
+    class dynamic_machine(MachineModel):
+        add_provider(oci_container_image, injector_access(DynamicContainerFileImage))
+
+        name = 'dynamic-machine'
+        
     class pod_group(ModelGroup):
         add_provider(OciExposedPort(22))
 
@@ -281,6 +298,15 @@ async def test_containerfile_image(ainjector):
         await l.true_machine.machine.async_become_ready()
     finally:
         try: await l.true_machine.machine.delete()
+        except Exception: pass
+@async_test
+async def test_dynamic_containerfile_image(layout_fixture):
+    l = layout_fixture
+    ainjector = l.ainjector
+    try:
+        await l.dynamic_machine.machine.async_become_ready()
+    finally:
+        try: await l.dynamic_machine.machine.delete()
         except Exception: pass
 
 @async_test
