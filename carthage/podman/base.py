@@ -22,7 +22,7 @@ from ..machine import AbstractMachineModel, Machine
 from ..utils import memoproperty
 from ..network import TechnologySpecificNetwork, Network, V4Config, this_network, NetworkConfig
 from ..oci import *
-from ..setup_tasks import setup_task, SetupTaskMixin
+from ..setup_tasks import setup_task, SetupTaskMixin, TaskWrapperBase
 
 
 logger = logging.getLogger('carthage.podman')
@@ -636,28 +636,32 @@ class PodmanFromScratchImage(PodmanImage):
 __all__ += ['PodmanFromScratchImage', 'podman_image_volume_key']
 
 
-def image_layer_task(customization, **kwargs):
+def image_layer_task(customization):
     '''Wrap a :class:`~carthage.machine.BaseCustomization` as a layer in a :class:`PodmanImage`.
     '''
-    if getattr(customization, 'description', None):
-        kwargs['description'] = customization.description
-    if 'description' not in kwargs:
-        kwargs['description'] = 'Image Layer: ' + customization.__name__
-
-    @setup_task(**kwargs)
-    async def task(image):
-        async with image.image_layer_context(kwargs['description']) as container:
-            await container.apply_customization(customization)
-
-    @task.check_completed()
-    def task(image):
-        # We always want to re-run layers
-        return False
-    return task
-
+    return ImageLayerTask(customization)
 
 __all__ += ['image_layer_task']
 
+class ImageLayerTask(TaskWrapperBase):
+
+    customization: BaseCustomization
+    description: str
+
+    def __init__(self, customization, **kwargs):
+        self.customization = customization
+        description = getattr(customization, 'description',
+                                   'Image Layer: ' + customization.__name__)
+        super().__init__(description=description, **kwargs)
+
+    async def func(self, image:PodmanImage):
+        async with image.image_layer_context(self.description) as container:
+            await container.apply_customization(customization)
+
+    async def check_completed_func(self):
+        # We always want to rerun images
+        return False
+    
 class ContainerfileImage(OciImage):
 
     '''
