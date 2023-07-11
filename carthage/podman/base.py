@@ -23,7 +23,7 @@ from ..machine import AbstractMachineModel, Machine
 from ..utils import memoproperty
 from ..network import TechnologySpecificNetwork, Network, V4Config, this_network, NetworkConfig
 from ..oci import *
-from ..setup_tasks import setup_task, SetupTaskMixin, TaskWrapperBase
+from ..setup_tasks import setup_task, SetupTaskMixin, TaskWrapperBase, SkipSetupTask
 
 
 logger = logging.getLogger('carthage.podman')
@@ -714,13 +714,14 @@ class ContainerfileImage(OciImage):
     stamp_path = output_path
 
     @setup_task("Copy Context if Needed", order=10)
-    def copy_context_if_needed(self):
+    async def copy_context_if_needed(self):
         if len(self.setup_tasks) > 2:
             #More than just this task and find_or_create
             logger.info('copying container context for %s image', self.oci_image_tag)
             shutil.rmtree(self.output_path)
             shutil.copytree(self.source_container_context, self.output_path, symlinks=True)
         else:
+            breakpoint()
             raise SkipSetupTask
 
     @copy_context_if_needed.invalidator()
