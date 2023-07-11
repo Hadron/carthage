@@ -721,7 +721,6 @@ class ContainerfileImage(OciImage):
             shutil.rmtree(self.output_path)
             shutil.copytree(self.source_container_context, self.output_path, symlinks=True)
         else:
-            breakpoint()
             raise SkipSetupTask
 
     @copy_context_if_needed.invalidator()
