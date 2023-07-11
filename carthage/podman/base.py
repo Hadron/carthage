@@ -657,7 +657,7 @@ class ImageLayerTask(TaskWrapperBase):
 
     async def func(self, image:PodmanImage):
         async with image.image_layer_context(self.description) as container:
-            await container.apply_customization(customization)
+            await container.apply_customization(self.customization)
 
     async def check_completed_func(self, image):
         # We always want to rerun images
