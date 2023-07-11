@@ -659,7 +659,7 @@ class ImageLayerTask(TaskWrapperBase):
         async with image.image_layer_context(self.description) as container:
             await container.apply_customization(customization)
 
-    async def check_completed_func(self):
+    async def check_completed_func(self, image):
         # We always want to rerun images
         return False
     
