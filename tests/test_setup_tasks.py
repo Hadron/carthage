@@ -67,6 +67,25 @@ async def test_basic_setup(ainjector):
     assert c_obj is not c_obj2
     assert called == 1
 
+@async_test
+async def test_skip_task(ainjector):
+    class c(Stampable):
+
+        @setup_task("test_skip")
+        def test_skip(self):
+            raise SkipSetupTask
+
+        @setup_task("Test async skip")
+        async def test_async_skip(self):
+            nonlocal async_called
+            async_called = 1
+            raise SkipSetupTask
+
+    async_called = 0
+    await ainjector(c)
+    assert async_called == 1
+        
+
 
 @async_test
 async def test_check_completed(ainjector):

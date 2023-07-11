@@ -510,7 +510,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                     result = loop.create_task(self._handle_async(
                         result,
                         placement=do_place, loop=loop,
-                        mark_instantiation_done=True))
+                        mark_instantiation_done=True, instantiation_context=instantiation_context))
                     mark_instantiation_done = False
                     result.set_name('handle ' + str(current_instantiation()))
                     futures.append(result)
@@ -522,7 +522,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                         _loop=loop,
                         _placement=do_place,
                         _interim_placement=do_interim_place,
-                        _context_established=True,
+                        _instantiation_context=instantiation_context,
                     )
                 if isinstance(result, asyncio.Future):
                     if loop is None:
@@ -550,7 +550,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                      _loop,
                      _placement,
                      _interim_placement,
-                     _context_established=False,
+                     _instantiation_context=None,
                      **kwargs):
         # _loop if  present means we can return something for which _is_async will return True
         # There are complicated interactions between the
@@ -581,15 +581,17 @@ Return the first injector in our parent chain containing *k* or None if there is
                             "Asynchronous dependency injected into non-asynchronous context",
                             current_instantiation())
 
-                    future = asyncio.ensure_future(self._handle_async(res,
-                                                                      placement=_placement,
-                                                                      loop=_loop, mark_instantiation_done=mark_instantiation_done))
+                    future = asyncio.ensure_future(self._handle_async(
+                        res,
+                        placement=_placement,
+                        loop=_loop, mark_instantiation_done=mark_instantiation_done,
+                        instantiation_context=_instantiation_context))
                     if _interim_placement:
                         _interim_placement(future)
                     self._pending.add(future)
 
-                    if current_instantiation():
-                        future.set_name(f'async {current_instantiation().description}')
+                    if _instantiation_context:
+                        future.set_name(f'async {_instantiation_context.description}')
                     else:
                         future.set_name(f'Handle async  {res} for {self}')
                     return future
@@ -602,7 +604,7 @@ Return the first injector in our parent chain containing *k* or None if there is
             except Exception as e:
                 if filter_tracebacks:
                     tb_utils.filter_chatty_modules(e, _chatty_modules, None)
-                if current_instantiation():
+                if _instantiation_context:
                     tb_utils.filter_before_here(e)
                     if log_injection_failed.get():
                         logger.exception(f'Error resolving dependency for {current_instantiation()}')
@@ -619,8 +621,8 @@ Return the first injector in our parent chain containing *k* or None if there is
                     return await res
                 return res
             finally:
-                if _context_established:
-                    current_instantiation().done()
+                if _instantiation_context:
+                    _instantiation_context.done()
 
         def kwarg_place(k):
             def collect(res):
@@ -662,7 +664,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                 return fut
 
             else:
-                res = handle_result(mark_instantiation_done=_context_established)
+                res = handle_result(mark_instantiation_done=(_instantiation_context is not None))
                 return res
         finally:
             # Perhaps some day we need to clean up something about the sub_injector
@@ -680,6 +682,7 @@ Return the first injector in our parent chain containing *k* or None if there is
     async def _handle_async(self, p,
                             placement,
                             loop,
+                            instantiation_context=None,
                             mark_instantiation_done=True):
         if not hasattr(self, 'loop'):
             self.loop = loop
@@ -688,7 +691,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                 res = await p
             elif isinstance(p, AsyncInjectable):
                 res = await self._handle_async_injectable(p, placement=placement,
-                                                          mark_instantiation_done=False)
+                                                          mark_instantiation_done=False, instantiation_context=instantiation_context)
             elif isinstance(p, asyncio.Future):
                 # We may need to re-add an instantiation to
                 # waiting dependencies in the instantiations that
@@ -699,7 +702,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                 if isinstance(res, AsyncInjectable) and res._async_ready_state != ReadyState.READY:
                     res = await self._handle_async_injectable(
                         res, placement=placement,
-                        mark_instantiation_done=False)
+                        mark_instantiation_done=False, instantiation_context=instantiation_context)
             else:
                 raise RuntimeError('_is_async returned True when _handle_async cannot handle')
             if placement:
@@ -712,13 +715,20 @@ Return the first injector in our parent chain containing *k* or None if there is
         except Exception as e:
             if filter_tracebacks:
                 tb_utils.filter_chatty_modules(e, _chatty_modules, None)
-            raise
+            if instantiation_context:
+                tb_utils.filter_before_here(e)
+                if log_injection_failed.get():
+                    logger.exception(f'Error resolving dependency for {current_instantiation()}')
+                raise InjectionFailed(instantiation_context) from e
+            else:
+                raise
+
         finally:
             if mark_instantiation_done and current_instantiation():
                 current_instantiation().done()
 
     async def _handle_async_injectable(self, obj, placement, resolv=True,
-                                       mark_instantiation_done=False):
+                                       instantiation_context=None, mark_instantiation_done=False):
         try:
             # Don't bother running the resolve protocol for the base case
             if resolv and (obj._async_ready_state == ReadyState.NOT_READY):
@@ -731,7 +741,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                     return await self._handle_async(
                         res, placement=placement,
                         loop=self.loop,
-                        mark_instantiation_done=False)
+                        mark_instantiation_done=False, instantiation_context=instantiation_context)
                 else:
                     return res
             else:  # no resolution required
