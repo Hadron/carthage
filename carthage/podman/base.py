@@ -662,6 +662,12 @@ class ImageLayerTask(TaskWrapperBase):
     async def check_completed_func(self, image):
         # We always want to rerun images
         return False
+
+    @memoproperty
+    def stamp(self):
+        #Overridden if an image_layer_task is assigned as a class property
+        return self.customization.__name__
+    
     
 @inject_autokwargs(
     config_layout=ConfigLayout)
