@@ -315,6 +315,9 @@ async def test_podman_container_network(layout_fixture):
     layout = layout_fixture
     try:
         await layout.networked_container.machine.async_become_ready()
+    except InjectionFailed as e:
+        if isinstance(e.__cause__,NotImplementedError):
+            pytest.xfail("Podman too old")
     finally:
         try: await layout.networked_container.machine.delete()
         except Exception: pass
