@@ -1251,7 +1251,7 @@ class AsyncInjector(Injectable):
         except Exception as e:
             if filter_tracebacks:
                 tb_utils.filter_chatty_modules(e, _chatty_modules, 1)
-            raise e from None
+            raise
 
     async def filter_instantiate_async(self, target, predicate,
                                        *, stop_at=None,
