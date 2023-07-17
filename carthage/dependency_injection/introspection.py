@@ -1,4 +1,4 @@
-# Copyright (C)  2022, Hadron Industries, Inc.
+# Copyright (C)  2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import contextvars
 import dataclasses
+import traceback
 
 _current_instantiation = contextvars.ContextVar('current_instantiation', default=None)
 
@@ -285,6 +286,38 @@ def get_dependencies_for(obj, injector):
 
 
 __all__ += ['get_dependencies_for']
+
+
+@dataclasses.dataclass
+class FailedInstantiation:
+
+    exception: Exception
+    dependency: tuple[base.InjectionKey] = dataclasses.field(default_factory=lambda: tuple())
+
+    def __repr__(self):
+        return \
+            f"<Failed  Instantiation (dependency Path: {self.dependency}\n"\
+            +"\n".join(traceback.format_exception(self.exception))+">"
+        
+def failed_instantiation(context, exception):
+    injector = context.injector
+    key = context.key
+    dependency = tuple()
+    if isinstance(exception, base.InjectionFailed):
+        dependency = exception.dependency_path
+        exception = exception.__context__
+    failure = FailedInstantiation(exception=exception, dependency=dependency)
+    all_instantiation_failures[id(injector), key] = failure
+    if len(dependency) == 0:
+        failed_instantiation_leaves[id(injector), key] = failure
+
+__all__ += ['failed_instantiation']
+
+all_instantiation_failures: dict[tuple, FailedInstantiation] = {}
+failed_instantiation_leaves: dict[tuple, FailedInstantiation] = {}
+
+__all__ += ['all_instantiation_failures', 'failed_instantiation_leaves']
+
 
 
 from . import base

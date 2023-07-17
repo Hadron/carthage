@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2021, Hadron Industries, Inc.
+# Copyright (C) 2019, 2021, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -10,7 +10,7 @@ from carthage import *
 import carthage
 from carthage import sh, ssh
 config = base_injector(ConfigLayout)
-
+from carthage.dependency_injection.introspection import *
 
 async def async_setup():
     global ssh_key, tmux
