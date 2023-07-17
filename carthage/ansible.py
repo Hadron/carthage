@@ -686,3 +686,15 @@ def ansible_role_task(roles, vars=None,
 
 
 __all__ += ['ansible_role_task']
+
+@inject(model=machine.AbstractMachineModel)
+def ansible_log_for_model(model):
+    '''
+    used like::
+        add_provider(ansible_log, ansible_log_for_model, allow_multiple=True)
+
+    Sets up a per-model ansible log in *stamp_path*/ansible.log.
+    '''
+    return f'{model.stamp_path}/ansible.log'
+
+__all__ += ['ansible_log_for_model']
