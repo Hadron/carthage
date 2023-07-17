@@ -54,6 +54,10 @@ __all__ = []
 
 class PodmanContainerHost(AsyncInjectable):
 
+    @memoproperty
+    def podman_log(self):
+        return self.injector.get_instance(InjectionKey("podman_log", _optional=True))
+    
     def podman(self, *args,
                _bg=True, _bg_exc=True):
         raise NotImplementedError
@@ -82,7 +86,7 @@ class LocalPodmanContainerHost(PodmanContainerHost):
         result = await self.podman(
             'container', 'mount',
             container,
-            _bg=True, _bg_exc=False)
+            _bg=True, _bg_exc=False, _log=False)
         try:
             path = str(result).strip()
             yield Path(path)
@@ -90,11 +94,16 @@ class LocalPodmanContainerHost(PodmanContainerHost):
             pass  # Perhaps we should unmount, but we'd need a refcount to do that.
 
     def podman(self, *args,
-               _bg=True, _bg_exc=False):
+               _bg=True, _bg_exc=False, _log=True):
+        options = {}
+        if _log and self.podman_log:
+            options['_out']=str(self.podman_log)
+            options['_err_to_out'] = True
         return sh.podman(
             *args,
             _bg=_bg, _bg_exc=_bg_exc,
-            _encoding='utf-8')
+            _encoding='utf-8',
+            **options)
 
     @contextlib.asynccontextmanager
     async def tar_volume_context(self, volume):
@@ -167,7 +176,7 @@ class PodmanPod(OciPod, PodmanNetworkMixin, carthage.machine.NetworkedModel):
             inspect_arg = self.name
         try:
             result = await self.podman(
-                'pod', 'inspect', inspect_arg)
+                'pod', 'inspect', inspect_arg, _log=False)
         except sh.ErrorReturnCode:
             return False
         pod_info = json.loads(str(result.stdout, 'utf-8'))
@@ -261,7 +270,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         try:
             result = await self.podman(
                 'container', 'inspect', self.full_name,
-                _bg=True, _bg_exc=False)
+                _bg=True, _bg_exc=False, _log=False)
         except sh.ErrorReturnCode:
             return False
         containers = json.loads(str(result))
@@ -366,7 +375,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             'container', 'exec',
             self.full_name,
             *args,
-        )
+            _log=False)
         return result
 
     #: An alias to be more compatible with :class:`carthage.container.Container`
@@ -451,6 +460,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.layer_number = 1
+        self.injector.add_provider(InjectionKey('podman_log'), self.stamp_path/'podman.log')
 
     async def pull_base_image(self):
         if isinstance(self.base_image, OciImage):
@@ -464,7 +474,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
             )
         inspect_result = await self.podman(
             'image', 'inspect',
-            base_image)
+            base_image, _log=False)
         image_info = json.loads(str(inspect_result))[0]
         self.parse_base_image_info(image_info)
 
@@ -486,7 +496,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
         try:
             result = await self.podman(
                 'image', 'inspect', to_find,
-            )
+                _log=False)
         except sh.ErrorReturnCode:
             return False
         info = json.loads(str(result))[0]
@@ -563,7 +573,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
         commit_result = await self.podman(
             'container', 'commit',
             *options,
-            container.id)
+            container.id, _log=False)
         self.last_layer = str(commit_result.stdout, 'utf-8').strip()
 
     async def tag_last_layer(self):
@@ -606,6 +616,14 @@ class PodmanImage(OciImage, SetupTaskMixin):
     def container_host(self):
         return self.injector(LocalPodmanContainerHost)
 
+    @memoproperty
+    def stamp_path(self):
+        config = self.injector(ConfigLayout)
+        path = Path(config.output_dir)/"podman_image"/self.oci_image_tag.replace('/','_')
+        path.mkdir(exist_ok=True, parents=True)
+        return path
+    
+                            
 
 __all__ += ['PodmanImage']
 podman_image_volume_key = InjectionKey('carthage.podman/image_volume')
@@ -624,11 +642,11 @@ class PodmanFromScratchImage(PodmanImage):
                 'image', 'import',
                 *self._commit_options(),
                 tar_path,
-            )
+                _log=False)
         id = str(result.stdout, 'utf-8').strip()
         inspect_result = await self.podman(
             'image', 'inspect',
-            id)
+            id, _log=False)
         image_info = json.loads(str(inspect_result))[0]
         self.last_layer = id
         self.parse_base_image_info(image_info)
@@ -703,6 +721,8 @@ class ContainerfileImage(OciImage):
             # More than just find_or_create and copy_context_if_needed
             self.setup_tasks.sort(key=lambda t: 1 if t.func == OciManaged.find_or_create.func else 0)
             self.container_context = self.output_path
+        self.injector.add_provider(InjectionKey("podman_log"), self.stamp_path/'podman.log')
+                                   
             
 
     @memoproperty
@@ -711,7 +731,7 @@ class ContainerfileImage(OciImage):
 
     @memoproperty
     def output_path(self):
-        path = Path(self.config_layout.output_dir)/'images'
+        path = Path(self.config_layout.output_dir)/'podman_image'
         tag = self.oci_image_tag.replace('/', '_')
         path /= tag
         path.mkdir(exist_ok=True, parents=True)
@@ -750,7 +770,7 @@ class ContainerfileImage(OciImage):
     async def find(self):
         try: inspect_result = await self.container_host.podman(
                 'image', 'inspect',
-                self.oci_image_tag)
+                self.oci_image_tag, _log=False)
         except sh.ErrorReturnCode: return False
         inspect_json = json.loads(str(inspect_result.stdout, 'utf-8'))
         created = dateutil.parser.isoparse(inspect_json[0]['Created']).timestamp()
@@ -803,7 +823,7 @@ class PodmanNetwork(TechnologySpecificNetwork, OciManaged):
     async def find(self):
         try:
             inspect_result = await self.podman(
-                'network', 'inspect', self.network.name)
+                'network', 'inspect', self.network.name, _log=False)
         except Exception: return False
         info = json.loads(str(inspect_result))[0]
         try:
