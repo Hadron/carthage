@@ -413,7 +413,7 @@ __all__ += ['PodmanContainer']
 class PodmanImageBuilderContainer(PodmanContainer):
 
     oci_command = ['sleep', '3600']
-    stop_timeout = 0
+    stop_timeout = 1
 
     def _apply_to_container_customization(self, customization):
         @contextlib.asynccontextmanager
