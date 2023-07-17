@@ -68,8 +68,8 @@ __all__ += ['MachineDependency', 'SystemDependency', 'disable_system_dependency'
 
 import carthage.container
 import carthage.local
-from .local import LocalMachine
-__all__ += ['LocalMachine']
+from .local import LocalMachine, LocalMachineMixin
+__all__ += ['LocalMachine', 'LocalMachineMixin']
 
 import carthage.pki
 
