@@ -11,7 +11,7 @@ import argparse
 from .console import CarthageRunnerCommand
 from . import *
 from . import kvstore
-
+import asyncio
 
 class MachineCommand(CarthageRunnerCommand):
 
@@ -61,6 +61,22 @@ class ListMachines(MachineCommand):
         machines = self.ainjector.filter(Machine, ['host'])
         for m in machines:
             print(m.host)
+
+class SleepCommand(CarthageRunnerCommand):
+
+    name = 'sleep'
+
+    subparser_kwargs = dict(help='Disable the console command loop to prioritize PDB.')
+
+    def setup_subparser(self, parser):
+        pass
+
+    async def run(self, args):
+        # If no Pdb is active, this will return ~immediately.  If a
+        # Pdb is active, this will yield the console until the Pdb is
+        # continued or closed.
+        await asyncio.sleep(0.01)
+
 class DumpAssignmentsCommand(CarthageRunnerCommand):
 
     name = 'dump_assignments'
@@ -104,6 +120,7 @@ class DumpAssignmentsCommand(CarthageRunnerCommand):
 def enable_runner_commands(ainjector):
     ainjector.add_provider(StartCommand)
     ainjector.add_provider(ListMachines)
+    ainjector.add_provider(SleepCommand)
     ainjector.add_provider(StopCommand)
     ainjector.add_provider(DumpAssignmentsCommand)
 

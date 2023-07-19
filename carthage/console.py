@@ -84,15 +84,11 @@ class CarthageConsole(code.InteractiveConsole):
 
     @staticmethod
     def default_locals():
-        class sleeper():
-            def __repr__(self):
-                time.sleep(2**31)
         from carthage.dependency_injection.introspection import instantiation_roots
         return {
             'injector': base_injector,
             'instantiation_roots': instantiation_roots,
             'ainjector': base_injector(AsyncInjector),
-            'sleep': sleeper(),
             'loop': asyncio.get_event_loop(),
             'attach_monitor': attach_event_monitor_to_console,
             'config': base_injector(ConfigLayout)
