@@ -910,9 +910,10 @@ class InjectionKey:
     def __repr__(self):
         r = "InjectionKey({}".format(
             self.target.__name__ if isinstance(self.target, type) else repr(self.target))
+        if self.ready is not None:
+            r += f'\n  _ready={self.ready}'
         for k, v in self.constraints.items():
-            r += ",\n    {} = {}".format(
-                repr(k), repr(v))
+            r += f',\n  {str(k)}={repr(v)}'
         return r + ")"
 
     def __setattr__(self, k, v):
