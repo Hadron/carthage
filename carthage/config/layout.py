@@ -43,7 +43,7 @@ class ConfigLayout(ConfigAccessor, Injectable):
                     # injectible class that acts as a dependency
                     # provider for the configuration key.
 
-                    class value(schema_item.type, Injectable):
+                    class ConfigValue(schema_item.type, Injectable):
                         new_value = v
 
                         def __new__(self, **kwargs):
@@ -74,7 +74,7 @@ class ConfigLayout(ConfigAccessor, Injectable):
                             else:
                                 sup_obj.__init__(self.new_value, **kwargs)
 
-                    injector.replace_provider(config_key(full_key), value)
+                    injector.replace_provider(config_key(full_key), ConfigValue)
                 except AttributeError:
                     raise AttributeError("{} is not a config attribute".format(full_key)) from None
 
