@@ -57,7 +57,7 @@ class MachineDependency(SystemDependency):
         elif isinstance(m, Machine):
             self.key = InjectionKey(Machine, host=m.name, _ready=True)
         else:
-            raise ValueError
+            raise ValueError(f'unsupported value for MachineDependency: {m}')
         self.online = online
         if name:
             self._name = name
