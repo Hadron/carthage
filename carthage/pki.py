@@ -7,6 +7,7 @@
 # LICENSE for details.
 
 import contextlib
+import pathlib
 import os
 import os.path
 from .dependency_injection import *
@@ -16,13 +17,8 @@ from .utils import memoproperty
 from . import machine
 from .setup_tasks import *
 
-
-@inject(config_layout=ConfigLayout)
+@inject_autokwargs(config_layout=ConfigLayout)
 class PkiManager(Injectable):
-
-    def __init__(self, config_layout):
-        self.config_layout = config_layout
-        os.makedirs(self.pki_dir, exist_ok=True)
 
     def credentials(self, host):
         "Returns a key combined with certificate"
@@ -39,7 +35,9 @@ class PkiManager(Injectable):
 
     @memoproperty
     def pki_dir(self):
-        return os.path.join(self.config_layout.state_dir, "pki")
+        ret = pathlib.Path(self.config_layout.state_dir)/"pki"
+        ret.mkdir(exist_ok=True)
+        return str(ret)
 
     @property
     def ca_cert(self):
