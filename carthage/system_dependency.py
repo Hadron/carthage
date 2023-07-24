@@ -62,6 +62,9 @@ class MachineDependency(SystemDependency):
         if name:
             self._name = name
 
+        if not name and ('host' not in self.key.constraints):
+            raise ValueError(f'when MachineDependency is called with an InjectionKey, either the key must have a `host` constraint or a name must be given explicitly')
+
     async def __call__(self, ainjector):
         machine = await ainjector.get_instance_async(self.key)
         if not hasattr(machine, 'start_machine') and hasattr(machine, 'machine'):
