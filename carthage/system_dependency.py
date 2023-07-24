@@ -47,9 +47,11 @@ __all__ += ['SystemDependency']
 
 class MachineDependency(SystemDependency):
 
+    ONLINE_DEFAULT = object()
+
     def __init__(self, m, *,
                  name=None,
-                 online='ssh_online'):
+                 online=ONLINE_DEFAULT):
         if isinstance(m, InjectionKey):
             self.key = InjectionKey(m, _ready=True)
         elif isinstance(m, str):
@@ -71,7 +73,10 @@ class MachineDependency(SystemDependency):
             # Allow a dependency to be set on a MachineModel not just a machine
             machine = machine.machine
         await machine.start_machine()
-        if self.online:
+        if self.online is MachineDependency.ONLINE_DEFAULT:
+            if machine.machine_running_ssh_online:
+                await machine.ssh_online()
+        elif self.online:
             await getattr(machine, self.online)()
 
     @property
