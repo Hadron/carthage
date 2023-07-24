@@ -13,7 +13,12 @@ from .setup_tasks import setup_task, SetupTaskMixin
 from .utils import memoproperty
 from .config.types import ConfigPath
 import carthage.machine
-
+from pathlib import Path
+import os
+import json
+import base64
+import time
+import re
 
 __all__ = []
 
@@ -207,6 +212,75 @@ class OciPod(OciManaged):
 
 
 __all__ += ['OciPod']
+
+
+@dataclasses.dataclass
+class OciRegistry(Injectable):
+
+    fqdn: str
+    username: str = 'AWS'
+
+    # cat ${XDG_RUNTIME_DIR}/containers/auth.json | jq -r '.auths[].auth' | base64 -d | sed -e 's/.*://' | base64 -d | jq
+
+    async def credentials_valid(self):
+        authfile = Path(os.environ['XDG_RUNTIME_DIR'])/'containers'/'auth.json'
+        if not authfile.exists():
+            return None
+        j = json.loads(authfile.read_text())
+        if self.fqdn not in j['auths']:
+            return None
+        auth = j['auths'][self.fqdn]['auth']
+        u, c = base64.b64decode(auth).split(b':')
+        if u != self.username.encode('utf-8'):
+            return None
+        j2 = json.loads(base64.b64decode(c))
+        if j2.get('expiration', 0) < (time.time() + 15):
+            return None
+        return j2
+
+    async def _image_tags(self, image):
+        if not image.oci_image_tag.startswith('localhost/'):
+            raise ValueError(f'unable to push or pull non-local image: {image.oci_image_tag}')
+        ntag = image.oci_image_tag.replace('localhost/', f'{self.fqdn}/')
+        reponame = re.sub('localhost/([^:]*)(:.*)?', '\\1', image.oci_image_tag)
+        return reponame, ntag
+
+    async def push_image(self, image):
+        await self.refresh_credentials()
+        reponame, ntag = await self._image_tags(image)
+        await self.create_repository(reponame)
+        await image.podman('image', 'tag', image.oci_image_tag, ntag)
+        await image.podman('image', 'push', ntag)
+
+    async def pull_image(self, image):
+        await self.refresh_credentials()
+        reponame, ntag = await self._image_tags(image)
+        try:
+            await image.podman('image', 'pull', ntag)
+            await image.podman('image', 'tag', ntag, image.oci_image_tag)
+            return True
+        except carthage.sh.ErrorReturnCode_125:
+            return False
+
+
+__all__ += ['OciRegistry']
+
+
+@dataclasses.dataclass
+class AwsEcrRegistry(OciRegistry):
+
+    async def create_repository(self, reponame):
+        await carthage.sh.bash('-ce', f'aws ecr create-repository --repository-name {reponame} || true')
+
+    async def refresh_credentials(self):
+        if await self.credentials_valid():
+            return
+        await carthage.sh.bash('-ce', f'aws ecr get-login-password --region us-east-1 | podman login --username {self.username} --password-stdin {self.fqdn}')
+        if not await self.credentials_valid():
+            raise ValueError(f'unable to acquire credentials for {self.username} to {self.fqdn}')
+
+
+__all__ += ['AwsEcrRegistry']
 
 
 @dataclasses.dataclass

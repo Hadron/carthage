@@ -12,6 +12,10 @@ import contextlib
 import datetime
 import json
 import logging
+import re
+import os
+import base64
+import time
 from pathlib import Path
 import tempfile
 import shutil
@@ -586,10 +590,12 @@ class PodmanImage(OciImage, SetupTaskMixin):
         '''See if image exists otherwise rebuild the image.
         Note that this is not a :func:`setup_task` even though it is in the parent.  This is always run from :meth:`async_ready`
         '''
-        if await self.find():
-            if not await self.should_build():
-                return
-        return await self.build_image()
+        await self.pull_image()
+        if (not await self.find()) or (await self.should_build()):
+            await self.build_image()
+        await self.push_image()
+        return
+
 
     async def build_image(self):
         await self.pull_base_image()
@@ -607,6 +613,18 @@ class PodmanImage(OciImage, SetupTaskMixin):
     async def async_ready(self):
         await self.find_or_create()
         return await AsyncInjectable.async_ready(self)
+
+    async def push_image(self):
+        registry = await self.ainjector.get_instance_async(OciRegistry)
+        await registry.push_image(self)
+
+    async def push_image(self):
+        registry = await self.ainjector.get_instance_async(OciRegistry)
+        await registry.push_image(self)
+
+    async def pull_image(self):
+        registry = await self.ainjector.get_instance_async(OciRegistry)
+        await registry.pull_image(self)
 
     @memoproperty
     def podman(self):
