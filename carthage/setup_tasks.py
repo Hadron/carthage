@@ -363,7 +363,7 @@ class SetupTaskMixin:
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.setup_tasks = sorted(self._class_setup_tasks(),
+        self.setup_tasks = sorted(self.class_setup_tasks(),
                                   key=lambda t: t.order)
 
     def add_setup_task(self, task, **kwargs):
@@ -419,8 +419,15 @@ class SetupTaskMixin:
         if context_entered:
             await context.__aexit__(None, None, None)
 
-    def _class_setup_tasks(self):
-        cls = self.__class__
+    @classmethod
+    def class_setup_tasks(cls):
+        '''
+        returns a tuple of TaskWrapperBases associated with *cls*.  Handles MRO and methods overriding tasks.
+        This is a relatively expensive operation, so it is memoized per class.
+        '''
+        try:  return cls.__dict__['_class_setup_tasks_prop']
+        except (AttributeError, KeyError): pass
+        results: list[TaskWrapperBase] = []
         meth_names = {}
         for c in cls.__mro__:
             if not issubclass(c, SetupTaskMixin):
@@ -431,8 +438,11 @@ class SetupTaskMixin:
                 meth = getattr(c, m)
                 meth_names[m] = True
                 if isinstance(meth, TaskWrapperBase):
-                    yield meth
+                    results.append(meth)
 
+        cls._class_setup_tasks_prop = tuple(results)
+        return cls.__dict__['_class_setup_tasks_prop']
+    
     async def async_ready(self):
         '''
         This may need to be overridden, but is provided as a default
