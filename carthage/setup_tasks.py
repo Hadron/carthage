@@ -542,7 +542,7 @@ class cross_object_dependency(TaskWrapper):
         return True
 
     def __repr__(self):
-        if isinstance(self.task,str):
+        if isinstance(self.dependent_task, str):
             description = self.dependent_task
         else: description = self.dependent_task.description
         return f'<Depend on {description} task of {self.relationship}>'
