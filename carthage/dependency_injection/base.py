@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -430,6 +430,36 @@ Return the first injector in our parent chain containing *k* or None if there is
             if res is not None:
                 yield k, res
 
+    def inspect(self, *,key_filter=None, include_parent:bool = False):
+        '''
+        Inspect the contents of this injector.
+        This is a generator yielding key, :class:`~InjectedDependencyInspector` pairs for each dependency provided by the injector.
+
+        :param key_filter: A function that takes a key and returns true if  the inspector should inspect the dependency for this key.
+
+        :param include_parent: By default only this injector is  covered; if True, then the inspection recurses into the parent.
+
+        '''
+        if key_filter:
+            already_included = set(filter(key_filter, self._providers.keys()))
+            parent_filter = lambda k: k not in already_included and key_filter(k)
+        else:
+            already_included = set(self._providers.keys())
+            parent_filter = lambda k: k not in already_included
+        yield from ((k, InjectedDependencyInspector(
+            key=k, injector=self, provider=self._providers[k]
+            )) for k in already_included)
+        if include_parent and self.parent_injector: 
+            yield from self.parent_injector.inspect(
+                key_filter=parent_filter, include_parent=True)
+
+    @property
+    def child_injectors(self):
+        return frozenset(self._event_scope.children[id(self)])
+    
+            
+
+            
     def __call__(self, cls, *args, **kwargs):
         '''Construct an instance of cls using the providers in this injector.
         Instantiate providers as needed.  In general a sub-injector is not
