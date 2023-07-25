@@ -230,8 +230,8 @@ class CarthageConsole(code.InteractiveConsole):
                     self.subcommands_parser.print_help()
                     return
                 subcommand = self.subcommands[args.cmd]
-                future = self.loop.create_task(self.ainjector(subcommand.run, args))
-                self.wait_future(future)
+                future = asyncio.run_coroutine_threadsafe(self.ainjector(subcommand.run, args), loop=self.loop)
+                future.result()  #concurrent not asyncio future
                 return
         return super().runsource(source, filename)
 
@@ -254,16 +254,6 @@ class CarthageConsole(code.InteractiveConsole):
                     except KeyError:
                         pass
 
-    def wait_future(self, future):
-        def cb(future2):
-            try:
-                future2.result()
-            finally:
-                cfuture.set_result(True)
-        cfuture = concurrent.futures.Future()
-        future.add_done_callback(cb)
-        self.loop.call_soon_threadsafe(self.noop)
-        cfuture.result()  # blocks
 
 
 __all__ += ['CarthageConsole']
