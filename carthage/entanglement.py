@@ -51,6 +51,7 @@ class CarthageRegistry(SyncStoreRegistry):
 
 carthage_registry = CarthageRegistry()
 carthage_registry.register_syncable(SyncOwner.sync_type, SyncOwner)
+
 @dataclasses.dataclass
 class ProvidedDependency(StoreInSyncStoreMixin):
 
