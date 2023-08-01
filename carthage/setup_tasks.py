@@ -637,22 +637,31 @@ def find_mako_tasks(tasks):
             yield t
 
 
-def install_mako_task(relationship, cross_dependency=True):
+def install_mako_task(relationship, cross_dependency=True, *, relationship_ready=True):
     '''
 :param relationship: The name of an attribute property containing :class:`mako_tasks <mako_task>` in its :meth:`~SetupTaskMixin.setup_tasks`.
 
     :param cross_dependency: If true (the default), rerun the installation whenever any of the underlying mako_tasks change.
 
+    :param relationship_ready:  Bring the relationship to *async_become_ready* state before  installing mako tasks or checking cross-object dependencies.  Bringing the relationship to ready state allows the hash block in the mako template to access parts of the instance that are set up as part of bringing the instante to ready.  It also guarantees that the mako templates will be generated at least once.  However, it can produce dependency loops that hange Carthage in some circumstances.
+    
     This task is generally associated on a machine to install mako templates rendered on the model.  Typical usage might look like::
 
         install_mako = install_mako_task('model')
 
     '''
+    if relationship == 'self' and relationship_ready:
+        # We could just set relationship_ready to false but if we do that in thde easy case of self, we will miss harder cases like host.
+        raise RuntimeError('Set relationship_ready=False when using self as a relationship')
+    
     @setup_task("Install mako templates")
     async def install(self):
         async with self.filesystem_access() as fspath:
-            related = getattr(self, relationship)
-            await related.async_become_ready()
+            if relationship == 'self':
+                related = self
+            else:
+                related = getattr(self, relationship)
+            if relationship_ready: await related.async_become_ready()
             base = Path(related.stamp_path)
             path = Path(fspath)
             for mt in find_mako_tasks(related.setup_tasks):
@@ -667,8 +676,11 @@ def install_mako_task(relationship, cross_dependency=True):
         @install.invalidator()
         @inject(ainjector=AsyncInjector)
         async def install(self, ainjector, last_run, **kwargs):
-            related = getattr(self, relationship)
-            await related.async_become_ready()
+            if relationship == 'self':
+                related = self
+            else:
+                related = getattr(self, relationship)
+            if relationship_ready: await related.async_become_ready()
             last = 0.0
             for mt in find_mako_tasks(related.setup_tasks):
                 run, last = await mt.should_run_task(related, dependency_last_run=last, ainjector=ainjector)
