@@ -86,7 +86,7 @@ __all__ += ['BaseInstantiationContext']
 class InjectedDependencyInspector:
 
     '''
-    Using :func:`~carthage.dependency_injection.inject`, a dependency can be injected into a function or class.  Various APIs such as :meth:`~carthage.dependency_injection.Injector.get_dependencies_for` or :func:`get_dependencies_for` will allow introspection of these dependencies.  Those methods iterate over *INjectedDependencyInspector*s to give information on each dependency.
+    Using :func:`~carthage.dependency_injection.inject`, a dependency can be injected into a function or class.  Various APIs such as :meth:`~carthage.dependency_injection.introspection.get_dependencies_for` or :func:`get_dependencies_for` will allow introspection of these dependencies.  Those methods iterate over *INjectedDependencyInspector*s to give information on each dependency.
     '''
 
     #: The :class:`Injector` that provides the dependency. *None* if the dependency is unresolved.
