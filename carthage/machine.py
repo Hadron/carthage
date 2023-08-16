@@ -23,7 +23,7 @@ from .ssh import SshKey, SshAgent, RsyncPath
 from .utils import memoproperty
 from . import sh
 import carthage.ssh
-from .setup_tasks import SetupTaskMixin, setup_task, TaskWrapperBase
+from .setup_tasks import SetupTaskMixin, setup_task, TaskWrapperBase, TaskInspector
 import logging
 logger = logging.getLogger("carthage")
 
@@ -734,6 +734,25 @@ class FilesystemCustomization(BaseCustomization):
             return
 
 
+class CustomizationInspectorProxy:
+
+    def __init__(self, obj, stamp):
+        self.obj = obj
+        self.stamp_stem = stamp
+
+
+    def check_stamp(self, s, *args):
+        return self.obj.check_stamp(self.stamp_stem+'-'+s, *args)
+    
+
+    @property
+    def logger_for(self):
+        return self.obj.logger_for
+
+    @property
+    def stamp_path(self):
+        return self.obj.stamp_path
+
 class CustomizationWrapper(TaskWrapperBase):
 
     customization: typing.Type[BaseCustomization]
@@ -769,6 +788,13 @@ class CustomizationWrapper(TaskWrapperBase):
             dependency_last_run = res
         return False, dependency_last_run
 
+    def inspect(self, obj):
+        proxy = CustomizationInspectorProxy(obj, self.stamp)
+        prev_inspector = None
+        for t in self.customization.class_setup_tasks():
+            prev_inspector = TaskInspector(task=t, from_obj=proxy, previous=prev_inspector)
+            yield prev_inspector
+            
 
 def customization_task(c: BaseCustomization, order: int = None,
                        before=None):

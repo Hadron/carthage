@@ -31,7 +31,7 @@ import collections.abc
 __all__ = ['logger', 'TaskWrapper', 'TaskMethod', 'setup_task', 'SkipSetupTask', 'SetupTaskMixin',
            'cross_object_dependency',
            'mako_task',
-           "install_mako_task"]
+           'install_mako_task']
 
 logger = logging.getLogger('carthage.setup_tasks')
 
@@ -71,6 +71,67 @@ class SetupTaskContext(BaseInstantiationContext):
         from .dependency_injection.introspection import get_dependencies_for
         return get_dependencies_for(self.task, self.instance.injector)
 
+@dataclasses.dataclass
+class TaskInspector:
+
+    task: TaskWrapperBase
+    #: Either the class or instance with the task
+    from_obj: typing.Union[SetupTaskMixin, type[SetupTaskMixin]]
+    #: The task previous in the dependency chain.
+    previous: typing.Optional[TaskInspector] = dataclasses.field(default=None, repr=False)
+
+    @inject(ainjector=AsyncInjector)
+    async def should_run(self, ainjector):
+        if not self.is_instance:
+            raise NotImplementedError('You must inspect an instantiated class to determine if a task will run.')
+        dependency_last_run = await self.dependency_last_run(ainjector)
+        should_run, last_run = await  self.task.should_run_task(self.from_obj, ainjector=ainjector, run_methods=False)
+        self.last_run = last_run
+        return should_run
+
+    def subtasks(self):
+        from .machine import CustomizationWrapper
+        if isinstance(self.task, CustomizationWrapper):
+            return self.task.inspect(self.from_obj)
+        return []
+    
+    async def dependency_last_run(self, ainjector):
+        try: return self._dependency_last_run
+        except AttributeError: pass
+        inspector_list = []
+        current = self.previous
+        dependency_last_run = None
+        while current:
+            try:
+                dependency_last_run = inspector.last_run
+                break
+            except AttributeError:pass
+            inspector_list.insert(0,current)
+            current = current.previous
+        for inspector in inspector_list:
+            if dependency_last_run and not hasattr(inspector, '_dependency_last_run'):
+                inspector._dependency_last_run = dependency_last_run
+            await inspector.should_run(ainjector)
+            dependency_last_run = inspector.last_run
+        if dependency_last_run is None:
+            # Happens when no previous dependencies
+            dependency_last_run = 0.0
+        self._dependency_last_run = dependency_last_run
+        return dependency_last_run
+
+    @property
+    def description(self):
+        return f'{self.task.description} for {self.from_obj}'
+
+    @property
+    def is_instance(self):
+        '''Return true  if this is inspecting an instance  that has been instantiated rather than inspecting tasks on a class.
+        '''
+        from .machine import CustomizationInspectorProxy
+        return isinstance(self.from_obj, (SetupTaskMixin, CustomizationInspectorProxy))
+
+                
+    
 
 @dataclasses.dataclass
 class TaskWrapperBase:
@@ -149,7 +210,7 @@ class TaskWrapperBase:
 
     async def should_run_task(self, obj: SetupTaskMixin,
                               dependency_last_run: float = None,
-                              *, ainjector: AsyncInjector):
+                              *, ainjector: AsyncInjector, run_methods=True):
 
         '''Indicate whether this task should be run for *obj*.
 
@@ -171,11 +232,13 @@ class TaskWrapperBase:
 
         :param: obj
             The instance on which setup_tasks are being run.
+        :param run_methods: If False , no check_completed or invalidators are run.  If the task has a check_completed function, return None rather than True or False for wether the task should run.  Invalidators and hash functions are ignored, and the return is dependent only on stamps.
 
         '''
         if dependency_last_run is None:
             dependency_last_run = 0.0
         if self.check_completed_func:
+            if not run_methods: return (None, dependency_last_run)
             last_run = await ainjector(self.check_completed_func, obj)
             hash_contents = ""
             if last_run is True:
@@ -190,12 +253,12 @@ class TaskWrapperBase:
             obj.logger_for().debug(
                 f"Task {self.description} last run {_iso_time(last_run)}, but dependency run more recently at {_iso_time(dependency_last_run)}")
             return (True, dependency_last_run)
-        if not self.check_completed_func:
+        if (not self.check_completed_func) and run_methods:
             actual_hash_contents = await ainjector(self.hash_func, obj)
             if actual_hash_contents != hash_contents:
                 obj.logger_for().info(f'Task {self.description} invalidated by hash_func() change from `{hash_contents}` to `{actual_hash_contents}`; last run {_iso_time(last_run)}')
                 return (True, dependency_last_run)
-        if self.invalidator_func:
+        if self.invalidator_func and run_methods:
             if not await ainjector(self.invalidator_func, obj, last_run=last_run):
                 obj.logger_for().info(f"Task {self.description} invalidated for {obj} by invalidator_func(); last run {_iso_time(last_run)}")
                 return (True, time.time())
@@ -491,6 +554,23 @@ class SetupTaskMixin:
         except AttributeError:
             return logger
 
+    def inspect_setup_tasks(self):
+        '''Iterates over the setup tasks of a ninstance and provides an inspector that can determine if a task would run and what its description is.
+        '''
+        prev = None
+        for t in self.setup_tasks:
+            prev = TaskInspector(task=t, from_obj=self, previous=prev)
+            yield prev
+
+    @classmethod
+    def inspect_class_setup_tasks(cls):
+        '''Iterates over all the setup tasks that instances of this class will have and provides an inspector for that task.
+        '''
+        prev = None
+        for t in cls.class_setup_tasks():
+            prev=TaskInspector(task=t, from_obj=cls, previous=prev)
+            yield prev
+            
 
 def _iso_time(t):
     return datetime.datetime.fromtimestamp(t).isoformat()

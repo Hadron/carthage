@@ -60,9 +60,13 @@ async def test_basic_setup(ainjector):
             called += 1
     assert called == 0
     assert not c.check_stamp(c, "test_stamp_task")[0]
+    assert len(list(c.inspect_class_setup_tasks())) == 1
     c_obj = await ainjector(c)
     assert called == 1
     assert c_obj.check_stamp("test_stamp_task")[0]
+    inspectors = list(c_obj.inspect_setup_tasks())
+    assert len(inspectors) == 1
+    assert not await ainjector(inspectors[0].should_run)
     c_obj2 = await ainjector(c)
     assert c_obj is not c_obj2
     assert called == 1
