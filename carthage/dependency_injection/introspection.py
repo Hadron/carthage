@@ -149,6 +149,14 @@ class InjectedDependencyInspector:
         return result
 
 
+    @property
+    def provider_id(self):
+        "Two inspectors that refer to the same value will return the same provider ide."
+        if self.is_final:
+            return id(self.get_value())
+        else: return id(self.provider)
+        
+
 __all__ += ['InjectedDependencyInspector']
 
 
