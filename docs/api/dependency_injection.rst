@@ -83,6 +83,21 @@ API Reference
    :members:
    :undoc-members:
 
+   .. autoclass:: carthage.dependency_injection.InstantiationContext
+                  
 
       
                   
+Events
+******
+
+The dependency injection system emits several :meth:`events <carthage.event.EventListener.emit_event>`.
+
+    add_provider
+        Emitted  when :meth:`carthage.dependency_injection.Injector.add_provider` is called.  Dispatched to  all the keys that the dependency will satisfy.  The target of the event is the object providing the dependency, typically an uninstantiated class.  Also dispatched to ``InjectionKey(Injector)`` as a wildcard.  Contains the add_provider parameters as well as *other_keys*, indicating other keys by which this dependency will be provided.
+
+    dependency_progress
+        Emitted whenever an instantiation makes progress (for example resolving a :class:`~carthage.AsyncInjectable` or calling a coroutine.  The target is a :class:`carthage.dependency_injection.InstantiationContext`.  The value can be obtained with the *get_value* method.  This event is dispatched to all the keys that the *add_provider* event would be dispatched to.
+
+    dependency_final
+        Emitted whenever an instantiation finalizes (async object is ready for example). Same target and keys as *dependency_progress*.
