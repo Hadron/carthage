@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -341,3 +341,30 @@ async def test_setup_task_introspection(ainjector):
         assert not td_context.dependencies_waiting
     assert not icontext.dependencies_waiting
     assert len(instantiation_roots) == 0
+@async_test
+async def test_setup_task_events(ainjector):
+    class c(Stampable):
+
+        @setup_task("Run some task")
+        def task_1(self):
+            pass
+
+    def cb(event, target, **kwargs):
+        events.add(event)
+    events = set()
+    c_not_ready = InjectionKey(c, _ready=False)
+    ainjector.add_provider(c)
+    c_obj = await ainjector.get_instance_async(c_not_ready)
+    inspect = list(c_obj.inspect_setup_tasks())
+    assert  await inspect[0].should_run(ainjector)
+    with ainjector.event_listener_context(InjectionKey(c),
+                                          ['task_run', 'task_should_run'], cb):
+        await  c_obj.async_become_ready()
+    assert 'task_should_run' in events
+    assert 'task_run' in events
+    assert 'task_already_run' not in events
+    with ainjector.event_listener_context(
+            InjectionKey(c), 'task_already_run', cb):
+        c_2 = await ainjector(c)
+    assert 'task_already_run' in events
+    

@@ -22,7 +22,7 @@ import weakref
 import importlib.resources
 from pathlib import Path
 import carthage
-from carthage.dependency_injection import AsyncInjector, inject, BaseInstantiationContext
+from carthage.dependency_injection import AsyncInjector, inject, BaseInstantiationContext, InjectionKey
 from carthage.dependency_injection.introspection import current_instantiation
 from carthage.config import ConfigLayout
 from carthage.utils import memoproperty, import_resources_files
@@ -159,13 +159,22 @@ class TaskWrapperBase:
             if not self.check_completed_func:
                 hash_contents = instance.injector(self.hash_func, instance)
                 instance.create_stamp(self.stamp, hash_contents)
-
-        def fail():
+            instance.injector.emit_event(
+                InjectionKey(SetupTaskMixin), "task_run",
+                instance, task=self,
+                adl_keys=instance.setup_task_event_keys())
+            
+        def fail(e):
             if not self.check_completed_func:
                 instance.logger_for().warning(
                     f'Deleting {self.description} task stamp for {instance} because task failed')
                 instance.delete_stamp(self.stamp)
-
+            instance.injector.emit_event(
+                InjectionKey(SetupTaskMixin), "task_fail",
+                instance, task=self,
+                exception=e,
+                adl_keys=instance.setup_task_event_keys())
+    
         def final():
             context.done()
 
@@ -176,7 +185,7 @@ class TaskWrapperBase:
             elif isinstance(exc,SkipSetupTask):
                 pass
             else:
-                fail()
+                fail(e)
             final()
         mark_context_done = True
         with contextlib.ExitStack() as stack:
@@ -193,6 +202,10 @@ class TaskWrapperBase:
                     res = instance.ainjector.loop.create_task(res)
                     res.add_done_callback(callback)
                     mark_context_done = False
+                    instance.injector.emit_event(
+                        InjectionKey(SetupTaskMixin), "task_start",
+                        instance, task=self,
+                        adl_keys=instance.setup_task_event_keys())
                     if hasattr(instance, 'name'):
                         res.purpose = f'setup task: {self.stamp} for {instance.name}'
                     return res
@@ -201,8 +214,8 @@ class TaskWrapperBase:
                     return res
             except SkipSetupTask:
                 raise
-            except Exception:
-                fail()
+            except Exception as e:
+                fail(e)
                 raise
             finally:
                 if mark_context_done:
@@ -460,6 +473,10 @@ class SetupTaskMixin:
         for t in self.setup_tasks:
             should_run, dependency_last_run = await t.should_run_task(self, dependency_last_run, ainjector=ainjector)
             if should_run:
+                self.injector.emit_event(
+                    InjectionKey(SetupTaskMixin), "task_should_run",
+                    self, task=t,
+                    adl_keys=self.setup_task_event_keys())
                 try:
                     if (not context_entered) and context is not None:
                         await context.__aenter__()
@@ -479,9 +496,21 @@ class SetupTaskMixin:
                     if context_entered:
                         await context.__aexit__(*sys.exc_info())
                     raise
+            else:           # not should_run
+                self.injector.emit_event(
+                        InjectionKey(SetupTaskMixin), "task_already_run",
+                        self, task=t,
+                        adl_keys=self.setup_task_event_keys())
         if context_entered:
             await context.__aexit__(None, None, None)
 
+    def setup_task_event_keys(self):
+        '''Yield the set of keys that setup_task related events should be dispatc should be dispatched to.  In addition to keys yi.yielded by this generator, all setup tasks events are dispatched to InjectionKey(SetupTaskMixin).
+        '''
+        yield self.default_class_injection_key()
+        yield from self.supplementary_injection_keys(self.default_class_injection_key())
+        
+        
     @classmethod
     def class_setup_tasks(cls):
         '''

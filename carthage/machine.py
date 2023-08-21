@@ -456,6 +456,9 @@ class Machine(AsyncInjectable, SshMixin):
             futures.append(future)
         await asyncio.gather(*futures)
 
+    def setup_task_event_keys(self):
+        return self.supplementary_injection_keys(InjectionKey(Machine, host=self.name))
+    
     async def start_machine(self):
 
         '''
