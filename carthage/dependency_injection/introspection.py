@@ -124,6 +124,11 @@ class InjectedDependencyInspector:
             key = InjectionKey(key, _ready=ready)
         return self.injector.get_instance(key)
 
+    def get_value_no_instantiate(self):
+        '''Return the current value without instantiating; I.E. possibly whatever is passed into add_provider.
+        '''
+        return self.provider.provider
+
     async def get_value_async(self, ready=None):
         '''Like :func:`get_value` but asynchronous.
         '''
