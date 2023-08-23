@@ -99,7 +99,7 @@ class InjectedDependencyInspector:
     @property
     def is_provided(self):
         '''True if the dependency is provided; False if there is no injector in the chain providing this dependency.'''
-        return self.provider is None
+        return self.provider is not None
 
     @property
     def is_final(self):
@@ -156,10 +156,10 @@ class InjectedDependencyInspector:
 
     @property
     def provider_id(self):
-        "Two inspectors that refer to the same value will return the same provider ide."
-        if self.is_final:
-            return id(self.get_value())
-        else: return id(self.provider)
+        "If two inspectors have the same provider_id, they are guaranteed to refer to the same value.  It is possible that inspectors with different provider_id may refer to the same value.  Once is_final returns true, value_id will be stable."
+        if not self.is_provided: return None
+        return id(self.provider)
+    
         
 
 __all__ += ['InjectedDependencyInspector']
@@ -231,7 +231,7 @@ class InstantiationContext(BaseInstantiationContext, InjectedDependencyInspector
             # important that when _handle_async handles a future, it
             # calls progress soon to recover from that.
             parent.dependency_final(self.key, self)
-        if obj_ready or not ctx.ready:
+        if obj_ready or not self.ready:
             self.injector.emit_event(self.key,
                                      "dependency_final", self,
                                      adl_keys=self.provider.keys | {base.InjectionKey(base.Injector)})
@@ -293,7 +293,7 @@ def get_dependencies_for(obj, injector):
                 provider=dp)
         except KeyError:
             yield InjectedDependencyInspector(
-                injector=None,
+                injector=injector,
                 key=injection_key,
                 provider=None)
 
