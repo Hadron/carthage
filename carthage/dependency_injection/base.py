@@ -248,6 +248,8 @@ class Injector(Injectable, event.EventListener):
                  parent_injector=None):
         self._providers = {}
         self._pending = weakref.WeakSet()
+        self.closed = False
+        self._closing = False
         if parent_injector is None and len(providers) > 0:
             if isinstance(providers[0], Injector):
                 parent_injector = providers[0]
@@ -265,8 +267,6 @@ class Injector(Injectable, event.EventListener):
             self.add_provider(p)
         self.add_provider(self)  # Make sure we can inject an Injector
         self.add_provider(InjectionKey(AsyncInjector), AsyncInjector, allow_multiple=True)
-        self.closed = False
-        self._closing = False
 
     def claim(self, claimed_by=True):
         '''
@@ -332,6 +332,7 @@ class Injector(Injectable, event.EventListener):
             p.provider,
             replace=replace, close=close,
             allow_multiple=allow_multiple,
+            inspector=InjectedDependencyInspector(injector=self, key=k, provider=p),
             other_keys=p.keys,
             adl_keys=p.keys | {InjectionKey(Injector)})
         return k
