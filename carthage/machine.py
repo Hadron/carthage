@@ -791,11 +791,14 @@ class CustomizationWrapper(TaskWrapperBase):
             dependency_last_run = res
         return False, dependency_last_run
 
-    def inspect(self, obj):
+    def inspect(self, obj, instance_id=None):
+        if instance_id is None: instance_id = id(obj)
         proxy = CustomizationInspectorProxy(obj, self.stamp)
         prev_inspector = None
         for t in self.customization.class_setup_tasks():
             prev_inspector = TaskInspector(task=t, from_obj=proxy, previous=prev_inspector)
+            prev_inspector.stamp = self.stamp+'-'+prev_inspector.stamp
+            prev_inspector.instance_id = instance_id
             yield prev_inspector
             
 
