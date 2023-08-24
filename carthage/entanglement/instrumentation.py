@@ -7,6 +7,7 @@
 # LICENSE for details.
 
 from __future__ import annotations
+import asyncio
 import dataclasses
 import enum
 from pathlib import Path
@@ -20,6 +21,7 @@ from entanglement.types import register_type, register_enum
 
 
 from ..dependency_injection import InjectionKey, Injector, is_obj_ready, get_dependencies_for
+from ..setup_tasks import SetupTaskMixin, _iso_time
 
 __all__ = []
 
@@ -82,7 +84,27 @@ class CarthageRegistry(SyncStoreRegistry):
                 provider_info.state = InstantiationProgress.ready
             else: provider_info.state = InstantiationProgress.not_ready
         self.store_synchronize(provider_info)
-        
+        value = inspector.get_value_no_instantiate()
+        if isinstance(value, SetupTaskMixin):
+            asyncio.ensure_future(self.handle_tasks(value))
+
+    async def handle_task(self, inspector, running=False):
+        task_info = self.get_or_create(TaskInfo, inspector.instance_id, inspector.stamp)
+        task_info.running = running
+        try: task_info.should_run = await inspector.should_run(ainjector=None)
+        except Exception: pass
+        try:         task_info.last_run = _iso_time(inspector.last_run)
+        except AttributeError: task_info.last_run = None
+        task_info.description = inspector.description
+        self.store_synchronize(task_info)
+        for subinspector in inspector.subtasks():
+            await self.handle_task(subinspector)
+            
+
+    async def handle_tasks(self, obj):
+        for inspector in obj.inspect_setup_tasks():
+            await self.handle_task(inspector)
+            
     def dump(self, path):
         path = Path(path)
         result: dict[str, list] = {}
@@ -158,6 +180,20 @@ class StaticDependency(StoreInSyncStoreMixin):
 
     sync_primary_keys = ('provider_id', 'key')
     sync_registry = carthage_registry
-    
 
 __all__ += ['StaticDependency']
+
+@dataclasses.dataclass
+class TaskInfo(StoreInSyncStoreMixin):
+
+    instance_id: id = sync_property(constructor=True)
+    stamp: str = sync_property(constructor=True)
+    description: str = sync_property("")
+    running: bool = sync_property(False)
+    should_run: bool = sync_property(None)
+    last_run: str = sync_property(None)
+
+    sync_primary_keys = ('instance_id', 'stamp')
+    sync_registry = carthage_registry
+    
+__all__ += ['TaskInfo']
