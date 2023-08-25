@@ -655,6 +655,10 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
         stamp = f'{self.stamp_stem}-{stamp}'
         return self.host.delete_stamp(stamp)
 
+    def inspect_setup_tasks(self):
+        return super().inspect_setup_tasks(
+            stamp_stem=self.stamp_stem+'-', instance_id=id(self.host))
+    
     async def last_run(self):
         '''
         :return: the most recent time any setup task on this Customization has run against the given host. Returns false if the tasks definitely need to run.
