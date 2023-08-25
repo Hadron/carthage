@@ -606,12 +606,14 @@ class SetupTaskMixin:
         except AttributeError:
             return logger
 
-    def inspect_setup_tasks(self):
+    def inspect_setup_tasks(self, *, stamp_stem="", instance_id=None):
         '''Iterates over the setup tasks of a ninstance and provides an inspector that can determine if a task would run and what its description is.
         '''
         prev = None
         for t in self.setup_tasks:
             prev = TaskInspector(task=t, from_obj=self, previous=prev)
+            if stamp_stem: prev.stamp = stamp_stem+prev.stamp
+            if instance_id: prev.instance_id = instance_id
             yield prev
 
     @classmethod

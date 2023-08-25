@@ -88,14 +88,18 @@ class CarthageRegistry(SyncStoreRegistry):
         if isinstance(value, SetupTaskMixin):
             asyncio.ensure_future(self.handle_tasks(value))
 
-    async def handle_task(self, inspector, running=False):
+    async def handle_task(self, inspector, running=False, should_run=None, exception=None):
         task_info = self.get_or_create(TaskInfo, inspector.instance_id, inspector.stamp)
         task_info.running = running
-        try: task_info.should_run = await inspector.should_run(ainjector=None)
-        except Exception: pass
+        if should_run is None:
+            try: should_run = await inspector.should_run(ainjector=None)
+            except Exception: pass
+        if should_run is not None: task_info.should_run = should_run
         try:         task_info.last_run = _iso_time(inspector.last_run)
         except AttributeError: task_info.last_run = None
         task_info.description = inspector.description
+        if exception:
+            task_info.last_failure = str(exception)
         self.store_synchronize(task_info)
         for subinspector in inspector.subtasks():
             await self.handle_task(subinspector)
@@ -104,6 +108,22 @@ class CarthageRegistry(SyncStoreRegistry):
     async def handle_tasks(self, obj):
         for inspector in obj.inspect_setup_tasks():
             await self.handle_task(inspector)
+
+    async def on_task_event(self, event, target, task, **kwargs):
+        exception = None
+        should_run = None
+        if event == 'task_start': running = True
+        else: running = False
+        if event == 'task_ran': should_run = False
+        if event == 'task_fail':
+            exception = kwargs[exception]
+        for inspector in  target.inspect_setup_tasks():
+            if inspector.task == task:
+                return await self.handle_task(
+                    inspector,
+                    should_run=should_run,
+                    exception=exception,
+                    running=running)
             
     def dump(self, path):
         path = Path(path)
@@ -122,6 +142,10 @@ class CarthageRegistry(SyncStoreRegistry):
         injector.add_event_listener(InjectionKey(Injector), {'add_provider'}, self.on_add_provider)
         injector.add_event_listener(
             InjectionKey(Injector), {'dependency_progress', 'dependency_final'}, self.on_update)
+        injector.add_event_listener(
+            InjectionKey(SetupTaskMixin),
+            {'task_ran', 'task_start', 'task_fail', 'task_should_run'},
+            self.on_task_event)
         for k, inspector in injector.inspect():
             self.on_add_provider(scope=injector, target_key=inspector.key, other_keys=set(),
                                  inspector=inspector
@@ -192,6 +216,8 @@ class TaskInfo(StoreInSyncStoreMixin):
     running: bool = sync_property(False)
     should_run: bool = sync_property(None)
     last_run: str = sync_property(None)
+    last_failure: str = sync_property(None)
+    
 
     sync_primary_keys = ('instance_id', 'stamp')
     sync_registry = carthage_registry
