@@ -57,13 +57,19 @@ class CarthageRegistry(SyncStoreRegistry):
     def on_add_provider(self, scope,  other_keys, target_key, inspector,
                         **kwargs):
         injector_id = self.injector_id(scope)
+        injector_info = self.get_or_create(InjectorInfo, injector_id)
+        if scope.parent_injector:
+            injector_info.parent_id = id(scope.parent_injector)
+        try: injector_info.description = repr(scope)
+        except Exception: pass
+        self.store_synchronize(injector_info)
         for k in other_keys | {target_key}:
             o = ProvidedDependency(injector_id=injector_id, key=k, provider_id=inspector.provider_id)
             self.store_synchronize(o)
         provider_info = self.get_or_create(ProviderInfo, inspector.provider_id)
-        try: provider_info.provider_repr = repr(inspector.get_value_no_instantiate())
+        try: provider_info.value_repr = repr(inspector.get_value_no_instantiate())
         except Exception:
-            provider_info.provider_repr = None
+            provider_info.value_repr = None
         self.store_synchronize(provider_info)
         for dependency in get_dependencies_for(inspector.get_value_no_instantiate(), inspector.injector):
             sd = StaticDependency(
@@ -84,6 +90,8 @@ class CarthageRegistry(SyncStoreRegistry):
             if is_obj_ready(inspector.get_value()):
                 provider_info.state = InstantiationProgress.ready
             else: provider_info.state = InstantiationProgress.not_ready
+        try: provider_info.value_injector_id = id(inspector.get_value_no_instantiate().injector)
+        except Exception: pass
         self.store_synchronize(provider_info)
         value = inspector.get_value_no_instantiate()
         if isinstance(value, SetupTaskMixin):
@@ -195,7 +203,9 @@ class ProviderInfo(StoreInSyncStoreMixin):
     id: int = sync_property(constructor=True)
     state: InstantiationProgress= sync_property(InstantiationProgress.not_instantiated)
     
-    provider_repr:str = sync_property(None)
+    value_repr:str = sync_property(None)
+    value_injector_id: int = sync_property(None)
+    
 
     sync_registry = carthage_registry
     sync_primary_keys = ('id',)
@@ -216,6 +226,16 @@ class StaticDependency(StoreInSyncStoreMixin):
     sync_registry = carthage_registry
 
 __all__ += ['StaticDependency']
+
+@dataclasses.dataclass
+class InjectorInfo(StoreInSyncStoreMixin):
+
+    id: int = sync_property(constructor=True)
+    parent_id: int = sync_property(None)
+    description: str = sync_property(None)
+
+    sync_primary_keys = ('id',)
+    sync_registry = carthage_registry
 
 @dataclasses.dataclass
 class TaskInfo(StoreInSyncStoreMixin):
