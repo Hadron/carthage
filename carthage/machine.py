@@ -760,6 +760,9 @@ class CustomizationInspectorProxy:
     def stamp_path(self):
         return self.obj.stamp_path
 
+    def __repr__(self):
+        return f'CustomizationInspectorProxy({repr(self.obj)})'
+    
 class CustomizationWrapper(TaskWrapperBase):
 
     customization: typing.Type[BaseCustomization]
