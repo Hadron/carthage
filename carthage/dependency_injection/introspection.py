@@ -323,6 +323,11 @@ def failed_instantiation(context, exception):
     all_instantiation_failures[id(injector), key] = failure
     if len(dependency) == 0:
         failed_instantiation_leaves[id(injector), key] = failure
+    injector.emit_event(
+        key, "dependency_instantiation_failed",
+        failure,
+        adl_keys={base.InjectionKey(base.Injector)})
+    
 
 __all__ += ['failed_instantiation']
 

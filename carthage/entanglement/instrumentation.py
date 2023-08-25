@@ -11,6 +11,7 @@ import asyncio
 import dataclasses
 import enum
 from pathlib import Path
+import traceback
 import uuid
 import yaml
 
@@ -124,7 +125,14 @@ class CarthageRegistry(SyncStoreRegistry):
                     should_run=should_run,
                     exception=exception,
                     running=running)
-            
+
+    def on_instantiation_failed(self, target, scope, target_key, **kwargs):
+        failed_instantiation = self.get_or_create(FailedInstantiation,
+                                                  id(scope), target_key)
+        failed_instantiation.exception = "".join(traceback.format_exception(target.exception))
+        failed_instantiation.dependency = target.dependency
+        self.store_synchronize(failed_instantiation)
+        
     def dump(self, path):
         path = Path(path)
         result: dict[str, list] = {}
@@ -135,7 +143,7 @@ class CarthageRegistry(SyncStoreRegistry):
                 sync_repr['_sync_type'] = o.sync_type
                 objects.append(sync_repr)
             result[t.sync_type] = objects
-        path.write_text(yaml.dump(result, default_flow_style=False))
+        path.write_text(yaml.dump(result, default_flow_style=False ))
         
 
     def instrument_injector(self, injector):
@@ -146,6 +154,8 @@ class CarthageRegistry(SyncStoreRegistry):
             InjectionKey(SetupTaskMixin),
             {'task_ran', 'task_start', 'task_fail', 'task_should_run'},
             self.on_task_event)
+        injector.add_event_listener(
+            InjectionKey(Injector), {'dependency_instantiation_failed'}, self.on_instantiation_failed)
         for k, inspector in injector.inspect():
             self.on_add_provider(scope=injector, target_key=inspector.key, other_keys=set(),
                                  inspector=inspector
@@ -223,3 +233,24 @@ class TaskInfo(StoreInSyncStoreMixin):
     sync_registry = carthage_registry
     
 __all__ += ['TaskInfo']
+
+def encode_fi_dependency(val):
+    return [encode_injection_key(x) for x in val]
+
+def decode_fi_dependency(val):
+    return [decode_injection_key(x) for x in val]
+
+@dataclasses.dataclass
+class FailedInstantiation(StoreInSyncStoreMixin):
+
+    injector_id: int = sync_property(constructor=True)
+    key: InjectionKey = sync_property(constructor=True)
+    exception: str = sync_property("")
+    dependency: list[InjectionKey] = sync_property(
+        dataclasses.field(default_factory=lambda: []),
+        encoder=encode_fi_dependency,
+        decoder=decode_fi_dependency)
+    sync_primary_keys = ('injector_id', 'key')
+    sync_registry = carthage_registry
+
+__all__ += ['FailedInstantiation']
