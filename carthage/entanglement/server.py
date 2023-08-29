@@ -10,7 +10,7 @@ import asyncio
 
 from entanglement import SyncServer
 
-from .instrumentation import carthage_registry
+from .instrumentation import carthage_registry, CarthageDestination
 
 from carthage.dependency_injection import *
 from carthage import ConfigLayout
