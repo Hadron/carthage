@@ -126,7 +126,7 @@ class CarthageRegistry(SyncStoreRegistry):
         else: running = False
         if event == 'task_ran': should_run = False
         if event == 'task_fail':
-            exception = kwargs[exception]
+            exception = kwargs['exception']
         for inspector in  target.inspect_setup_tasks():
             if inspector.task == task:
                 return await self.handle_task(
