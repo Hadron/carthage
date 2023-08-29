@@ -8,6 +8,7 @@ class EntanglementConfig(ConfigSchema, prefix='entanglement'):
 
     run_server: bool = True
     ws_port:int = None
+    ws_address:str = "127.0.0.1"
     port:int = 39102
     
 __all__ = instrumentation.__all__

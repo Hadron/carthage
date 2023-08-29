@@ -23,6 +23,9 @@ class CarthageEntanglement(Injectable):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.loop.call_later(0.2, self.start_server)
+
+    def start_server(self):
         self.config_layout = self.injector(ConfigLayout)
         config = self.config_layout.entanglement
         if config.run_server or config.ws_port:
@@ -36,7 +39,7 @@ class CarthageEntanglement(Injectable):
             from entanglement.websocket import SyncWsHandler
             self.web_app = tornado.web.Application([(r'/entanglement_ws', SyncWsHandler)])
             self.http_server = tornado.httpserver.HTTPServer(self.web_app)
-            self.http_server.listen(config.ws_port)
+            self.http_server.listen(int(config.ws_port), address=str(config.ws_address))
             self.web_app.sync_manager = self.server
             self.web_app.find_sync_destination = self.websocket_destination
 
