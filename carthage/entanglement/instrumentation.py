@@ -87,7 +87,7 @@ class CarthageRegistry(SyncStoreRegistry):
             provider_info.state = InstantiationProgress.in_progress
 
         else: #dependency_final
-            if is_obj_ready(inspector.get_value()):
+            if is_obj_ready(inspector.get_value(ready=False)):
                 provider_info.state = InstantiationProgress.ready
             else: provider_info.state = InstantiationProgress.not_ready
         try: provider_info.value_injector_id = id(inspector.get_value_no_instantiate().injector)
