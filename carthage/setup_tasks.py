@@ -185,7 +185,7 @@ class TaskWrapperBase:
             elif isinstance(exc,SkipSetupTask):
                 pass
             else:
-                fail(e)
+                fail(exc)
             final()
         mark_context_done = True
         with contextlib.ExitStack() as stack:
