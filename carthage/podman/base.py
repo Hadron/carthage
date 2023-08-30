@@ -801,10 +801,11 @@ class ContainerfileImage(OciImage):
             container = await self.ainjector(PodmanContainer, name='image_options')
         for k, v in self.injector.filter_instantiate(
                 OciEnviron, lambda k: 'name' in k.constraints and k.constraints.get('scope', 'all') in ('all','image')):
-            options.append('-e' + v.assignment)
+            options.append('--env')
+            options.append(v.assignment)
         for m in container.mounts:
             options.append(podman_mount_option(self.injector, m))
-            options.extend(self.podman_options)
+        options.extend(self.podman_options)
         return options
 
 __all__ += ['ContainerfileImage']
