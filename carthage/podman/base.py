@@ -688,8 +688,9 @@ class ImageLayerTask(TaskWrapperBase):
     
     
 @inject_autokwargs(
-    config_layout=ConfigLayout)
+    config_layout=ConfigLayout,
     podman_options=InjectionKey('podman_options', _optional=NotPresent),
+    )
 class ContainerfileImage(OciImage):
 
     '''
@@ -703,6 +704,7 @@ class ContainerfileImage(OciImage):
 
     #: Options to pass to podman
     podman_options = tuple()
+
     def __init__(self, container_context=None, **kwargs):
         if container_context: self.container_context = container_context
         else:
