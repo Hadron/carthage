@@ -50,6 +50,16 @@ class StopCommand(MachineCommand):
         machine = await self.ainjector.get_instance_async(InjectionKey(Machine, host=args.machine))
         await machine.stop_machine()
 
+class DeleteCommand(MachineCommand):
+
+    name = 'delete'
+
+    async def run(self, args):
+        machine = await self.ainjector.get_instance_async(InjectionKey(Machine, host=args.machine))
+        if hasattr(machine, 'delete'):
+            await machine.delete()
+        else:
+            raise NotImplementedError(f'{machine} cannot be deleted')
 
 class ListMachines(MachineCommand):
 
@@ -122,5 +132,6 @@ def enable_runner_commands(ainjector):
     ainjector.add_provider(ListMachines)
     ainjector.add_provider(SleepCommand)
     ainjector.add_provider(StopCommand)
+    ainjector.add_provider(DeleteCommand)
     ainjector.add_provider(DumpAssignmentsCommand)
 
