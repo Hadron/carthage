@@ -200,7 +200,21 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass=ModelingContainer):
         providers = {}
         keys = {}
 
+        def _class_setup_tasks(cls):
+            from carthage.setup_tasks import TaskWrapperBase
+            meth_names = {}
+            for c in cls.__mro__:
+                if not issubclass(c, SetupTaskMixin):
+                    continue
+                for m in c.__dict__:
+                    if m in meth_names:
+                        continue
+                    meth = getattr(c, m)
+                    meth_names[m] = True
+                    if isinstance(meth, TaskWrapperBase):
+                        yield meth
         def to_json(o):
+
             if isinstance(o, str): return o
             if isinstance(o, list): return [ to_json(no) for no in o ]
             if isinstance(o, tuple):
@@ -212,6 +226,8 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass=ModelingContainer):
             if isinstance(o, (Injector, AsyncInjector)): return str(o)
             if isinstance(o, (ConfigLayout,)): return str(o)
             if isinstance(o, type): return str(o)
+            if isinstance(o, carthage.machine.CustomizationWrapper):
+                return [ to_json(t) for t in list(_class_setup_tasks(o.customization)) ]
             if isinstance(o, (InjectionKey,)):
                 return dict(target=to_json(o.target), constraints=to_json(o.constraints))
             return str(o)
@@ -260,16 +276,30 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass=ModelingContainer):
         stamps = {}
 
         for injector in all_injectors(root_injector):
+
             if not injector.claimed_by or isinstance(injector.claimed_by, str):
                 continue
+
             instance = injector.claimed_by()
+            if not getattr(instance, 'stamp_path', None):
+                continue
+
             for t in getattr(instance, 'setup_tasks', []):
-                if not getattr(instance, 'stamp_path', None):
-                    continue
+
+                if isinstance(t, carthage.machine.CustomizationWrapper):
+                    for tt in list(_class_setup_tasks(t.customization)):
+                        record = dict(path=os.path.join(instance.stamp_path, ".stamp-" + tt.stamp),
+                                      injector=id(injector),
+                                      instance=to_json(instance),
+                                      task=to_json(tt))
+                        record['id'] = id(record)
+                        injectors[id(injector)]['stamps'].append(id(record))
+                        stamps[id(record)] = record
+
                 record = dict(path=os.path.join(instance.stamp_path, ".stamp-" + t.stamp),
                               injector=id(injector),
-                              instance=str(instance),
-                              task=str(t))
+                              instance=to_json(instance),
+                              task=to_json(t))
                 record['id'] = id(record)
                 injectors[id(injector)]['stamps'].append(id(record))
                 stamps[id(record)] = record
