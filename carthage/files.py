@@ -98,8 +98,17 @@ The resulting setup_task has an attribute *repo_path* which is a function return
     return checkout_repo
 
 
+# I think that we want this, or something similar to this, to be
+# extended to manage sync between a git revision spec and a directory.
+# I'd also really love "tell me what repos are being checked out by
+# Carthage and if they have any local changes."  Or maybe even
+# "autosync with a temporary branch" or something.
+#
+# But for WIP all I'm doing is allowing a branch to be specified on
+# initial pull.
+
 @inject(injector=Injector)
-def checkout_git_repo(url, repo, *, injector):
+def checkout_git_repo(url, repo, *, injector, branch=None):
     config = injector(ConfigLayout)
     path = Path(config.checkout_dir) / repo
     os.makedirs(config.checkout_dir, exist_ok=True)
@@ -109,8 +118,10 @@ def checkout_git_repo(url, repo, *, injector):
                       _bg_exc=False,
                       _cwd=path)
     else:
+        branchargs = ['--branch', branch] if branch else []
         return sh.git("clone",
                       url, str(path),
+                      *branchargs,
                       _bg=True,
                       _bg_exc=False)
 

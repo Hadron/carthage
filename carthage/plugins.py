@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 from .dependency_injection import *
 from .config import ConfigLayout
 from .files import checkout_git_repo
-
+from typing import Union
 
 logger = logging.getLogger('carthage.plugins')
 
@@ -66,13 +66,43 @@ class CarthagePlugin(Injectable):
     def resource_path(self, resource):
         return self._get_resource(resource)
 
+def _parse_plugin_spec(spec: Union[str, dict, Path]):
+    if isinstance(spec, dict):
+        return spec
+    if hasattr(spec, '__fspath__'):
+        return dict(type='path', path=spec.resolve())
+    assert isinstance(spec, str)
+    if ':' in spec:
+        prefix = spec.partition(':')[0]
+        if prefix in ('https', 'git+ssh'):
+            return dict(type='git', url=spec)
+        raise NotImplementedError(f'unrecognized plugin specification: {spec}')
+    if '/' in spec:
+        return dict(type='path', path=Path(spec).resolve())
+    return dict(type='module', name=spec)
 
 @inject(injector=Injector)
-def load_plugin(spec: str,
-                *, injector):
-    if ':' in str(spec):
-        spec = handle_plugin_url(str(spec), injector)
-    if hasattr(spec, "__fspath__") or '/' in spec:
+def load_plugin(spec: Union[str, dict, Path], *, injector):
+    spec = _parse_plugin_spec(spec)
+
+    if spec['type'] == 'module':
+        package = importlib.import_module(spec['name'])
+        metadata = None
+        return injector(load_plugin_from_package, package, metadata)
+
+    elif spec['type'] == 'path':
+        return handle_path_url(spec['path'], injector)
+
+    elif spec['type'] == 'git':
+        path = handle_git_url(spec, injector)
+        return handle_path_url(path, injector)
+
+    else:
+        raise ValueError(f'unrecognized plugin type in {spec}')
+
+def handle_path_url(spec: dict, injector):
+    # Defer whitespace churn by leaving this indented
+    if True:
         path = Path(spec).resolve()
         metadata_path = path / "carthage_plugin.yml"
         if not metadata_path.exists():
@@ -117,21 +147,10 @@ def load_plugin(spec: str,
                 module_spec.loader.exec_module(package)
             else:
                 package = None
-    else:  # spec is a package
-        package = importlib.import_module(spec)
-        metadata = None
     return injector(load_plugin_from_package, package, metadata)
 
-
-def handle_plugin_url(url, injector):
-    parsed = urlparse(url)
-    if parsed.scheme in ('https', 'git+ssh'):
-        return handle_git_url(parsed, injector)
-    else:
-        raise NotImplementedError(f"Don't know how to handle {parsed.scheme} URL")
-
-
-def handle_git_url(parsed, injector):
+def handle_git_url(spec, injector):
+    parsed = urlparse(spec['url'])
     config = injector(ConfigLayout)
     stem = Path(parsed.path).name
     if stem.endswith('.git'):
@@ -140,7 +159,8 @@ def handle_git_url(parsed, injector):
     if dest.exists():
         return dest
     logger.info(f'Checking out {parsed.geturl()}')
-    injector(checkout_git_repo, parsed.geturl(), dest).wait()
+    branch = spec.get('branch', None)
+    injector(checkout_git_repo, parsed.geturl(), dest, branch=branch).wait()
     return dest
 
 
