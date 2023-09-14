@@ -262,6 +262,10 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         super().__init__(**kwargs)
         self._operation_lock = asyncio.Lock()
 
+    @property
+    def full_name(self):
+        return f'{self.name.partition(".")[0]}'
+
     @memoproperty
     def podman(self):
         return self.container_host.podman
@@ -301,9 +305,11 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         if self.oci_command:
             command_options = list(self.oci_command)
         network_options = await self._container_network_options()
+        hostname_options = [f'--hostname={self.full_name}'] if not self.pod else []
         await self.podman(
             'container', 'create',
             f'--name={self.full_name}',
+            *hostname_options,
             *self._podman_create_options(),
             *network_options,
             image,
