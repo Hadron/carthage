@@ -42,11 +42,12 @@ def enable_modeling_ansible(injector: Injector):
     injector.add_provider(InjectionKey(AnsibleHostPlugin, name='modeling'), ModelingHostPlugin)
 
 
-@inject_autokwargs(config_layout=ConfigLayout)
+
 class AnsibleModelMixin(InjectableModel, AsyncInjectable):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.config_layout = self.injector(ConfigLayout)
         self.injector.add_provider(
             InjectionKey(AnsibleInventory),
             when_needed(AnsibleInventory,
