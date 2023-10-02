@@ -208,7 +208,7 @@ async def debian_container_to_vm(
         ainjector):
     '''
 
-    Use FAI to convert a container image into a VM image.
+    Use FAI to convert a container image into a VM image.  Carthage's FAI configuration currently requires that the host running Carthage (and probably the container being converted) use systemd-resolved for DNS.
 
     :param size: Size of resulting disk; for example ``8g``
 
