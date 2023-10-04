@@ -406,7 +406,9 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
             assert isinstance(
                 b, type) or hasattr(
                 b, '__mro_entries__'), f'{b} is not a type; did you forget a dependency_quote'
-        res = types.new_class(implementation.__qualname__, tuple(bases))
+        try: res = types.new_class(implementation.__qualname__, tuple(bases))
+        except TypeError as e:
+            raise TypeError(f'Unable to create machine_type for {self.name} with bases {bases}: {str(e)}') from None
         inject()(res)  # Pick up any injections from extra bases
         for k, customization in self.injector.filter_instantiate(carthage.machine.BaseCustomization, [
                                                                  'description'], stop_at=self.injector):
