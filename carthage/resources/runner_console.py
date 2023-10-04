@@ -14,8 +14,9 @@ from carthage.dependency_injection.introspection import *
 
 async def async_setup():
     global ssh_key, tmux
-    ssh_agent = await ainjector.get_instance_async(ssh.SshAgent)
-    tmux = sh.tmux.bake('new-window', _env=ssh_agent.agent_environ)
+#    ssh_agent = await ainjector.get_instance_async(ssh.SshAgent)
+#    tmux = sh.tmux.bake('new-window', _env=ssh_agent.agent_environ)
+pass
 
 
 def unbake(cmd):
