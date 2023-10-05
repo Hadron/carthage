@@ -267,10 +267,10 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
             if unpack == "create":
                 unpack = False
         else:
+            if create_size is None and not callable(unpack):
+                raise RuntimeError("{} not found and creation disabled".format(self.path))
             os.makedirs(os.path.dirname(self.path), exist_ok=True)
             remove_stamps = True
-            if create_size is None and not callable(unpack):
-                raise RuntimeError("{} not found and creation disabled".format(path))
             if create_size:
                 with open(self.path, "w") as f:
                     try:
