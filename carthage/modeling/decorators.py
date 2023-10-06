@@ -39,7 +39,8 @@ class ModelingDecoratorWrapper:
     @property
     def __provides_dependencies_for__(self): return self.value.__provides_dependencies_for__
 
-
+    _injection_error = "Use @inject on the innermost value not on a decorator."
+    
 class injector_access(ModelingDecoratorWrapper):
 
     '''Usage::
@@ -75,6 +76,8 @@ class injector_access(ModelingDecoratorWrapper):
         self.target = target
         # Our __call__method needs an injector
         inject_autokwargs(injector=Injector)(self)
+
+    _injection_error = None #Because injector_access does have dependencies.
 
     def handle(self, cls, ns, k, state):
         super().handle(cls, ns, k, state)

@@ -1038,6 +1038,10 @@ def inject(**dependencies):
                 autokwargs |= b._injection_autokwargs
 
     def wrap(fn):
+        if getattr(fn, '_injection_error', None):
+            #Set _injection_error on decorators or other things that might be mistakenly targets of inject.
+            raise TypeError(fn._injection_error)
+        
         if (not hasattr(fn, '_injection_dependencies')) or (isinstance(
                 fn, type) and '_injection_dependencies' not in fn.__dict__):
             fn._injection_dependencies = dict()
