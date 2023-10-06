@@ -140,7 +140,7 @@ class V4Config(L3ConfigMixin):
                 dhcp_ranges=self._handle_dhcp_ranges(IPv4Address),
                 secondary_addresses=self._handle_secondary_addresses(IPv4Address),
                 pool = self._handle_pool(IPv4Address),
-                public_address=IPv4Address,
+                public_address=ipv4_gateway,
         ).items():
             val = getattr(self, k)
             if val is not None:
