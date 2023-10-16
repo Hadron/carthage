@@ -41,6 +41,8 @@ register_type(InjectionKey, encode_injection_key, decode_injection_key)
 
 class CarthageDestination(FilteredSyncDestination):
 
+    filter_should_listen_returns_true = True
+    
     def __init__(self):
         super().__init__(dest_hash=random.randbytes(32),
                          name='websocket to ip address should go here')
