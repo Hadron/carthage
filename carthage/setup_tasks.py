@@ -89,10 +89,33 @@ class TaskInspector:
         self.last_run = last_run
         return should_run
 
+    @property
+    def stamp(self):
+        "The complete stamp that will be checked; for customizations includes the stamp_stem"
+        try: return self._stamp
+        except AttributeError:
+            return self.task.stamp
+
+    @stamp.setter
+    def stamp(self, val):
+        self._stamp = val
+        
+
+    @property
+    def instance_id(self):
+        "The ID of the instance on which this task is run; for Customizations, the ultimate host's ID, **not** the id of the instantiated :class:`carthage.machine.BaseCustomization`"
+        try: return self._instance_id
+        except AttributeError:
+            return id(self.from_obj)
+
+    @instance_id.setter
+    def instance_id(self, val):
+        self._instance_id = val
+        
     def subtasks(self):
         from .machine import CustomizationWrapper
         if isinstance(self.task, CustomizationWrapper):
-            return self.task.inspect(self.from_obj)
+            return self.task.inspect(self.from_obj, instance_id=self.instance_id)
         return []
     
     async def dependency_last_run(self, ainjector):
@@ -583,12 +606,14 @@ class SetupTaskMixin:
         except AttributeError:
             return logger
 
-    def inspect_setup_tasks(self):
+    def inspect_setup_tasks(self, *, stamp_stem="", instance_id=None):
         '''Iterates over the setup tasks of a ninstance and provides an inspector that can determine if a task would run and what its description is.
         '''
         prev = None
         for t in self.setup_tasks:
             prev = TaskInspector(task=t, from_obj=self, previous=prev)
+            if stamp_stem: prev.stamp = stamp_stem+prev.stamp
+            if instance_id: prev.instance_id = instance_id
             yield prev
 
     @classmethod

@@ -656,6 +656,10 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
         stamp = f'{self.stamp_stem}-{stamp}'
         return self.host.delete_stamp(stamp)
 
+    def inspect_setup_tasks(self):
+        return super().inspect_setup_tasks(
+            stamp_stem=self.stamp_stem+'-', instance_id=id(self.host))
+    
     async def last_run(self):
         '''
         :return: the most recent time any setup task on this Customization has run against the given host. Returns false if the tasks definitely need to run.
@@ -757,6 +761,9 @@ class CustomizationInspectorProxy:
     def stamp_path(self):
         return self.obj.stamp_path
 
+    def __repr__(self):
+        return f'CustomizationInspectorProxy({repr(self.obj)})'
+    
 class CustomizationWrapper(TaskWrapperBase):
 
     customization: typing.Type[BaseCustomization]
@@ -792,11 +799,14 @@ class CustomizationWrapper(TaskWrapperBase):
             dependency_last_run = res
         return False, dependency_last_run
 
-    def inspect(self, obj):
+    def inspect(self, obj, instance_id=None):
+        if instance_id is None: instance_id = id(obj)
         proxy = CustomizationInspectorProxy(obj, self.stamp)
         prev_inspector = None
         for t in self.customization.class_setup_tasks():
             prev_inspector = TaskInspector(task=t, from_obj=proxy, previous=prev_inspector)
+            prev_inspector.stamp = self.stamp+'-'+prev_inspector.stamp
+            prev_inspector.instance_id = instance_id
             yield prev_inspector
             
 

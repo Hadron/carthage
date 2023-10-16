@@ -570,8 +570,9 @@ async def test_ready_event_propagation(a_injector, loop):
     class Dependent2(Injectable):
         pass
 
-    def dp_callback(*args, **kwargs):
-        trigger_event_received.trigger()
+    def dp_callback(*args, target, **kwargs):
+        if target.ready:
+            trigger_event_received.trigger()
     sub_injector = await ainjector(Injector)
     sub_ainjector = sub_injector(AsyncInjector)
     # we start in the super injector with something that will cause
