@@ -172,6 +172,7 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
         online = False
         last_error = None
         await self.ainjector.get_instance_async(InjectionKey(carthage.ssh.SshKey, _optional=True)) #Instantiate in case it is async
+        await self.ainjector.get_instance_async(carthage.ssh.SshAgent)
         for i in range(self.ssh_online_retries):
             try:
                 await self.ssh(self.ssh_online_command,
