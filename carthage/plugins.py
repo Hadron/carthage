@@ -72,7 +72,7 @@ def load_plugin(spec: str,
                 *, injector):
     if ':' in str(spec):
         spec = handle_plugin_url(str(spec), injector)
-    if hasattr(spec, "__fspath__") or '/' in spec:
+    if hasattr(spec, "__fspath__") or '/' in spec or spec == '.' or spec == '..':
         path = Path(spec).resolve()
         metadata_path = path / "carthage_plugin.yml"
         if not metadata_path.exists():
@@ -177,6 +177,14 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
                 metadata = {}
                 metadata_path = None
 
+    if 'name' in metadata:
+            name = metadata['name']
+    else:
+        name = package.__name__
+    try:
+        injector.get_instance(InjectionKey(CarthagePlugin, name=name))
+        return # already loaded
+    except KeyError: pass
     _handle_plugin_config(injector=injector, metadata=metadata, path=metadata_path)
     try:
         plugin_module = importlib.import_module(".carthage_plugin", package=package.__name__)
@@ -192,12 +200,9 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
     else:
         res = None
     if isinstance(res, CarthagePlugin):
+        assert res.name == name, "Metadata name must agree with resulting plugin for duplicate load detection to work"
         plugin_object = res
     else:
-        if 'name' in metadata:
-            name = metadata['name']
-        else:
-            name = package.__name__
         plugin_object = injector(CarthagePlugin, name=name, package=package, metadata=metadata)
     injector.add_provider(
         InjectionKey(CarthagePlugin, name=plugin_object.name),
