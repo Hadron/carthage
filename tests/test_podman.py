@@ -73,6 +73,20 @@ class podman_layout(CarthageLayout):
         oci_image_tag = 'localhost/authorized-debian:latest'
         authorized_keys = image_layer_task(SshAuthorizedKeyCustomizations)
 
+    class ImageModelCustomizations(PodmanImageModel):
+
+        oci_image_tag = 'localhost/carthage_podman:image_model'
+
+        class fs_cust(FilesystemCustomization):
+
+            @setup_task("Test filesystem customization in image model")
+            def test_fscust(self): pass
+
+        class container_cust(ContainerCustomization):
+
+            @setup_task("Test container customization")
+            def test_container_cust(self): pass
+            
     class foo(MachineModel):
 
         name = 'foo.com'
@@ -343,3 +357,8 @@ async def test_podman_pod_network(layout_fixture):
     finally:
         try: await layout.net_pod.pod.delete(force=True)
         except Exception: pass
+
+@async_test
+async def test_podman_image_model(layout_fixture):
+    await layout_fixture.ImageModelCustomizations.build_image()
+    

@@ -429,6 +429,8 @@ class PodmanImageBuilderContainer(PodmanContainer):
         async def customization_context():
             async with self.machine_running(ssh_online=False), self.filesystem_access() as path:
                 customization.path = path
+                customization.container_command = self.container_exec
+                customization.running = False # It is technically running, but not with any services
                 yield
             return
         customization.customization_context = customization_context()

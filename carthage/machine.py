@@ -714,7 +714,7 @@ class ContainerCustomization(BaseCustomization):
         super().__init__(apply_to=apply_to, **kwargs)
         apply_to._apply_to_container_customization(self)
 
-    @property
+    @memoproperty
     def path(self):
         return self.host.volume.path
 
