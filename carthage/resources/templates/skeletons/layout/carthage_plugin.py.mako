@@ -1,4 +1,4 @@
-<%inherit file="../prototype.py" />\
+<%inherit file="../prototype.mako" />\
 <%!
 from carthage.skeleton import package_to_dir
 %>\

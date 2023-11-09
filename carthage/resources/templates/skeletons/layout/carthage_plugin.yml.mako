@@ -1,4 +1,4 @@
-<%inherit file="../prototype.py" />\
+<%inherit file="../prototype.mako" />\
 name: ${args.name}
 %if args.package:
 package: ${args.package}
