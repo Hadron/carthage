@@ -21,7 +21,7 @@ def skeleton_subparser_setup() ->argparse.ArgumentParser:
                                 help='which layout to select', required=True)
     for skel in SKELETONS:
         plugin_uri = mako_lookup.adjust_uri(skel+'/carthage_plugin.yml', 'skeletons/')
-        plugin_template = mako_lookup.get_template(plugin_uri)
+        plugin_template = mako_lookup.get_template(plugin_uri+'.mako')
         help_text = plugin_template.get_def('help').render()
         subparser = action.add_parser(skel,
                                          help=help_text)
@@ -38,7 +38,7 @@ def subrender_wrapper(context, relative_in, relative_out:Path, absolute_out:Path
         new_ctx.update(kwargs)
         del new_ctx['subrender']
         template_uri = mako_lookup.adjust_uri(template, relative_in)
-        our_template = mako_lookup.get_template(template_uri)
+        our_template = mako_lookup.get_template(template_uri+'.mako')
         if output is None and our_template.has_def('output'):
             output_text = our_template.get_def('output').render(**new_ctx)
             output = output_text.strip()
