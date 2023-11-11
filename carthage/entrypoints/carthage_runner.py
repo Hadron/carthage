@@ -66,8 +66,7 @@ async def setup_layout():
     if layout:
         ainjector = layout.ainjector
 
-async def run():
-    global ainjector, layout
+async def run(ainjector, args, console, layout, loop, queue_workers):
     config = await ainjector(carthage.config.ConfigLayout)
     layout_name = config.layout_name
     if args.warn_dns: warn_on_dns()
@@ -88,7 +87,7 @@ async def run():
     queue_workers.append(loop.create_task(queue_worker()))
     queue_workers.append(loop.create_task(queue_worker()))
 
-    async def run_console():
+    async def run_console(console):
         console.locals['ainjector'] = ainjector
         console.locals['layout'] = layout
         console.locals['in_tmux'] = 'TMUX' in os.environ
@@ -101,7 +100,7 @@ async def run():
 
     if args.console:
         try:
-            await run_console()
+            await run_console(console)
         except Exception:
             logger.exception('console failed:')
     else:
@@ -231,13 +230,15 @@ def main():
     loop.run_until_complete(
         console.enable_console_commands(ainjector))
 
+    # issues that aren't global
+    # args, ainjector, layout, loop, queue_workers
 
 
 
     try:
         queue_workers = []
         if args.cmd is None:
-            loop.run_until_complete(run())
+            loop.run_until_complete(run(ainjector, args, console, layout, loop, queue_workers))
         else:
             selected_subcommand = subcommands[args.cmd]
             if selected_subcommand.generate_required:
