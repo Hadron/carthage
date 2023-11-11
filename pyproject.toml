@@ -1,0 +1,75 @@
+# Copyright (C) 2023, Hadron Industries, Inc.
+# Carthage is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License version 3
+# as published by the Free Software Foundation. It is distributed
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
+# LICENSE for details.
+
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "carthage"
+version = "0.20"
+authors = [
+    { name = "Sam Hartman", email = "sam.hartman@hadronindustries.com" },
+]
+description = "A powerful Infrastructure as Code (IAC) framework"
+readme = "README.rst"
+requires-python = ">=3.11"
+license = { text = "LGPL-3" }
+classifiers = [
+    "Intended Audience :: Developers",
+    "License :: Freely Distributable",
+    "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+    "lmdb",
+    "hvac",
+    "mako",
+    "python-dateutil",
+    "pyVmomi",
+    "pyyaml",
+    "requests",
+    "setuptools",
+    "sh",
+]
+
+
+[project.scripts]
+carthage-runner = "carthage.entrypoints.carthage_runner:main"
+carthage-console = "carthage.entrypoints.carthage_console:main"
+carthage-new = "carthage.entrypoints.carthage_new:main"
+carthage-vault-tool = "carthage.entrypoints.carthage_vault_tool:main"
+btrfs-rmrf = "carthage.entrypoints.btrfs_rmrf:main"
+
+
+[tool.setuptools]
+packages = [
+    "carthage",
+    "carthage.config",
+    "carthage.dependency_injection",
+    "carthage.entanglement",
+    "carthage.entrypoints",
+    "carthage.extra_packages",
+    "carthage.modeling",
+    "carthage.network",
+    "carthage.podman",
+    "carthage.resources",
+    "carthage.vault",
+    "carthage.vmware",
+]
+include-package-data = true
+
+
+[tool.setuptools.package-data]
+"carthage" = [
+    "resources/*",
+    "resources/fai/**",
+    "resources/templates/**",
+    "extra_packages/resources/*",
+]
