@@ -54,8 +54,7 @@ def main():
                         )
     args = carthage_main_setup(parser)
     new(args)
-    
+
 
 if __name__ == '__main__':
     main()
-    

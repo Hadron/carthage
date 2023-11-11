@@ -31,6 +31,6 @@ def main():
         await loop.run_in_executor(None, console.interact)
 
     carthage.utils.carthage_main_run(run)
-    
+
 if __name__ == '__main__':
     main()

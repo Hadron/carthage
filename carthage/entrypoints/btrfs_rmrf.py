@@ -23,15 +23,18 @@ async def run(volumes):
     for v in volumes:
         vol = await ainjector(ContainerVolume, implementation=BtrfsVolume, name =v)
         vol.close()
-        
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('volumes', nargs ='+',
+                        )
+    args = parser.parse_args()
+    loop = asyncio.get_event_loop()
+
+    try:
+       loop.run_until_complete(run(args.volumes))
+    finally:
+       base_injector.close()
+
 if __name__ == '__main__':
-   parser = argparse.ArgumentParser()
-   parser.add_argument('volumes', nargs ='+',
-                       )
-   args = parser.parse_args()
-   loop = asyncio.get_event_loop()
-try:
-   loop.run_until_complete(run(args.volumes))
-finally:
-   base_injector.close()
-   
+    main()

@@ -29,7 +29,9 @@ from carthage.modeling import CarthageLayout, instantiate_layout
 logger = logging.getLogger('carthage')
 
 machines = []
-        
+layout = None
+ainjector = None
+
 async def queue_worker():
     global machines
     while True:
@@ -63,7 +65,7 @@ async def setup_layout():
     layout = await ainjector(instantiate_layout, config.layout_name, optional=True)
     if layout:
         ainjector = layout.ainjector
-            
+
 async def run():
     global ainjector, layout
     config = await ainjector(carthage.config.ConfigLayout)
@@ -127,123 +129,126 @@ def warn_on_dns():
     for f in ('gethostbyname', 'getaddrinfo', 'gethostbyaddr', 'getnameinfo'):
         old = getattr(socket,f)
         setattr(socket,f, warn_on(f, old))
-            
-
-    
-ainjector = base_injector(AsyncInjector)
-
-loop = asyncio.get_event_loop()
-machine_queue = asyncio.Queue()
-
-parser = carthage.utils.carthage_main_argparser(add_help=False)
-parser.add_argument('--generate',
-                    help = "Generate configuration for the layout",
-                    dest = 'actions',
-                    action = 'append_const',
-                    const = 'generate',
-                    default = [])
-parser.add_argument("--start",
-                    nargs = "*",
-                    metavar = "machine",
-                    help = "Start machines",
-                    )
-parser.add_argument(
-    '--stop', nargs = '*',
-    metavar = 'machines',
-    help = "Stop already running machines",
-)
-parser.add_argument('--no-tmux', action = 'store_false',
-                    dest = 'tmux', default = False,
-                    help = "Do not start a tmux for the console")
-parser.add_argument('--tmux',
-                    action='store_true',
-                    dest='tmux',
-                    default=False,
-                    help="Start a tmux for the console")
-parser.add_argument(
-    '--keep', '--keep-machines',
-                    help = "Keep machines running on exit",
-                    action='store_true',
-                    dest ='keep_machines')
-parser.add_argument('--warn-dns',
-                    '--warn-on-dns',
-                    dest='warn_dns',
-                    action='store_true',
-                    help="Warn on any use of dns in layout; testing tool to avoid dns dependencies when the layout will provide dns service")
-
-parser.add_argument(
-    '-h', '--help',
-    action='store_true',
-    help='Print usage')
 
 
+def main():
+    global ainjector, layout
+    ainjector = base_injector(AsyncInjector)
 
-console = carthage.console.CarthageConsole()
-console.add_arguments(parser)
+    loop = asyncio.get_event_loop()
+    machine_queue = asyncio.Queue()
 
-args, unknown = carthage.utils.carthage_main_setup(parser, unknown_ok=True)
+    parser = carthage.utils.carthage_main_argparser(add_help=False)
+    parser.add_argument('--generate',
+                        help = "Generate configuration for the layout",
+                        dest = 'actions',
+                        action = 'append_const',
+                        const = 'generate',
+                        default = [])
+    parser.add_argument("--start",
+                        nargs = "*",
+                        metavar = "machine",
+                        help = "Start machines",
+                        )
+    parser.add_argument(
+        '--stop', nargs = '*',
+        metavar = 'machines',
+        help = "Stop already running machines",
+    )
+    parser.add_argument('--no-tmux', action = 'store_false',
+                        dest = 'tmux', default = False,
+                        help = "Do not start a tmux for the console")
+    parser.add_argument('--tmux',
+                        action='store_true',
+                        dest='tmux',
+                        default=False,
+                        help="Start a tmux for the console")
+    parser.add_argument(
+        '--keep', '--keep-machines',
+                        help = "Keep machines running on exit",
+                        action='store_true',
+                        dest ='keep_machines')
+    parser.add_argument('--warn-dns',
+                        '--warn-on-dns',
+                        dest='warn_dns',
+                        action='store_true',
+                        help="Warn on any use of dns in layout; testing tool to avoid dns dependencies when the layout will provide dns service")
 
-
-# First see if we need to rexec
-if 'TMUX' not in os.environ and  args.tmux:
-    os.execvp("tmux", ["tmux", "new-session", "-A", "-scarthage",
-                       ]+sys.argv)
-
-    
-
-layout = None
-loop.run_until_complete(setup_layout())
-
-if layout is None and not args.plugins:
-    # If a layout is specified in the config it is not needed as a subcommand
-    # Otherwise we need it before the subcommand
-    parser.add_argument('plugin_path', help='Plugin containing a layout')
-    if unknown:
-        plugin = unknown.pop(0)
-        try:
-            base_injector(carthage.plugins.load_plugin, plugin)
-            loop.run_until_complete(setup_layout())
-        except Exception:
-            parser.print_help()
-            raise
-subparser_action = parser.add_subparsers(title='subcommands', dest='cmd',
-                                         required=False)
-carthage.runner_commands.enable_runner_commands(ainjector)
-
-subcommands = loop.run_until_complete(
-    console.setup_subcommands(ainjector, subparser_action))
-
-
-if args.help:
-    parser.print_help()
-    sys.exit(2)
-args = parser.parse_args()
-
-if args.start is not None:
-    args.actions.append('start')
-if args.stop is not None:
-    args.actions.append('stop')
-
-
-console.process_arguments(args)
-loop.run_until_complete(
-    console.enable_console_commands(ainjector))
+    parser.add_argument(
+        '-h', '--help',
+        action='store_true',
+        help='Print usage')
 
 
 
+    console = carthage.console.CarthageConsole()
+    console.add_arguments(parser)
 
-try:
-    queue_workers = []
-    if args.cmd is None:
-        loop.run_until_complete(run())
-    else:
-        selected_subcommand = subcommands[args.cmd]
-        if selected_subcommand.generate_required:
-            loop.run_until_complete(layout.generate())
-        loop.run_until_complete(ainjector( selected_subcommand.run, args))
-        
-    for q in queue_workers:
-        q.cancel()
-finally:
-    loop.run_until_complete(shutdown_injector(base_injector))
-    gc.collect()
+    args, unknown = carthage.utils.carthage_main_setup(parser, unknown_ok=True)
+
+
+    # First see if we need to rexec
+    if 'TMUX' not in os.environ and  args.tmux:
+        os.execvp("tmux", ["tmux", "new-session", "-A", "-scarthage",
+                           ]+sys.argv)
+
+
+    layout = None
+    loop.run_until_complete(setup_layout())
+
+    if layout is None and not args.plugins:
+        # If a layout is specified in the config it is not needed as a subcommand
+        # Otherwise we need it before the subcommand
+        parser.add_argument('plugin_path', help='Plugin containing a layout')
+        if unknown:
+            plugin = unknown.pop(0)
+            try:
+                base_injector(carthage.plugins.load_plugin, plugin)
+                loop.run_until_complete(setup_layout())
+            except Exception:
+                parser.print_help()
+                raise
+    subparser_action = parser.add_subparsers(title='subcommands', dest='cmd',
+                                             required=False)
+    carthage.runner_commands.enable_runner_commands(ainjector)
+
+    subcommands = loop.run_until_complete(
+        console.setup_subcommands(ainjector, subparser_action))
+
+
+    if args.help:
+        parser.print_help()
+        sys.exit(2)
+    args = parser.parse_args()
+
+    if args.start is not None:
+        args.actions.append('start')
+    if args.stop is not None:
+        args.actions.append('stop')
+
+
+    console.process_arguments(args)
+    loop.run_until_complete(
+        console.enable_console_commands(ainjector))
+
+
+
+
+    try:
+        queue_workers = []
+        if args.cmd is None:
+            loop.run_until_complete(run())
+        else:
+            selected_subcommand = subcommands[args.cmd]
+            if selected_subcommand.generate_required:
+                loop.run_until_complete(layout.generate())
+            loop.run_until_complete(ainjector( selected_subcommand.run, args))
+
+        for q in queue_workers:
+            q.cancel()
+    finally:
+        loop.run_until_complete(shutdown_injector(base_injector))
+        gc.collect()
+
+if __name__ == "__main__":
+    main()
