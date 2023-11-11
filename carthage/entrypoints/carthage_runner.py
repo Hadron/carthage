@@ -230,11 +230,6 @@ def main():
     loop.run_until_complete(
         console.enable_console_commands(ainjector))
 
-    # issues that aren't global
-    # args, ainjector, layout, loop, queue_workers
-
-
-
     try:
         queue_workers = []
         if args.cmd is None:
