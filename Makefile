@@ -1,4 +1,4 @@
-VERSION != grep -Po 'version = "\K[^"]*' pyproject.toml 
+VERSION != grep -Po 'version = "\K[^"]*' pyproject.toml
 
 TESTENV = carthage-$(VERSION)-build-testenv
 
