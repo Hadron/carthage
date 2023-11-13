@@ -250,7 +250,7 @@ Takes a :func:`setup_task` and wraps it in a :class:`ContainerCustomization` so 
 class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
     def __init__(self, name, path=None, create_size=None,
-                 unpack="create",
+                 unpack=None,
                  remove_stamps=False,
                  **kwargs):
         super().__init__(**kwargs)
@@ -263,12 +263,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         else:
             self.path = os.path.join(path, name + '.raw')
 
-        if os.path.exists(self.path):
-            if unpack == "create":
-                unpack = False
-        else:
-            if create_size is None and not callable(unpack):
-                raise RuntimeError("{} not found and creation disabled".format(self.path))
+        if not os.path.exists(self.path):
             os.makedirs(os.path.dirname(self.path), exist_ok=True)
             remove_stamps = True
             if create_size:
@@ -281,7 +276,10 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         if remove_stamps:
             shutil.rmtree(self.stamp_path, ignore_errors=True)
         os.makedirs(self.stamp_path, exist_ok=True)
-        self.unpack = unpack
+        self._pass_self_to_unpack = False
+        if callable(unpack):
+            self._pass_self_to_unpack = True
+            self.unpack = unpack
 
     def __repr__(self):
         return f"<{self.__class__.__name__} path={self.path}>"
@@ -309,22 +307,34 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
     def __del__(self):
         self.close()
 
+    async def unpack(self):
+        """Override this method in a subclass to implement alternate creation methods
+            Alternatively specify unpack=func() in the constructor
+        """
+        raise NotImplementedError
+
     @setup_task('unpack')
     async def unpack_installed_system(self):
-        if not self.unpack:
+        if os.path.exists(self.path):
             return  # mark as succeeded rather than skipped
-        if callable(self.unpack):
-            return await self.unpack()
+
         # We never want to unpack later after we've decided not to
-        await sh.gzip('-d', '-c',
-                      self.config_layout.base_vm_image,
-                      _out=self.path,
-                      _no_pipe=True,
-                      _no_out=True,
-                      _out_bufsize=1024 * 1024,
-                      _tty_out=False,
-                      _bg=True,
-                      _bg_exc=False)
+        if self._pass_self_to_unpack:
+            return await self.unpack(self)
+        try:
+            return await self.unpack()
+        except NotImplementedError:
+            if self.create_size is None:
+                raise RuntimeError(f"{self.path} not found and creation disabled")
+            await sh.gzip('-d', '-c',
+                          self.config_layout.base_vm_image,
+                          _out=self.path,
+                          _no_pipe=True,
+                          _no_out=True,
+                          _out_bufsize=1024 * 1024,
+                          _tty_out=False,
+                          _bg=True,
+                          _bg_exc=False)
         if hasattr(self, 'create_size'):
             os.truncate(self.path, self.create_size)
 
