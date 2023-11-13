@@ -232,7 +232,7 @@ async def debian_container_to_vm(
         data = data.strip()
         logger.debug("Image Creation: %s", data)
 
-    async def unpack_callback():
+    async def unpack_callback(image_volume):
         nonlocal volume
         if isinstance(volume, type):
             # Allow usage specifying volume in a when_needed
