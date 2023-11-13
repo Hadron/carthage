@@ -40,21 +40,19 @@ dependencies = [
 ]
 
 
-[project.scripts]
-carthage-runner = "carthage.entrypoints.carthage_runner:main"
-carthage-console = "carthage.entrypoints.carthage_console:main"
-carthage-new = "carthage.entrypoints.carthage_new:main"
-carthage-vault-tool = "carthage.entrypoints.carthage_vault_tool:main"
-btrfs-rmrf = "carthage.entrypoints.btrfs_rmrf:main"
-
-
 [tool.setuptools]
+
+script-files = ["bin/carthage-runner",
+    "bin/carthage-console",
+    "bin/carthage-vault-tool",
+    "bin/carthage-new",
+    "bin/btrfs-rmrf",
+]
 packages = [
     "carthage",
     "carthage.config",
     "carthage.dependency_injection",
     "carthage.entanglement",
-    "carthage.entrypoints",
     "carthage.extra_packages",
     "carthage.modeling",
     "carthage.network",
