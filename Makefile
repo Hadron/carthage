@@ -4,12 +4,14 @@ TESTENV = carthage-$(VERSION)-build-testenv
 
 DIST = dist/carthage-$(VERSION).tar.gz
 
-$(DIST):
+$(DIST): dist
+
+dist:
 	python3 -m build .
 
-build: $(DIST)
+build: dist
 
-test: build
+test: $(DIST)
 	-mkdir tmp
 	tar xf $(DIST) -C tmp/
 	-podman run -d --name $(TESTENV) -v $$PWD/tmp:/carthage:ro docker.io/library/debian:bookworm sleep 3000
@@ -26,4 +28,7 @@ destroy:
 
 clean: destroy
 	rm -rf carthage.egg-info dist tmp
-	find . -name __pycache__ -exec rm -rf '{}' \; 2>/dev/null
+	-find . -name __pycache__ -exec rm -rf '{}' \; 2>/dev/null
+
+.PHONY : clean destroy test dist build
+

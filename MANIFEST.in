@@ -1,0 +1,3 @@
+graft tests/resources
+global-exclude *~
+include tests/*.py

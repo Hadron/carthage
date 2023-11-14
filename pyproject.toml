@@ -48,21 +48,11 @@ script-files = ["bin/carthage-runner",
     "bin/carthage-new",
     "bin/btrfs-rmrf",
 ]
-packages = [
-    "carthage",
-    "carthage.config",
-    "carthage.dependency_injection",
-    "carthage.entanglement",
-    "carthage.extra_packages",
-    "carthage.modeling",
-    "carthage.network",
-    "carthage.podman",
-    "carthage.resources",
-    "carthage.vault",
-    "carthage.vmware",
-]
 include-package-data = true
 
+
+[tool.setuptools.packages.find]
+include = ["carthage*"]
 
 [tool.setuptools.package-data]
 "carthage" = [
