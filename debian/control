@@ -10,7 +10,8 @@ X-Python3-Version: >= 3.7
 Package: python3-carthage
 Architecture: all
 Multi-Arch: foreign
-Depends: ${misc:Depends}, ${python3:Depends}, socat, systemd-container,  python3-hadron-inventory-admin, socat, libvirt-clients, hadron-entanglement-cli (>= 0.10~), qemu-utils, python3-mako, bridge-utils, python3-yaml, python3-pyvmomi, fai-setup-storage, python3-sh, sshfs, python3-lmdb
+Depends: ${misc:Depends}, ${python3:Depends}, socat, sshfs, systemd-container, bridge-utils, python3-mako, python3-yaml, python3-sh, python3-lmdb
+Recommends: python3-hadron-inventory-admin, python3-pyvmomi, fai-setup-storage, libvirt-clients, hadron-entanglement-cli (>= 0.10~), qemu-utils
 Description: Burn it to the ground and Rebuild it Framework
 
 Package: hadron-carthage-cli
@@ -23,6 +24,7 @@ Description: CLI scripts for Carthage
 
 Package: hadron-carthage
 Architecture: all
-Depends: hadron-carthage-cli (= ${binary:Version}), hadron-container-image, hadron-installer-direct, qemu-kvm, ovmf, libvirt-daemon-system
+Depends: hadron-carthage-cli (= ${binary:Version})
+Recommends: hadron-container-image, hadron-installer-direct, qemu-kvm, ovmf, libvirt-daemon-system
 Multi-Arch: foreign
 Description: Carthage run environment
