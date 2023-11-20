@@ -15,10 +15,10 @@ SKELETONS = ('layout',
 
 __all__ = []
 
-def skeleton_subparser_setup() ->argparse.ArgumentParser:
-    parser = carthage_main_argparser()
+def skeleton_subparser_setup(parser: argparse.ArgumentParser) ->argparse.ArgumentParser:
     action = parser.add_subparsers(title='layout', dest='skel',
-                                help='which layout to select', required=True)
+                                   help='which layout to select', 
+                                   required=True)
     for skel in SKELETONS:
         plugin_uri = mako_lookup.adjust_uri(skel+'/carthage_plugin.yml', 'skeletons/')
         plugin_template = mako_lookup.get_template(plugin_uri+'.mako')
@@ -30,6 +30,7 @@ def skeleton_subparser_setup() ->argparse.ArgumentParser:
             # allow template to adjust arguments.
             arguments.render(parser=subparser)
     return parser
+
 __all__ += ['skeleton_subparser_setup']
 
 def subrender_wrapper(context, relative_in, relative_out:Path, absolute_out:Path):

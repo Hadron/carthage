@@ -6,6 +6,7 @@
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
+
 import argparse
 import shutil
 import sh #We do not want carthage.sh
@@ -16,7 +17,7 @@ if Path(__file__).parents[1].joinpath('carthage').exists():
     sys.path.insert(0, str(Path(__file__).parents[1].absolute()))
 
 from carthage.skeleton import *
-from carthage.utils import carthage_main_setup
+from carthage.utils import carthage_main_setup, carthage_main_argparser
 
 def new(args):
     dir = Path(args.name)
@@ -38,22 +39,29 @@ def new(args):
     print('Output in '+str(dir))
 
 def main():
-    parser = skeleton_subparser_setup()
-    parser.add_argument('--name', required=True, metavar='output_name')
-    parser.add_argument('--copyright',
-                        help='Who is the copyright holder',
+    parser = carthage_main_argparser()
+    command_action = parser.add_subparsers(title='command', dest='cmd', )
+    new_parser = command_action.add_parser('new',
+                                           help='Create a new Carthage project')
+
+    skeleton_subparser_setup(new_parser)
+    new_parser.add_argument('--name', required=True, metavar='output_name')
+    new_parser.add_argument('--copyright',
+    help='Who is the copyright holder',
                         default='Hadron Industries',
                         )
-    parser.add_argument('--proprietary',
+    new_parser.add_argument('--proprietary',
                         help='Do not include LGPL-3 license block',
                         action='store_true',
                         )
-    parser.add_argument('--git',
+    new_parser.add_argument('--git',
                         help='Create a git repository for the output',
                         action='store_true',
                         )
     args = carthage_main_setup(parser)
-    new(args)
+    match args.cmd:
+        case 'new':
+            new(args)
     
 
 if __name__ == '__main__':

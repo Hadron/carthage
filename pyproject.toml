@@ -45,7 +45,7 @@ dependencies = [
 script-files = ["bin/carthage-runner",
     "bin/carthage-console",
     "bin/carthage-vault-tool",
-    "bin/carthage-new",
+    "bin/carthage",
     "bin/btrfs-rmrf",
 ]
 include-package-data = true
