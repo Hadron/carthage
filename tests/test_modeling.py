@@ -469,3 +469,19 @@ async def test_detects_class_multi_instantiate(ainjector):
             class a(InjectableModel):
                 pass
             add_provider(InjectionKey("b"), a) #should raise
+
+@async_test
+async def test_model_subclass_propagation(ainjector):
+    "Test that if a template includes classes to be propagated, subclasses of the template properly propagate those classes."
+    class TemplateNetwork(NetworkModel):
+        @propagate_up()
+        class net_config(NetworkConfigModel): pass
+
+    class layout(CarthageLayout):
+        @provides(InjectionKey(Network, role='public'))
+        class public_network(TemplateNetwork):
+            name = 'public_network'
+    ainjector.add_provider(layout)
+    l = await ainjector.get_instance_async(layout)
+    nc = await l.ainjector.get_instance_async(InjectionKey(NetworkConfig, role='public'))
+    

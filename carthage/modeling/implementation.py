@@ -454,6 +454,7 @@ class InjectableModelType(ModelingBase):
             if hasattr(c, '__initial_injections__'):
                 to_inject.update(c.__initial_injections__)
         return namespace
+
     def __new__(cls, name, bases, namespace, **kwargs):
         namespace.setdefault('_callbacks', [])
 
@@ -598,8 +599,7 @@ class ModelingContainer(InjectableModelType):
                     reverse=True):
                 if isinstance(outer_key.target, ModelingContainer) and len(outer_key.constraints) > 0:
                     break
-        to_propagate = combine_mro_mapping(val, ModelingContainer, '__container_propagations__')
-        to_propagate.update(val.__container_propagations__)
+        to_propagate = val.__container_propagations__
         if to_propagate and (outer_key is None or len(outer_key.constraints) == 0):
             warnings.warn("Cannot propagate because no outer key with constraints found", stacklevel=3)
             return
@@ -625,6 +625,8 @@ class ModelingContainer(InjectableModelType):
     def __new__(cls, name, bases, ns, **kwargs):
         to_propagate = ns.to_propagate
         self = super().__new__(cls, name, bases, ns, **kwargs)
+        to_propagate.update( sum([
+            list(b.__container_propagations__.items()) for b in bases if isinstance(b, ModelingContainer)], []))
         for k in list(to_propagate.keys()):
             if k not in self.__initial_injections__:
                 del self.__container_propagations[k]

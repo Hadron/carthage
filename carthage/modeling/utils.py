@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -14,8 +14,25 @@ def combine_mro(
         subclass: type, attribute: str,
         add: typing.Callable,
         state):
-    # for all members of the mro of base that are subclasses of *subclass*,  run ``add(mro_member, getattr(mro_member, attribute), state)``
-    # *base* may be a sequence
+    # for all members of the mro of base that are subclasses of
+    # *subclass*, run ``add(mro_member, getattr(mro_member,
+    # attribute), state)`` *base* may be a sequence This is intended
+    # for collecting together attributes like classes_to_inject or
+    # namespace_filters that are manually set on a class and need to
+    # be combined together.  Currently, if there are conflicts (as in
+    # multiple classes setting the same key in a mapping), the
+    # visitation order is wrong and the wrong value will survive.
+    #
+    # This function is not appropriate for values like
+    # __initial_injections__, __container_propagations__, or
+    # __transclusions__ that are automatically maintained and built up
+    # as the inheritance tree is constructed.  For one thing, it is
+    # only necessary to descend one level since the earlier levels
+    # should have already accumulated together.  Also, typically,
+    # those attributes are attributes of say ModelingContainer or
+    # InjectableModelType instances rather than of say
+    # ModelingContainer subclasses, and so the subclass check is
+    # guaranteed to fail.
     if isinstance(base, type):
         base = [base]
         mro_set = set()
