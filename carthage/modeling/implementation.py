@@ -447,12 +447,13 @@ class InjectableModelType(ModelingBase):
         namespace = super().__prepare__(cls, name, bases, **kwargs)
         to_inject = namespace.to_inject
         transclusions = namespace.transclusions
-        transclusions.update(combine_mro_mapping(cls, InjectableModelType, '__transclusions__'))
         namespace.setitem('__transclusions__', transclusions)
         namespace.setitem('__initial_injections__', to_inject)
         for c in reversed(bases):
             if hasattr(c, '__initial_injections__'):
                 to_inject.update(c.__initial_injections__)
+            if hasattr(c, '__transclusions__'):
+                transclusions.update(c.__transclusions__)
         return namespace
 
     def __new__(cls, name, bases, namespace, **kwargs):
