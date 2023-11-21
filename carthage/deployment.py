@@ -10,9 +10,10 @@
 from pathlib import Path
 import pkg_resources
 import typing
-from .dependency_injection import inject, Injector
+from .dependency_injection import inject, Injector, AsyncInjector
 from .plugins import CarthagePlugin
 from . import sh
+dependency_preference_order = ['deb', 'pypi']
 
 @inject(injector=Injector)
 def plugin_iterator(injector):
@@ -24,7 +25,7 @@ def collect_dependencies(
         plugins: list[CarthagePlugin],
         descend_plugins: typing.Union[list,bool]=[],
         minimize_os_packages:bool = True,
-        valid_dependency_types = ['deb', 'pypi'],
+        valid_dependency_types = dependency_preference_order,
 ) -> list[dict[str, str]]:
     '''
     Iterate over the plugins.  Return dependencies of the form ``{type:dependency}`` for each dependency in a plugin.  Dependencies may be expressed multiple times.
@@ -46,7 +47,7 @@ def collect_dependencies(
                 except pkg_resources.ResolutionError: pass
 
         for dependency in plugin.metadata['dependencies']:
-            skip_os_package = minimize_os_packages # set to False below; decided per dependency
+            skip_os_package = minimize_os_packages and 'pypi' in dependency # set to False below; decided per dependency
             if minimize_os_packages and 'pypi' in dependency:
                 for requirement in pkg_resources.parse_requirements(dependency['pypi']):
                     # We only expect one requirement but the interface returns an iterator
@@ -89,12 +90,12 @@ async def install_deb(*, injector, **kwargs):
             # valid_dependency_types if they wanted deb more
             # preferred.
         if packages:
-            await stem.apt(
-                '-y', install, *packages, _fg=foreground)
+            stem.apt(
+                '-y', '--no-install-recommends',
+                'install', *packages, _fg=foreground)
 
 @inject(injector=Injector)
 async def install_pypi(*, sudo=True,
-
                        allow_system=True,
                        injector, **kwargs):
     stem = sh
@@ -113,6 +114,17 @@ async def install_pypi(*, sudo=True,
             *options,
             *requirements,
             _fg=foreground)
+
+@inject(ainjector=AsyncInjector)
+async def install_carthage_dependencies(
+        minimize_os_packages:bool = False,
+        valid_dependency_types:list = dependency_preference_order,
+        *, ainjector):
+    await ainjector(
+        install_deb,
+        minimize_os_packages=minimize_os_packages,
+        valid_dependency_types=valid_dependency_types)
+    
         
 
 @inject(injector=Injector)
@@ -126,11 +138,21 @@ def gen_requirements(descend_plugins=[],
                                            minimize_os_packages=False,
                                            descend_plugins=descend_plugins):
         requirements.append(dependency['pypi'])
-    return "\n".join(requirements)
+    return requirements
 
 @inject(injector=Injector)
 def gen_requirements_command(args, injector):
-    print( injector(gen_requirements, args.descend_plugins))
+    print("\n".join(injector(gen_requirements, args.descend_plugins)))
+
+@inject(ainjector=AsyncInjector)
+async def install_carthage_dependencies_command(args, ainjector):
+    valid_dependency_types = dependency_preference_order
+    if args.prefer_python:
+        valid_dependency_types = ['pypi', 'deb']
+    await ainjector(
+        install_carthage_dependencies,
+        minimize_os_packages=args.minimize_os,
+        valid_dependency_types=valid_dependency_types)
 
 def setup_deployment_commands(command_action):
     gen_requirements = command_action.add_parser(
@@ -142,4 +164,18 @@ def setup_deployment_commands(command_action):
         default=[],
         help='Plugins whose internal dependencies should be included'
         )
+    install_dependencies = command_action.add_parser(
+        'install_dependencies', 
+        help='Install Carthage dependencies')
+    install_dependencies.add_argument(
+        '--no-minimize-os',
+        dest='minimize_os',
+        action='store_false',
+        default=True,
+        help='Do not minimize OS package installs when a Python distribution is already installed')
+    install_dependencies.add_argument(
+        '--prefer-python',
+        action='store_true',
+        help='Prefer pypi to OS packages')
+    
     

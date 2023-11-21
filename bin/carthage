@@ -65,6 +65,8 @@ def main():
     match args.cmd:
         case 'generate_requirements':
             carthage_main_run(deployment.gen_requirements_command, args)
+        case 'install_dependencies':
+            carthage_main_run(deployment.install_carthage_dependencies_command, args)
         case 'new':
             new(args)
     
