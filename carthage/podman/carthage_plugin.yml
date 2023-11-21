@@ -1,0 +1,5 @@
+name: carthage.podman
+dependencies:
+  - deb: python3-dateutil
+    pypi: dateutil
+    

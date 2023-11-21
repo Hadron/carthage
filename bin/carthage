@@ -17,7 +17,9 @@ if Path(__file__).parents[1].joinpath('carthage').exists():
     sys.path.insert(0, str(Path(__file__).parents[1].absolute()))
 
 from carthage.skeleton import *
-from carthage.utils import carthage_main_setup, carthage_main_argparser
+from carthage.utils import carthage_main_setup, carthage_main_argparser, carthage_main_run
+from carthage import deployment
+
 
 def new(args):
     dir = Path(args.name)
@@ -58,8 +60,11 @@ def main():
                         help='Create a git repository for the output',
                         action='store_true',
                         )
-    args = carthage_main_setup(parser)
+    deployment.setup_deployment_commands(command_action)
+    args = carthage_main_setup(parser, ignore_import_errors=True)
     match args.cmd:
+        case 'generate_requirements':
+            carthage_main_run(deployment.gen_requirements_command, args)
         case 'new':
             new(args)
     

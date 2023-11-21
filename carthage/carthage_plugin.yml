@@ -1,0 +1,20 @@
+name: core
+dependencies:
+  - deb: python3-sh
+    pypi: sh
+  - deb: python3-requests
+    pypi: requests
+  - deb: python3-yaml
+    pypi: pyyaml
+  - deb: python3-mako
+    pypi: mako
+  - deb: python3-lmdb
+    pypi: lmdb
+  - deb: socat
+  - deb: systemd-container
+  - deb: libvirt-clients
+  - deb: fai-setup-storage
+  - deb: sshfs
+  - deb: bridge-utils
+  - deb: qemu-utils
+  

@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -78,7 +78,11 @@ class ConfigLayout(ConfigAccessor, Injectable):
                 except AttributeError:
                     raise AttributeError("{} is not a config attribute".format(full_key)) from None
 
-    def load_yaml(self, y, *, injector=None, path=None):
+    def load_yaml(self, y, *, injector=None, path=None,
+                  ignore_import_errors=False):
+        '''
+        :param ignore_import_errors: If true, then loading a plugin will not fail simply because the plugin's python code  raises an error.  This is intended to allow introspection of plugin metadata to determine plugin dependencies; actually trying to use a plugin that has raised an error on load is unlikely to work.
+        '''
         if injector is None:
             injector = self._injector
         if path:
@@ -103,7 +107,7 @@ class ConfigLayout(ConfigAccessor, Injectable):
             for p in d['plugins']:
                 if (not ':' in p) and (p == '..' or p == '.' or '/' in p):
                     p = base_path.joinpath(p)
-                enable_plugin(p)
+                enable_plugin(p, ignore_import_errors=ignore_import_errors)
             del d['plugins']
         if 'include' in d:
             for include in d['include']:
@@ -114,7 +118,7 @@ class ConfigLayout(ConfigAccessor, Injectable):
         self._load(d, injector, self._schema, "")
 
 
-def enable_plugin(plugin):
+def enable_plugin(plugin, ignore_import_errors=False):
     '''
 Load and enable a Carthage plugin.
 
@@ -123,7 +127,7 @@ Load and enable a Carthage plugin.
 '''
     from .. import base_injector
     from ..plugins import load_plugin
-    base_injector(load_plugin, plugin)
+    base_injector(load_plugin, plugin, ignore_import_errors=ignore_import_errors)
     from . import inject_config
     inject_config(base_injector)
 

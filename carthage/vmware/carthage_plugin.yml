@@ -1,0 +1,5 @@
+name: carthage.vmware
+package: carthage.vmware
+dependencies:
+  - deb: python3-pyvmomi
+    pypi: pyvmomi

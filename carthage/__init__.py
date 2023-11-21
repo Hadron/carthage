@@ -8,6 +8,7 @@
 
 import asyncio
 import atexit
+import sys
 
 import carthage.config
 import carthage.dependency_injection
@@ -85,6 +86,7 @@ from .dns import DnsZone, PublicDnsManagement
 __all__ += ['DnsZone', 'PublicDnsManagement']
 
 from .plugins import CarthagePlugin
+from . import plugins
 
 __all__ += ['CarthagePlugin']
 
@@ -107,6 +109,7 @@ base_injector(carthage.cloud_init.enable_cloud_init_plugins)
 
 __all__ += ['base_injector']
 
+base_injector(plugins.load_plugin_from_package, sys.modules[__name__])
 
 @atexit.register
 def __done():

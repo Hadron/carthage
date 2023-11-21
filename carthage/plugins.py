@@ -72,6 +72,19 @@ class CarthagePlugin(Injectable):
 def load_plugin(spec: str,
                 *, injector,
                 ignore_import_errors=False):
+    '''
+    Load a plugin from a plugin specification:
+
+    * A path name to a directory containing a ``carthage_plugin.yml``
+
+    * A python package name
+
+    * A ``https`` URL to a Git repository
+
+    * A ``git+ssh`` URL to a git repository
+
+    :param ignore_import_errors:  If True, succeed and register the plugin even if the python code raises.  This is intended to allow the plugin to be loaded so its metadata can be examined to determine dependencies.  Obviously the plugin is unlikely to be functional in such a state.
+    '''
     if ':' in str(spec):
         spec = handle_plugin_url(str(spec), injector)
     if hasattr(spec, "__fspath__") or '/' in spec or spec == '.' or spec == '..':
@@ -212,6 +225,8 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
     if not any((plugin_func, metadata)):
         raise SyntaxError(f'{package.__file__} is not a Carthage plugin')
 
+if package and 'package' not in metadata:
+    metadata['package'] = package.__name__
     if plugin_func:
         res = injector(plugin_func)
     else:

@@ -229,7 +229,7 @@ def carthage_main_argparser(*args, **kwargs):
     return parser
 
 
-def carthage_main_setup(parser=None, unknown_ok=False):
+def carthage_main_setup(parser=None, unknown_ok=False, ignore_import_errors=False):
     from . import base_injector, ConfigLayout
     from .plugins import load_plugin
     if parser is None:
@@ -243,9 +243,9 @@ def carthage_main_setup(parser=None, unknown_ok=False):
     if len(args.config) > 0:
         config = base_injector(ConfigLayout)
         for f in args.config:
-            config.load_yaml(f)
+            config.load_yaml(f, ignore_import_errors=ignore_import_errors)
     for p in args.plugins:
-        base_injector(load_plugin, p)
+        base_injector(load_plugin, p, ignore_import_errors=ignore_import_errors)
     root_logger = logging.getLogger()
     console_handler = logging.StreamHandler()
     root_logger.addHandler(console_handler)

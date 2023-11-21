@@ -1,0 +1,4 @@
+name: carthage.vault
+dependencies:
+  - deb: python3-hvac
+    pypi: hvac
