@@ -225,8 +225,8 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
     if not any((plugin_func, metadata)):
         raise SyntaxError(f'{package.__file__} is not a Carthage plugin')
 
-if package and 'package' not in metadata:
-    metadata['package'] = package.__name__
+    if package and 'package' not in metadata:
+        metadata['package'] = package.__name__
     if plugin_func:
         res = injector(plugin_func)
     else:

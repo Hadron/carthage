@@ -10,6 +10,8 @@ dependencies:
     pypi: mako
   - deb: python3-lmdb
     pypi: lmdb
+  - deb: python3-netifaces
+    pypi: netifaces
   - deb: socat
   - deb: systemd-container
   - deb: libvirt-clients
@@ -17,4 +19,8 @@ dependencies:
   - deb: sshfs
   - deb: bridge-utils
   - deb: qemu-utils
+  - deb: ansible
+  - deb: rsync
+  - deb: btrfs-progs
+  - deb: debootstrap
   
