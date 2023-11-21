@@ -1,4 +1,4 @@
-# Copyright (C) 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -14,7 +14,7 @@ import typing
 import sys
 import yaml
 from pathlib import Path
-from importlib.util import spec_from_file_location, module_from_spec
+from importlib.util import spec_from_file_location, module_from_spec, find_spec
 from urllib.parse import urlparse
 from .dependency_injection import *
 from .config import ConfigLayout
@@ -30,6 +30,7 @@ class CarthagePlugin(Injectable):
     package: typing.Optional[importlib.resources.Package]
     resource_dir: Path
     metadata: dict
+    import_error: str = None
 
     def __init__(self, name: str, package: importlib.resources.Package,
                  metadata: dict,
@@ -69,7 +70,8 @@ class CarthagePlugin(Injectable):
 
 @inject(injector=Injector)
 def load_plugin(spec: str,
-                *, injector):
+                *, injector,
+                ignore_import_errors=False):
     if ':' in str(spec):
         spec = handle_plugin_url(str(spec), injector)
     if hasattr(spec, "__fspath__") or '/' in spec or spec == '.' or spec == '..':
@@ -89,7 +91,7 @@ def load_plugin(spec: str,
             return
         except KeyError:
             pass
-        _handle_plugin_config(injector, metadata, metadata_path)
+        _handle_plugin_config(injector, metadata, metadata_path, ignore_import_errors=ignore_import_errors)
         try:
             python_path = metadata['python']
             python_path = str(path.joinpath(python_path))
@@ -98,7 +100,7 @@ def load_plugin(spec: str,
         except KeyError:
             pass
         if 'package' in metadata:
-            package = importlib.import_module(metadata['package'])
+            module_spec = find_spec(metadata['package'])
         else:
             package_path = path.joinpath("carthage_plugin.py")
             name = metadata['name']
@@ -111,16 +113,29 @@ def load_plugin(spec: str,
                 )
             else:
                 module_spec = None
-            if module_spec:
-                package = module_from_spec(module_spec)
-                sys.modules[name] = package
-                module_spec.loader.exec_module(package)
-            else:
-                package = None
     else:  # spec is a package
-        package = importlib.import_module(spec)
+        module_spec = find_spec(spec)
         metadata = None
-    return injector(load_plugin_from_package, package, metadata)
+    package = None
+    import_error = None
+    if module_spec:
+        if module_spec.name in sys.modules:
+            package = sys.modules[module_spec.name]
+        else:
+            package = module_from_spec(module_spec)
+            try:
+                sys.modules[module_spec.name] = package
+                module_spec.loader.exec_module(package)
+            except Exception as e:
+                del sys.modules[module_spec.name]
+                if ignore_import_errors:
+                    logger.debug('Ignoring error importing %s: %s', module_spec.name, str(e))
+                    import_error = str(e)
+                else:
+                    raise
+    return injector(load_plugin_from_package, package, metadata,
+                    ignore_import_errors=ignore_import_errors,
+                    import_error=import_error)
 
 
 def handle_plugin_url(url, injector):
@@ -147,14 +162,16 @@ def handle_git_url(parsed, injector):
 @inject(injector=Injector)
 def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
                              metadata: dict = None,
-                             *, injector):
+                             *, ignore_import_errors=False,
+                             import_error=None, 
+                             injector):
+    if (not metadata) and (not package):
+        raise RuntimeError('Either package or metadata must be supplied')
     if metadata:
         if 'resource_dir' in metadata:
             metadata_path = Path(metadata['resource_dir']) / "carthage_plugin.yml"
         else:
             metadata_path = Path(package.__file__)
-    if (not metadata) and (not package):
-        raise RuntimeError('Either package or metadata must be supplied')
     if not metadata:
         if not package.__spec__.origin:
             raise SyntaxError(f'{package.__name__} is not a Carthage plugin')
@@ -185,7 +202,7 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
         injector.get_instance(InjectionKey(CarthagePlugin, name=name))
         return # already loaded
     except KeyError: pass
-    _handle_plugin_config(injector=injector, metadata=metadata, path=metadata_path)
+    _handle_plugin_config(injector=injector, metadata=metadata, path=metadata_path, ignore_import_errors=ignore_import_errors)
     try:
         plugin_module = importlib.import_module(".carthage_plugin", package=package.__name__)
     except (ImportError, AttributeError):
@@ -204,19 +221,19 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
         plugin_object = res
     else:
         plugin_object = injector(CarthagePlugin, name=name, package=package, metadata=metadata)
+    if import_error: plugin_object.import_error = import_error
     injector.add_provider(
         InjectionKey(CarthagePlugin, name=plugin_object.name),
         plugin_object)
 
 
-def _handle_plugin_config(injector, metadata, path):
+def _handle_plugin_config(injector, metadata, path, ignore_import_errors):
     # we don't want to take a ConfigLayout as a dependency because
     # that tends to push its instantiation too high in the injector
     # hierarchy
     config = injector(ConfigLayout)
     if 'config' in metadata:
         config.load_yaml(yaml.dump(metadata['config']), path=path)
-        del metadata['config']
 
 
 __all__ = ['load_plugin', 'load_plugin_from_spec']
