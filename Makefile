@@ -17,7 +17,7 @@ test: $(DIST) $(WHEEL)
 	-rm -f build_test/*whl
 	cp --reflink=auto $(WHEEL) build_test
 	podman build -t carthage:test build_test
-	podman run -ti --rm --privileged carthage:test cd /carthage/*&&pytest-3 --carthage-config /authorized.yml tests/test_podman.py tests/test_dependency_injection.py tests/test_modeling.py tests/test_setup_tasks.py
+	podman run -ti --rm --privileged carthage:test sh -c 'set -e&&cd /carthage/*&&pytest-3 --carthage-config /authorized.yml tests/test_podman.py tests/test_dependency_injection.py tests/test_modeling.py tests/test_setup_tasks.py'
 
 
 destroy:
