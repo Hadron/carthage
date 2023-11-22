@@ -86,6 +86,7 @@ async def test_container_unpack(a_injector, loop):
         del iv
 
 
+@pytest.mark.no_rootless
 @async_test
 async def test_image_unpack(loop, a_injector, vm_image):
     print(vm_image.path)

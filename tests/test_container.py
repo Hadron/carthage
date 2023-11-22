@@ -29,6 +29,8 @@ import carthage.ssh
 
 _resource_dir = Path(__file__).parent.joinpath("resources")
 
+pytestmark = pytest.mark.no_rootless
+
 
 @pytest.fixture()
 def container(test_ainjector, loop):

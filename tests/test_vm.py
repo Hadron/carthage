@@ -25,6 +25,7 @@ import os
 
 resource_dir = os.path.dirname(__file__)
 
+pytestmark = pytest.mark.no_rootless
 
 @pytest.fixture()
 def ainjector():

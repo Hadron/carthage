@@ -250,6 +250,7 @@ async def test_podman_mount(ainjector):
         await machine.delete()
 
 
+@pytest.mark.no_rootless
 @async_test
 async def test_from_scratch_image(test_ainjector):
     l = await test_ainjector(podman_layout)

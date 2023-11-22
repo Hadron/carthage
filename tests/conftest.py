@@ -25,6 +25,7 @@ from carthage.pytest import *
 pytest_plugins = ('carthage.pytest_plugin',)
 
 
+@pytest.mark.no_rootless
 @pytest.fixture(scope='session')
 def test_ainjector(loop):
     if posix.geteuid() != 0:
