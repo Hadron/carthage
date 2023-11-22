@@ -5,10 +5,9 @@ TESTENV = carthage-$(VERSION)-build-testenv
 DIST = dist/carthage-$(VERSION).tar.gz
 WHEEL = dist/carthage-$(VERSION)-py3-none-any.whl
 
-$(DIST): dist
-$(WHEEL): dist
+dist: clean $(WHEEL) $(DIST)
 
-dist:
+$(DIST) $(WHEEL):
 	python3 -m build .
 
 build: dist
@@ -17,7 +16,7 @@ test: $(DIST) $(WHEEL)
 	-rm -f build_test/*whl
 	cp --reflink=auto $(WHEEL) build_test
 	podman build -t carthage:test build_test
-	podman run -ti --rm --privileged carthage:test sh -c 'set -e&&cd /carthage/*&&pytest-3 --carthage-config /authorized.yml tests/test_podman.py tests/test_dependency_injection.py tests/test_modeling.py tests/test_setup_tasks.py'
+	podman run -ti --rm --privileged carthage:test sh -c 'set -e&&cd /carthage/*&&pytest-3 --carthage-config=/authorized.yml -k "not no_rootless and not test_pki" tests'
 
 
 destroy:
