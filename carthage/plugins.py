@@ -119,6 +119,7 @@ def load_plugin(spec: str,
             name = metadata['name']
             if '.' not in name:
                 name = "carthage.carthage_plugins." + name
+                _setup_carthage_plugins_module()
             if package_path.exists():
                 module_spec = spec_from_file_location(
                     name, location=package_path,
@@ -132,15 +133,25 @@ def load_plugin(spec: str,
     package = None
     import_error = None
     if module_spec:
-        if module_spec.name in sys.modules:
-            package = sys.modules[module_spec.name]
+        # For some reason module_from_spec sometimes changes spec.name
+        module_name = module_spec.name
+        if module_name in sys.modules:
+            package = sys.modules[module_name]
         else:
             package = module_from_spec(module_spec)
             try:
-                sys.modules[module_spec.name] = package
+                parent_module = None
+                parent, _, stem = module_name.rpartition('.')
+                if parent:
+                    parent_module = importlib.import_module(parent)
+                    setattr(parent_module, stem, package)
+                    
+                sys.modules[module_name] = package
                 module_spec.loader.exec_module(package)
             except Exception as e:
-                del sys.modules[module_spec.name]
+                try: del sys.modules[module_name]
+                except KeyError: pass
+                if parent_module: delattr(parent_module, stem)
                 if ignore_import_errors:
                     logger.debug('Ignoring error importing %s: %s', module_spec.name, str(e))
                     import_error = str(e)
@@ -251,4 +262,7 @@ def _handle_plugin_config(injector, metadata, path, ignore_import_errors):
         config.load_yaml(yaml.dump(metadata['config']), path=path)
 
 
+def _setup_carthage_plugins_module():
+    from types import ModuleType
+    sys.modules['carthage.carthage_plugins'] = ModuleType('carthage.carthage_plugins')
 __all__ = ['load_plugin', 'load_plugin_from_spec']
