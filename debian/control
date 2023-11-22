@@ -2,9 +2,9 @@ Source: hadron-carthage
 Section: devel
 Priority: optional
 Maintainer: Sam Hartman <sam.hartman@hadronindustries.com>
-Build-Depends: debhelper-compat  (= 13), dh-python, python3-all (>= 3.5), python3-openssl, python3-sqlalchemy, python3-setuptools, python3-pytest, python3-mako, python3-yaml, python3-pyvmomi, python3-sh, python3-lmdb
+Build-Depends: debhelper-compat  (= 13), dh-python, python3-all (>= 3.5), python3-openssl, python3-sqlalchemy, python3-setuptools, python3-pytest, python3-mako, python3-yaml, python3-pyvmomi, python3-sh, python3-lmdb, pybuild-plugin-pyproject
 Standards-Version: 3.9.6
-X-Python3-Version: >= 3.7
+X-Python3-Version: >= 3.11
 
 
 Package: python3-carthage
