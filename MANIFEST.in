@@ -1,3 +1,7 @@
 graft tests/resources
+graft tests/templates
+graft tests/test_plugin
 global-exclude *~
 include tests/*.py
+include tests/*.yml
+include tests/*.expected
