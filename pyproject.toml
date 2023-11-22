@@ -14,7 +14,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "carthage"
-version = "0.20"
+version = "0.30"
 authors = [
     { name = "Sam Hartman", email = "sam.hartman@hadronindustries.com" },
 ]
@@ -24,7 +24,7 @@ requires-python = ">=3.11"
 license = { text = "LGPL-3" }
 classifiers = [
     "Intended Audience :: Developers",
-    "License :: Freely Distributable",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
     "Programming Language :: Python :: 3.11",
 ]
 dependencies = [
@@ -34,11 +34,19 @@ dependencies = [
     "python-dateutil",
     "pyVmomi",
     "pyyaml",
+    "netifaces",
     "requests",
     "setuptools",
-    "sh",
+    "sh ~= 1.14",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest", "black"]
+
+[project.urls]
+
+Homepage = "https://github.com/hadron/carthage"
+Documentation = "https://carthage.readthedocs.io"
 
 [tool.setuptools]
 
@@ -56,8 +64,13 @@ include = ["carthage*"]
 
 [tool.setuptools.package-data]
 "carthage" = [
+    "carthage_plugin.yml",
     "resources/*",
     "resources/fai/**",
     "resources/templates/**",
     "extra_packages/resources/*",
 ]
+
+"carthage.podman" = ["carthage_plugin.yml"]
+"carthage.vmware" = ["carthage_plugin.yml"]
+"carthage.vault" = ["carthage_plugin.yml"]

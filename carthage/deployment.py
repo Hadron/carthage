@@ -89,10 +89,10 @@ async def install_deb(*, injector, **kwargs):
             # preferred way to install; our caller could have adjusted
             # valid_dependency_types if they wanted deb more
             # preferred.
-        if packages:
-            stem.apt(
-                '-y', '--no-install-recommends',
-                'install', *packages, _fg=foreground)
+    if packages:
+        stem.apt(
+            '-y', '--no-install-recommends',
+            'install', *packages, _fg=foreground)
 
 @inject(injector=Injector)
 async def install_pypi(*, sudo=True,

@@ -3,28 +3,26 @@ VERSION != grep -Po 'version = "\K[^"]*' pyproject.toml
 TESTENV = carthage-$(VERSION)-build-testenv
 
 DIST = dist/carthage-$(VERSION).tar.gz
+WHEEL = dist/carthage-$(VERSION)-py3-none-any.whl
 
 $(DIST): dist
+$(WHEEL): dist
 
 dist:
 	python3 -m build .
 
 build: dist
+test: $(DIST) $(WHEEL)
+	cp --reflink=auto $(DIST) build_test/carthage.tar.gz
+	-rm -f build_test/*whl
+	cp --reflink=auto $(WHEEL) build_test
+	podman build -t carthage:test build_test
+	podman run -ti --rm --privileged carthage:test cd /carthage/*&&pytest-3 --carthage-config /authorized.yml tests/test_podman.py tests/test_dependency_injection.py tests/test_modeling.py tests/test_setup_tasks.py
 
-test: $(DIST)
-	-mkdir tmp
-	tar xf $(DIST) -C tmp/
-	-podman run -d --name $(TESTENV) -v $$PWD/tmp:/carthage:ro docker.io/library/debian:bookworm sleep 3000
-	-podman exec -it $(TESTENV) apt update
-	-podman exec -it $(TESTENV) apt install -y git vim-tiny python3 python3-setuptools python3-pip python3-build
-	-podman exec -it $(TESTENV) mkdir /build
-	podman exec -it $(TESTENV) cp -r /carthage/ /build/
-	podman exec -it $(TESTENV) python3 -m pip install --break-system-packages /build/carthage/carthage-$(VERSION)/
-	podman exec -it $(TESTENV) bash
 
 destroy:
-	-podman stop -t 0 $(TESTENV)
-	-podman rm $(TESTENV)
+	-podman rmi carthage:test
+	- rm -f build_test/*whl build_test/carthage.tar.gz
 
 clean: destroy
 	rm -rf carthage.egg-info dist tmp
