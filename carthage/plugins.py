@@ -148,7 +148,7 @@ def load_plugin(spec: str,
                     
                 sys.modules[module_name] = package
                 module_spec.loader.exec_module(package)
-            except Exception as e:
+            except BaseException as e:
                 try: del sys.modules[module_name]
                 except KeyError: pass
                 if parent_module: delattr(parent_module, stem)
@@ -179,7 +179,7 @@ def handle_git_url(parsed, injector):
     if dest.exists():
         return dest
     logger.info(f'Checking out {parsed.geturl()}')
-    injector(checkout_git_repo, parsed.geturl(), dest).wait()
+    injector(checkout_git_repo, parsed.geturl(), dest, foreground=True)
     return dest
 
 
@@ -239,7 +239,12 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
     if package and 'package' not in metadata:
         metadata['package'] = package.__name__
     if plugin_func:
-        res = injector(plugin_func)
+        try:
+            res = injector(plugin_func)
+        except Exception as e:
+            res = None
+            if not ignore_import_errors: raise
+            if not import_error: import_error = e
     else:
         res = None
     if isinstance(res, CarthagePlugin):
