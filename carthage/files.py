@@ -99,20 +99,21 @@ The resulting setup_task has an attribute *repo_path* which is a function return
 
 
 @inject(injector=Injector)
-def checkout_git_repo(url, repo, *, injector):
+def checkout_git_repo(url, repo, *, foreground=False, injector):
+    if foreground:
+        options = dict(_fg=True)
+    else: options = dict(_bg=True, _bg_exc=False)
     config = injector(ConfigLayout)
     path = Path(config.checkout_dir) / repo
     os.makedirs(config.checkout_dir, exist_ok=True)
     if path.exists():
         return sh.git("pull", "--rebase",
-                      _bg=True,
-                      _bg_exc=False,
-                      _cwd=path)
+                      _cwd=pat,
+                      **options)
     else:
         return sh.git("clone",
                       url, str(path),
-                      _bg=True,
-                      _bg_exc=False)
+                      **options)
 
 
 __all__ += ['git_checkout_task', 'checkout_git_repo']
