@@ -23,4 +23,6 @@ dependencies:
   - deb: rsync
   - deb: btrfs-progs
   - deb: debootstrap
-  
+  - deb: genisoimage
+  - deb: dosfstools
+      

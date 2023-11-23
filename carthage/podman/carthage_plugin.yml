@@ -1,7 +1,7 @@
 name: carthage.podman
 dependencies:
   - deb: python3-dateutil
-    pypi: dateutil
+    pypi: python_dateutil
   - deb: podman
   - deb: containers-storage
   - deb: fuse-overlayfs
