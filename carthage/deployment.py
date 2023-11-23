@@ -13,6 +13,8 @@ import typing
 from .dependency_injection import inject, Injector, AsyncInjector
 from .plugins import CarthagePlugin
 from . import sh
+__all__ = []
+
 dependency_preference_order = ['deb', 'pypi']
 
 @inject(injector=Injector)
@@ -20,6 +22,8 @@ def plugin_iterator(injector):
     for key, plugin in injector.filter_instantiate(
             CarthagePlugin, ['name']):
         yield plugin
+
+__all__ += ['plugin_iterator']
 
 def collect_dependencies(
         plugins: list[CarthagePlugin],
@@ -47,6 +51,7 @@ def collect_dependencies(
                 except pkg_resources.ResolutionError: pass
 
         for dependency in plugin.metadata['dependencies']:
+            assert isinstance(dependency, dict)
             skip_os_package = minimize_os_packages and 'pypi' in dependency # set to False below; decided per dependency
             if minimize_os_packages and 'pypi' in dependency:
                 for requirement in pkg_resources.parse_requirements(dependency['pypi']):
@@ -71,6 +76,8 @@ def collect_dependencies(
                 if skip_pypi_package: continue
                 results.append(dict(pypi=dependency['pypi']))
     return results
+
+__all__ += ['collect_dependencies']
 
 @inject(injector=Injector)
 async def install_deb(*, injector, **kwargs):
@@ -125,7 +132,8 @@ async def install_carthage_dependencies(
         minimize_os_packages=minimize_os_packages,
         valid_dependency_types=valid_dependency_types)
     
-        
+__all__ += ['install_carthage_dependencies']
+
 
 @inject(injector=Injector)
 def gen_requirements(descend_plugins=[],
@@ -140,9 +148,30 @@ def gen_requirements(descend_plugins=[],
         requirements.append(dependency['pypi'])
     return requirements
 
+__all__ += ['gen_requirements']
+
+@inject(injector=Injector)
+def gen_os_dependencies(package_type: str = 'deb',
+                        minimize_os_packages: bool=False,
+                     *,
+                     injector):
+    plugins = list(injector(plugin_iterator))
+    packages = []
+    for dependency in collect_dependencies(
+            plugins,
+            valid_dependency_types=[package_type],
+            minimize_os_packages=minimize_os_packages,
+                                           ):
+        packages.append(dependency[package_type].strip())
+    return packages
+
+__all__ += ['gen_os_dependencies']
+
 @inject(injector=Injector)
 def gen_requirements_command(args, injector):
     print("\n".join(injector(gen_requirements, args.descend_plugins)))
+
+__all__ += ['gen_requirements_command']
 
 @inject(ainjector=AsyncInjector)
 async def install_carthage_dependencies_command(args, ainjector):
@@ -153,6 +182,8 @@ async def install_carthage_dependencies_command(args, ainjector):
         install_carthage_dependencies,
         minimize_os_packages=args.minimize_os,
         valid_dependency_types=valid_dependency_types)
+
+__all__ += ['install_carthage_dependencies_command']
 
 def setup_deployment_commands(command_action):
     gen_requirements = command_action.add_parser(
@@ -179,3 +210,4 @@ def setup_deployment_commands(command_action):
         help='Prefer pypi to OS packages')
     
     
+__all__ += ['setup_deployment_commands']
