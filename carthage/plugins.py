@@ -264,7 +264,7 @@ def _handle_plugin_config(injector, metadata, path, ignore_import_errors):
     # hierarchy
     config = injector(ConfigLayout)
     if 'config' in metadata:
-        config.load_yaml(yaml.dump(metadata['config']), path=path)
+        config.load_yaml(yaml.dump(metadata['config']), path=path, ignore_import_errors=ignore_import_errors)
 
 
 def _setup_carthage_plugins_module():
