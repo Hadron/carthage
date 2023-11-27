@@ -113,9 +113,13 @@ class ConfigLayout(ConfigAccessor, Injectable):
             for include in d['include']:
                 include = base_path.joinpath(include)
                 with include.open("rt") as include_file:
-                    self.load_yaml(include_file)
+                    self.load_yaml(include_file, ignore_import_errors=ignore_import_errors)
             del d['include']
-        self._load(d, injector, self._schema, "")
+        try: self._load(d, injector, self._schema, "")
+        except KeyError:
+            if not ignore_import_errors: raise
+            # We can fail to get new schema defined because of an
+            # import that failed, so also ignore KeyError from _load.
 
 
 def enable_plugin(plugin, ignore_import_errors=False):
