@@ -272,6 +272,7 @@ async def test_podman_ansible(ainjector):
         await machine.delete()
 
 
+@pytest.mark.requires_podman_pod
 @async_test
 async def test_podman_pod(ainjector):
     l = await ainjector(podman_layout)
@@ -314,6 +315,7 @@ async def test_containerfile_image(ainjector):
     finally:
         try: await l.true_machine.machine.delete()
         except Exception: pass
+
 @async_test
 async def test_dynamic_containerfile_image(layout_fixture):
     l = layout_fixture
@@ -337,6 +339,7 @@ async def test_podman_container_network(layout_fixture):
         try: await layout.networked_container.machine.delete()
         except Exception: pass
 
+@pytest.mark.requires_podman_pod
 @async_test
 async def test_podman_pod_network(layout_fixture):
     "Test networking in a pod"
