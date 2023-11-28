@@ -48,7 +48,9 @@ jobs:
   test_python_dist:
     runs-on: ubuntu-22.04
     needs: build_python_dist
-    container: ${{matrix.image}}
+    container:
+      image: ${{matrix.image}}
+      options: --privileged
     strategy:
       matrix:
         image: ['debian:bookworm', 'debian:unstable']
@@ -65,7 +67,7 @@ jobs:
         name: Python Distributions
         path: dist
 
-    - name: install_dependencies
+    - name: install_dependencies_and_carthage
       run: |
         apt update
         apt -y install python3 python3-pip python3-pytest
@@ -78,5 +80,8 @@ jobs:
         carthage --plugin carthage.podman generate_requirements >requirements.txt
         pip3 install --break-system-packages -r requirements.txt
         carthage --plugin carthage.podman install_dependencies
+
+    - name: Test Carthage
+      run: |
         pytest-3 ${{env.run_tests}} tests
         
