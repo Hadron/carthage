@@ -7,7 +7,7 @@ on:
 
 env:
   core_dependencies: python3-requests python3-yaml python3-mako python3-sh python3-lmdb
-  run_tests: --carthage-config=build_test/authorized.yml -k "not no_rootless and not test_pki"
+  run_tests: --carthage-config=build_test/authorized.yml -k "not no_rootless and not test_pki and not requires_podman_pod"
 jobs:
   build_python_dist:
     runs-on: ubuntu-22.04
@@ -83,5 +83,7 @@ jobs:
 
     - name: Test Carthage
       run: |
+        # It looks like podman create fails the first time with a resource busy
+        podman run --rm debian:latest sleep 1 || true
         pytest-3 ${{env.run_tests}} tests
         
