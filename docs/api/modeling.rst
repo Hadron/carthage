@@ -141,7 +141,8 @@ Model classes sometimes involve a new construct called a **modelmethod**.  Unlik
 
           self.injector.add_provider(key, value, **options)
 
-.. class:: ModelingContainer
+.. class:: ModelContainer
+    ModelingContainer
 
 
     :class:`InjectableModel` provides downward propagation.  That is,
@@ -179,7 +180,7 @@ Modeling containers provide upward propagation so these calls work:
 
     .. method: our_key()
 
-        Returns a key under which this container should be registered in the parent.  If provided, the key returned by this method will be associated with the class as if it were decorated with :func:`provides`.
+        A classmethod returning a key under which this container should be registered in the parent.  If provided, the key returned by this method will be associated with the class as if it were decorated with :func:`provides`.
 
     For upward propagation to work, containers must provide dependencies for some :class:`InjectionKey`, and that key must have some constraints associated with it.  For example, :class:`Enclave`\ 's *our_key* method provides ``InjectionKey(Enclave, domain = self.domain)``.
 
@@ -193,7 +194,7 @@ Modeling containers provide upward propagation so these calls work:
 
     Only the following objects are considered for propagation:
 
-    * Any :class:`ModelingContainer` including :class:`MachineModel`, :class:`NetworkModel`, :class:`ModelGroup`, and :class:`Enclave` is propagated.
+    * Any :class:`ModelingContainer` including :class:`MachineModel`, :class:`NetworkModel`, :class:`ModelGroup`, :class:`ModelContainer`, and :class:`Enclave` is propagated.
 
     * The :func:`propagate_up` decorator can be used to request propagation for other objects.
 

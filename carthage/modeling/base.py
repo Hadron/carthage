@@ -97,8 +97,15 @@ class InjectableModel(Injectable, metaclass=InjectableModelType):
 
 __all__ += ['InjectableModel']
 
+class ModelContainer(InjectableModel, metaclass=ModelingContainer): pass
 
-class NetworkModel(carthage.Network, InjectableModel, metaclass=ModelingContainer):
+__all__ +=  ['ModelContainer']
+
+
+
+
+
+class NetworkModel(carthage.Network, ModelContainer):
 
     def __init__(self, **kwargs):
         kwargs.update(gather_from_class(self, 'name', 'vlan_id'))
@@ -149,7 +156,7 @@ class NetworkConfigModel(InjectableModel,
 __all__ += ['NetworkConfigModel']
 
 
-class ModelGroup(InjectableModel, AsyncInjectable, metaclass=ModelingContainer):
+class ModelGroup(ModelContainer, AsyncInjectable):
 
     async def all_models(self, ready=None):
         models = await self.ainjector.filter_instantiate_async(
@@ -215,7 +222,7 @@ class ModelGroup(InjectableModel, AsyncInjectable, metaclass=ModelingContainer):
         return await super().async_ready()
 
 
-class Enclave(ModelGroup, metaclass=ModelingContainer):
+class Enclave(ModelGroup):
 
     domain: str
 
@@ -314,7 +321,7 @@ class MachineModelMixin:
 @inject_autokwargs(
     config_layout=ConfigLayout,
                    )
-class MachineModel(InjectableModel, carthage.machine.AbstractMachineModel, metaclass=MachineModelType, template=True):
+class MachineModel(ModelContainer, carthage.machine.AbstractMachineModel, metaclass=MachineModelType, template=True):
 
     '''
 
@@ -478,7 +485,7 @@ class MachineImplementation(AsyncInjectable):
 
 __all__ += ['MachineModel', 'MachineModelMixin']
 
-class ImageRole(InjectableModel, metaclass=RoleType): pass
+class ImageRole(ModelContainer, metaclass=RoleType): pass
 
 __all__ += ['ImageRole']
 
@@ -569,7 +576,7 @@ __all__ += ['model_bases']
 
 
 @inject(config_layout=ConfigLayout)
-class ModelTasks(InjectableModel, SetupTaskMixin, AsyncInjectable, metaclass=ModelingContainer):
+class ModelTasks(ModelContainer, SetupTaskMixin, AsyncInjectable):
 
     '''
     A grouping of tasks that will be run at generate time in a :class:`CarthageLayout`.  As part of :meth:`ModelGroup.generate`, the layout searches for any :class:`ModelTasks` provided by its injector and instantiates them.  This causes any setup_tasks to be run.

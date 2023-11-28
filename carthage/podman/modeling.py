@@ -17,7 +17,7 @@ from carthage.oci import OciImage
 __all__ = []
 
 
-class PodmanPodModel( carthage.machine.NetworkedModel, InjectableModel, metaclass=carthage.modeling.implementation.ModelingContainer):
+class PodmanPodModel( carthage.machine.NetworkedModel, ModelContainer):
 
     '''A container that can group a number of :class:`MachineModels` representing Podman containers.
 
