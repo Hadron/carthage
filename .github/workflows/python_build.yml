@@ -4,7 +4,10 @@ on:
   push:
   release:
     types: [create]
-    
+
+env:
+  core_dependencies: python3-requests python3-yaml python3-mako python3-sh python3-lmdb
+  run_tests: --carthage-config=build_test/authorized.yml -k "not no_rootless and not test_pki"
 jobs:
   build_python_dist:
     runs-on: ubuntu-22.04
@@ -41,4 +44,39 @@ jobs:
         with open('pyproject.toml', 'rt') as f:
           result = toml.load(f)
         assert 'v'+result['project']['version'] == '${{github.ref_name}}'
+
+  test_python_dist:
+    runs-on: ubuntu-22.04
+    needs: build_python_dist
+    container: ${{matrix.image}}
+    strategy:
+      matrix:
+        image: ['debian:bookworm', 'debian:unstable']
+        prefer_pip: [false, true]
+        
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: download_dist
+      uses: actions/download-artifact@v3
+      with:
+        name: Python Distributions
+        path: dist
+
+    - name: install_dependencies
+      run: |
+        apt update
+        apt -y install python3 python3-pip python3-pytest
+        test ${{matrix.prefer_pip}} = true && pip3 install --break-system-packages dist/*whl
+        if [ ${{matrix.prefer_pip}} = false ]; then
+          apt -y install $core_dependencies
+          PYTHONPATH=. ./bin/carthage --plugin carthage.podman install_dependencies
+          pip3 install --break-system-packages dist/*whl
+          fi
+        carthage --plugin carthage.podman generate_requirements >requirements.txt
+        pip3 install --break-system-packages -r requirements.txt
+        carthage --plugin carthage.podman install_dependencies
+        pytest-3 ${{env.run_tests}} tests
         
