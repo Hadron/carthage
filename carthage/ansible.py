@@ -585,7 +585,7 @@ class AnsibleResult:
                     raise ValueError(f"{t['name']} duplicated")
                 if len(t['hosts']) == 1:
                     for v in t['hosts'].values():
-                        t.update(v)
+                        t.update({k:v[k] for k in v if k != 'name'})
                 self.tasks[t['name']] = SimpleNamespace(**t)
 
     @property
