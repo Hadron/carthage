@@ -263,23 +263,13 @@ def machine_mixin(name=None):
     return wrapper
 
 
-class PropagateUpDecorator(ModelingDecoratorWrapper):
 
-    name = "propagate_up"
-    subclass = ModelingContainer
-
-    def handle(self, cls, ns, k, state):
-        super().handle(cls, ns, k, state)
-        state.flags |= NSFlags.propagate_key
-
-
-def propagate_up():
-    '''Indicate that an assignment should have its keys propagated up in
-    a container::
+def propagate_key(key, obj=None):
+    '''Indicate a set of keys that should be propagated up
+    in a container::
 
         class foo(ModelingContainer):
-            @propagate_up()
-            @provides(InjectionKey(Baz, target = 42))
+            @propagate_key(InjectionKey(Baz, target = 42))
             class ourbaz(Baz): ...
 
     When *foo* is included ain a container, then the *Baz* injection
@@ -288,9 +278,32 @@ def propagate_up():
     constraints from *foo.our_key()* will be added to it as it is
     propagated.
 
+    *keys* are also provided by the contained class as if :func:`provides` or :func:`globally_unique` were called.
+
+    Propagating a key up is typically an interface point; rather than propagating all keys related to an object up, propagate the keys that will be understood by the environment.  Examples of usage include:
+
+    * Any :class:`~carthage.machine.AbstractMachineModel` with a *host* constraint is collected to find all the machine models in a layout
+
+    
     '''
     def wrap(val):
-        return PropagateUpDecorator(val)
+        setattr_default(val,'__container_propagation_keys__', None)
+        if val.__container_propagation_keys__ is None:
+            if isinstance(val, type):
+                val.__container_propagation_keys__ = set(
+                    propagation_keys for  b in val.__bases__
+                    for propagation_keys in getattr(b, '__container_propagation_keys__', set()))
+            else: # not type
+                val.__container_propagation_keys = set(getattr(
+                    val.__class__,
+                    '__container_propagation_keys__',
+                    set()))
+        val.__container_propagation_keys__.add(key)
+        return provides(key)(val)
+    if not isinstance(key, InjectionKey):
+        raise TypeError('propagate_key takes an injection key and optional object to apply it to.')
+    if obj is not None:
+        return wrap(obj)
     return wrap
 
 
@@ -384,7 +397,7 @@ __all__ = ["ModelingDecoratorWrapper", "provides", 'dynamic_name',
            'allow_multiple', 'no_close',
            'globally_unique_key',
            'MachineMixin', 'machine_mixin',
-           'propagate_up',
+           'propagate_key',
            'transclude_overrides',
            'model_mixin_for',
            ]

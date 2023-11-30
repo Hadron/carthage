@@ -305,8 +305,7 @@ class MachineModelType(RoleType):
                 self.machine, dict(
                     close=True, allow_multiple=False,
                 ))
-            self.__container_propagations__[machine_key] = \
-                self.__initial_injections__[machine_key]
+            self.__container_propagations__.add(machine_key)
             globally_unique_key(InjectionKey(
                 carthage.machine.ResolvableModel,
                 name=self.name))(self)

@@ -77,7 +77,7 @@ def test_container(injector):
     def extra_container(domain):
         d = domain
 
-        @provides(InjectionKey("included", constraint=20))
+        @provides(InjectionKey(ModelGroup, constraint=20))
         class Baz(ModelGroup):
             domain = d
 
@@ -97,7 +97,7 @@ def test_container(injector):
 
             domain = "evil.com"
 
-            @propagate_up()
+            @propagate_key(InjectionKey(NetworkConfig))
             class nc(NetworkConfig):
                 pass
 
@@ -473,15 +473,26 @@ async def test_detects_class_multi_instantiate(ainjector):
 @async_test
 async def test_model_subclass_propagation(ainjector):
     "Test that if a template includes classes to be propagated, subclasses of the template properly propagate those classes."
+    class FirstLevel(InjectableModel): pass
+    propagate_key(InjectionKey(FirstLevel), FirstLevel)
+    @propagate_key(InjectionKey(FirstLevel, level=2))
+    class SecondLevel(FirstLevel): pass
+    
     class TemplateNetwork(NetworkModel):
-        @propagate_up()
+        @propagate_key(InjectionKey(NetworkConfig))
         class net_config(NetworkConfigModel): pass
 
     class layout(CarthageLayout):
         @provides(InjectionKey(Network, role='public'))
         class public_network(TemplateNetwork):
             name = 'public_network'
+
+        @provides(InjectionKey(ModelContainer, name='container'))
+        class container(ModelContainer):
+            class third(SecondLevel): pass
+                  
     ainjector.add_provider(layout)
     l = await ainjector.get_instance_async(layout)
     nc = await l.ainjector.get_instance_async(InjectionKey(NetworkConfig, role='public'))
+    l3 = l.ainjector.get_instance_async(InjectionKey(FirstLevel, name='container'))
     

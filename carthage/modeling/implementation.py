@@ -33,7 +33,7 @@ class NSFlags(enum.Flag):
     inject_by_name = 4
     inject_by_class = 8
     instantiate_on_access = 16
-    propagate_key = 32
+    # 32 previously used by propagate_key, but that has been reworked
     dependency_quote = 64
 
 
@@ -415,8 +415,8 @@ class ModelingBase(type):
 
 __all__ += ["ModelingBase"]
 
-not_transcluded_key = InjectionKey('carthage.modeling.not_transcluded', _optional=True)
 #: An injection key to store the set of keys that could have been transcluded but were not so that container propagation does not  transclude
+not_transcluded_key = InjectionKey('carthage.modeling.not_transcluded', _optional=True)
 
 __all__ += ['not_transcluded_key']
 
@@ -516,7 +516,7 @@ class InjectableModelType(ModelingBase):
         ))
         if propagate:
             assert issubclass(metaclass, ModelingContainer), "Only ModelingContainers accept propagation"
-            to_propagate[k] = to_inject[k]
+            to_propagate.add(k)
 
     @modelmethod
     def disable_system_dependency(cls, dependency):
@@ -544,13 +544,18 @@ class ModelingContainer(InjectableModelType):
     our_key: typing.Callable[[object], InjectionKey]
 
     def _integrate_containment(target_cls, ns, k, state):
-        def propagate_provider(k_inner, v, options):
-            # There is the provides_dependencies_for (or outer) keys, and there is a
-            # set of inner keys from the providers being injected.  We
-            # want to pick one outer key and also add the inner keys
-            # (plus the constraints from the outer key) into the outer
-            # injector.  We pick one outer key just for simplicity; it
-            # could be made to work with more.
+        def propagate_provider(outer_key, k_inner, v, options, do_global):
+            # There is the set of outer keys by which the container is
+            # known; typically from @provides_dependencies_for or
+            # @globally_unique_key, and there is a set of inner keys
+            # from the providers being injected (from @propagate_key
+            # or add_provider with propagate True).  We want to pick
+            # one outer key and also add the inner keys (plus the
+            # constraints from the outer key) into the outer
+            # injector. This function will be called for each outer
+            # key to propagate the crossproduct of inner and outer
+            # keys.  
+
             globally_unique = k_inner.globally_unique
             if not globally_unique:
                 if k_inner in val.__transclusions__:
@@ -560,9 +565,10 @@ class ModelingContainer(InjectableModelType):
                     return
                 k_new = InjectionKey(k_inner.target, **outer_constraints, **k_inner.constraints)
             else:
+                if not do_global: return
                 k_new = k_inner  # globally unique
             # Must be after we have chosen a globally unique key if there is one.
-            if k_new not in ns.to_inject:
+            if k_new not in ns.to_inject and k_inner not in inner_key_map:
                 inner_key_map[k_inner] = k_new
             if isinstance(v, decorators.injector_access):
                 # Normally injector_access will not actually get a key
@@ -571,10 +577,7 @@ class ModelingContainer(InjectableModelType):
                 # MachineModel.  In general this situation will come
                 # up if some modeling type wishes to propagate
                 # something that is referenced by an InjectionKey
-                # rather than a value.  One of the biggest reasons to
-                # try and collapse out injector_access is that
-                # injector_access cannot deal with AsyncRequired but
-                # injector_xref can.
+                # rather than a value.  
                 k_inner = v.key
             # In some cases we could make the injector_xref more clear
             # by adding the outer key's constraints to
@@ -586,51 +589,69 @@ class ModelingContainer(InjectableModelType):
             v = injector_xref(outer_key, k_inner)
             if k_new not in ns.to_inject:
                 ns.to_inject[k_new] = (v, options)
-                ns.to_propagate[k_new] = (v, options)
+                ns.to_propagate.add(k_new)
 
         if not isinstance(state.value, ModelingContainer):
             return
         inner_key_map = {}
         val = state.value
         outer_key = None
+        to_propagate = val.__container_propagations__
+        outer_keys = []
         if hasattr(val, '__provides_dependencies_for__'):
             for outer_key in sorted(
                     val.__provides_dependencies_for__,
                     key=lambda k: k.globally_unique,
                     reverse=True):
-                if isinstance(outer_key.target, ModelingContainer) and len(outer_key.constraints) > 0:
-                    break
-        to_propagate = val.__container_propagations__
-        if to_propagate and (outer_key is None or len(outer_key.constraints) == 0):
+                if  len(outer_key.constraints) > 0:
+                    outer_keys.append(outer_key)
+        if to_propagate and not outer_keys:
             warnings.warn("Cannot propagate because no outer key with constraints found", stacklevel=3)
             return
-        for k, info in to_propagate.items():
-            v, options = info
-            propagate_provider(k, v, options)
+        for k_inner in to_propagate:
+            if k_inner not in val.__initial_injections__:
+                warnings.warn(f'Cannot propagate {k_inner} because it is not provided by {val}')
+                continue
+            v, options = val.__initial_injections__[k_inner]
+            do_global = True
+            for outer_key in outer_keys:
+                propagate_provider(outer_key, k_inner, v, options, do_global)
+                do_global = False
         map_transclusions(ns.transclusions, val, inner_key_map)
 
     def _propagate_filter(target_cls, ns, k, state):
-        if isinstance(state.value, ModelingContainer) or (state.flags & NSFlags.propagate_key):
-            for k, info in ns.keys_for(name=k, state=state):
-                ns.to_propagate[k] = info
-
+        if hasattr(state.value, '__container_propagation_keys__'):
+            propagation_keys = set(state.value.__container_propagation_keys__)
+        else: propagation_keys = set()
+        keys_for = set((x[0] for x in ns.keys_for(name=k, state=state)))
+        propagation_keys &= keys_for
+        # ModelingContainers must propagate even if they have no explicit keys
+        if (not propagation_keys ) and isinstance(state.value, ModelingContainer):
+            propagation_keys = keys_for
+        ns.to_propagate |= propagation_keys
+        
+    # propagate_filter must come before integrate_containment so that
+    # integrate_containment can check whether outer_keys are in
+    # ns.to_propagate. However, filters are processed in reversed
+    # order.
     namespace_filters = [_integrate_containment, _propagate_filter]
 
     @classmethod
     def __prepare__(cls, *args, **kwargs):
         ns = super().__prepare__(*args, **kwargs)
-        ns.to_propagate = {}
+        ns.to_propagate = set()
         ns.setitem('__container_propagations__', ns.to_propagate)
         return ns
 
     def __new__(cls, name, bases, ns, **kwargs):
         to_propagate = ns.to_propagate
         self = super().__new__(cls, name, bases, ns, **kwargs)
-        to_propagate.update( sum([
-            list(b.__container_propagations__.items()) for b in bases if isinstance(b, ModelingContainer)], []))
-        for k in list(to_propagate.keys()):
+        to_propagate |= set(
+            propagations for b in bases
+            for propagations in getattr(b, '__container_propagations__', set()))
+        for k in set(to_propagate): #copy for mutation
             if k not in self.__initial_injections__:
-                del self.__container_propagations[k]
+                self.__container_propagations__.remove(k)
         return self
 
     def __init__(self, *args, **kwargs):
@@ -673,17 +694,19 @@ class ModelingContainer(InjectableModelType):
                 raise TypeError('If using dynamic_name, use decorators to adjust close and allow_multiple')
             ns[fixup_dynamic_name(dynamic_name)] = obj
             return
-        ModelingContainer._integrate_containment(cls, ns, obj.__name__, state)
         # Since we're not able to use ns.__setitem__, do the injection key stuff ourself.
         if not close:
             state.flags &= ~NSFlags.close
         if allow_multiple:
             state.flags |= NSFlags.allow_multiple
+        state.extra_keys = obj.__provides_dependencies_for__
         options = state.injection_options
         for k in obj.__provides_dependencies_for__:
             if k not in ns.to_inject:
                 ns.to_inject[k] = (obj, options)
-                ns.to_propagate[k] = (obj, options)
+        ModelingContainer._propagate_filter(cls, ns, obj.__name__, state)
+        ModelingContainer._integrate_containment(cls, ns, obj.__name__, state)
+
 
 
 __all__ += ['ModelingContainer']
@@ -757,7 +780,7 @@ This must happen prior to the first instantiation of a subclass, and for propaga
     ))
     if propagate:
         assert isinstance(cls, ModelingContainer), "Only ModelingContainers accept propagation"
-        cls.__container_propagations__[k] = cls.__initial_injections__[k]
+        cls.__container_propagations__.add(k)
 
 
 def map_transclusions(container_transclusions, contained, inner_key_map):
