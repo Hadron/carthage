@@ -1,4 +1,4 @@
-# Copyright (C) 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, 2023, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -133,7 +133,7 @@ class ProvidesDecorator(ModelingDecoratorWrapper):
 
 def provides(*keys):
     '''Indicate that the decorated value provides these InjectionKeys'''
-    keys = list(map(lambda k: InjectionKey(k), keys))
+    keys = list(map(lambda k: InjectionKey(k) if not isinstance(k, InjectionKey) else k, keys))
 
     def wrapper(val):
         try:
