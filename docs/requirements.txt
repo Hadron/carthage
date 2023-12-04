@@ -1,5 +1,6 @@
 mako
 sphinx
+sphinx-rtd-theme
 python-dateutil
 lmdb
 pyyaml
