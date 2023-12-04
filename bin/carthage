@@ -18,7 +18,7 @@ if Path(__file__).parents[1].joinpath('carthage').exists():
 
 from carthage.skeleton import *
 from carthage.utils import carthage_main_setup, carthage_main_argparser, carthage_main_run
-from carthage import deployment
+from carthage import carthage_deployment
 
 
 def new(args):
@@ -60,13 +60,13 @@ def main():
                         help='Create a git repository for the output',
                         action='store_true',
                         )
-    deployment.setup_deployment_commands(command_action)
+    carthage_deployment.setup_deployment_commands(command_action)
     args = carthage_main_setup(parser, ignore_import_errors=True)
     match args.cmd:
         case 'generate_requirements':
-            carthage_main_run(deployment.gen_requirements_command, args)
+            carthage_main_run(carthage_deployment.gen_requirements_command, args)
         case 'install_dependencies':
-            carthage_main_run(deployment.install_carthage_dependencies_command, args)
+            carthage_main_run(carthage_deployment.install_carthage_dependencies_command, args)
         case 'new':
             new(args)
     
