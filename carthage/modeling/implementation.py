@@ -603,6 +603,7 @@ class ModelingContainer(InjectableModelType):
                     val.__provides_dependencies_for__,
                     key=lambda k: k.globally_unique,
                     reverse=True):
+                if outer_key not in ns.to_propagate: continue
                 if  len(outer_key.constraints) > 0:
                     outer_keys.append(outer_key)
         if to_propagate and not outer_keys:
