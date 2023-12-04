@@ -494,5 +494,5 @@ async def test_model_subclass_propagation(ainjector):
     ainjector.add_provider(layout)
     l = await ainjector.get_instance_async(layout)
     nc = await l.ainjector.get_instance_async(InjectionKey(NetworkConfig, role='public'))
-    l3 = l.ainjector.get_instance_async(InjectionKey(FirstLevel, name='container'))
+    l3 = await l.ainjector.get_instance_async(InjectionKey(FirstLevel, name='container'))
     

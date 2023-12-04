@@ -137,7 +137,14 @@ def provides(*keys):
 
     def wrapper(val):
         try:
-            setattr_default(val, '__provides_dependencies_for__', [])
+            setattr_default(val, '__provides_dependencies_for__', None)
+            if val.__provides_dependencies_for__ is None:
+                if isinstance(val, type):
+                    val.__provides_dependencies_for__ = [
+                        k for b in val.__bases__
+                        for k in getattr(b, '__provides_dependencies_for__', [])]
+                else:
+                    val.__provides_dependencies_for__ = list(getattr(val.__class__, '__provides_dependencies_for__', []))
             val.__provides_dependencies_for__ = keys + val.__provides_dependencies_for__
             return val
         except BaseException:
