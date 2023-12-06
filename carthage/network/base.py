@@ -174,7 +174,7 @@ class Network(AsyncInjectable):
         pool.new_assignments()
         pool.assignment_loop(self.network_links)
         
-    async def access_by(self, cls: TechnologySpecificNetwork):
+    async def access_by(self, cls: TechnologySpecificNetwork, ready=None):
         '''Request a view of *self* using *cls* as a technology-specific lens.
 
         :return: The instance of *cls* for accessing this network
@@ -184,12 +184,12 @@ class Network(AsyncInjectable):
         instance = None
         if (cls not in self.ainjector) and self.vlan_id is not None:
             try:
-                instance = await self.ainjector.get_instance_async(InjectionKey(cls, vlan_id=self.vlan_id))
+                instance = await self.ainjector.get_instance_async(InjectionKey(cls, vlan_id=self.vlan_id, _ready=ready))
                 self.ainjector.add_provider(instance)
             except KeyError:
                 pass
         if not instance:
-            instance = await self.ainjector.get_instance_async(cls)
+            instance = await self.ainjector.get_instance_async(InjectionKey(cls, _ready=ready))
         assert cls in self.ainjector, \
             f"It looks like {cls} was not registered with add_provider with allow_multiple set to True"
         if instance not in self.technology_networks:
