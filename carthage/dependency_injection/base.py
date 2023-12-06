@@ -417,6 +417,9 @@ Return the first injector in our parent chain containing *k* or None if there is
         if isinstance(predicate, list):
             constraints = predicate
             predicate = filter_for_constraints
+        if isinstance(stop_at, AsyncInjector):
+            stop_at = stop_at.injector
+        assert isinstance(stop_at, (Injector, type(None)))
         if stop_at == self:
             result = {}  # stop here
         elif stop_at and not self.parent_injector:
