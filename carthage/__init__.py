@@ -33,6 +33,9 @@ from .kvstore import KvStore, KvConsistency,AssignmentsExhausted, persistent_see
 __all__ += ['persistent_seed_path']
 
 
+from . import deployment
+from .deployment import  find_deployables, DeployableFinder
+__all__ += ['find_deployables', 'DeployableFinder']
 
 from .network import Network, NetworkConfig, MacStore, V4Config, V4Pool
 
@@ -93,6 +96,7 @@ __all__ += ['CarthagePlugin']
 base_injector = carthage.dependency_injection.Injector()
 base_injector.claim("base injector")
 carthage.config.inject_config(base_injector)
+base_injector.add_provider(deployment.MachineDeployableFinder)
 base_injector.add_provider(ssh.SshKey)
 base_injector.add_provider(ssh.AuthorizedKeysFile)
 base_injector.add_provider(asyncio.get_event_loop(), close=False)

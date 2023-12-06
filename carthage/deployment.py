@@ -72,6 +72,14 @@ class Deployable(typing.Protocol):
         raise NotImplementedError
 
 
+    #: If True,do not deploy the object bringing it to Ready; used for
+    # examining existing objects without creating new objects.
+    # Instantiating an object readonly does not stop methods like
+    # :meth:`delete` from changing the state of the object.  It only
+    # affects what the instantiation process does.
+    readonly: bool
+    
+
 __all__ += ['Deployable']
 
 class DeployableFinder(AsyncInjectable):
@@ -93,11 +101,11 @@ class DeployableFinder(AsyncInjectable):
     #: The plugin name under which a DeployableFinder is registered
     name = None
 
-    async def find(self, stop_at):
+    async def find(self, ainjector):
         '''
         Returns an iterable of :class:`Deployable` objects. Thes objects should be instantiated in a not-ready state (instantiating InjectionKeys with ``_ready=False``.
 
-        :param stop_at: The scope of the injector hierarchy to search.  See :meth:`carthage.Injector.filter` for documentation.
+        :param ainjector: The root of the hierarchy to search. *ainjector* must be an AsyncInjector.  If :meth:`Injector.filter` is called, then it should be called on *ainjector* and *ainjector* should be passed in as the *stop_at* parameter to :meth:`Injector.filter`.  *ainjector* may not be a parent of *self.ainjector*; consider the case when :func:`find_deployables` is called with *recurse* set to True.
         
         '''
         raise NotImplementedError
@@ -127,24 +135,73 @@ class MachineDeployableFinder(DeployableFinder):
 
     name = 'machine'
 
-    async def find(self, stop_at):
+    async def find(self, ainjector):
         from .machine import Machine
-        result = await self.ainjector.filter_instantiate_async(Machine, ['host'], stop_at=stop_at, ready=False)
+        result = await ainjector.filter_instantiate_async(Machine, ['host'], stop_at=ainjector, ready=False)
         return [x[1] for x in result]
 
 @inject(
     ainjector=AsyncInjector,
     )
-async def find_deployables(*, ainjector,
-                           stop_at=None):
-    finder_filter = await ainjector.filter_instantiate_async(DeployableFinder, ['name'],  stop_at=stop_at, ready=True)
+async def find_deployables(
+        *, ainjector,
+        readonly=False,
+        recurse=False,
+        ):
+    '''Find the deployables in an injector hierarchy.
+
+    :returns: A list of :class:`Deployable`
+
+    :param readonly: If True, then readonly is set to True on
+    instances after instantiation.  Finders will typically instantiate
+    instances ``_ready=False``which typically means that readonly does
+    get set in time.  However, if there is some dependency that is
+    marked ``_ready=True`` then that dependency subtree will be
+    instantiated to ready even when the root instantiation is
+    ``_ready=False``.  Layouts should carefully consider the
+    implications of ``_ready=True`` dependencies, because such
+    dependencies may be deployed even on a ``readonly=True``
+    find_deployables call.  Even if ``readonly=False``, readonly will
+    not be forced to False within instantiated objects.  Setting this
+    parameter to True tries to force readonly mode; setting this
+    parameter False respects objects that are marked readonly in the
+    layout.
+
+    :param recurse: If True, for each object returned by finders,
+    apply the finders recursively (with stop_at set to the
+    Deployable's injector).  Some objects such as
+    :class:`carthage_aws.AwsNatGateway` optionally include
+    dependencies based on their configuration.  For example, if no
+    external address is provided, AwsNatGateway dynamically creates a
+    :class:`carthage_aws.VpcAddress`.  When deploying, *recursive*
+    should be set to False.  If Deployables need to deploy an optional
+    dependency, they should do that as part of coming to ready.
+    However, when looking for orphans, *recursive* and *readonly*
+    should both be set to True, to probe for the largest set of
+    potentially Deployed objects. If recursive is not set when
+    searching for orphans, objects that are actually created by the
+    layout may be flagged as orphans.
+
+    '''
+    async def do_recurse(stop_at):
+        for finder in finders:
+            for r in await finder.find(ainjector=stop_at):
+                if id(r) in result_ids: continue
+                results.append(r)
+                result_ids.add(id(r))
+                if readonly: r.readonly = True
+                if recurse:
+                    futures.append(asyncio.ensure_future(
+                        do_recurse(stop_at=r.ainjector)))
+
+    finder_filter = await ainjector.filter_instantiate_async(DeployableFinder, ['name'], ready=True)
+    futures = []
     result_ids = set()
     results = []
-    for _, finder in finder_filter:
-        for r in await finder.find(stop_at=stop_at):
-            if id(r) in result_ids: continue
-            results.append(r)
-            result_ids.add(id(r))
+    finders = [x[1] for x in finder_filter]
+    await do_recurse(stop_at=ainjector)
+    if futures:
+        await asyncio.gather(*futures)
     return results
 
 __all__ += ['find_deployables']
