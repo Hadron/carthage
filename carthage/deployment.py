@@ -66,7 +66,7 @@ class Deployable(typing.Protocol):
 
     async def find(self):
         '''Find whether object exists.
-        If this returns True, the object must exist.  If this returns falsy, then if *id* or *mob* is set on the object,  it exists.  There is a bit of divergence in how :meth:`find` returns.  See :func:`find_deployable` for a more uniform way to call this function.
+        If this returns True, the object must exist.  If this returns falsy, then if *mob* is set on the object,  it exists.  There is a bit of divergence in how :meth:`find` returns.  See :func:`find_deployable` for a more uniform way to call this function.
         Should not raise simply because the object does not exist.
         '''
         raise NotImplementedError
@@ -196,6 +196,14 @@ async def find_deployables(
 
     finder_filter = await ainjector.filter_instantiate_async(DeployableFinder, ['name'], ready=True)
     futures = []
+    # We want to make sure we return an object at most once, and make
+    # sure we never recurse into an object more than once. We cannot
+    # have a set of results.  The main reason is that we cannot
+    # guarantee that all Deployables are hashable. The secondary
+    # reason is that order may be desirable to preserve, although that
+    # requires additional study. However id(obj) is hashable always,
+    # so we can have a set of ids as a way to see if we have already
+    # found an object.
     result_ids = set()
     results = []
     finders = [x[1] for x in finder_filter]
@@ -205,3 +213,24 @@ async def find_deployables(
     return results
 
 __all__ += ['find_deployables']
+
+async def find_deployable(deployable: Deployable):
+    '''
+    Ideally, :meth:`Deployable.find` would return non-falsy if an object exists and falsy if it does not exist.  Unfortunately, some of the Carthage plugins do not follow this pattern.  This method:
+
+    * Returns whatever find returns if it is non-falsy (I.E. objects exists)
+
+    * Returns true if find returns falsy (typically None) and *deployable.mob* exists and is not None
+
+    * Returns False otherwise
+
+    '''
+    result = await deployable.find()
+    if bool(result): return result
+    try:
+        if deployable.mob is not None: return True
+    except AttributeError: pass
+    return False
+
+__all__ += ['find_deployable']
+
