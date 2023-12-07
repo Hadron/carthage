@@ -442,7 +442,7 @@ Return the first injector in our parent chain containing *k* or None if there is
             if res is not None:
                 yield k, res
 
-    def inspect(self, *,key_filter=None, include_parent:bool = False):
+    def inspect(self, *, key_filter=None, include_parent:bool = False):
         '''
         Inspect the contents of this injector.
         This is a generator yielding key, :class:`~InjectedDependencyInspector` pairs for each dependency provided by the injector.
@@ -1368,6 +1368,15 @@ class InjectorXrefMarkerMeta(type):
     def __repr__(self):
         return f'injector_xref({self.injectable_key}, {self.target_key})'
 
+    def __hash__(self):
+        try:return hash(self.injectable_key)+hash(self.target_key)
+        except AttributeError:
+            return hash(self.target_key)
+
+    def __eq__(self, other):
+        if getattr(self, 'injectable_key', None) != getattr(other, 'injectable_key', None): return False
+        if self.target_key != other.target_key: return False
+        return True
 
 class InjectorXrefMarker(AsyncInjectable, metaclass=InjectorXrefMarkerMeta):
 
