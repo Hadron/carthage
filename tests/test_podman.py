@@ -347,7 +347,7 @@ async def test_podman_pod_network(layout_fixture):
     try:
         try: await layout.net_pod.container.machine.async_become_ready()
         except InjectionFailed as e:
-            if isinstance(e.__cause__, NotImplementedError):
+            if isinstance(e.__cause__.__cause__, NotImplementedError):
                 pytest.xfail('Podman is too old')
             raise
         async with layout.net_pod.container.machine.machine_running():

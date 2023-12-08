@@ -1199,14 +1199,14 @@ class AsyncInjectable(Injectable):
         '''Returns None or an object that should replace *self* in providing dependencies.'''
         return None
 
-    async def async_become_ready(self, cycle_set=None):
+    async def async_become_ready(self, cycle_set=None, dependency_key=None):
 
         '''
         Interface point to request that a dependency be fully ready (:meth:`async_ready` is called exactly once).  This function manages tracking to make sure that async_ready is called once, and waits for that call if needed.
         This method also makes sure that dependencies registered with :func:`.inject` are made ready before :meth:`async_ready` is called.
         Subclasses should not override this method but instead should override :meth:`async_ready`.
         '''
-        with AsyncBecomeReadyContext(self):
+        with AsyncBecomeReadyContext(self, dependency_key=dependency_key):
             if self._async_ready_state == ReadyState.NOT_READY:
                 raise RuntimeError("Resolution should have already happened")
             elif self._async_ready_state == ReadyState.RESOLVED:
@@ -1329,6 +1329,14 @@ class AsyncInjector(Injectable):
         zipped = zip(result_keys, results)
         return [z for z in zipped if z[1] is not None]
 
+async def _handle_1_dep(val, cycle_set, dependency_key):
+    with AsyncBecomeReadyContext(val, dependency_key) as context:
+        try: await val.async_become_ready(cycle_set=cycle_set, dependency_key=dependency_key)
+        except Exception as e:
+            tb_utils.filter_before_here(e)
+            failed_instantiation(context, e)
+            raise InjectionFailed(context) from e
+
 
 async def _handle_async_deps(obj, cycle_set):
     if cycle_set is None:
@@ -1346,19 +1354,22 @@ async def _handle_async_deps(obj, cycle_set):
         val = getattr(obj, attr, None)
         if val is None:
             continue
-        if not isinstance(val, AsyncInjectable):
+        if is_obj_ready(val):
             continue
         if id(val) in cycle_set:
             import warnings
             warnings.warn(f'{obj}.async_become_ready: @inject({attr}={dep}) produced dependency cycle with {val}')
             continue
         cycle_set.add(id(val))
-        future = asyncio.ensure_future(val.async_become_ready(cycle_set=cycle_set))
+        future = asyncio.ensure_future(_handle_1_dep(val, cycle_set=cycle_set, dependency_key=dep))
         future.set_name(f'Dependency become ready for {dep} of {repr}')
         futures.append(future)
 
     gather = asyncio.gather(*futures)
-    await gather
+    try: await gather
+    except Exception as e:
+        tb_utils.filter_chatty_modules(e, _chatty_modules, None)
+        raise
     return await obj.async_ready()
 
 

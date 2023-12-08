@@ -252,18 +252,27 @@ __all__ += ['current_instantiation']
 
 class AsyncBecomeReadyContext(BaseInstantiationContext):
 
-    def __init__(self, obj):
+    def __init__(self, obj, dependency_key):
         super().__init__(obj.injector)
+        if dependency_key is not None:
+            self.key = dependency_key
         self.obj = obj
         self.entered = False
 
     @property
     def description(self):
-        return f'{self.obj}.async_become_ready()'
+        return f'bringing {self.obj} to ready'
 
     def __enter__(self):
+        # If the parent context is an instantiation context for
+        # ourself (async_become_ready as part of get_instance_async),
+        # or the parent is already an AsyncBecomeReadyContext for
+        # ourself (_handle_1_dep), we do not need an extra level of
+        # context.
         parent = _current_instantiation.get()
         if isinstance(parent, InstantiationContext) and parent.provider.provider is self.obj:
+            return parent
+        elif isinstance(parent,AsyncBecomeReadyContext) and self.obj is parent.obj:
             return parent
         self.entered = True
         return super().__enter__()
@@ -273,6 +282,9 @@ class AsyncBecomeReadyContext(BaseInstantiationContext):
             super().__exit__(*args)
             self.done()
         return False
+
+    def get_value_no_instantiate(self):
+        return self.obj
 
     def get_dependencies(self):
         return get_dependencies_for(self.obj, self.obj.injector)
@@ -326,6 +338,7 @@ def failed_instantiation(context, exception):
     injector.emit_event(
         key, "dependency_instantiation_failed",
         failure,
+        context=context,
         adl_keys={base.InjectionKey(base.Injector)})
     
 
