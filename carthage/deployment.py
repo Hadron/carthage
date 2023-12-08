@@ -6,10 +6,14 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+from __future__ import annotations
 import asyncio
+import contextlib
+import dataclasses
 import enum
 import typing
 from .dependency_injection import *
+from .dependency_injection import introspection as dependency_introspection, is_obj_ready
 
 __all__ = []
 
@@ -50,6 +54,190 @@ orphan_policy = InjectionKey(DeletionPolicy, policy='orphan')
 
 __all__ += ['orphan_policy']
 
+class DryRunType:
+
+    '''A singleton indicating that readonly has been set on an object
+    because it was part of the return from
+    ``find_deployments(readonly=True)``, which typically means it was
+    part of a ``run_deployment(dry_run=True)``.  A future deployment
+    run with such an object included in the *deployables* parameter
+    will clear *DryRun* as a readonly value, while letting other True
+    readonly values remain.
+    '''
+
+    def __new__(cls):
+        return DryRun
+
+    def __bool__(self):
+        return True
+
+    def __repr__(self):
+        return 'DryRun'
+
+DryRun = object.__new__(DryRunType)
+
+__all__ += ['DryRun']
+
+    
+@dataclasses.dataclass(frozen=True)
+class DeploymentFailure:
+
+    '''Represents an object that failed to instantiate during deployment or that raised an error while calling the deployment method.
+    If *failing_dependency* is not None, then it is the InjectionKey of a dependency that failed to instantiate. In that case, *exception* is relative to the failing dependency.
+
+    Otherwise *exeception* is an exception raised handling *deployable*.
+
+    Note that :class:`FailedDeployment` is the exception that is
+    raised when a deployment fails.  This class is contained in the
+    *failures* and *dependency_failures* property of a
+    :class:`DeploymentResult`.
+
+    '''
+    
+    #: In dependency_failures, may be a Deployable class rather than a Deployable instance.
+    deployable: typing.Union[Deployable, typing.Type[Deployable]]
+    exception: Exception
+    dependency_path: typing.Sequence[InjectionKey] = None
+
+__all__ += ['DeploymentFailure']
+
+
+@dataclasses.dataclass
+class DeploymentResult:
+
+    successes: list[Deployable] = dataclasses.field(default_factory=lambda: [])
+    failures: list[DeploymentFailure] = dataclasses.field(default_factory=lambda: [])
+    dependency_failures: list[DeploymentFailure] = dataclasses.field(default_factory=lambda: [])
+
+    #: A Deployable can be not found either if it is readonly=True or
+    #not found on a delete
+    not_found: list[Deployable] = dataclasses.field(default_factory=lambda: [])
+        
+#: Lists instantiation failures that are leaves (not failing because a
+    #dependency failed). If the object being instantiated can be
+    #identified as a Deployable, it will also appear in *failures*.
+    instantiation_failure_leaves: dict[InjectionKey, dependency_introspection.FailedInstantiation] = \
+        dataclasses.field(repr=False, default_factory=lambda: {})
+
+    def is_successful(self):
+        return self.successes and  not (self.failures or self.dependency_failures or self.instantiation_failure_leaves)
+
+    def __contains__(self, d:Deployable):
+        if d in self.successes:
+            return True
+        if any(x.deployable is d for x in self.failures):
+            return True
+        if any(x.deployable is d for x in self.dependency_failures):
+            return True
+        return False
+    
+    def _injection_failed_cb(self, target, target_key, context, **kwargs):
+        try:
+            obj = context.get_value_no_instantiate()
+        except AttributeError: obj = None
+        if hasattr(obj, 'find') and hasattr(obj, 'find_or_create'):
+            deployable = obj
+            deployment_failure = DeploymentFailure(
+                deployable=deployable,
+                exception=target.exception,
+                # Turn tuple() into None
+                dependency_path=target.dependency if target.dependency else None)
+        else:
+            deployable = None
+            deployment_failure = None
+        if not target.dependency:
+            # We take the first one if there are duplicate InjectionKeys
+            self.instantiation_failure_leaves.setdefault(target_key, target)
+            if deployment_failure and deployable not in self:
+                self.failures.append(deployment_failure)
+        else: # there is a dependency_path
+            if deployment_failure and deployable not in self:
+                self.dependency_failures.append(deployment_failure)
+
+    def method_callback(self, deployable:Deployable):
+        def callback(future):
+            if  deployable in self:
+                # We already noticed an instantiation failure
+                if not future.exception():
+                    logger.warning("successful method callback for %s, already recorded as a failure in the DeploymentResult", deployable)
+                    return
+            if exception := future.exception():
+                if isinstance(exception, InjectionFailed) and exception.dependency_path:
+                    self.dependency_failures.append(DeploymentFailure(
+                        deployable, exception=exception.__context__,
+                        dependency_path=exception.dependency_path))
+                else:
+                    self.failures.append(DeploymentFailure(
+                        deployable=deployable,
+                        exception=exception))
+            else: # no exception
+                future.result() # so it is read
+                self.successes.append(deployable)
+
+        return callback
+
+    def find_callback(self, deployable: Deployable):
+        def callback(future):
+            if  deployable in self:
+                # We already noticed an instantiation failure
+                if not future.exception():
+                    logger.warning("successful method callback for %s, already recorded as a failure in the DeploymentResult", deployable)
+                    return
+            if exception := future.exception():
+                if isinstance(exception, InjectionFailed) and exception.dependency_path:
+                    self.dependency_failures.append(DeploymentFailure(
+                        deployable, exception=exception,
+                        dependency_path=exception.dependency_path))
+                else:
+                    self.failures.append(DeploymentFailure(
+                        deployable=deployable,
+                        exception=exception))
+            else: # no exception
+                if future.result():
+                    self.successes.append(deployable)
+                else:
+                    self.not_found.append(deployable)
+
+        return callback
+
+__all__ += ['DeploymentResult']
+
+class DeploymentIntrospection(dependency_introspection.BaseInstantiationContext):
+
+    '''
+    Groups all the dependency operations in a deployment together for instantiation_roots'''
+
+    def __init__(self, injector, method, result:DeploymentResult):
+        super().__init__(injector=injector)
+        self.method = method
+        self.result = result
+        self.exit_stack = contextlib.ExitStack()
+
+    def __enter__(self):
+        res = super().__enter__()
+        self.exit_stack.__enter__()
+        self.exit_stack.enter_context(self.injector.event_listener_context(
+            InjectionKey(Injector), ['dependency_instantiation_failed'],
+            self.result._injection_failed_cb))
+        return res
+
+    def __exit__(self, *args):
+        try:
+            super().__exit__(*args)
+            self.done()
+            return False
+        finally:
+            # we always raise the exception so we ignore the return
+            # value from the exit stack
+            self.exit_stack.__exit__(*args)
+            
+
+    @property
+    def description(self):
+        return f'DEPLOYMENT.{self.method}'
+
+__all__ += ['DeploymentIntrospection']
+
 @typing.runtime_checkable
 class Deployable(typing.Protocol):
 
@@ -77,7 +265,7 @@ class Deployable(typing.Protocol):
     # Instantiating an object readonly does not stop methods like
     # :meth:`delete` from changing the state of the object.  It only
     # affects what the instantiation process does.
-    readonly: bool
+    readonly: typing.Union[bool, DryRun]
     
 
 __all__ += ['Deployable']
@@ -152,20 +340,21 @@ async def find_deployables(
 
     :returns: A list of :class:`Deployable`
 
-    :param readonly: If True, then readonly is set to True on
+    :param readonly: If True, then readonly is set to DryRun on
     instances after instantiation.  Finders will typically instantiate
     instances ``_ready=False``which typically means that readonly does
     get set in time.  However, if there is some dependency that is
     marked ``_ready=True`` then that dependency subtree will be
     instantiated to ready even when the root instantiation is
-    ``_ready=False``.  Layouts should carefully consider the
-    implications of ``_ready=True`` dependencies, because such
-    dependencies may be deployed even on a ``readonly=True``
-    find_deployables call.  Even if ``readonly=False``, readonly will
-    not be forced to False within instantiated objects.  Setting this
-    parameter to True tries to force readonly mode; setting this
-    parameter False respects objects that are marked readonly in the
-    layout.
+    ``_ready=False``.  In such cases, find_deployables may not set
+    readonly until after the object is constructed. Layouts should
+    carefully consider the implications of ``_ready=True``
+    dependencies, because such dependencies may be deployed even on a
+    ``readonly=True`` find_deployables call.  Even if
+    ``readonly=False``, readonly will not be forced to False within
+    instantiated objects.  Setting this parameter to True tries to
+    force readonly mode; setting this parameter False respects objects
+    that are marked readonly in the layout.
 
     :param recurse: If True, for each object returned by finders,
     apply the finders recursively (with stop_at set to the
@@ -189,7 +378,8 @@ async def find_deployables(
                 if id(r) in result_ids: continue
                 results.append(r)
                 result_ids.add(id(r))
-                if readonly: r.readonly = True
+                if readonly and not r.readonly:
+                    r.readonly = DryRun
                 if recurse:
                     futures.append(asyncio.ensure_future(
                         do_recurse(stop_at=r.ainjector)))
@@ -234,3 +424,71 @@ async def find_deployable(deployable: Deployable):
 
 __all__ += ['find_deployable']
 
+def clear_dry_run_marker(deployables):
+    for d in deployables:
+        if d.readonly is DryRun:
+            d.readonly = False
+            if is_obj_ready(d):
+                warnings.warn(f'{d!r} was already ready when clearing read only', stack_level=3)
+                
+
+@inject(ainjector=AsyncInjector)
+async def run_deployment(
+        *,
+        dry_run=False,
+        deployables: typing.Union[DeploymentResult, list[Deployable]] = None,
+        filter=lambda d:True,
+        ainjector):
+    '''
+    Run a deployment.
+
+    #. Find the objects using :func:`find_deployables`
+
+    #. For each object returned, call some deployment method on the object.  For an actual deployment, that is :meth:`async_become_ready`.
+
+    :returns: A :class:`DeploymentResult` capturing the results of the deployment.  Will raise if find_deployments fails.
+
+    :param dry_run: Do not actually call a deployment method, but instead report successes for all objects that would be touched.
+
+    :param filter: If specified, a function that returns whether to operate on a given Deployable.
+
+    :param deployables: If specified, then operate on the given deployables (after applying *filter*) rather than calling :func:`find_deployables`. If *deployables* is a :class:`DeploymentResult`, then operate on the successes of that result. When *deployables* is specified and *dry_run* is not true, any :class:`Deployable` with *readonly* set to *DryRun* will have readonly cleared.  Typical use is to run a deployment with *dry_run* set to True and then after confirming that the deployment is desired, to pass in the :class:`DeploymentResult` from the dry run into a new call to :func:`run_deployment`.
+    
+    '''
+    find_readonly = dry_run
+    match deployables:
+        case DeploymentResult():
+            deployables_list = deployables.successes
+            if not dry_run: clear_dry_run_marker(deployables_list)
+        case list():
+            deployables_list = deployables
+            if not dry_run: clear_dry_run_marker(deployables_list)
+        case _:
+            deployables_list = await ainjector(
+                find_deployables,
+                readonly=find_readonly,
+                # Not recursive until we are looking at delete_orphans.
+            )
+    result = DeploymentResult()
+    futures = []
+    with DeploymentIntrospection(ainjector.injector, 'deploy', result):
+        for d in deployables_list:
+            if not dry_run:
+                if d.readonly:
+                    future = asyncio.ensure_future(ainjector(
+                        find_deployable, d))
+                    future.add_done_callback(result.find_callback(d))
+                    futures.append(future)
+                else:
+                    future = asyncio.ensure_future(d.async_become_ready())
+                    future.add_done_callback(result.method_callback(d))
+                    futures.append(future)
+            else: # dry_run
+                if d not in result:
+                    result.successes.append(d)
+
+        if futures:
+            await asyncio.wait(futures) # We should already have captured in result
+    return result
+
+__all__ += ['run_deployment']
