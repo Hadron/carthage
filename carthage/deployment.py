@@ -33,13 +33,13 @@ class DeletionPolicy(enum.Enum):
     '''
 
     #: Retain the deployable without  any diagnostic.
-    RETAIN = enum.auto()
+    retain = enum.auto()
 
     #: Warn about the deployable
-    WARN = enum.auto()
+    warn = enum.auto()
 
     #: Delete the object using default recursion rules for that object.
-    DELETE = enum.auto()
+    delete = enum.auto()
 
 __all__ += ['DeletionPolicy']
 
@@ -81,6 +81,10 @@ DryRun = object.__new__(DryRunType)
 
 __all__ += ['DryRun']
 
+class IgnoreDeployable(Exception):
+    '''Raised to indicate that a deployable should be ignored
+    '''
+    
     
 @dataclasses.dataclass(frozen=True)
 class DeploymentFailure:
@@ -99,8 +103,9 @@ class DeploymentFailure:
     
     #: In dependency_failures, may be a Deployable class rather than a Deployable instance.
     deployable: typing.Union[Deployable, typing.Type[Deployable]]
-    exception: Exception
+    exception: typing.Optional[Exception]
     dependency_path: typing.Sequence[InjectionKey] = None
+    depended_deployables: list[Deployable] = None
 
 __all__ += ['DeploymentFailure']
 
@@ -115,7 +120,10 @@ class DeploymentResult:
     #: A Deployable can be not found either if it is readonly=True or
     #not found on a delete
     not_found: list[Deployable] = dataclasses.field(default_factory=lambda: [])
-        
+
+    #: Deployables ignored by filter or DeletionPolicy
+    ignored: list[Deployable] = dataclasses.field(default_factory=lambda: [])
+    
 #: Lists instantiation failures that are leaves (not failing because a
     #dependency failed). If the object being instantiated can be
     #identified as a Deployable, it will also appear in *failures*.
@@ -127,6 +135,8 @@ class DeploymentResult:
 
     def __contains__(self, d:Deployable):
         if d in self.successes:
+            return True
+        if d in self.ignored:
             return True
         if any(x.deployable is d for x in self.failures):
             return True
@@ -187,7 +197,9 @@ class DeploymentResult:
                     logger.warning("successful method callback for %s, already recorded as a failure in the DeploymentResult", deployable)
                     return
             if exception := future.exception():
-                if isinstance(exception, InjectionFailed) and exception.dependency_path:
+                if isinstance(exception, IgnoreDeployable):
+                    self.ignored.append(deployable)
+                elif isinstance(exception, InjectionFailed) and exception.dependency_path:
                     self.dependency_failures.append(DeploymentFailure(
                         deployable, exception=exception.__cause__,
                         dependency_path=exception.dependency_path))
@@ -508,15 +520,18 @@ async def run_deployment(
 __all__ += ['run_deployment']
 
 @inject(ainjector=AsyncInjector)
-async def find_deployables_reverse_dependencies(ainjector):
+async def find_deployables_reverse_dependencies(*, readonly=False,
+                                                deployables: list[Deployable]=None,
+                                                ainjector):
     def add_dependency(depending, on, /):
         if isinstance(on, Deployable):
             reverse_dependencies.setdefault(on, set())
             reverse_dependencies[on] |= {depending}
     reverse_dependencies = {}
-    deployables = await ainjector(find_deployables,
-                                  recurse=True,
-                                  readonly=True)
+    if not deployables:
+        deployables = await ainjector(find_deployables,
+                                      recurse=True,
+                                      readonly=True)
     for d in deployables:
         if hasattr(d, 'dynamic_dependencies'):
             try:
@@ -531,3 +546,121 @@ async def find_deployables_reverse_dependencies(ainjector):
     return reverse_dependencies
 
 __all__ += ['find_deployables_reverse_dependencies']
+
+@inject(ainjector=AsyncInjector)
+async def run_deployment_destroy(
+        *,
+        dry_run=False,
+        deployables: typing.Union[DeploymentResult, list[Deployable]] = None,
+        filter=lambda d:True,
+        ainjector):
+    '''
+    Run a deployment destroy operation, calling :meth:`delete` on Deployables.
+
+    #. Find the objects using :func:`find_deployables_reverse_dependencies`
+
+    #. Exclude Deployables for which *filter* returns falsy and any reverse dependencies of those objects.
+
+    #. Delete the remaining objects or in a *dry_run* report which objects would be deleted
+    
+
+    :returns: A :class:`DeploymentResult` capturing the results of the deployment.  Will raise if find_deployments fails.
+
+    :param dry_run: Do not actually call a deployment method, but instead report successes for all objects that would be touched.
+
+    :param filter: If specified, a function that returns whether to operate on a given Deployable.
+
+    :param deployables: If specified, then operate on the given deployables (after applying *filter*) rather than calling :func:`find_deployables`. If *deployables* is a :class:`DeploymentResult`, then operate on the successes of that result. When *deployables* is specified and *dry_run* is not true, any :class:`Deployable` with *readonly* set to *DryRun* will have readonly cleared.  Typical use is to run a deployment with *dry_run* set to True and then after confirming that the deployment is desired, to pass in the :class:`DeploymentResult` from the dry run into a new call to :func:`run_deployment`.
+    
+    '''
+    find_readonly = dry_run
+    match deployables:
+        case DeploymentResult():
+            deployables_list = deployables.successes
+            if not dry_run: clear_dry_run_marker(deployables_list)
+        case list():
+            deployables_list = deployables
+            if not dry_run: clear_dry_run_marker(deployables_list)
+        case _:
+            deployables_list = await ainjector(
+                find_deployables,
+                readonly=find_readonly,
+                recurse=True,
+            )
+    reverse_dependencies = await ainjector(
+        find_deployables_reverse_dependencies,
+        deployables=deployables_list,
+        )
+    async def handle(d: Deployable):
+        try:
+            found = await find_deployable(d)
+            if not found: return False
+            if d.readonly is not DryRun or not filter(d):
+                logger.debug('Ignoring %s and its reverse dependencies', d)
+                raise IgnoreDeployable
+            policy = d.injector.get_instance(InjectionKey(destroy_policy, _optional=True))
+            if not dry_run:
+                match policy:
+                    case DeletionPolicy.retain:
+                        logger.debug("%s not deleted: deletion policy retain", d)
+                        raise IgnoreDeployable
+                    case DeletionPolicy.warn:
+                        logger.warn("%s retained per deletion policy", d)
+                        raise IgnoreDeployable
+                    case None| DeletionPolicy.delete:
+                        logger.info('Deleting %s', d)
+                        await d.delete()
+                    case _:
+                        logger.error("Illegal destroy policy for %s: %s", d, policy)
+            else:
+                if policy in (DeletionPolicy.retain, DeletionPolicy.warn):
+                    raise IgnoreDeployable
+                logger.debug("Dry run; would delete %s", d)
+            good_to_go.add(d)
+            more_work()
+            return True
+        finally:
+            pending.remove(d)
+
+
+    def more_work():
+        # This is horribly inefficient
+        failures = submitted - pending - good_to_go
+        possibles = set(reverse_dependencies) - submitted 
+        for p in possibles:
+            rdeps = reverse_dependencies[p]
+            if failing_rdeps := (rdeps & failures):
+                submitted.add(p)
+                result.dependency_failures.append(
+                    DeploymentFailure(deployable=p,
+                                      exception=None,
+                                      depended_deployables=list(failing_rdeps)))
+                continue
+            elif  rdeps - good_to_go:
+                continue
+            else:
+                # All the rdeps are in good_to_go
+                # And it hasn't been submitted yet
+                submitted.add(p)
+                pending.add(p)
+                future = asyncio.ensure_future(handle(p))
+                future.set_name('handle delete for '+str(p))
+                future.add_done_callback(result.find_callback(p))
+                futures.append(future)
+
+    pending = set()
+    submitted = set()
+    futures = []
+    good_to_go = set()
+    result = DeploymentResult()
+    with DeploymentIntrospection(ainjector.injector, 'destroy', result):
+        more_work()
+        while futures:
+            futures_last_round = futures
+            futures = []
+            done, pending_futures = await asyncio.wait(futures_last_round)
+            assert not pending_futures
+            assert len(pending) == len([f for f in futures if not f.done()])
+    return result
+
+__all__ += ['run_deployment_destroy']
