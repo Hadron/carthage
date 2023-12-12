@@ -170,7 +170,7 @@ class CarthageConsole(code.InteractiveConsole):
         if isinstance(obj, collections.abc.Coroutine):
             self.history_num += 1
             num = self.history_num
-            future = asyncio.ensure_future(obj, loop=self.loop)
+            future = asyncio.run_coroutine_threadsafe(obj, loop=self.loop)
             future.add_done_callback(future_callback)
             print(f'[{num}]: async {obj.__name__}')
             self.history[num] = future
