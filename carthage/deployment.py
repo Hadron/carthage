@@ -11,9 +11,12 @@ import asyncio
 import contextlib
 import dataclasses
 import enum
+import logging
 import typing
 from .dependency_injection import *
 from .dependency_injection import introspection as dependency_introspection, is_obj_ready
+
+logger = logging.getLogger('carthage.deployment')
 
 __all__ = []
 
@@ -266,6 +269,17 @@ class Deployable(typing.Protocol):
     # :meth:`delete` from changing the state of the object.  It only
     # affects what the instantiation process does.
     readonly: typing.Union[bool, DryRun]
+
+    async def dynamic_dependencies(self):
+        '''
+        Returns a iterable of dependencies that are dynamically used.  Typically used for better introspection and for calculating the order of destroy operations.  Examples include:
+
+        * Dependencies on specific :class:`~carthage.network.TechnologySpecificNetwork` implementations from machines.
+
+        * Objects instantiated directly through ``get_instance`` or through :func:`resolve_deferred`
+
+        '''
+        return []
     
 
 __all__ += ['Deployable']
@@ -495,11 +509,21 @@ __all__ += ['run_deployment']
 
 @inject(ainjector=AsyncInjector)
 async def find_deployables_reverse_dependencies(ainjector):
+    def add_dependency(depending, on, /):
+        if isinstance(on, Deployable):
+            reverse_dependencies.setdefault(on, set())
+            reverse_dependencies[on] |= {depending}
     reverse_dependencies = {}
     deployables = await ainjector(find_deployables,
                                   recurse=True,
                                   readonly=True)
     for d in deployables:
+        if hasattr(d, 'dynamic_dependencies'):
+            try:
+                for dependency in await d.dynamic_dependencies():
+                    add_dependency(d, dependency)
+            except:
+                logger.exception('Error finding dynamic dependencies for %s', d)
         dependency_introspection.calculate_reverse_dependencies(
             d, injector=d.injector,
             reverse_dependencies=reverse_dependencies,

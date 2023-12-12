@@ -248,6 +248,9 @@ class NetworkedModel(ResolvableModel):
 
     network_links: typing.Mapping[str, carthage.network.NetworkLink]
 
+    #: A class of :class:`~carthage.network.TechnologySpecificNetwork` that will be instantiated for the links on this NetworkedModel.
+    network_implementation_class: carthage.network.TechnologySpecificNetwork = None
+
     async def resolve_networking(self, force: bool = False):
         '''
             Adds all :class:`carthage.network.NetworkLink` objects specified in the :class:`carthage.network.NetworkConfig`  to the network_links property.
@@ -278,7 +281,20 @@ class NetworkedModel(ResolvableModel):
     async def resolve_model(self, force:bool=False):
         await self.resolve_networking(force=force)
         return await super().resolve_model(force=force)
-    
+
+    async def dynamic_dependencies(self):
+        '''See :func:`carthage.deployment.Deployable.dynamic_dependencies` for documentation.
+        Returns technology specific networks for links where that is possible.
+        '''
+        if not self.network_implementation_class: return []
+        await self.resolve_networking()
+        results = []
+        network_class = self.network_implementation_class
+        for l in self.network_links.values():
+            if l.local_type: continue
+            instance = await l.net.access_by(network_class, ready=False)
+            results.append(instance)
+        return results
 
 class AbstractMachineModel(NetworkedModel):
 
