@@ -222,6 +222,13 @@ class FlagClearDecorator(ModelingDecoratorWrapper):
         state.flags &= ~self.flag
 
 
+def no_inject_name(val=None, /):
+    def wrap(v):
+        return FlagClearDecorator(v, NSFlags.instantiate_on_access|NSFlags.inject_by_name)
+    if val is not None:
+        return wrap(val)
+    else: return wrap
+    
 def no_instantiate():
     def wrapper(val):
         return FlagClearDecorator(val, NSFlags.instantiate_on_access)
@@ -400,7 +407,7 @@ class wrap_base_customization:
 
 
 __all__ = ["ModelingDecoratorWrapper", "provides", 'dynamic_name',
-           'injector_access', 'no_instantiate',
+           'injector_access', 'no_inject_name', 'no_instantiate',
            'allow_multiple', 'no_close',
            'globally_unique_key',
            'MachineMixin', 'machine_mixin',
