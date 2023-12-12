@@ -349,6 +349,26 @@ failed_instantiation_leaves: dict[tuple, FailedInstantiation] = {}
 
 __all__ += ['all_instantiation_failures', 'failed_instantiation_leaves']
 
+def calculate_reverse_dependencies(obj: object, /, injector,
+                                   *, reverse_dependencies: dict[object,set[object]],
+                                   filter=lambda o:True):
+    def visit(dependencies,val, cycle):
+        reverse_dependencies.setdefault(val, set())
+        for dependency in dependencies:
+            try:
+                inner_val = dependency.get_value(ready=False)
+            except KeyError: continue
+            if not filter(inner_val): continue
+            if inner_val in cycle: continue
+            found_dependency = True
+            if inner_val not in reverse_dependencies:
+                reverse_dependencies.setdefault(inner_val, set())
+            reverse_dependencies[inner_val] |= {val}
+            visit(get_dependencies_for(inner_val, dependency.injector), inner_val, cycle=cycle|{inner_val})
+            
+    visit(get_dependencies_for(obj, injector),
+          obj, {obj})
 
+__all__ += ['calculate_reverse_dependencies']
 
 from . import base

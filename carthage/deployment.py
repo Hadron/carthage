@@ -186,7 +186,7 @@ class DeploymentResult:
             if exception := future.exception():
                 if isinstance(exception, InjectionFailed) and exception.dependency_path:
                     self.dependency_failures.append(DeploymentFailure(
-                        deployable, exception=exception,
+                        deployable, exception=exception.__cause__,
                         dependency_path=exception.dependency_path))
                 else:
                     self.failures.append(DeploymentFailure(
@@ -492,3 +492,18 @@ async def run_deployment(
     return result
 
 __all__ += ['run_deployment']
+
+@inject(ainjector=AsyncInjector)
+async def find_deployables_reverse_dependencies(ainjector):
+    reverse_dependencies = {}
+    deployables = await ainjector(find_deployables,
+                                  recurse=True,
+                                  readonly=True)
+    for d in deployables:
+        dependency_introspection.calculate_reverse_dependencies(
+            d, injector=d.injector,
+            reverse_dependencies=reverse_dependencies,
+            filter=lambda d:isinstance(d,Deployable))
+    return reverse_dependencies
+
+__all__ += ['find_deployables_reverse_dependencies']
