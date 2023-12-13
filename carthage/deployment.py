@@ -84,6 +84,23 @@ __all__ += ['DryRun']
 class IgnoreDeployable(Exception):
     '''Raised to indicate that a deployable should be ignored
     '''
+
+class FailureList(list):
+
+    '''This is a list with the additional behavior that if a
+    deployable is passed into __contains__, then if a member is a
+    DeploymentFailure with deployable set to the deployable,
+    __contains__ will return true.  This allows syntax like::
+
+        if deployable in result.failures:
+            # do stuff
+
+    '''
+
+    def __contains__(self, item):
+        if isinstance(item, Deployable):
+            return any(x.deployable == item for x in self)
+        return super.__contains__(item)
     
     
 @dataclasses.dataclass(frozen=True)
@@ -114,8 +131,8 @@ __all__ += ['DeploymentFailure']
 class DeploymentResult:
 
     successes: list[Deployable] = dataclasses.field(default_factory=lambda: [])
-    failures: list[DeploymentFailure] = dataclasses.field(default_factory=lambda: [])
-    dependency_failures: list[DeploymentFailure] = dataclasses.field(default_factory=lambda: [])
+    failures: FailureList[DeploymentFailure] = dataclasses.field(default_factory=lambda: FailureList())
+    dependency_failures: FailureList[DeploymentFailure] = dataclasses.field(default_factory=lambda: FailureList())
 
     #: A Deployable can be not found either if it is readonly=True or
     #not found on a delete
