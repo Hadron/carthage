@@ -301,7 +301,7 @@ class Deployable(typing.Protocol):
 
     async def dynamic_dependencies(self):
         '''
-        Returns a iterable of dependencies that are dynamically used.  Typically used for better introspection and for calculating the order of destroy operations.  Examples include:
+        Returns a iterable of dependencies that are dynamically used.  Typically used for better introspection and for calculating the order of destroy operations.  Members of the iterable can be :class:Deployables <Deployable>` or :class:InjectionKeys <InjectionKey>` that are instantiated. Examples of dynamic dependencies include:
 
         * Dependencies on specific :class:`~carthage.network.TechnologySpecificNetwork` implementations from machines.
 
@@ -552,8 +552,11 @@ async def find_deployables_reverse_dependencies(*, readonly=False,
     for d in deployables:
         if hasattr(d, 'dynamic_dependencies'):
             try:
-                for dependency in await d.dynamic_dependencies():
-                    add_dependency(d, dependency)
+                with instantiation_not_ready():
+                    for dependency in await d.dynamic_dependencies():
+                        if isinstance(dependency,InjectionKey):
+                            dependency = await d.ainjector.get_instance_async(dependency)
+                        add_dependency(d, dependency)
             except:
                 logger.exception('Error finding dynamic dependencies for %s', d)
         dependency_introspection.calculate_reverse_dependencies(
