@@ -22,6 +22,7 @@ class MockDeployable(InjectableModel, SetupTaskMixin, AsyncInjectable):
     async def find_or_create(self):
         if res := await self.find():
             return res
+        if self.readonly: raise LookupError('readonly true')
         await self.do_create()
         if not await self.find():
             raise LookupError('Object failed to be found after creation')
@@ -31,14 +32,16 @@ class MockDeployable(InjectableModel, SetupTaskMixin, AsyncInjectable):
         return await self.find()
 
     async def find(self):
-        return self in deployed_deployables
+        return self.name in deployed_deployables
 
     async def do_create(self):
-        deployed_deployables.add(self)
+        deployed_deployables.add(self.name)
 
     async def delete(self):
-        deployed_deployables.remove(self)
+        deployed_deployables.remove(self.name)
 
+    async def dynamic_dependencies(self):
+        return []
     def __str__(self):
         return 'Deployable:'+self.name
 
@@ -69,8 +72,8 @@ def ainjector(ainjector):
     ainjector.add_provider(MockDeployableFinder)
     return ainjector
 
-    
-    
+
+
 @async_test
 async def test_run_deployment_simple(ainjector):
     class layout(CarthageLayout):
@@ -113,7 +116,7 @@ async def test_failure_detection(ainjector):
 
             async def do_create(self):
                 raise NotImplementedError("We're not quite there yet.")
-                
+
 
     ainjector.add_provider(layout)
     l = await ainjector.get_instance_async(CarthageLayout)
@@ -125,3 +128,92 @@ async def test_failure_detection(ainjector):
         run_deployment, deployables=result)
     assert l.software_without_bugs in [x.deployable for x in result_full_run.failures]
     assert l.good_software in [x.deployable for x in result_full_run.dependency_failures]
+
+@async_test
+async def test_deploy_destroy(ainjector):
+    class layout(CarthageLayout):
+
+        class delete_me_second(MockDeployable):
+
+            name = 'delete_me_second'
+
+            async def delete(self):
+                dependency = await self.ainjector.get_instance_async('simple_delete')
+                if await dependency.find():
+                    raise RuntimeError('You must delete simple_delete before delete_me_second')
+                await super().delete()
+
+            async def dynamic_dependencies(self):
+                return [InjectionKey('delete_me_third')]
+
+        @inject_autokwargs(
+            dependency=InjectionKey('delete_me_second'))
+        class simple_delete(MockDeployable):
+
+            name = 'simple_delete'
+
+            async def dynamic_dependencies(self):
+                return [InjectionKey('delete_me_third')]
+
+        class  delete_me_third(MockDeployable):
+
+            name = 'delete_me_third'
+
+        class dependency_failure(MockDeployable):
+
+            name = 'dependency_failure'
+
+
+        @inject_autokwargs(
+            dependency=InjectionKey('dependency_failure'))
+        class failing_delete(MockDeployable):
+
+            name = 'failing_delete'
+
+            async def delete(self):
+                raise RuntimeError('I have a bug in my delete function')
+
+
+        class readonly_not_deleted(MockDeployable):
+
+            name = 'readonly_not_deleted'
+
+            readonly = True
+
+        class retain_not_deleted(MockDeployable):
+
+            name = 'retain_not_deleted'
+
+            add_provider(destroy_policy, DeletionPolicy.retain)
+
+    ainjector.add_provider(layout)
+    l = await ainjector.get_instance_async(layout)
+    ainjector = l.ainjector
+    # We force create the readonly object
+    await l.readonly_not_deleted.do_create()
+    result_deploy = await ainjector(run_deployment)
+    assert result_deploy.is_successful()
+    result_dry_run = await ainjector(run_deployment_destroy, dry_run=True)
+    assert l.readonly_not_deleted in result_dry_run.ignored
+    assert l.retain_not_deleted in result_dry_run.ignored
+    assert l.simple_delete in result_dry_run.successes
+    result = await ainjector(run_deployment_destroy)
+    successes = result.successes
+    assert l.simple_delete in successes
+    assert l.delete_me_second in successes
+    assert l.delete_me_third in successes
+    assert len(successes) == 3
+    ignored = result.ignored
+    assert l.readonly_not_deleted in ignored
+    assert l.retain_not_deleted in ignored
+    assert len(ignored) == 2
+    assert l.failing_delete in result.failures
+    assert len(result.failures) == 1
+    assert l.dependency_failure in result.dependency_failures
+    assert len(result.dependency_failures) == 1
+    for d in successes:
+        assert not await d.find()
+    for d in await ainjector(find_deployables):
+        if d in successes: continue
+        assert await d.find()
+        
