@@ -688,10 +688,16 @@ async def run_deployment_destroy(
         deployables=deployables_list,
         )
     async def handle(d: Deployable):
+        '''Called once for each deployable whose  reverse dependencies have been handled. Responsible for filtering and deleting the object.
+        '''
         try:
             found = await find_deployable(d)
-            if not found: return False
-            if d.readonly is not DryRun or not filter(d):
+            if not found:
+                # if the object is not found it should not block reverse dependencies
+                good_to_go.add(d)
+                more_work()
+                return False
+            if d.readonly not in (DryRun, False, None) or not filter(d):
                 logger.debug('Ignoring %s and its reverse dependencies', d)
                 raise IgnoreDeployable
             policy = d.injector.get_instance(InjectionKey(destroy_policy, _optional=True))
