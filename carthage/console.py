@@ -212,6 +212,13 @@ class CarthageConsole(code.InteractiveConsole):
                     except InjectionFailed:
                         continue
 
+            # Unfortunately depending on when commands are registered
+            # by plugins, they are likely registered before the layout
+            # ainjector is established. Explicitly override the
+            # ainjector in the command so that it can access layout
+            # objects.
+            v.injector = ainjector.injector
+            v.ainjector = ainjector
             if await v.should_register():
                 v.register(subparser_action)
             subcommands[v.name] = v
