@@ -33,7 +33,12 @@ class ConfigString(str):
 
     * ``{plugin:selector}`` with the lookup of *selector* using the *plugin* :ref:`.ConfigLookupPlugin`
 
-    Backslash scapes the next character always; ``${var}`` is reserved for :ref:`ConfigPath` use.
+    * ``${var}`` the environment variable *var*
+
+    * ``${var-default}`` The environment variable *var* else *default*
+    
+
+    Backslash scapes the next character always;
 
     '''
 
@@ -43,16 +48,19 @@ class ConfigString(str):
             # takes an iterator to consume input characters
             lastch = None
             for c in i:
+                if lastch == '$' and c != '{':
+                    yield '$'
                 if lastch == '\\':
                     yield c
                 elif c == '\\':
                     # one backslash always eats itself.
                     pass
+                elif c == '$':
+                    # hold to see if next character is {
+                    pass
                 elif c == '{':
-                    if lastch == "$":
-                        yield '{'
-                        yield from tok(i, True)
-                        yield "}"
+                    if lastch == '$':
+                        yield from iter(cls.subst_var("".join(tok(i, True))))
                     else:
                         yield from iter(cls.subst(
                             "".join(tok(i, True)),
@@ -74,20 +82,32 @@ class ConfigString(str):
         return "".join(tok(iter(s), False))
 
     @staticmethod
+    def subst_var(s):
+        '''When parse encounters ${foo} in a pattern, it calls subst_var(foo); we handle environment substitutions like:
+
+        * ``foo``: look up ``foo in environment``
+
+        * ``foo-bar`` look up ``foo`` in environment; if not found return ``bar``
+
+        '''
+        var, sep, default = s.partition('-')
+        return os.environ.get(var, default)
+    
+    @staticmethod
     def subst(s, *, config, injector):
         plugin, sep, selector = s.partition(':')
         if sep == '':
-            return getattr_path(config, s)
+            return getattr_path(config, ConfigString.parse(s,config, injector))
         else:
             try:
                 plugin = injector.get_instance(InjectionKey(ConfigLookupPlugin, name=plugin))
             except KeyError:
                 raise KeyError(f'Config lookup plugin {plugin} not found') from None
-            return plugin(selector)
+            return plugin(ConfigString.parse(selector,config,injector))
 
     def __new__(cls, s, *, injector):
         config = injector(ConfigLayout)
-        return str.__new__(str, cls.parse(os.path.expandvars(s), config, injector))
+        return str.__new__(str, cls.parse(s, config, injector))
 
 
 @inject(
