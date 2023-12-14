@@ -9,6 +9,7 @@
 import sys
 from ipaddress import IPv6Address, IPv4Address, IPv4Network, IPv6Network
 from pathlib import Path
+import types
 from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies, InjectorClosed, InjectionFailed, injection_failed_unlogged
 
 
@@ -118,6 +119,8 @@ class ConfigSchema(metaclass=ConfigSchemaMeta, prefix=""):
         __slots__ = ('name', 'type', 'default', 'key')
 
         def __init__(self, name, type_, default):
+            if isinstance(type_, types.GenericAlias):
+                type_ = type_.__origin__
             assert isinstance(type_, type), f'{name} config key must be declared with a type not {type_}'
             if type_ is bool:
                 from .types import ConfigBool
