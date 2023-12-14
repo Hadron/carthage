@@ -34,8 +34,11 @@ __all__ += ['persistent_seed_path']
 
 
 from . import deployment
-from .deployment import  find_deployables, DeployableFinder
-__all__ += ['find_deployables', 'DeployableFinder']
+from .deployment import  find_deployables, DeployableFinder, run_deployment, run_deployment_destroy, find_deployable, destroy_policy, DeletionPolicy
+__all__ += ['find_deployable', 'find_deployables', 'DeployableFinder',
+            'run_deployment', 'run_deployment_destroy',
+            'destroy_policy', 'DeletionPolicy']
+
 
 from .network import Network, NetworkConfig, MacStore, V4Config, V4Pool
 
@@ -110,10 +113,13 @@ base_injector.add_provider(InjectionKey(carthage.ssh.SshAgent), carthage.ssh.ssh
 base_injector.add_provider(carthage.pki.PkiManager)
 base_injector(carthage.cloud_init.enable_cloud_init_plugins)
 
-
 __all__ += ['base_injector']
 
 base_injector(plugins.load_plugin_from_package, sys.modules[__name__])
+
+# Things that need to import after base_injector is defined
+from . import deployment_commands
+base_injector(deployment_commands.register)
 
 @atexit.register
 def __done():
