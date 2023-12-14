@@ -124,12 +124,24 @@ class DeploymentFailure:
     dependency_path: typing.Sequence[InjectionKey] = None
     depended_deployables: list[Deployable] = None
 
+    def __str__(self):
+        res = str(self.deployable)+':'
+        if self.exception: res += str(self.exception)
+        if self.depended_deployables:
+            for d in self.depended_deployables:
+                res += f"\n    * failing dependency: {d}"
+        elif self.dependency_path:
+            res += f"\n    * Failing dependency: {self.dependency_path!r}"
+        return res
+    
 __all__ += ['DeploymentFailure']
 
 
 @dataclasses.dataclass
 class DeploymentResult:
 
+    #: What kind of deployment
+    method: str
     successes: list[Deployable] = dataclasses.field(default_factory=lambda: [])
     failures: FailureList[DeploymentFailure] = dataclasses.field(default_factory=lambda: FailureList())
     dependency_failures: FailureList[DeploymentFailure] = dataclasses.field(default_factory=lambda: FailureList())
@@ -149,6 +161,70 @@ class DeploymentResult:
 
     def is_successful(self):
         return self.successes and  not (self.failures or self.dependency_failures or self.instantiation_failure_leaves)
+
+    def report(self, *, dry_run=False):
+        '''Print a human readable deployment report
+        '''
+        success = self.is_successful()
+        result = ""
+        if dry_run:
+            result += f'''
+# Deployment Analysis
+
+Will {self.method} the following objects:
+
+'''
+        else:
+            result += f'''
+# Deployment Report {"(failing)" if not success else ""}
+
+Ran {self.method} on the following objects successfully:
+
+'''
+        for s in self.successes:
+            result += f"* {s}\n"
+        if self.failures:
+            result += "\n## Deployment Failures\n\n"
+            for f in self.failures:
+                result +=f"* {f}\n"
+        if self.dependency_failures:
+            result += "\n## Dependency Failures\n\n"
+            for df in self.dependency_failures:
+                result += f"* {df}\n"
+        if self.not_found:
+            result += "\n## Objects not Found\n\n"
+            for nf in self.not_found:
+                result += f"* {nf}\n"
+        if self.ignored:
+            result += "\n## Objects Ignored\n\n"
+            for ign in self.ignored:
+                result += f"* {ign}\n"
+        result += "\n"
+        result += self.summary(dry_run=dry_run)
+        return result
+
+
+    def summary(self, dry_run=False):
+        '''One line summary of the result
+        '''
+        success = self.is_successful()
+        result = ""
+        if success: result += "Successful "
+        if dry_run:
+            result += "dry run"
+        else:
+            result += self.method+" "
+        result += f'successes:{len(self.successes)}'
+        if self.failures: result += f' failures:{len(self.failures)}'
+        if self.dependency_failures: result += f' dependency failures:{len(self.dependency_failures)}'
+        if self.not_found: result += f' not_found:{len(self.not_found)}'
+        if self.ignored: result += f' ignored:{len(self.ignored)}'
+        return result
+
+    def __str__(self):
+        return self.report(dry_run=False)
+    
+        
 
     def __contains__(self, d:Deployable):
         if d in self.successes:
@@ -239,9 +315,9 @@ class DeploymentIntrospection(dependency_introspection.BaseInstantiationContext)
     '''
     Groups all the dependency operations in a deployment together for instantiation_roots'''
 
-    def __init__(self, injector, method, result:DeploymentResult):
+    def __init__(self, injector, result:DeploymentResult):
         super().__init__(injector=injector)
-        self.method = method
+        self.method = result.method
         self.result = result
         self.exit_stack = contextlib.ExitStack()
 
@@ -512,9 +588,9 @@ async def run_deployment(
                 readonly=find_readonly,
                 # Not recursive until we are looking at delete_orphans.
             )
-    result = DeploymentResult()
+    result = DeploymentResult('deploy')
     futures = []
-    with DeploymentIntrospection(ainjector.injector, 'deploy', result):
+    with DeploymentIntrospection(ainjector.injector, result):
         for d in deployables_list:
             if not dry_run:
                 if d.readonly:
@@ -672,8 +748,8 @@ async def run_deployment_destroy(
     submitted = set()
     futures = []
     good_to_go = set()
-    result = DeploymentResult()
-    with DeploymentIntrospection(ainjector.injector, 'destroy', result):
+    result = DeploymentResult('destroy')
+    with DeploymentIntrospection(ainjector.injector, result):
         more_work()
         while futures:
             futures_last_round = futures
