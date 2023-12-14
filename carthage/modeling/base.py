@@ -94,6 +94,30 @@ class InjectableModel(Injectable, metaclass=InjectableModelType):
     def __init_subclass__(cls, *args, template=False, **kwargs):
         super().__init_subclass__(*args, **kwargs)
 
+    def __str__(self):
+        keys = []
+        for a in ('__container_propagation_keys__', '__provides_dependencies_for__'):
+            res = getattr(self, a, None)
+            if res:
+                keys = res
+                break
+        if not keys: return super().__str__()
+        keys = list(keys)
+        # We want globally_unique is True to sort before
+        # globally_unique False and then most constraints first.
+        # So that's reversed of globally_unique followed by len(constraints)
+        keys.sort(key=lambda k: (k.globally_unique, len(k.constraints)), reverse=True)
+        result_key = keys[0]
+        if isinstance(result_key.target, type):
+            result = [result_key.target.__name__]
+        else: result = [str(result_key.target)]
+        result += [f"{k}={v}" for k,v in result_key.constraints.items()]
+        if len(result) > 1:
+            return result[0]+":"+(" ".join(result[1:]))
+        else: return result[0]
+        
+    
+        
 
 __all__ += ['InjectableModel']
 
