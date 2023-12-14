@@ -91,8 +91,10 @@ Update a DNS zone when :class:`NetworkLinks` gain a public IP address.  This can
             zone = await self.ainjector.get_instance_async(InjectionKey(DnsZone, role='public_zone', _ready=True, _optional=True))
         if zone is None and link.public_dns_name:
             logger.error(f'No public zone found for {name}')
+            return
         elif zone is None:
             logger.debug(f'No public zone found for {name}, but it may not be required')
+            return
             
         if not zone.contains(name):
             logger.error(f'Not setting DNS for {model}: {name} does not fall within {zone.name}')
