@@ -128,6 +128,7 @@ async def test_failure_detection(ainjector):
         run_deployment, deployables=result)
     assert l.software_without_bugs in [x.deployable for x in result_full_run.failures]
     assert l.good_software in [x.deployable for x in result_full_run.dependency_failures]
+    print(result_full_run)
 
 @async_test
 async def test_deploy_destroy(ainjector):
@@ -198,6 +199,7 @@ async def test_deploy_destroy(ainjector):
     assert l.retain_not_deleted in result_dry_run.ignored
     assert l.simple_delete in result_dry_run.successes
     result = await ainjector(run_deployment_destroy)
+    print(result)
     successes = result.successes
     assert l.simple_delete in successes
     assert l.delete_me_second in successes
