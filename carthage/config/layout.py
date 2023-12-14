@@ -111,6 +111,7 @@ class ConfigLayout(ConfigAccessor, Injectable):
             del d['plugins']
         if 'include' in d:
             for include in d['include']:
+                include = injector(ConfigPath, include)
                 include = base_path.joinpath(include)
                 with include.open("rt") as include_file:
                     self.load_yaml(include_file, ignore_import_errors=ignore_import_errors)
