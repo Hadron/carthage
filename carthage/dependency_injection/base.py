@@ -1385,6 +1385,7 @@ class InjectorXrefMarkerMeta(type):
             return hash(self.target_key)
 
     def __eq__(self, other):
+        if not isinstance(other, InjectorXrefMarkerMeta): return NotImplemented
         if getattr(self, 'injectable_key', None) != getattr(other, 'injectable_key', None): return False
         if self.target_key != other.target_key: return False
         return True
