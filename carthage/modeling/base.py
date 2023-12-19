@@ -28,7 +28,9 @@ __all__ = []
 
 
 def dependency_quote_class(c: type):
-    "When *c* is injected in a model, dependency_quote the result"
+    """
+    When *c* is injected in a model, dependency_quote the result
+    """
     from .implementation import classes_to_quote
     classes_to_quote.add(c)
 
@@ -38,8 +40,18 @@ __all__ += ['dependency_quote_class']
 
 @inject_autokwargs(injector=Injector)
 class InjectableModel(Injectable, metaclass=InjectableModelType):
+    """
+    The ``InjectableModel`` uses the injected :class:`Injector` ``injector`` to manage the set of dependencies.
 
-    def __init__(self, *args, _not_transcluded=None, **kwargs):
+    Any model that is an ``InjectableModel`` will filter out dependencies based upon the ``_not_transcluded`` items.
+    """
+
+    injector: Injector
+    __transclusions__: dict
+    _already_instantiated: bool
+    __initial_injections__: dict
+
+    def __init__(self, *args, _not_transcluded:dict={}, **kwargs):
         self.__class__._already_instantiated = True # no more calling modelmethods
         super().__init__(*args, **kwargs)
         injector = self.injector
@@ -47,20 +59,32 @@ class InjectableModel(Injectable, metaclass=InjectableModelType):
         ignored_keys = set()
         parent_injector = injector.parent_injector
         not_transcluded = set()
-        if _not_transcluded: not_transcluded.update(_not_transcluded)
+        if _not_transcluded: 
+            not_transcluded.update(_not_transcluded)
         for k, to_ignore in self.__transclusions__.items():
-            if k in not_transcluded: continue
-            target = parent_injector.injector_containing(k)
+            if k in not_transcluded: 
+                continue
+
+            if parent_injector is not None:
+                target = parent_injector.injector_containing(k)
+            else:
+                raise ValueError("parent_injector can not be None")
+
             if target:
                 ignored_keys |= to_ignore
+
                 # For each alias that a transcluded item may be known by, set up an injector_xref back to the base transcluded key
                 for alias in to_ignore:
                     if alias is k: continue # It's the primary key
-                    try: injector.add_provider(alias, injector_xref(None, k))
-                    except ExistingProvider: pass
+                    try: 
+                        injector.add_provider(alias, injector_xref(None, k))
+                    except ExistingProvider: 
+                        pass
             else: not_transcluded |= to_ignore
-        if not_transcluded: self.injector.add_provider(not_transcluded_key, not_transcluded)
+        if not_transcluded: 
+            self.injector.add_provider(not_transcluded_key, not_transcluded)
         self.ignored_by_transclusion = frozenset(ignored_keys)
+
         # This is complicated because we want to reuse the same
         # DependencyProvider when registering the same value more than
         # once so that instantiations alias and we don't accidentally
@@ -88,7 +112,7 @@ class InjectableModel(Injectable, metaclass=InjectableModelType):
 
         for c in reversed(self.__class__.__mro__):
             if isinstance(c, ModelingBase) and hasattr(c, '_callbacks'):
-                for cb in c._callbacks:
+                for cb in c._callbacks:  # type: ignore -- ignore type checking when existstance of _callbacks is possible at runtime
                     cb(self)
 
     def __init_subclass__(cls, *args, template=False, **kwargs):

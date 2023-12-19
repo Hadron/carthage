@@ -25,6 +25,8 @@ from .. import tb_utils, event
 from .introspection import *
 from ..utils import NotPresent
 
+from typing import Optional
+
 _chatty_modules = {asyncio.futures, asyncio.tasks, sys.modules[__name__]}
 logger = logging.getLogger('carthage.dependency_injection')
 logger.setLevel('INFO')
@@ -368,11 +370,20 @@ class Injector(Injectable, event.EventListener):
         raise KeyError("{} not found".format(k))
 
     def injector_containing(self, k):
-        '''
-Return the first injector in our parent chain containing *k* or None if there is no such injector.
+        """
+        Return the first injector in our parent chain containing ``k`` or ``None`` if there is no such injector.
 
-        If *k* has not yet been instantiated, this injector would be the one against which the instantiation is recorded unless the provider was added with the *allow_multiple* argument to :meth:`add_provider()`.
-        '''
+        If ``k`` has not yet been instantiated, this injector would be the one against which the instantiation 
+        is recorded unless the provider was added with the ``allow_multiple`` argument to :meth:`add_provider()`.
+        
+        :param k: An :class:`InjectionKey` or a type or other object representing what is desired.
+            * A type indicating an object of that type is desired
+            * An object such as a string that is a unique identifier for what is desired
+
+        :returns: Injector or None 
+        :rtype: :class:`Injector`, None
+
+        """
         if not isinstance(k, InjectionKey):
             k = InjectionKey(k)
         injector = self
@@ -1430,11 +1441,8 @@ class InjectorXrefMarker(AsyncInjectable, metaclass=InjectorXrefMarkerMeta):
         return await self.ainjector.get_instance_async(self.target_key)
 
 
-def injector_xref(injectable_key: InjectionKey,
-                  target_key: InjectionKey,
-                  ):
+def injector_xref(injectable_key: Optional[InjectionKey]=None, target_key: Optional[InjectionKey]=None):
     '''
-
     Request that one injector look up a target in another injector.  Typical usage::
 
         base_injector.add_provider(target_key,
