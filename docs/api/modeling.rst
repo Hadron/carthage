@@ -3,7 +3,6 @@
 Modeling Layer
 ==============
 
-.. py:currentmodule:: carthage.modeling
 
 Classes like :class:`carthage.Network` and :class:`carthage.machine.AbstractMachineModel` provide an abstract interface to infrastructure resources.
 
@@ -38,44 +37,7 @@ Model classes sometimes involve a new construct called a **modelmethod**.  Unlik
       add_provider(InjectionKey("baz"), Network)
 
 
-.. class:: ModelingBase
-
-    All modeling classes derive their type from *ModelingBase* and have the following behaviors:
-
-    * Unlike normal Python, an inner class can access the attributes of an outer class while the class body is being defined::
-
-        class foo(metaclass  = ModelingBase):
-            attr = 32
-            b = attr+1
-            class bar(metaclass = ModelingBase):
-                a = b+1
-                attr = 64
-
-      In the above example, while the body of *bar* is being defined, *attr* and *b* are available.
-
-      However, only variables that are actually set in a class body survive into the actual class.  So in the above example, ``foo.bar.a`` and ``foo.bar.attr`` are set in the resulting class.  While it was used in the class body, ``foo.bar.b`` will raise :exc:`AttributeError`.  If an attribute should be copied into an inner class, the following will work::
-
-        class outer(metaclass = ModelingBase):
-            outer_attr = []
-            class inner(metaclass = ModelingBase):
-                outer_attr = outer_attr
-
-    * ModelingBases support the :ref:`modeling decorators <modeling:decorators>`.
-
-    * The :func:`dynamic_name` decorator can be used to change the name under which an assignment is stored.  This permits programatic creation of several classes in a loop::
-
-        class example(metaclass = ModelingBase):
-
-            # create a machine for each user
-            for u in users:
-                @dynamic_name(f'{u}_workstation')
-                class workstation(MachineModel): # ...
-            del u #to avoid polluting class namespace Now we have
-            #several workstation inner classes, named based on the
-            #argument to dynamic_name rather than each being called
-            #workstation.
-
-      The dynamic_name decorator is particularly useful with :ref:`injectors <modeling:dynamic_name_injectors>` where it can be used to build up a set of machines that can be selected using :meth:`.Injector.filter_instantiate`.
+.. autoclass:: carthage.modeling.implementation.ModelingBase
 
 .. class:: InjectableModel
     InjectableModelType
@@ -201,6 +163,7 @@ Modeling containers provide upward propagation so these calls work:
 
 
 
+.. py:currentmodule:: carthage.modeling
 
 Base Models
 ***********
