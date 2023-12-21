@@ -1,6 +1,6 @@
-Setup Tasks
-===========
+Carthage Setup Tasks Module
+==========================
 
-.. automodule: carthage.setup_tasks
+.. automodule:: carthage.setup_tasks
    :members:
       
