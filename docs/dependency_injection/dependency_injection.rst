@@ -13,7 +13,7 @@ Often in developing IAC systems, the part of the system that needs to know somet
 How Dependency Injection Works
 ******************************
 
-An object such as a function or class declares dependencies using :func:`inject`\ ::
+An object such as a function or class declares dependencies using :func:`inject <carthage.dependency_injection.base.inject>`\ ::
 
   @inject(connect_to = Network)
   def build_workstation(name, *, connect_to: Network):
@@ -45,7 +45,7 @@ Injectors and Classes
       def do_something(self):
           print(self.this_network)
 
-The :func:`inject_autokwargs` decorator works like *inject* except that it raises :exc:`TypeError` if the parameter is not specified either by a caller or an injector.  :meth:`Injectable.__init__` examines dependencies associated with the class and sets an attribute on *self* capturing any provided dependency.
+The :func:`inject_autokwargs <carthage.dependency_injection.base.inject_autokwargs>` decorator works like *inject* except that it raises :exc:`TypeError` if the parameter is not specified either by a caller or an injector.  :meth:`Injectable.__init__` examines dependencies associated with the class and sets an attribute on *self* capturing any provided dependency.
 
 Injection Keys
 **************
