@@ -1,5 +1,6 @@
-File Copying and Insertion
-==========================
+Carthage Files Module
+=====================
+
 .. automodule:: carthage.files
    :members:
       

@@ -11,5 +11,3 @@ API Documentation
    images
    ssh
    files
-
-   

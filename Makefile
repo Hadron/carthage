@@ -17,9 +17,12 @@ test_env: $(DIST) $(WHEEL)
 	cp --reflink=auto $(WHEEL) build_test
 	podman build -t carthage:test build_test
 
+
 test: test_env
 	podman run -ti --rm --privileged carthage:test sh -c 'set -e&&cd /carthage/*&&pytest-3 --carthage-config=/authorized.yml -k "not no_rootless and not test_pki" tests'
 
+build_docs:
+	podman run -ti --rm --privileged -v $(PWD):/carthage carthage:test sh -c 'set -e&&cd /carthage/docs&&ls&&./setup_docs.sh'
 
 destroy:
 	-podman rmi carthage:test
@@ -29,5 +32,5 @@ clean: destroy
 	rm -rf carthage.egg-info dist tmp
 	-find . -name __pycache__ -exec rm -rf '{}' \; 2>/dev/null
 
-.PHONY : clean destroy test dist build test_env
+.PHONY : clean destroy test dist build test_env build_docs
 
