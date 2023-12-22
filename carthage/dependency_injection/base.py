@@ -1001,7 +1001,7 @@ class UnsatisfactoryDependency(RuntimeError):
 
 
 def inject(**dependencies):
-    '''A dhecorator to indicate that a function requires dependencies:
+    '''A decorator to indicate that a function requires dependencies:
 
     Sample Usage::
 
