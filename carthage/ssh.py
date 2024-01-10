@@ -32,7 +32,7 @@ class RsyncPath:
         return f'<Rsync {self.machine}:{self.path}>'
 
     def __str__(self):
-        return f'{self.machine.ip_address}:{self.path}'
+        return f'{ssh_user_addr(self.machine)}:{self.path}'
 
     @property
     def relpath(self):
@@ -237,4 +237,39 @@ class SshAgent(Injectable):
 
 ssh_agent = when_needed(SshAgent)
 
-__all__ = ('SshKey', 'ssh_agent', 'SshAgent', 'RsyncPath', 'rsync')
+def ssh_user_addr(machine):
+    '''Returns a string like ``root@test.example.com`` from a model
+    with *ip_address* of ``test.example.com`` and *ssh_login_user* of
+    ``root``.
+
+    :param machine: a :class:`~carthage.machine.Machine` or something else with *ip_address* and *ssh_login_user*.
+
+    This handles things like ssh_login_user being None.
+
+    Note that :meth:`carthage.machine.Machine.ip_address` can best be thought of as the endpoint to connect to for management of a machine.  It is often but not always an ip_address.
+    
+    '''
+    user = machine.ssh_login_user
+    connection = machine.ip_address
+    if user: return user+'@'+connection
+    return connection
+
+@inject(jump_host=InjectionKey('ssh_jump_host', _optional=True))
+def ssh_handle_jump_host(jump_host):
+    '''
+        Returns ssh options for connecting to a jump host.  If *jump_host* is None, returns an empty tuple.
+
+        If *jump_host* is a string, returns that string.
+
+        If jump_host is a Machine or MachineModel, calculates the appropriate jump host specification assuming that machine is to be used.
+        '''
+    if jump_host is None: return tuple()
+    if isinstance(jump_host, str): return ('-oProxyJump='+jump_host,)
+    try:
+        return ('-oProxyJump='+ssh_user_addr(jump_host),)
+    except AttributeError:
+        raise AttributeError(f'{jump_host!r} is not a valid jump host')
+            
+__all__ = ('SshKey', 'ssh_agent', 'SshAgent', 'RsyncPath', 'rsync',
+           'ssh_user_addr', 'ssh_handle_jump_host',
+           )

@@ -19,7 +19,7 @@ from pathlib import Path
 
 from .dependency_injection import *
 from .config import ConfigLayout
-from .ssh import SshKey, SshAgent, RsyncPath
+from .ssh import SshKey, SshAgent, RsyncPath, ssh_user_addr, ssh_handle_jump_host
 from .utils import memoproperty
 from . import sh
 import carthage.ssh
@@ -67,13 +67,29 @@ class MachineRunning:
 ssh_origin = InjectionKey('ssh-origin')
 ssh_origin_vrf = InjectionKey("ssh-origin-vrf")
 
+#: A :class:`Machine` to use as a jump host.
+ssh_jump_host = InjectionKey('ssh_jump_host')
+
 
 class SshMixin:
-    '''An Item that can be sshed to.  Will look for the ssh_origin
-    injection key.  If found, this should be a container.  The ssh will be
-    launched from within the network namespace of that container in order
-    to reach the appropriate devices.  Requires ip_address to be made
-    available.  Requires an carthage.ssh.SshAgent be injectable.
+    '''
+    An item that accepts ssh connections.
+
+    :attr:`ip_address` represents  the endpoint to connect to in order to manage the resource via ssh.  In early Carthage development, this was always an IP address. More recently, this can be an IP address or hostname.
+
+    The :data:`ssh_origin` injection key is used to look up a :class:`~carthage.container.Container` from which  the ssh should be run.  If *ssh_origin* is provided by the injector hierarchy, then Carthage enters the network namespace of the Container before running ssh. Note that the mount namespace is not typically used, so the host's ssh binary and keys are used.  There is support for using a Linux VRF within the namespace; see :func:`carthage.network.access_ssh_origin` for details.
+
+    If the injector hierarchy provides :data:`ssh_jump_host`, then that is used as a *ProxyJump* host.
+
+    If neither *ssh_origin* nor *ssh_jump_host* are provided then Carthage connects directly to *ip_address*.
+
+    If *ssh_origin* is provided but not *ssh_jump_host*, then Carthage enters the network namespace of *ssh_origin* and connects to *ip_address* within the context of that namespace (possibly within a VRF within that namespace). DNS resolution for the connection to *ip_address* may be performed by the host in the host's network namespace (systemd-resolved'sNSS plugin or similar) or it may be performed in the *ssh_origin* network namespace using the host's nameserver configuration.  It is best if *ip_address* actually is an IP address to avoid this ambiguity.
+
+    If *ssh_jump_host* is provided but not *ssh_origin*, then Carthage first connects to *ssh_jump_host* and tunnels a connection to *ip_address* within the jump host connection. The DNS resolution for the connection to *ip_address* is performed by the jump host; the DNS resolution for the connection to the jump host is performed by the host.
+
+    If both *ssh_origin* and *ssh_jump_host* are provided:  Carthage enters the namespace of *ssh_origin*.  Within that namespace it establishes an ssh connection to *ssh_jump_host*.  Over that connection it tunnels to *ip_address*. DNS resolution for the connection to *ssh_jump_host* is ambiguous; it is best if *ip_address* is an IP address in this case.  DNS resolution to *ip_address* is performed by *ssh_jump_host*.
+
+
     '''
 
     _ssh_online_required = True
@@ -88,9 +104,20 @@ class SshMixin:
 
     @memoproperty
     def ssh_options(self):
+        jump_host_options = ssh_handle_jump_host(self.ssh_jump_host)
         if hasattr(self.model, 'ssh_options'):
-            return self.model.ssh_options
-        return ('-lroot', )
+            return self.model.ssh_options + jump_host_options
+        return jump_host_options
+
+    @memoproperty
+    def ssh_jump_host(self):
+        '''
+        An :class:`SshMixin` or string to use as a jump host.
+        '''
+        return self.injector.get_instance(InjectionKey(ssh_jump_host, _ready=False, _optional=True))
+
+    #: The remote user to ssh into
+    ssh_login_user = 'root'
 
     @memoproperty
     def ssh_online_retries(self):
@@ -134,13 +161,13 @@ class SshMixin:
                 *key_options,
                 *options,
                 *self.config_layout.global_ssh_options.split(),
-                ip_address,
+                ssh_user_addr(self),
                 _env=ssh_agent.agent_environ)
         else:
             return sh.ssh.bake(*key_options,
                                *options,
                                *self.config_layout.global_ssh_options.split(),
-                               self.ip_address,
+                               ssh_user_addr(self),
                                _env=ssh_agent.agent_environ)
 
     def rsync(self, *args):
@@ -566,7 +593,7 @@ it works like :meth:`carthage.container.Container.container_command` and is used
         return sh.sshfs(
             '-o' 'ssh_command=' + " ".join(
                 str(self.ssh).split()[:-1]),
-            f'{self.ip_address}:/',
+            f'{ssh_user_addr(self)}:/',
             self.sshfs_path,
             '-f',
             _bg=True,
@@ -701,7 +728,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
                  'name', 'full_name',
                  'apply_customization'):
             return getattr(self.host, a)
-        raise AttributeError(f"'{self}' has no attribute '{a}'")
+        raise AttributeError(f"'{self!r}' has no attribute '{a}'")
 
     def __repr__(self):
         return f"<{self.__class__.__name__} description:\"{self.description}\" for {self.host.name}>"
@@ -894,6 +921,7 @@ def disk_config_from_model(model, default_disk_config):
 
 __all__ = ['AbstractMachineModel',
            'ssh_origin',
+           'ssh_jump_host',
            'Machine', 'MachineRunning', 'BareMetalMachine',
            'ResolvableModel', 'NetworkedModel',
            'SshMixin', 'BaseCustomization', 'ContainerCustomization',

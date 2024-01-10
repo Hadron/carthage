@@ -46,7 +46,7 @@ __all__ += ['Network', 'NetworkConfig', 'MacStore', 'V4Config', 'V4Pool']
 
 
 
-from .machine import Machine, AbstractMachineModel, MachineCustomization, ContainerCustomization, FilesystemCustomization, customization_task, BareMetalMachine
+from .machine import ssh_jump_host, Machine, AbstractMachineModel, MachineCustomization, ContainerCustomization, FilesystemCustomization, customization_task, BareMetalMachine
 import carthage.ssh  # ssh import must come after machine
 from .ssh import RsyncPath
 import carthage.pki
@@ -55,7 +55,7 @@ from . import cloud_init
 from .files import rsync_git_tree, git_tree_hash
 
 
-__all__ += ['Machine', 'rsync_git_tree',
+__all__ += ['ssh_jump_host', 'Machine', 'rsync_git_tree',
             'git_tree_hash',
             'RsyncPath',
             'AbstractMachineModel', 'MachineCustomization',
