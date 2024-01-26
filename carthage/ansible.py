@@ -162,13 +162,13 @@ class AnsibleInventory(AsyncInjectable):
             if 'ansible_host' not in var_dict:
                 try:
                     var_dict['ansible_host'] = m.ip_address
-                except BaseException:
+                except Exception:
                     pass
             if 'ansible_ssh_common_args' not in var_dict:
                 try:
                     if ssh_options := m.ssh_options:
                         var_dict['ansible_ssh_common_args'] = " ".join(ssh_options)
-                except BaseException:
+                except Exception:
                     pass
             hosts_dict[machine_name] = var_dict
             groups = []
