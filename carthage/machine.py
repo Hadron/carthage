@@ -116,7 +116,18 @@ class SshMixin:
         '''
         return self.injector.get_instance(InjectionKey(ssh_jump_host, _ready=False, _optional=True))
 
-    #: The remote user to ssh into
+    @memoproperty
+    def ssh_login_user(self):
+        '''
+        The ssh user to log in as. Defaults to root, can be set either on the machine or the model.
+        '''
+        try:
+            if self.model.ssh_login_user:
+                return self.model.ssh_login_user
+        except AttributeError:
+            pass
+        return 'root'
+        
     ssh_login_user = 'root'
 
     @memoproperty
