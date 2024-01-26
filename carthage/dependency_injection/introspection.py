@@ -12,6 +12,8 @@ import contextvars
 import dataclasses
 import traceback
 
+from ..utils import memoproperty
+
 _current_instantiation = contextvars.ContextVar('current_instantiation', default=None)
 
 __all__ = []
@@ -255,6 +257,9 @@ class AsyncBecomeReadyContext(BaseInstantiationContext):
     def __init__(self, obj, dependency_key):
         super().__init__(obj.injector)
         if dependency_key is not None:
+            # Setting self.key to None may make the instantiation
+            # failed tracking mechanisms sad; they may expect that key
+            # is always an InjectionKey if present, so check with hasattr before accessing key.
             self.key = dependency_key
         self.obj = obj
         self.entered = False
@@ -275,7 +280,10 @@ class AsyncBecomeReadyContext(BaseInstantiationContext):
         elif isinstance(parent,AsyncBecomeReadyContext) and self.obj is parent.obj:
             return parent
         self.entered = True
-        return super().__enter__()
+        res =  super().__enter__()
+        if self.parent:
+            self.parent.dependency_progress(self.dependency_key, self)
+        return res
 
     def __exit__(self, *args):
         if self.entered:
@@ -289,6 +297,20 @@ class AsyncBecomeReadyContext(BaseInstantiationContext):
     def get_dependencies(self):
         return get_dependencies_for(self.obj, self.obj.injector)
 
+    def done(self):
+        super().done()
+        if self.entered and self.parent:
+            self.parent.dependency_final(self.dependency_key, self)
+
+    @memoproperty
+    def dependency_key(self):
+        if hasattr(self, 'key'):
+            return self.key
+        try:
+            return str(self.obj)
+        except Exception:
+            return repr(self.obj)
+    
 
 __all__ += ['AsyncBecomeReadyContext']
 
