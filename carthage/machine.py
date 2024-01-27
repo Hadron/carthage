@@ -128,7 +128,6 @@ class SshMixin:
             pass
         return 'root'
         
-    ssh_login_user = 'root'
 
     @memoproperty
     def ssh_online_retries(self):
