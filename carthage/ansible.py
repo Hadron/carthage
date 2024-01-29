@@ -446,8 +446,7 @@ async def run_play(hosts, play,
                 'remote_user': 'root',
                 'gather_facts': gather_facts,
                 'tasks': play}]
-            if callable(vars):
-                vars = await ainjector(vars)
+            vars = await resolve_deferred(ainjector, item=vars, args={})
             if vars:
                 pb[0]['vars'] = vars
             f.write(yaml.dump(pb, default_flow_style=False))
