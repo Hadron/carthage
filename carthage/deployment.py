@@ -588,15 +588,21 @@ async def find_orphan_deployables(
         deployables = list(deployables)
     #handle dynamic_dependencies
     dynamic_dependencies: list[Deployable] = []
-    for d in deployables:
-        if not hasattr(d, 'dynamic_dependencies'):
-            continue
-        with instantiation_not_ready():
-            for dynamic in await d.dynamic_dependencies():
-                if isinstance(dynamic, InjectionKey):
-                    dynamic = await d.ainjector.get_instance_async(dynamic)
-                dynamic_dependencies.append(dynamic)
-    deployables.extend(dynamic_dependencies)
+    this_round = deployables
+    while this_round:
+        for d in this_round:
+            if not hasattr(d, 'dynamic_dependencies'):
+                continue
+            with instantiation_not_ready():
+                for dynamic in await d.dynamic_dependencies():
+                    if isinstance(dynamic, InjectionKey):
+                        dynamic = await d.ainjector.get_instance_async(dynamic)
+                    dynamic_dependencies.append(dynamic)
+        this_round = []
+        for d in dynamic_dependencies:
+            if d not in deployables:
+                deployables.append(d)
+                this_round.append(d)
     deployables = [ d for d in deployables
                     if await ainjector(find_deployable, d)]
     res = ainjector.filter_instantiate(DeployableFinder, ['name'])
@@ -604,6 +610,15 @@ async def find_orphan_deployables(
     orphans = []
     for finder in finders:
         orphans.extend(await ainjector(finder.find_orphans, deployables))
+        for d in orphans:
+            o.readonly = DryRun
+    async def orphan_filter(o):
+        if await ainjector(find_deployable, o):
+            return True
+        else:
+            logger.debug(f'{o} is not an orphan because it does not exist')
+            return False
+    orphans =  [o for o in orphans if await orphan_filter(o)]
     return orphans
 
 __all__ += ['find_orphan_deployables']
