@@ -34,8 +34,12 @@ __all__ += ['persistent_seed_path']
 
 
 from . import deployment
-from .deployment import  find_deployables, DeployableFinder, run_deployment, run_deployment_destroy, find_deployable, destroy_policy, DeletionPolicy
+from .deployment import  (
+    find_deployables, DeployableFinder,
+    find_orphan_deployables,
+    run_deployment, run_deployment_destroy, find_deployable, destroy_policy, DeletionPolicy)
 __all__ += ['find_deployable', 'find_deployables', 'DeployableFinder',
+            'find_orphan_deployables',
             'run_deployment', 'run_deployment_destroy',
             'destroy_policy', 'DeletionPolicy']
 

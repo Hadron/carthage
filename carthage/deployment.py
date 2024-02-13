@@ -1,4 +1,4 @@
-# Copyright (C) 2023, Hadron Industries, Inc.
+# Copyright (C) 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -417,6 +417,32 @@ class DeployableFinder(AsyncInjectable):
         '''
         raise NotImplementedError
 
+    async def find_orphans(self, deployables:list[Deployable]):
+        '''
+        Returns an iterable of :class:`Deployables <Deployable>`
+        that are orphaned. Orphaned deployables are deployables that
+        used to be deployed by the layout but are no longer produced
+        by the layout.
+
+        :param deployables: The set of deployables that would be
+        produced by this layout.  :func:`find_deployable` will already
+        be called by each such Deployable; Deployables that are not
+        found will be filtered out of the iteration.  *find_orphans*
+        must not return any deployable whose underlying object
+        represents the same object as one of these input deployables.
+        Note that this input is all deployables found by some call to
+        :func:`find_deployables`, not just deployables returned by
+        this :class:`DeployableFinder`. As a consequence, this method
+        must be able to handle deployables that :meth:`find` would not
+        return.
+
+        See :class:`carthage_aws.connection.AwsDeploymentFinder` for a
+        common implementation approach.
+
+        '''
+        return []
+    
+            
     def __init__(self, **kwargs):
         if self.name is None:
             raise TypeError(f'{self.__class__} is abstract: it has no DeployableFinder name')
@@ -484,9 +510,9 @@ async def find_deployables(
     :class:`carthage_aws.VpcAddress`.  When deploying, *recursive*
     should be set to False.  If Deployables need to deploy an optional
     dependency, they should do that as part of coming to ready.
-    However, when looking for orphans, *recursive* and *readonly*
+    However, when looking for orphans, *recurse* and *readonly*
     should both be set to True, to probe for the largest set of
-    potentially Deployed objects. If recursive is not set when
+    potentially Deployed objects. If recurse is not set when
     searching for orphans, objects that are actually created by the
     layout may be flagged as orphans.
 
@@ -542,6 +568,45 @@ async def find_deployable(deployable: Deployable):
     return False
 
 __all__ += ['find_deployable']
+
+@inject(ainjector=AsyncInjector)
+async def find_orphan_deployables(
+        deployables:list[Deployable] = None,
+        *,
+        ainjector):
+    '''Find any orphans in a set of Deployables. An orphan is a
+    deployable that used to be deployed by a layout, but is no longer
+    deployed.
+    Not all :class:`DeploymentFinders` are able to find orphans, so some orphaned objects might not be recognized.
+
+    :param deployments: If slpecified, this should be the result of :func:`find_deployments` with recurse set to True. If None, then find_deployments will be called with recursive and readonly set to True.
+
+    '''
+    if deployables is None:
+        deployables = await ainjector(find_deployables, readonly=True, recurse=True)
+    else:
+        deployables = list(deployables)
+    #handle dynamic_dependencies
+    dynamic_dependencies: list[Deployable] = []
+    for d in deployables:
+        if not hasattr(d, 'dynamic_dependencies'):
+            continue
+        with instantiation_not_ready():
+            for dynamic in await d.dynamic_dependencies():
+                if isinstance(dynamic, InjectionKey):
+                    dynamic = await d.ainjector.get_instance_async(dynamic)
+                dynamic_dependencies.append(dynamic)
+    deployables.extend(dynamic_dependencies)
+    deployables = [ d for d in deployables
+                    if await ainjector(find_deployable, d)]
+    res = ainjector.filter_instantiate(DeployableFinder, ['name'])
+    finders = [x[1] for x in res]
+    orphans = []
+    for finder in finders:
+        orphans.extend(await ainjector(finder.find_orphans, deployables))
+    return orphans
+
+__all__ += ['find_orphan_deployables']
 
 def clear_dry_run_marker(deployables):
     for d in deployables:
