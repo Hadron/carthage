@@ -13,6 +13,7 @@ import dataclasses
 import enum
 import logging
 import typing
+import warnings
 from .dependency_injection import *
 from .dependency_injection import introspection as dependency_introspection, is_obj_ready
 
@@ -29,7 +30,7 @@ class DeletionPolicy(enum.Enum):
 
     * *orphan_policy*: What to do with a model that used to be created by a given layout but is no longer contained in that layout.
 
-    By default *destroy_policy* is *DELETE* and *orphan_policy* is *RETAIN*.
+    By default both policies are *delete*.
     '''
 
     #: Retain the deployable without  any diagnostic.
@@ -159,6 +160,10 @@ class DeploymentResult:
     instantiation_failure_leaves: dict[InjectionKey, dependency_introspection.FailedInstantiation] = \
         dataclasses.field(repr=False, default_factory=lambda: {})
 
+    #: Orphans that will be/have been deleted.  If deleting an orphan
+    #fails, it will appear in failures not orphans.
+    orphans:list[Deployable] = dataclasses.field(default_factory=lambda: [])
+    
     def is_successful(self):
         return self.successes and  not (self.failures or self.dependency_failures or self.instantiation_failure_leaves)
 
@@ -183,6 +188,13 @@ Ran {self.method} on the following objects successfully:
 '''
         for s in self.successes:
             result += f"* {s}\n"
+        if self.orphans:
+            if dry_run:
+                result += '\n## Orphans to Delete\n\n'
+            else:
+                result += '\n## Orphans Deleted\n\n'
+            for o in self.orphans:
+                result += f'* {o}\n'
         if self.failures:
             result += "\n## Deployment Failures\n\n"
             for f in self.failures:
@@ -215,6 +227,8 @@ Ran {self.method} on the following objects successfully:
         else:
             result += self.method+" "
         result += f'successes:{len(self.successes)}'
+        if self.orphans:
+            result += f' orphans:{len(self.orphans)}'
         if self.failures: result += f' failures:{len(self.failures)}'
         if self.dependency_failures: result += f' dependency failures:{len(self.dependency_failures)}'
         if self.not_found: result += f' not_found:{len(self.not_found)}'
@@ -601,6 +615,8 @@ async def find_orphan_deployables(
         this_round = []
         for d in dynamic_dependencies:
             if d not in deployables:
+                if not is_obj_ready(d):
+                    d.readonly = DryRun
                 deployables.append(d)
                 this_round.append(d)
     deployables = [ d for d in deployables
@@ -611,7 +627,7 @@ async def find_orphan_deployables(
     for finder in finders:
         orphans.extend(await ainjector(finder.find_orphans, deployables))
         for d in orphans:
-            o.readonly = DryRun
+            d.readonly = DryRun
     async def orphan_filter(o):
         if await ainjector(find_deployable, o):
             return True
@@ -628,7 +644,7 @@ def clear_dry_run_marker(deployables):
         if d.readonly is DryRun:
             d.readonly = False
             if is_obj_ready(d):
-                warnings.warn(f'{d!r} was already ready when clearing read only', stack_level=3)
+                warnings.warn(f'{d!r} was already ready when clearing read only', stacklevel=3)
                 
 
 @inject(ainjector=AsyncInjector)
@@ -637,9 +653,10 @@ async def run_deployment(
         dry_run=False,
         deployables: typing.Union[DeploymentResult, list[Deployable]] = None,
         filter=lambda d:True,
+        delete_orphans: bool=True,
+        orphans:list[Deployable]=None,
         ainjector):
-    '''
-    Run a deployment.
+    '''Run a deployment.
 
     #. Find the objects using :func:`find_deployables`
 
@@ -652,12 +669,25 @@ async def run_deployment(
     :param filter: If specified, a function that returns whether to operate on a given Deployable.
 
     :param deployables: If specified, then operate on the given deployables (after applying *filter*) rather than calling :func:`find_deployables`. If *deployables* is a :class:`DeploymentResult`, then operate on the successes of that result. When *deployables* is specified and *dry_run* is not true, any :class:`Deployable` with *readonly* set to *DryRun* will have readonly cleared.  Typical use is to run a deployment with *dry_run* set to True and then after confirming that the deployment is desired, to pass in the :class:`DeploymentResult` from the dry run into a new call to :func:`run_deployment`.
-    
+
+    :param delete_orphans: If true, then delete any orphans according
+    to their *orphan_policy*.  Orphans that (are/would be) deleted
+    will be reported in the :attr:`~DeploymentResult.orphans`
+    attribute in the *DeploymentResult*.
+
+    :param orphans: If not None, then these Deployables will be
+    considered orphans when *delete_orphans* is True.  If None, then
+    if *deployables* is a *DeploymentResult*, the *orphans* attribute
+    will be used.  Otherwise, :func:`find_orphan_deployables` will be
+    called.
+
     '''
     find_readonly = dry_run
     match deployables:
         case DeploymentResult():
             deployables_list = deployables.successes
+            if delete_orphans:
+                orphans = deployables.orphans
             if not dry_run: clear_dry_run_marker(deployables_list)
         case list():
             deployables_list = deployables
@@ -666,8 +696,10 @@ async def run_deployment(
             deployables_list = await ainjector(
                 find_deployables,
                 readonly=find_readonly,
-                # Not recursive until we are looking at delete_orphans.
+                recurse=delete_orphans
             )
+    if delete_orphans and orphans is None:
+        orphans = await ainjector(find_orphan_deployables, deployables=deployables_list)
     result = DeploymentResult('deploy')
     futures = []
     with DeploymentIntrospection(ainjector.injector, result):
@@ -688,6 +720,17 @@ async def run_deployment(
 
         if futures:
             await asyncio.wait(futures) # We should already have captured in result
+    if delete_orphans and len(orphans) > 0:
+        orphan_result = await ainjector(
+            run_deployment_destroy,
+            dry_run=dry_run,
+            deployables=orphans,
+            _policy_key=orphan_policy,
+            )
+        result.orphans = orphan_result.successes
+        result.ignored.extend(orphan_result.ignored)
+        result.failures.extend(orphan_result.failures)
+        result.dependency_failures.extend(orphan_result.dependency_failures)
     return result
 
 __all__ += ['run_deployment']
@@ -729,6 +772,7 @@ async def run_deployment_destroy(
         dry_run=False,
         deployables: typing.Union[DeploymentResult, list[Deployable]] = None,
         filter=lambda d:True,
+        _policy_key: InjectionKey=destroy_policy,
         ainjector):
     '''
     Run a deployment destroy operation, calling :meth:`delete` on Deployables.
@@ -746,7 +790,9 @@ async def run_deployment_destroy(
 
     :param filter: If specified, a function that returns whether to operate on a given Deployable.
 
-    :param deployables: If specified, then operate on the given deployables (after applying *filter*) rather than calling :func:`find_deployables`. If *deployables* is a :class:`DeploymentResult`, then operate on the successes of that result. When *deployables* is specified and *dry_run* is not true, any :class:`Deployable` with *readonly* set to *DryRun* will have readonly cleared.  Typical use is to run a deployment with *dry_run* set to True and then after confirming that the deployment is desired, to pass in the :class:`DeploymentResult` from the dry run into a new call to :func:`run_deployment`.
+    :param deployables: If specified, then operate on the given deployables (after applying *filter*) rather than calling :func:`find_deployables`. If *deployables* is a :class:`DeploymentResult`, then operate on the successes of that result. When *deployables* is specified and *dry_run* is not true, any :class:`Deployable` with *readonly* set to *DryRun* will have readonly cleared.  Typical use is to run a deployment with *dry_run* set to True and then after confirming that the deployment is desired, to pass in the :class:`DeploymentResult` from the dry run into a new call to :func:`run_deployment_destroy`.  When :func:`run_deployment` is used to delete orphans, it does the following internally:  For deleting orphans, call :func:`find_orphan_deployables` and pass in the orphans as *deployables* while setting *_policy_key* to *orphan_policy*. 
+
+    :param _policy_key:  An internal parameter that allows :func:`run_deployment` to adjust which deletion policy is used when deleting orphans.
     
     '''
     find_readonly = dry_run
@@ -780,7 +826,7 @@ async def run_deployment_destroy(
             if d.readonly not in (DryRun, False, None) or not filter(d):
                 logger.debug('Ignoring %s and its reverse dependencies', d)
                 raise IgnoreDeployable
-            policy = d.injector.get_instance(InjectionKey(destroy_policy, _optional=True))
+            policy = d.injector.get_instance(InjectionKey(_policy_key, _optional=True))
             if not dry_run:
                 match policy:
                     case DeletionPolicy.retain:
