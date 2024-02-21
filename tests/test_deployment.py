@@ -1,4 +1,4 @@
-# Copyright (C) 2023, Hadron Industries, Inc.
+# Copyright (C) 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -18,6 +18,22 @@ class MockDeployable(InjectableModel, SetupTaskMixin, AsyncInjectable):
     name = None
 
     readonly=False
+
+    def __init__(self, name=None, readonly=None, **kwargs):
+        super().__init__(**kwargs)
+        if name is not None:
+            self.name = name
+        if readonly is not None:
+            self.readonly = readonly
+
+    def __eq__(self, other):
+        if not isinstance(other, MockDeployable):
+            return NotImplemented
+        return other.name == self.name
+
+    def __hash__(self):
+        return hash(self.name)
+    
     @setup_task("Find or create")
     async def find_or_create(self):
         if res := await self.find():
@@ -42,6 +58,7 @@ class MockDeployable(InjectableModel, SetupTaskMixin, AsyncInjectable):
 
     async def dynamic_dependencies(self):
         return []
+
     def __str__(self):
         return 'Deployable:'+self.name
 
@@ -64,6 +81,13 @@ class MockDeployableFinder(DeployableFinder):
             ready=False)
         return [x[1] for x in result]
 
+    async def find_orphans(self, deployables):
+        expected_deployables = set(d.name for d in deployables if isinstance(d,MockDeployable))
+        results = []
+        for n in deployed_deployables - expected_deployables:
+            results.append(await self.ainjector(MockDeployable, name=n, readonly=True))
+        return results
+    
 deployed_deployables = set()
 
 @pytest.fixture()
@@ -100,6 +124,9 @@ async def test_run_deployment_simple(ainjector):
     assert l.devops.continuous_integration in result.successes
     assert len(result.successes)==2
     assert result.is_successful()
+    orphans = await ainjector(find_orphan_deployables)
+    assert len(orphans) == 0
+    
 
 @async_test
 async def test_failure_detection(ainjector):
@@ -219,3 +246,51 @@ async def test_deploy_destroy(ainjector):
         if d in successes: continue
         assert await d.find()
         
+@async_test
+async def test_find_orphans(ainjector):
+    class layout(CarthageLayout):
+
+        class has_dynamic_dependency(MockDeployable):
+
+            name = 'has_dynamic_dependency'
+
+            async def async_ready(self):
+                # Deploy a deployable called dynamic
+                await self._dynamic()
+                return await super().async_ready()
+
+            async def _dynamic(self):
+                '''
+                Create a dynamic deployable.
+                If called from async_ready, will actually bring the deployable to ready and thus will deploy it.
+                If called from dynamic_dependencies, will be in an instantiate_not_ready context, so will not deploy.
+                '''
+                return await self.ainjector(MockDeployable, name='dynamic_dependency')
+
+            async def dynamic_dependencies(self):
+                return [await self._dynamic()]
+
+        class normal(MockDeployable):
+
+            name = 'normal'
+
+    ainjector.add_provider(layout)
+    l = await ainjector.get_instance_async(layout)
+    lainjector = l.ainjector
+    result = await lainjector(run_deployment)
+    assert l.has_dynamic_dependency in result.successes
+    assert l.normal in result.successes
+    with instantiation_not_ready():
+        dynamic = await l.has_dynamic_dependency._dynamic()
+    assert await dynamic.find()
+    orphan = await lainjector(MockDeployable, name='orphan')
+    # If we search too far up the hierarchy, everything should be an orphan
+    orphans = await ainjector(find_orphan_deployables)
+    assert len(orphans) == 4
+    assert l.normal in orphans
+    assert orphan in orphans
+    # But only the orphan should be an orphan if we include the layout's context
+    orphans = await lainjector(find_orphan_deployables)
+    assert len(orphans) == 1
+    assert orphan in orphans
+    
