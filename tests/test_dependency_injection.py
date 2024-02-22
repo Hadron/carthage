@@ -646,3 +646,21 @@ async def test_resolve_deferred(ainjector):
         dict(a=10, b=20),
         dict(c='foo', d=40),
         'bar']
+
+@async_test
+async def test_filter_failure(ainjector):
+    class Plugin(AsyncInjectable):
+
+        @classmethod
+        def default_class_injection_key(cls):
+            return InjectionKey(Plugin, name=cls.name)
+
+    @inject_autokwargs(not_found=InjectionKey('not_found'))
+    class not_found(Plugin):
+        '''This plugin fails to instantiate because it has a missing dependency
+                       '''
+        name = 'not_found'
+
+    ainjector.add_provider(not_found)
+    with pytest.raises(InjectionFailed):
+        await ainjector.filter_instantiate_async(Plugin, ['name'], ready=True)

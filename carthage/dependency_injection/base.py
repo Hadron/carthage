@@ -702,8 +702,14 @@ Return the first injector in our parent chain containing *k* or None if there is
             for k, d in (cls._injection_dependencies.items()) if dks else []:
                 if d is None:
                     continue
-                injector.get_instance(d, placement=kwarg_place(k),
+                try:
+                    injector.get_instance(d, placement=kwarg_place(k),
                                       loop=_loop, futures=futures)
+                except KeyError as e:
+                    if _instantiation_context:
+                        raise InjectionFailed(current_instantiation()) from e
+                    else:
+                        raise
             if futures:
                 fut = asyncio.ensure_future(callback(futures))
                 if current_instantiation():
