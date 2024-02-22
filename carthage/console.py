@@ -237,6 +237,9 @@ class CarthageConsole(code.InteractiveConsole):
                     self.subcommands_parser.print_help()
                     return
                 subcommand = self.subcommands[args.cmd]
+                if args.help:
+                    subcommand.subparser.print_help()
+                    return
                 future = asyncio.run_coroutine_threadsafe(self.ainjector(subcommand.run, args), loop=self.loop)
                 try: future.result()  #concurrent not asyncio future
                 except Exception as e:
@@ -294,9 +297,11 @@ class CarthageRunnerCommand(AsyncInjectable):
         return True
 
     def register(self, subparser_action):
-        parser = subparser_action.add_parser(
-            self.name, **self.subparser_kwargs)
-        self.setup_subparser(parser)
+        self.subparser = subparser_action.add_parser(
+            self.name, add_help=False,
+            **self.subparser_kwargs)
+        self.setup_subparser(self.subparser)
+        self.subparser.add_argument('--help', action='store_true', help='Print Usage')
 
     @classmethod
     def default_class_injection_key(cls):

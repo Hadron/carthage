@@ -215,7 +215,14 @@ subcommands = loop.run_until_complete(
 
 
 if args.help:
-    parser.print_help()
+    if len(unknown) >= 1:
+        cmd = unknown[0]
+    else:
+        cmd = ""
+    if cmd in subcommands:
+        subcommands[cmd].subparser.print_help()
+    else:
+        parser.print_help()
     sys.exit(2)
 args = parser.parse_args()
 

@@ -1,4 +1,4 @@
-# Copyright (C) 2023, Hadron Industries, Inc.
+# Copyright (C) 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -68,10 +68,18 @@ class DeployCommand(DeploymentCommand):
     name = 'deploy'
     method = 'run_deployment'
 
+    subparser_kwargs = {
+        'help': 'Deploy all deployables in the layout',
+        }
+    
 class DestroyCommand(DeploymentCommand):
 
     name = 'destroy'
     method = 'run_deployment_destroy'
+    subparser_kwargs = {
+        'help': 'Destroy all Deployables in the layout where the destroy_policy does not retain the object.',
+        }
+    
 
 @inject(injector=Injector)
 def register(injector):
