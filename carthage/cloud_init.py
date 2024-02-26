@@ -20,7 +20,6 @@ import carthage.ssh
 
 __all__ = []
 
-
 @dataclasses.dataclass
 class CloudInitConfig:
 
@@ -30,7 +29,10 @@ class CloudInitConfig:
 
     network_configuration: dict = dataclasses.field(default_factory=lambda: {})
 
-    __all__ += ['CloudInitConfig']
+class WinInitConfig(CloudInitConfig):
+    pass
+
+__all__ += ['CloudInitConfig', 'WinInitConfig']
 
 
 @inject_autokwargs(model=AbstractMachineModel)
@@ -48,42 +50,60 @@ class CloudInitPlugin(Injectable):
     def name(self):
         raise NotImplementedError
 
-
 __all__ += ['CloudInitPlugin']
+
+@inject_autokwargs(model=AbstractMachineModel)
+class WinInitPlugin(CloudInitPlugin):
+
+    @classmethod
+    def default_class_injection_key(cls):
+        return InjectionKey(WinInitPlugin, name=cls.name)
+
+
+__all__ += ['WinInitPlugin']
 
 
 @inject(model=AbstractMachineModel,
         ainjector=AsyncInjector)
 async def generate_cloud_init_cloud_config(*, ainjector, model):
     '''
-    Generate a :class:`CloudInitConfig` from the model.  The operation is based on the *cloud_init* property in the model:
+    Generate a :class:`CloudInitConfig` from the model.  
+    The operation is based on the *cloud_init* or the *win_init* property in the model:
 
-    * True: Generate cidata based on calling all the :class:`CloudInitPlugins <CloudInitPlugin>` registered with the model's injector.
+        * True: Generate cidata based on calling all the :class:`CloudInitPlugins <CloudInitPlugin>` registered with the model's injector.
 
-    * False: return None
+        * False: return None
 
-    * A :class:`CloudInitConfig` object: use that object without calling plugins.
+        * A :class:`CloudInitConfig` object: use that object without calling plugins.
 
     '''
 
     cloud_init = getattr(model, 'cloud_init', False)
-    if not cloud_init:
+    win_init = getattr(model, 'win_init', False)
+    if not cloud_init and not win_init:
         return
+
+    if cloud_init and win_init:
+        raise ValueError("Can not do both cloud_init and win_init at the same time.")
+
     if cloud_init is True:
         config = CloudInitConfig()
         plugin_data = await ainjector.filter_instantiate_async(CloudInitPlugin, ['name'], ready=True)
-        for plugin_key, plugin in plugin_data:
-            # we apply in order so that plugins can look at previous
-            # results.  We sacrifice parallelism to get this.
-            await plugin.apply(config)
-        if not plugin_data:
-            return
-        return config
+    elif win_init is True:
+        config = CloudInitConfig()
+        plugin_data = await ainjector.filter_instantiate_async(WinInitPlugin, ['name'], ready=True)
     else:
-        return model.cloud_init
+        return False
+    
+    for _, plugin in plugin_data:
+        # we apply in order so that plugins can look at previous
+        # results.  We sacrifice parallelism to get this.
+        await plugin.apply(config)
+    if not plugin_data:
+        return
+    return config
 
 __all__ += ['generate_cloud_init_cloud_config']
-
 
 @inject(model=AbstractMachineModel, ainjector=AsyncInjector,
         config_layout=ConfigLayout)
@@ -210,5 +230,20 @@ def enable_cloud_init_plugins(injector):
     injector.add_provider(NetworkPlugin, allow_multiple=True)
     injector.add_provider(HostnamePlugin, allow_multiple=True)
 
+class AdminPasswordPlugin(WinInitPlugin):
+    name = "admin_password"
+    async def apply(self, config: CloudInitConfig):
+        config.user_data['password'] = self.model.admin_password
 
-__all__ += ['enable_cloud_init_plugins']
+
+class WinRmPlugin(WinInitPlugin):
+    name = "enable_winrm"
+    async def apply(self, config: CloudInitConfig):
+        config.user_data['winrm'] = self.model.enable_winrm
+
+@inject(injector=Injector)
+def enable_win_init_plugins(injector):
+    injector.add_provider(AdminPasswordPlugin, allow_multiple=True)
+    injector.add_provider(WinRmPlugin, allow_multiple=True)
+
+__all__ += ['enable_cloud_init_plugins', 'enable_win_init_plugins']

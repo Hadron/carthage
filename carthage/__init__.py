@@ -116,6 +116,7 @@ base_injector.add_provider(carthage.network.BridgeNetwork, allow_multiple=True)
 base_injector.add_provider(InjectionKey(carthage.ssh.SshAgent), carthage.ssh.ssh_agent)
 base_injector.add_provider(carthage.pki.PkiManager)
 base_injector(carthage.cloud_init.enable_cloud_init_plugins)
+base_injector(carthage.cloud_init.enable_win_init_plugins)
 
 __all__ += ['base_injector']
 
