@@ -108,7 +108,7 @@ def checkout_git_repo(url, repo, *, foreground=False, injector):
     os.makedirs(config.checkout_dir, exist_ok=True)
     if path.exists():
         return sh.git("pull", "--rebase",
-                      _cwd=pat,
+                      _cwd=path,
                       **options)
     else:
         return sh.git("clone",
