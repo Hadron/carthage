@@ -10,9 +10,19 @@ from __future__ import annotations
 import dataclasses
 import typing
 import weakref
-from .base import NetworkLink
+from ipaddress import IPv4Address
+from .base import NetworkLink, Network
 from ..dependency_injection import *
 
+
+class GRELink(NetworkLink):
+    address: str
+    local: typing.Union[str,IPv4Address]
+    remote: typing.Union[str,IPv4Address]
+    key: str = None
+    local_type = "gre"
+    required = False
+    routes: list[Network] = dataclasses.field(default_factory=lambda: [])
 
 class BondLink(NetworkLink):
 

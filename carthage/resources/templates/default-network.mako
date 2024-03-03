@@ -12,8 +12,14 @@ if v4_config.pool:
 DHCP=ipv4
 <%nontrivial = True%>\
 %endif
-%if v4_config.address and not v4_config.dhcp:
+%if v4_config.address:
 Address=${str(v4_config.address)}/${v4_config.network.prefixlen}
+<%nontrivial = True %>
+%endif
+%if v4_config.secondary_addresses:
+%for address in v4_config.secondary_addresses:
+Address=${str(address.private)}/${v4_config.network.prefixlen}
+%endfor
 <%nontrivial = True %>
 %endif
 %if link.precious:

@@ -8,6 +8,8 @@ if link.local_type == 'bridge':
     driver = 'bridge'
 elif link.local_type == 'bond':
     driver = 'bond'
+elif link.local_type == 'gre':
+    driver = 'gre'
 elif link.local_type == 'vlan': driver = 'vlan'
     %>\
 %if link.mac and driver in ('ether'):
