@@ -1,4 +1,4 @@
-# Copyright (C) 2021, Hadron Industries, Inc.
+# Copyright (C) 2021, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -10,9 +10,18 @@ from __future__ import annotations
 import dataclasses
 import typing
 import weakref
-from .base import NetworkLink
+from ipaddress import IPv4Address
+from .base import NetworkLink, Network
 from ..dependency_injection import *
 
+
+class GRELink(NetworkLink):
+    local: typing.Union[str,IPv4Address] = dataclasses.field(kw_only=True)
+    remote: typing.Union[str,IPv4Address] = dataclasses.field(kw_only=True)
+    key: str = None
+    local_type = "gre"
+    required  = False
+    routes: list[Network] = dataclasses.field(default_factory=lambda: [])
 
 class BondLink(NetworkLink):
 

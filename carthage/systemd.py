@@ -20,6 +20,10 @@ import logging
 logger = logging.getLogger('carthage.network')
 
 local_type_map = dict(
+    gre=dict(
+        netdev="gre-netdev.mako",
+        network="gre-network.mako",
+    ),
     bond=dict(
         netdev="bond-netdev.mako",
         member_network="bond-network.mako"),

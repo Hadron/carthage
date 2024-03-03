@@ -16,6 +16,13 @@ DHCP=ipv4
 Address=${str(v4_config.address)}/${v4_config.network.prefixlen}
 <%nontrivial = True %>
 %endif
+%if v4_config.secondary_addresses:
+<% nontrivial = True %>
+%for address in v4_config.secondary_addresses:
+Address=${str(address.private)}/${v4_config.network.prefixlen}
+%endfor
+<%nontrivial = True %>
+%endif
 %if link.precious:
 KeepConfiguration = dhcp
 %endif
