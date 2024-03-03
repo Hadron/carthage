@@ -391,10 +391,7 @@ class NetworkConfig:
         The *network_links* property of *connection* is updated based on the new network links.  That side effect is a bit unclean, but doing the update here allows :meth:`carthage.machine.Machine.resolve_networking` and :meth:`carthage.machine.AbstractMachineModel.resolve_networking` to have less duplicated code.
         '''
         async def resolve1(r: typing.any, i, args, k):
-            if isinstance(r, InjectionKey):
-                r = await ainjector.get_instance_async(r)
-            elif callable(r):
-                r = await ainjector(r, i)
+            r = await resolve_deferred(ainjector, r, {"interface": i})
             if args is not None:
                 args[k] = r
             return r
@@ -486,7 +483,11 @@ class NetworkConfig:
                     else:
                         members_of[i] = v
                     continue
-                if callable(v) or isinstance(v, InjectionKey):
+                if (
+                    callable(v)
+                    or isinstance(v, InjectionKey)
+                    or isinstance(v, list)
+                ):
                     futures.append(asyncio.ensure_future(resolve1(v, i, link_args, k)))
                 else:
                     link_args[k] = v
@@ -722,8 +723,13 @@ class NetworkLink:
             if k not in args:
                 if not optional:
                     raise TypeError(f'{k} is required')
-            elif (not unresolved) and (not isinstance(args[k], t)):
-                raise TypeError(f'{k} must be a {t} not {args[k]}')
+            elif not unresolved:
+                if hasattr(t, "__instancecheck__"):
+                    if not t.__instancecheck__(args[k]):
+                        raise TypeError(f'{k} must be a {t} not {args[k]}')
+                else:
+                    if not isinstance(args[k], t):
+                        raise TypeError(f'{k} must be a {t} not {args[k]}')
         if subclass:
             subclass.validate_subclass(args, unresolved=unresolved)
 
