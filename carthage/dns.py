@@ -179,6 +179,7 @@ async def update_dns_for(*,
         public_head, sep, public_domain = public_name.partition('.')
         public_zone = await ainjector.get_instance_async(InjectionKey(DnsZone, name=public_domain, addressing='public', _optional=True))
     else: public_zone = None
+    private_zone = None
     if private_name:
         private_head, sep, private_domain = private_name.partition('.')
         private_zone = await ainjector.get_instance_async(InjectionKey(DnsZone, name=private_domain, addressing='private', _optional=True))
