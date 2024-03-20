@@ -93,7 +93,8 @@ async def test_gre_networking(ainjector):
                     key="34",
                     v4_config=V4Config(
                         address='172.31.0.1'),
-                    routes=[net_1])
+                    routes=[injector_access(net_1)])
     ainjector.add_provider(layout)
     l = await ainjector.get_instance_async(layout)
-    breakpoint()
+    assert l.net_1 in l.machine.network_links['gre0'].routes
+    
