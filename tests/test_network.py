@@ -68,3 +68,32 @@ async def test_v4_config_secondary_expand(ainjector):
 
     
         
+@async_test
+async def test_gre_networking(ainjector):
+    class layout(CarthageLayout):
+
+        @provides("net_1")
+        class net_1(NetworkModel):
+            v4_config = V4Config(
+                network='10.0.0.0/8')
+
+        @provides('tunnel_net')
+        class tunnel_net(NetworkModel):
+            v4_config = V4Config(
+                dhcp=False,
+                network='172.31.0.0/29')
+
+        class machine(MachineModel):
+            class net_config(NetworkConfigModel):
+                add('gre0', net=tunnel_net,
+                    mac=None,
+                    local_type='gre',
+                    local='192.168.0.1',
+                    remote='192.168.0.2',
+                    key="34",
+                    v4_config=V4Config(
+                        address='172.31.0.1'),
+                    routes=[net_1])
+    ainjector.add_provider(layout)
+    l = await ainjector.get_instance_async(layout)
+    breakpoint()
