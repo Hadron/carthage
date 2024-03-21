@@ -12,6 +12,7 @@ import json
 import logging
 import pytest
 import yaml
+from dataclasses import replace, is_dataclass
 from. import base_injector, ConfigLayout
 from .dependency_injection import AsyncInjector
 
@@ -41,7 +42,15 @@ def pytest_collection_modifyitems(items):
                 del i.keywords._markers['place_as']
                 del i.keywords._markers['usefixtures']
                 del i.keywords._markers['__signature__']
-                i._fixtureinfo.argnames = tuple(i.function.__signature__.parameters.keys())
+                if is_dataclass(i._fixtureinfo) and i._fixtureinfo.__dataclass_params__.frozen:
+                    # _fixtureinfo is a frozen dataset. We can't change attrs of this. 
+                    # use `replace` to generate a new _fixtureinfo object with the updated `argnames`
+                    old = i._fixtureinfo
+                    new = replace(old, argnames=tuple(i.function.__signature__.parameters.keys()))
+                    i._fixtureinfo = new
+                else:
+                    i._fixtureinfo.argnames = tuple(i.function.__signature__.parameters.keys())
+
 
 
 @pytest.fixture()
