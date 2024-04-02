@@ -97,7 +97,7 @@ class ConfigString(str):
     def subst(s, *, config, injector):
         plugin, sep, selector = s.partition(':')
         if sep == '':
-            return getattr_path(config, ConfigString.parse(s,config, injector))
+            return str(getattr_path(config, ConfigString.parse(s,config, injector)))
         else:
             try:
                 plugin = injector.get_instance(InjectionKey(ConfigLookupPlugin, name=plugin))
@@ -115,7 +115,7 @@ class ConfigString(str):
 class ConfigPath(ConfigString):
 
     def __new__(cls, s, *, injector):
-        return super().__new__(ConfigString, os.path.expanduser(s),
+        return super().__new__(ConfigString, os.path.expanduser(str(s)),
                                injector=injector)
 
 
