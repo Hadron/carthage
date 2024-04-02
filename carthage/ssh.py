@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -67,7 +67,7 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
 
     @memoproperty
     def known_hosts(self):
-        return self.config_layout.state_dir + "/ssh_known_hosts"
+        return Path(self.config_layout.state_dir)/"ssh_known_hosts"
 
     async def async_ready(self):
         await self.run_setup_tasks()
@@ -94,11 +94,11 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
     def key_path(self):
         '''The path of the private key suitable for inclusion with ``ssh -i`` or *None* if no filesystem key exists.
         '''
-        return self.config_layout.state_dir + '/ssh_key'
+        return Path(self.config_layout.state_dir)/'ssh_key'
 
     @memoproperty
     def stamp_path(self):
-        return self.config_layout.state_dir
+        return Path(self.config_layout.state_dir)
 
     @memoproperty
     def ssh(self):
@@ -149,7 +149,7 @@ async def rsync(*args, config_layout,
         if ssh_options:
             ssh_options = list(ssh_options)
 
-        ssh_options.extend(['-oUserKnownHostsFile=' + config_layout.state_dir + "/ssh_known_hosts"])
+        ssh_options.extend(['-oUserKnownHostsFile=' + str(config_layout.state_dir) + "/ssh_known_hosts"])
         ssh_options = " ".join(ssh_options)
         rsync_opts = ('-e', 'ssh ' + ssh_options)
 
@@ -172,7 +172,7 @@ class AuthorizedKeysFile(Injectable):
 
     def __init__(self, ssh_key, injector):
         config_layout = injector(ConfigLayout)
-        self.path = config_layout.state_dir + '/authorized_keys'
+        self.path = Path(config_layout.state_dir)/'authorized_keys'
         authorized_keys = config_layout.authorized_keys
         if authorized_keys.startswith('|'):
             authorized_keys = authorized_keys[1:]
