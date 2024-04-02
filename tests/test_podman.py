@@ -31,7 +31,7 @@ def enable_podman():
 
 @pytest.fixture()
 def ainjector(ainjector, enable_podman):
-    ainjector = ainjector.claim("test_setup.py")
+    ainjector = ainjector.claim("test_podman.py")
     config = ainjector.injector(carthage.ConfigLayout)
     config.state_dir = state_dir
     state_dir.mkdir(parents=True, exist_ok=True)
