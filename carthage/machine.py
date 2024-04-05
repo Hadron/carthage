@@ -127,7 +127,18 @@ class SshMixin:
         except AttributeError:
             pass
         return 'root'
-        
+
+    @memoproperty
+    def runas_user(self):
+        '''
+        The user to run commands as.  Mechanisms like :class:`carthage.become_privileged.BecomePrivilegedMixin` provide a mechanism to  use a privilege gateway like ``sudo`` so that *runas_user* can differ from :attr:`ssh_login_user`.
+        Can be set on the machine or model.  Defaults to root.
+        '''
+        try:
+            if self.model.runas_user:
+                return self.model.runas_user
+        except AttributeError: pass
+        return 'root'
 
     @memoproperty
     def ssh_online_retries(self):
@@ -584,22 +595,35 @@ class Machine(AsyncInjectable, SshMixin):
         Adapts the customization to this type of machine.  Overridden in machines that can customize a filesystem without booting.
         '''
         customization.customization_context = customization._machine_context()
-        customization.run_command = self.ssh_run_command
+        customization.run_command = self.run_command
 
-    def ssh_run_command(self,
+    def run_command(self,
                         *args,
                         _bg=True,
-                        _bg_exc=False):
+                        _bg_exc=False,
+                    _user=None):
         '''
-            Ssh has really bad quoting; it effectively  removes one level of quoting from the input.
+        This method is the machine-specific part of :meth:`run_command`.  Override in subclasses if there is a better way to run a command than sshing into a machine.  This method is async, although that is not reflected in the signature because this implementation returns an awaitable.
+
+        :param user: The user to run as.  defaults to :attr:`runas_user`.
+        
+        This implementation calls :meth:`ssh`.
+        Ssh has really bad quoting; it effectively  removes one level of quoting from the input.
 This handles quoting and  makes sure each argument is a separate argument on the eventual shell;
-it works like :meth:`carthage.container.Container.container_command` and is used to give a consistent interface by :meth:`FilesystemCustomization.run_command`.
+it works like :meth:`carthage.container.Container.container_command` and is used to give a consistent interface by :meth:`run_command`.
 '''
+        if _user is None:
+            _user = self.runas_user
+        if _user != self.ssh_login_user:
+            raise ValueError(f'{self.__class__.__qualname__} Does not support runas_user different than ssh_login_user; consider BecomePrivilegedMixin or another privilege management solution.')
         return self.ssh(
             shlex.join(args),
             _bg=_bg, _bg_exc=_bg_exc)
 
-    async def sshfs_process_factory(self):
+        
+    async def sshfs_process_factory(self, user):
+        if user != self.ssh_login_user:
+            raise ValueError(f'{self.__class__.__qualname__} cannot set up filesystem access when runas_user != ssh_login_user')
         return sh.sshfs(
             '-o' 'ssh_command=' + " ".join(
                 str(self.ssh).split()[:-1]),
@@ -610,13 +634,16 @@ it works like :meth:`carthage.container.Container.container_command` and is used
             _bg_exc=False)
 
     @contextlib.asynccontextmanager
-    async def filesystem_access(self):
+    async def filesystem_access(self, user=None):
+
         '''
         An asynchronous context manager that makes the filesystem of the *Machine* available on a local path.
 
         :returns: Path at which the filesystem can be accessed while in the context.
 
         '''
+        if user is None:
+            user = self.runas_user
         async with self.machine_running(ssh_online=True):
             self.sshfs_count += 1
             try:
@@ -634,7 +661,7 @@ it works like :meth:`carthage.container.Container.container_command` and is used
                     if self.sshfs_count == 1:
                         self.sshfs_path = tempfile.mkdtemp(
                             dir=self.config_layout.state_dir, prefix=self.name, suffix="sshfs")
-                        self.sshfs_process = await self.sshfs_process_factory()
+                        self.sshfs_process = await self.sshfs_process_factory(user=user)
                         for x in range(5):
                             alive, *rest = self.sshfs_process.process.is_alive()
                             if not alive:

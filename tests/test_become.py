@@ -99,7 +99,9 @@ async def test_become_privileged_mixin(layout):
     try:
         await ainjector.get_instance_async(InjectionKey(Machine, host='machine', _ready=True))
         async with layout.machine.machine.machine_running():
-            await layout.machine.machine.ssh('touch /foo')
+            await become_privileged.BecomePrivilegedMixin.run_command(layout.machine.machine, 'touch', '/foo')
+            async with Machine.filesystem_access(layout.machine.machine) as path:
+                path.joinpath('usr/bin/dpkg').unlink()
     finally:
         try: await layout.machine.machine.delete()
         except Exception: pass
