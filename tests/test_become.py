@@ -57,6 +57,7 @@ class Layout(modeling.CarthageLayout):
                     'apt', '-y', 'install',
                     'openssh-server',
                     'sudo',
+                    'rsync',
                     'systemd')
 
                 
@@ -102,6 +103,12 @@ async def test_become_privileged_mixin(layout):
             await become_privileged.BecomePrivilegedMixin.run_command(layout.machine.machine, 'touch', '/foo')
             async with Machine.filesystem_access(layout.machine.machine) as path:
                 path.joinpath('usr/bin/dpkg').unlink()
+            layout.machine.machine.rsync_uses_filesystem_access = False
+            await layout.ainjector(
+                ssh.rsync, RsyncPath(
+                layout.machine.machine,
+                "/etc/shadow"),
+                        state_dir/"shadow")
     finally:
         try: await layout.machine.machine.delete()
         except Exception: pass

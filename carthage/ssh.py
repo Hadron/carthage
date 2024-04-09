@@ -25,8 +25,14 @@ from pathlib import Path
 @dataclasses.dataclass
 class RsyncPath:
 
+    '''
+    In :func:`rsync`, local paths are represented directly and remote paths are represented as a :class:`RsyncPath`.
+    RsyncPath has a target machine (a :class:`~carthage.Machine`) and path.  There is also a *runas_user*.  If not specified *runas_user* defaults to the *runas_user* of the machine.  It is an error to use two RsyncPaths in the same call to rsync with differing *runas_user*.
+    '''
+    
     machine: machine.Machine
     path: str
+    runas_user: str = None
 
     def __repr__(self):
         return f'<Rsync {self.machine}:{self.path}>'
@@ -113,7 +119,7 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
 
     @memoproperty
     def pubkey_contents(self):
-        with open(self.key_path + ".pub", "rt") as f:
+        with open(str(self.key_path) + ".pub", "rt") as f:
             return f.read()
 
 
@@ -130,14 +136,29 @@ async def rsync(*args, config_layout,
     else:
         ssh_agent = injector.get_instance(SshAgent)
     ssh_options = []
+    rsync_command = ""
+    runas_user = None
     args = list(args)
     async with contextlib.AsyncExitStack() as stack:
         for i, a in enumerate(args):
             if isinstance(a, RsyncPath):
+                if runas_user is None:
+                    runas_user = a.runas_user
+                if runas_user is None:
+                    runas_user = a.machine.runas_user
+                if a.runas_user is not None and runas_user != a.runas_user:
+                    raise RuntimeError('conflicting runas_user between multiple RsyncPaths')
+        
                 if a.machine.rsync_uses_filesystem_access:
-                    path = await stack.enter_async_context(a.machine.filesystem_access())
+                    path = await stack.enter_async_context(a.machine.filesystem_access(user=runas_user))
                     args[i] = Path(path).joinpath(a.relpath)
                     continue
+                if runas_user != a.machine.ssh_login_user:
+                    if hasattr(a.machine, 'become_privileged_command'):
+                        rsync_command = '--rsync-path='+' '.join(
+                            a.machine.become_privileged_command(runas_user)) + " rsync"
+                    else:
+                        raise RuntimeError('runas_user differs from ssh_login_user but no become privileged mechanism present.')
                 sso = a.ssh_origin
                 if ssh_origin is None:
                     ssh_origin = sso
@@ -151,7 +172,10 @@ async def rsync(*args, config_layout,
 
         ssh_options.extend(['-oUserKnownHostsFile=' + str(config_layout.state_dir) + "/ssh_known_hosts"])
         ssh_options = " ".join(ssh_options)
-        rsync_opts = ('-e', 'ssh ' + ssh_options)
+        rsync_opts = ['-e', 'ssh ' + ssh_options]
+        if rsync_command:
+            rsync_opts .append(rsync_command)
+
 
         if ssh_origin:
             return await access_ssh_origin(ssh_origin=ssh_origin,
