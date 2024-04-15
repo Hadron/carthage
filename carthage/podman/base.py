@@ -233,7 +233,15 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
     podman_restart = 'no'
 
     #:Extra options (as a list) to be passed into podman create
-    podman_options = []
+    @memoproperty
+    def podman_options(self):
+        '''Extra options to be passed into podman create as a list
+        '''
+        try:
+            return self.model.podman_options
+        except AttributeError:
+            return []
+        
 
     @memoproperty
     def ssh_options(self):
@@ -391,7 +399,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         customization.customization_context = customization_context()
         customization.run_command = self.container_exec
 
-    def filesystem_access(self):
+    def filesystem_access(self, user='root'):
         return self.container_host.filesystem_access(self.full_name)
 
     def __repr__(self):

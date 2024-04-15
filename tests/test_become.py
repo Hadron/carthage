@@ -71,6 +71,10 @@ class Layout(modeling.CarthageLayout):
         ip_address = '127.0.0.1'
         add_provider(oci.OciExposedPort(22))
         ssh_login_user = 'user'
+        # If we are actually running as root, we need --privileged so
+        # that ssh's call to pam_loginuid.so succeeds.  Otherwise
+        # pam_open_session fails and thus the ssh connection fails.
+        podman_options = ['--privileged']
 
         class authorize_cust(FilesystemCustomization):
             @setup_task("Create user and authorize")
@@ -108,7 +112,7 @@ async def test_become_privileged_mixin(layout):
     ainjector = layout.ainjector
     try:
         await ainjector.get_instance_async(InjectionKey(Machine, host='machine', _ready=True))
-        async with layout.machine.machine.machine_running():
+        async with layout.machine.machine.machine_running(ssh_online=True):
             await become_privileged.BecomePrivilegedMixin.run_command(layout.machine.machine, 'touch', '/foo')
             async with Machine.filesystem_access(layout.machine.machine) as path:
                 path.joinpath('usr/bin/dpkg').unlink()
