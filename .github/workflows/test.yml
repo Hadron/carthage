@@ -14,7 +14,7 @@ jobs:
         run: |
           sudo apt -q update
           sudo apt -y install systemd-container socat qemu-utils fai-setup-storage fai-server python3-mako python3-sh python3-pyvmomi python3-yaml python3-pytest python3-pip python3-lmdb ansible genisoimage runc crun-
-          sudo pip install python-dateutil
+          sudo pip install python-dateutil sshfs
 
       - name: run tests
         run: |
