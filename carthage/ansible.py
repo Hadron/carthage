@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -419,6 +419,7 @@ __all__ += ['run_playbook']
 async def run_play(hosts, play,
                    *, raise_on_failure=True,
                    gather_facts=False,
+                   base_vars=None,
                    vars=None, inventory=None,
                    log=None,
                    origin=None,
@@ -428,7 +429,13 @@ async def run_play(hosts, play,
     The typical usage of this function is for cases where code wants to use an Ansible module to access some resource, especially when the results need to be programatically examined.  As an example, this can be used to examine the output of Ansible modules that gather facts.
 
     **If you are considering loading a YAML file, parsing it, and calling this function, you are almost certainly better served by :func:`run_playbook`.**
+    :param vars: Run through :func:`resolve_deferred` to produce a dictionary of variables.  Can be a function, an InjectionKey, or a dict.
+
+    :param base_vars: A dictionary of variables to set.  Unlike *vars* this must be a dictionary mapping strings to variable values or None.  *vars* is typically left to the user writing a Carthage layout, where as *base_vars* is used by higher-level constructs like :func:`ansible_role_task` to set variables related to privilege escalation from a customization or Machine.  Variables in *vars* override variables in *base_vars*.
+    
 '''
+    if base_vars is None:
+        base_vars = {}
     async with contextlib.AsyncExitStack() as stack:
         if origin and not isinstance(origin, NetworkNamespaceOrigin):
             root_path = await stack.enter_async_context(origin.filesystem_access())
@@ -448,7 +455,9 @@ async def run_play(hosts, play,
                 'tasks': play}]
             vars = await resolve_deferred(ainjector, item=vars, args={})
             if vars:
-                pb[0]['vars'] = vars
+                base_vars.update(vars)
+            if base_vars:
+                pb[0]['vars'] = base_vars
             f.write(yaml.dump(pb, default_flow_style=False))
         if inventory is None:
             with open(os.path.join(ansible_dir,
@@ -617,13 +626,20 @@ __all__ += ['AnsibleResult']
 
 
 def _handle_host_origin(host, origin):
+    base_vars = {}
+    runas_user = getattr(host, 'runas_user', None)
     if not isinstance(host, Machine) and hasattr(host, 'host'):
         host = host.host
+        if runas_user is None:
+            runas_user = host.runas_user
+    if runas_user != host.ssh_login_user:
+        base_vars['ansible_become_user'] = runas_user
+        base_vars['ansible_become'] = True
     if not origin:
-        return host, {}
+        return host, {}, base_vars
     if isinstance(host, Container) and not host.running:
-        return localhost_machine, dict(origin=dependency_quote(host))
-    return host, dict(origin=dependency_quote(host))
+        return localhost_machine, dict(origin=dependency_quote(host)), base_vars
+    return host, dict(origin=dependency_quote(host)), base_vars
 
 
 class ansible_playbook_task(setup_tasks.TaskWrapper):
@@ -632,8 +648,14 @@ class ansible_playbook_task(setup_tasks.TaskWrapper):
 
     def __init__(self, playbook, origin=False, **kwargs):
         async def func(inst):
-            host, extra_args = _handle_host_origin(inst, origin)
-            return await inst.ainjector(run_playbook, host, self.dir.joinpath(self.playbook), **extra_args)
+            host, extra_args, base_vars = _handle_host_origin(inst, origin)
+            args = []
+            if base_vars:
+                for k,v in base_vars.items():
+                    args.append(shlex.join(f'-e{k}={v}'))
+                    
+            return await inst.ainjector(run_playbook, host, self.dir.joinpath(self.playbook),  extra_args=args,
+                                        **extra_args)
         super().__init__(
             func=func,
             description=f'Run {playbook} playbook',
@@ -658,7 +680,7 @@ def ansible_role_task(roles, vars=None,
     '''
     A :func:`setup_task` to apply one or more ansible roles to a machine.
 
-    :param roles: A single role (as a string) or list of roles to include.  Roles can also be a list of dictionaries containing argumens to *import_role*.
+    :param roles: A single role (as a string) or list of roles to include.  Roles can also be a list of dictionaries containing arguments to *import_role*.
 
     :param vars: An optional dictionary of ansible variable assignments.
     :param origin: If True, use host as origin from which to run ansible.
@@ -668,7 +690,7 @@ def ansible_role_task(roles, vars=None,
                             before=before, order=order)
     @inject(ainjector=AsyncInjector)
     async def apply_roles(self, ainjector):
-        host, extra_args = _handle_host_origin(self, origin)
+        host, extra_args, base_vars = _handle_host_origin(self, origin)
         play = []
         for r in roles:
             if isinstance(r, dict):
@@ -683,6 +705,7 @@ def ansible_role_task(roles, vars=None,
             hosts=[host],
             play=play,
             vars=vars,
+            base_vars=base_vars,
             **extra_args
         )
     if isinstance(roles, (str, dict)):

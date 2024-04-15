@@ -10,11 +10,12 @@ from pathlib import Path
 import pytest
 import shutil
 
-from carthage import become_privileged, modeling, oci, podman , ssh
+from carthage import ansible, become_privileged, modeling, oci, podman , ssh
 from carthage import *
 from carthage.pytest import *
 
 state_dir = Path(__file__).parent.joinpath("test_state")
+ansible_roles_path = Path(__file__).parent.joinpath('roles')
 
 @pytest.fixture(scope='session')
 def enable_podman():
@@ -32,12 +33,15 @@ def ainjector(loop, ainjector, enable_podman):
     config.authorized_keys = ""
     state_dir.mkdir(parents=True, exist_ok=True)
     loop.run_until_complete(ainjector.get_instance_async(ssh.SshKey))
+    ansible_config = ainjector.get_instance(ansible.AnsibleConfig)
+    ansible_config.roles.append(str(ansible_roles_path))
     yield ainjector
     shutil.rmtree(state_dir, ignore_errors=True)
 
 class Layout(modeling.CarthageLayout):
 
     add_provider(modeling.machine_implementation_key, dependency_quote(podman.PodmanContainer))
+    #add_provider(ansible.ansible_log, '/tmp/ansible.log')
 
     @modeling.provides(oci.oci_container_image)
     @inject(base_image=None)
@@ -56,6 +60,7 @@ class Layout(modeling.CarthageLayout):
                 await self.run_command(
                     'apt', '-y', 'install',
                     'openssh-server',
+                    'python3',
                     'sudo',
                     'rsync',
                     'systemd')
@@ -96,6 +101,10 @@ async def layout(ainjector):
 
 @async_test
 async def test_become_privileged_mixin(layout):
+    class ansible_cust(FilesystemCustomization):
+        description = "Install ansible roles with root access"
+        touch_root_file = ansible.ansible_role_task('touch_root')
+    
     ainjector = layout.ainjector
     try:
         await ainjector.get_instance_async(InjectionKey(Machine, host='machine', _ready=True))
@@ -109,6 +118,8 @@ async def test_become_privileged_mixin(layout):
                 layout.machine.machine,
                 "/etc/shadow"),
                         state_dir/"shadow")
+            await layout.machine.machine.apply_customization(ansible_cust)
+            
     finally:
         try: await layout.machine.machine.delete()
         except Exception: pass
