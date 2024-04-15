@@ -170,7 +170,7 @@ async def test_order_override(ainjector):
         @setup_task("one")
         def one(self): pass
 
-        @setup_task("foo", order=9200)
+        @setup_task("foo", order=12000)
         def two(self):
             nonlocal two_called
             two_called = True
@@ -183,7 +183,7 @@ async def test_order_override(ainjector):
         def before_two(self):
             assert two_called is False
 
-    assert c.one.order < 9200
+    assert c.one.order < 12000
     assert c.before_two.order < c.two.order
     assert c.three.order > c.two.order
     await ainjector(c)
