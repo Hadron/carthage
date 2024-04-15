@@ -103,6 +103,9 @@ async def layout(ainjector):
     ainjector.add_provider(Layout)
     return await ainjector.get_instance_async(Layout)
 
+# this one is probably no podman within docker, but whatever the case,
+# podman systemd inside privileged docker tends to fail.
+@pytest.mark.no_rootless
 @async_test
 async def test_become_privileged_mixin(layout):
     class ansible_cust(FilesystemCustomization):
