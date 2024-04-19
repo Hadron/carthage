@@ -316,6 +316,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     def _podman_create_options(self):
         options = []
+        options = options + ['--cap-add', 'NET_ADMIN', '--cap-add', 'NET_RAW']
         options.append('--restart=' + self.podman_restart)
         if self.oci_interactive:
             options.append('-i')
