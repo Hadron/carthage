@@ -212,8 +212,6 @@ class VmwareManagedObject(VmwareStampable):
 
     def set_custom_fields(self):
         entity = self.mob
-        if not self.writable:
-            return
         fields = self.injector.get_instance(custom_fields_key)
         for name, val_func in fields.items():
             field = self._ensure_custom_field(name, vim.ManagedEntity)
@@ -233,6 +231,10 @@ class VmwareManagedObject(VmwareStampable):
         except KeyError:
             content = self.connection.content
             cfm = content.customFieldsManager
+            if not self.writable:
+                # This isn't exactly right since it looks at writable
+                # for the object not the overall connection
+                raise ValueError(f'unable to write field {fname} because object is read-only')
             return cfm.AddFieldDefinition(name=fname, moType=ftype)
 
     def set_custom_field(self, field, value):
@@ -248,8 +250,10 @@ class VmwareManagedObject(VmwareStampable):
         '''Return the vmware custom field value or None if not set
         '''
         if isinstance(field, str):
-            field = self._ensure_custom_field(field, vim.ManagedEntity)
-
+            try:
+                field = self._fetch_custom_field(field)
+            except KeyError:
+                return None
         for val in self.mob.customValue:
             if (val.key == field.key) and (val.value != ''):
                 return val.value
