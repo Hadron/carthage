@@ -316,7 +316,6 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     def _podman_create_options(self):
         options = []
-        options = options + ['--cap-add', 'NET_ADMIN', '--cap-add', 'NET_RAW']
         options.append('--restart=' + self.podman_restart)
         if self.oci_interactive:
             options.append('-i')
@@ -333,6 +332,8 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         for m in self.mounts:
             options.append(podman_mount_option(self.injector, m))
         options.extend(self.podman_options)
+        if '--privileged' not in options:
+            options.extend(['--cap-add', 'NET_ADMIN', '--cap-add', 'NET_RAW'])
         return options
 
     async def delete(self, force=True, volumes=True):
