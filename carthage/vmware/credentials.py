@@ -13,6 +13,7 @@ class CredentialsSchema(ConfigSchema, prefix="vmware"):
     hostname: str
     username: str = "{vault:secret/password/{vmware.hostname}:username}"
     password: str = "{vault:secret/password/{vmware.hostname}:password}"
+    proxy: str = None
     validate_certs: bool = False
 
 

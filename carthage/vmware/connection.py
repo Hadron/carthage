@@ -12,7 +12,7 @@ from pyVim.connect import Connect, SmartConnect, Disconnect
 from ssl import create_default_context
 
 import logging
-
+from urllib.parse import urlparse
 
 @inject(config=ConfigLayout)
 class VmwareConnection(Injectable):
@@ -23,12 +23,19 @@ class VmwareConnection(Injectable):
         if self.config.validate_certs is False:
             ssl_context.check_hostname = False
             ssl_context.verify_mode = 0
+        kwargs = dict(host=self.config.hostname,
+                      user=self.config.username,
+                      pwd=self.config.password,
+                      sslContext=ssl_context)
+        if self.config.proxy:
+            r = urlparse(self.config.proxy)
+            if r.scheme != 'http':
+                raise RuntimeError(f"unsupported proxy scheme '{r.scheme}' in proxy string '{self.config.proxy}'; current support is only for 'http'")
+            kwargs['httpProxyHost'] = r.hostname
+            kwargs['httpProxyPort'] = r.port
         self.connection = None
-        logging.debug(f'connecting to {self.config.hostname} as {self.config.username}')
-        self.connection = SmartConnect(host=self.config.hostname,
-                                       user=self.config.username,
-                                       pwd=self.config.password,
-                                       sslContext=ssl_context)
+        logging.debug(f'connecting to {self.config.hostname} as {self.config.username} using {kwargs}')
+        self.connection = SmartConnect(**kwargs)
         self.content = self.connection.content
         logging.debug(f'connected to {self.config.hostname}')
 
