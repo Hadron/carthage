@@ -13,6 +13,7 @@ import argparse
 import code
 import collections.abc
 import concurrent.futures
+import functools
 import shlex
 import re
 import time
@@ -158,7 +159,7 @@ class CarthageConsole(code.InteractiveConsole):
 
     def displayhook(self, obj):
 
-        def future_callback(f):
+        def future_callback(num, f):
             del self.history[num]
             try:
                 self.history[num] = f.result()
@@ -171,7 +172,7 @@ class CarthageConsole(code.InteractiveConsole):
             self.history_num += 1
             num = self.history_num
             future = asyncio.run_coroutine_threadsafe(obj, loop=self.loop)
-            future.add_done_callback(future_callback)
+            future.add_done_callback(functools.partial(future_callback, num))
             print(f'[{num}]: async {obj.__name__}')
             self.history[num] = future
             self.loop.call_soon_threadsafe(CarthageConsole.noop)
