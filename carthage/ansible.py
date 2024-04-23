@@ -170,6 +170,12 @@ class AnsibleInventory(AsyncInjectable):
                         var_dict['ansible_ssh_common_args'] = " ".join(ssh_options)
                 except Exception:
                     pass
+            if 'ansible_user' not in var_dict:
+                try:
+                    if m.ssh_login_user != 'root':
+                        var_dict['ansible_user'] = m.ssh_login_user
+                except Exception:
+                    pass
             hosts_dict[machine_name] = var_dict
             groups = []
             for p in self.group_plugins:
@@ -726,3 +732,25 @@ def ansible_log_for_model(model):
     return f'{model.stamp_path}/ansible.log'
 
 __all__ += ['ansible_log_for_model']
+
+class AnsibleIpAddressMixin(Machine):
+
+    '''Normally, ansible inventory is generated at generation time,
+    which may be before cloud services have determined the IP address
+    of machines.  This Mixin will look at ip_address at runtime to set
+
+    In a     :class:`carthage.modeling.MachineModel`, use this as follows::
+
+        class server(MachineModel):
+            machine_mixins = (AnsibleIpAddressMixin,)
+
+
+        '''
+
+    @property
+    def ansible_inventory_overrides(self):
+        return {
+            'ansible_host':self.ip_address,
+            }
+
+__all__ += ['AnsibleIpAddressMixin']
