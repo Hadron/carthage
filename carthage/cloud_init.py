@@ -1,4 +1,4 @@
-# Copyright (C) 2021, Hadron Industries, Inc.
+# Copyright (C) 2021, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -33,7 +33,6 @@ class CloudInitConfig:
     __all__ += ['CloudInitConfig']
 
 
-@inject_autokwargs(model=AbstractMachineModel)
 class CloudInitPlugin(Injectable):
 
     async def apply(self, config: CloudInitConfig):
@@ -131,6 +130,7 @@ async def generate_cloud_init_cidata(
 __all__ += ['generate_cloud_init_cidata']
 
 
+@inject_autokwargs(model=AbstractMachineModel)
 class NetworkPlugin(CloudInitPlugin):
 
     name = "network"
@@ -174,8 +174,10 @@ class AuthorizedKeysPlugin(CloudInitPlugin):
             lambda k: k and (not k[0] == '#'),
             authorized_keys_file.read_text().split("\n")))
         config.meta_data['public_ssh_keys'] = authorized_keys
+        config.user_data['ssh_authorized_keys'] = authorized_keys
 
 
+@inject_autokwargs(model=AbstractMachineModel)
 class HostnamePlugin(CloudInitPlugin):
 
     name = "hostname"
@@ -202,6 +204,15 @@ class WriteAuthorizedKeysPlugin(CloudInitPlugin):
             content=content,
             permissions='0644',
             owner='root:root'))
+
+class DisableRootPlugin(CloudInitPlugin):
+
+    name ='disable_root'
+
+    async def apply(self, config):
+        config.user_data['disable_root'] = True
+
+__all__ += ['DisableRootPlugin']
 
 
 @inject(injector=Injector)
