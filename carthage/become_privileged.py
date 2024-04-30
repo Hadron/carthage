@@ -6,7 +6,9 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import os
 import typing
+import carthage.machine
 from . import machine, sh
 from .utils import memoproperty
 __all__ = []
@@ -49,19 +51,41 @@ class BecomePrivilegedMixin(machine.Machine):
             _user=self.ssh_login_user)
         
     async def sshfs_process_factory(self, user):
-        if not self.become_privileged(user):
-            return await super().sshfs_process_factory(user=user)
-        sftp_command_list = self.become_privileged_command(user) + [
-            '/bin/sh', '-c',
-            f"'for sftp in {' '.join(sftp_server_locations)} ; do test -x $sftp && exec $sftp; done'"]
-        sftp_command = " ".join(sftp_command_list)
-        return sh.sshfs(
-            '-o' 'ssh_command=' + " ".join(
-                str(self.ssh).split()[:-1]),
-            '-osftp_server='+sftp_command,
-            f'{machine.ssh_user_addr(self)}:/',
-            self.sshfs_path,
-            '-f',
-            )
-
+        become_privileged_command = self.become_privileged_command(user)
+        if not become_privileged_command:
+            return await super().sshfs_process_factory(user)
+        return await sshfs_sftp_finder(
+            self,
+            become_privileged_command=become_privileged_command,
+            sshfs_path=self.sshfs_path,
+            prefix="")
+    
 __all__ += ['BecomePrivilegedMixin']
+
+async def sshfs_sftp_finder(
+        machine:                            machine.Machine,
+                            become_privileged_command: list,
+        sshfs_path: str,
+        prefix:str = ""):
+    '''Like :class:`Machine`.  Does not use the sftp subsystem,
+    but instead tries to find an sftp server.  Also, mostly for
+    podman's convenienc in running an sftp server with unshare,
+    supports a prefix argument.
+
+    :param prefix: Command inserted between the become_privileged_command and sftp invocation.  Can be used to enter the right namespace.
+
+    '''
+    
+    sftp_command_list = become_privileged_command + [
+        '/bin/sh', '-c',
+        f"'for sftp in {' '.join(sftp_server_locations)} ; do test -x $sftp && exec {prefix} $sftp; done'"]
+    sftp_command = " ".join(sftp_command_list)
+    return sh.sshfs(
+        '-o' 'ssh_command=' + " ".join(
+                str(machine.ssh).split()[:-1]),
+        '-osftp_server='+sftp_command,
+        f'{carthage.machine.ssh_user_addr(machine)}:/',
+        sshfs_path,
+        '-f',
+        )
+

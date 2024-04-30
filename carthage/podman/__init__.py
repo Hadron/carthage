@@ -1,4 +1,4 @@
-# Copyright (C)  2022, 2023, Hadron Industries, Inc.
+# Copyright (C)  2022, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -16,6 +16,10 @@ __all__ += ['PodmanPod', 'PodmanContainer', 'PodmanImage',
 from .modeling import PodmanPodModel, PodmanImageModel, ContainerfileImageModel
 
 __all__ += ['PodmanPodModel', 'PodmanImageModel', 'ContainerfileImageModel']
+
+from .container_host import LocalPodmanContainerHost, RemotePodmanHost, podman_container_host
+
+__all__ += ['LocalPodmanContainerHost', 'RemotePodmanHost', 'podman_container_host']
 
 
 @carthage.inject(injector=carthage.Injector)

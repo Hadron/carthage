@@ -1,4 +1,4 @@
-# Copyright (C)  2022, 2023, Hadron Industries, Inc.
+# Copyright (C)  2022, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -24,6 +24,7 @@ from ..utils import memoproperty
 from ..network import TechnologySpecificNetwork, Network, V4Config, this_network, NetworkConfig
 from ..oci import *
 from ..setup_tasks import setup_task, SetupTaskMixin, TaskWrapperBase, SkipSetupTask
+from .container_host import find_container_host
 
 
 logger = logging.getLogger('carthage.podman')
@@ -48,78 +49,7 @@ def podman_mount_option(injector: Injector, m: OciMount):
         res += f',{m.options}'
     return res
 
-
 __all__ = []
-
-
-class PodmanContainerHost(AsyncInjectable):
-
-    @memoproperty
-    def podman_log(self):
-        return self.injector.get_instance(InjectionKey("podman_log", _optional=True))
-    
-    def podman(self, *args,
-               _bg=True, _bg_exc=True):
-        raise NotImplementedError
-
-    async def filesystem_access(self, container):
-        raise NotImplementedError
-
-    async def tar_volume_context(self, volume):
-        '''
-        An asynchronous context manager that tars up a volume and provides a path to that tar file usable in ``podman import``.  Typical usage::
-
-            async with container_host.tar_volume_context(container_image) as path:
-                await container_host.podman('import', path)
-
-        On local systems this manages temporary directories.  For remote container hosts, this manages to get the tar file to the remote system and clean up later.
-        '''
-        raise NotImplementedError
-
-
-class LocalPodmanContainerHost(PodmanContainerHost):
-
-        
-    
-    @contextlib.asynccontextmanager
-    async def filesystem_access(self, container):
-        result = await self.podman(
-            'container', 'mount',
-            container,
-            _bg=True, _bg_exc=False, _log=False)
-        try:
-            path = str(result).strip()
-            yield Path(path)
-        finally:
-            pass  # Perhaps we should unmount, but we'd need a refcount to do that.
-
-    def podman(self, *args,
-               _bg=True, _bg_exc=False, _log=True):
-        options = {}
-        if _log and self.podman_log:
-            options['_out']=str(self.podman_log)
-            options['_err_to_out'] = True
-        return sh.podman(
-            *args,
-            _bg=_bg, _bg_exc=_bg_exc,
-            _encoding='utf-8',
-            **options)
-
-    @contextlib.asynccontextmanager
-    async def tar_volume_context(self, volume):
-        assert hasattr(volume, 'path')
-        with tempfile.TemporaryDirectory() as path_raw:
-            path = Path(path_raw)
-            await sh.tar(
-                "-C", str(volume.path),
-                "--xattrs",
-                "--xattrs-include=*.*",
-                "-czf",
-                str(path / "container.tar.gz"),
-                ".",
-                _bg=True,
-                _bg_exc=False)
-            yield path / 'container.tar.gz'
 
 class PodmanNetworkMixin:
 
@@ -168,8 +98,11 @@ class PodmanPod(OciPod, PodmanNetworkMixin, carthage.machine.NetworkedModel):
         super().__init__(**kwargs)
         self.injector.add_provider(InjectionKey(PodmanPod), dependency_quote(self))
         self.network_links = {}
-
+        self.container_host = None
     async def find(self):
+        if not self.container_host:
+            await self.ainjector(find_container_host, self)
+        await self.container_host.start_container_host()
         if self.id:
             inspect_arg = self.id
         else:
@@ -205,7 +138,7 @@ class PodmanPod(OciPod, PodmanNetworkMixin, carthage.machine.NetworkedModel):
 
     @memoproperty
     def podman(self):
-        return self.injector(LocalPodmanContainerHost).podman
+        return self.container_host.podman
 
 
 __all__ += ['PodmanPod']
@@ -265,16 +198,17 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._operation_lock = asyncio.Lock()
+        self.container_host = None
 
     @memoproperty
     def podman(self):
         return self.container_host.podman
 
-    @memoproperty
-    def container_host(self):
-        return self.injector(LocalPodmanContainerHost)
 
     async def find(self):
+        if not self.container_host:
+            await self.ainjector(find_container_host, self)
+        await self.container_host.start_container_host()
         try:
             result = await self.podman(
                 'container', 'inspect', self.full_name,
@@ -335,6 +269,8 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         return options
 
     async def delete(self, force=True, volumes=True):
+        if not self.container_host:
+            await self.ainjector(find_container_host, self)
         force_args = []
         if force:
             force_args.append('--force')
@@ -365,6 +301,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     async def stop_machine(self):
         async with self._operation_lock:
+            await self.is_machine_running()
             if not self.running:
                 return
             await self.podman(
@@ -400,6 +337,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         customization.run_command = self.container_exec
 
     def filesystem_access(self, user='root'):
+        assert self.container_host, 'call self.find first'
         return self.container_host.filesystem_access(self.full_name)
 
     def __repr__(self):
@@ -453,6 +391,7 @@ class PodmanImageBuilderContainer(PodmanContainer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.injector.add_provider(InjectionKey(NetworkConfig), dependency_quote(None))
+
 @inject_autokwargs(
     base_image=InjectionKey(oci_container_image, _optional=NotPresent),
 )
@@ -471,8 +410,12 @@ class PodmanImage(OciImage, SetupTaskMixin):
         super().__init__(**kwargs)
         self.layer_number = 1
         self.injector.add_provider(InjectionKey('podman_log'), self.stamp_path/'podman.log')
+        self.container_host = None
 
     async def pull_base_image(self):
+        if not self.container_host:
+            await self.ainjector(find_container_host, self)
+        await self.container_host.start_container_host()
         if isinstance(self.base_image, OciImage):
             await self.base_image.async_become_ready()
             base_image = self.base_image.oci_image_tag
@@ -498,6 +441,9 @@ class PodmanImage(OciImage, SetupTaskMixin):
         self.last_layer = self.base_image_info['Id']
 
     async def find(self):
+        if not self.container_host:
+            await self.ainjector(find_container_host, self)
+        await self.container_host.start_container_host()
         if self.id:
             to_find = self.id
             self.oci_read_only = True
@@ -622,9 +568,6 @@ class PodmanImage(OciImage, SetupTaskMixin):
     def podman(self):
         return self.container_host.podman
 
-    @memoproperty
-    def container_host(self):
-        return self.injector(LocalPodmanContainerHost)
 
     @memoproperty
     def stamp_path(self):
@@ -732,6 +675,7 @@ class ContainerfileImage(OciImage):
                     path = Path(module.__file__).parent
                 self.source_container_context = self.container_context = path/self.container_context
         super().__init__(**kwargs)
+        self.container_host = None
         if len(self.setup_tasks) > 2:
             # More than just find_or_create and copy_context_if_needed
             self.setup_tasks.sort(key=lambda t: 1 if t.func == OciManaged.find_or_create.func else 0)
@@ -740,9 +684,6 @@ class ContainerfileImage(OciImage):
                                    
             
 
-    @memoproperty
-    def container_host(self):
-        return self.injector(LocalPodmanContainerHost)
 
     @memoproperty
     def output_path(self):
@@ -783,6 +724,9 @@ class ContainerfileImage(OciImage):
             self.container_context)
 
     async def find(self):
+        if not self.container_host:
+            await self.ainjector(find_container_host, self)
+        await self.container_host.start_container_host()
         try: inspect_result = await self.container_host.podman(
                 'image', 'inspect',
                 self.oci_image_tag, _log=False)
@@ -828,15 +772,16 @@ __all__ += ['ContainerfileImage']
 @inject_autokwargs(network=this_network)
 class PodmanNetwork(TechnologySpecificNetwork, OciManaged):
 
-    @memoproperty
-    def container_host(self):
-        return self.injector(LocalPodmanContainerHost)
+    container_host: PodmanContainerHost = None
 
     @property
     def podman(self):
         return self.container_host.podman
     
     async def find(self):
+        if not self.container_host:
+            await self.ainjector(find_container_host, self)
+            await self.container_host.start_container_host()
         try:
             inspect_result = await self.podman(
                 'network', 'inspect', self.network.name, _log=False)
