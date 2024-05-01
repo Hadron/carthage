@@ -1,4 +1,4 @@
-# Copyright (C)  2022, 2023, Hadron Industries, Inc.
+# Copyright (C)  2022, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -18,11 +18,14 @@ from carthage.modeling import *
 from carthage.image import SshAuthorizedKeyCustomizations
 from carthage.ssh import SshKey
 from carthage import *
+from carthage.become_privileged import BecomePrivilegedMixin
 from carthage.machine import FilesystemCustomization
 import carthage
 from carthage.pytest import *
 
 state_dir = Path(__file__).parent.joinpath("test_state")
+
+
 
 @pytest.fixture(scope='session')
 def enable_podman():
@@ -30,12 +33,29 @@ def enable_podman():
     base_injector(carthage.plugins.load_plugin, 'carthage.podman')
 
 @pytest.fixture()
-def ainjector(ainjector, enable_podman):
+def ainjector(ainjector, enable_podman, pytestconfig, loop):
     ainjector = ainjector.claim("test_podman.py")
     config = ainjector.injector(carthage.ConfigLayout)
     config.state_dir = state_dir
     state_dir.mkdir(parents=True, exist_ok=True)
+    if pytestconfig.getoption('remote_container_host'):
+        from podman_remote_host import container_host
+        ainjector.add_provider(ssh_jump_host, injector_access(podman_container_host))
+    else:
+        container_host = LocalPodmanContainerHost
+    ainjector.add_provider(podman_container_host, container_host)
     yield ainjector
+    container_host_instance = ainjector.injector.get_instance(InjectionKey(podman_container_host, _ready=False))
+    try:
+        host_machine = container_host_instance.machine
+        loop.run_until_complete(host_machine.ainjector(host_machine.delete))
+        # AsyncRequired if the machine was never set up
+        # AttributeError if it's a LocalPodmanContainerHost
+    except (AsyncRequired, AttributeError):
+        pass
+    except Exception as e:
+        logger.exception('error cleaning up container host')
+        
     shutil.rmtree(state_dir, ignore_errors=True)
 
 @pytest.fixture()
@@ -86,7 +106,7 @@ class podman_layout(CarthageLayout):
 
             @setup_task("Test container customization")
             def test_container_cust(self): pass
-            
+
     class foo(MachineModel):
 
         name = 'foo.com'
@@ -94,7 +114,7 @@ class podman_layout(CarthageLayout):
     class ssh_test(MachineModel):
         name = 'ssh-test.foo.com'
         ip_address = '127.0.0.1'
-
+        podman_options = ('--privileged',)
         add_provider(OciExposedPort(22))
 
     class mount_test(MachineModel):
@@ -140,8 +160,8 @@ class podman_layout(CarthageLayout):
 #!/bin/sh
 exit 0
             ''')
-            
-            
+
+
     class true_machine(MachineModel):
         add_provider(oci_container_image, injector_access(TrueImage))
 
@@ -151,7 +171,7 @@ exit 0
         add_provider(oci_container_image, injector_access(DynamicContainerFileImage))
 
         name = 'dynamic-machine'
-        
+
     class pod_group(ModelGroup):
         add_provider(OciExposedPort(22))
 
@@ -365,4 +385,3 @@ async def test_podman_pod_network(layout_fixture):
 @async_test
 async def test_podman_image_model(layout_fixture):
     await layout_fixture.ImageModelCustomizations.build_image()
-    

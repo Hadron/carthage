@@ -35,7 +35,7 @@ class PodmanContainerHost(AsyncInjectable):
     @memoproperty
     def podman_log(self):
         return self.injector.get_instance(InjectionKey("podman_log", _optional=True))
-    
+
     def podman(self, *args,
                _bg=True, _bg_exc=True):
         raise NotImplementedError
@@ -62,11 +62,11 @@ class PodmanContainerHost(AsyncInjectable):
         '''Extra arguments to pass to podman from ansible plugin.
         '''
         return ''
-    
+
 class LocalPodmanContainerHost(PodmanContainerHost):
 
-        
-    
+
+
     @contextlib.asynccontextmanager
     async def filesystem_access(self, container):
         result = await self.podman(
@@ -127,7 +127,7 @@ class RemotePodmanHost(PodmanContainerHost):
         self.sshfs_path = None
         self.sshfs_process = None
         self.sshfs_lock = asyncio.Lock()
-        
+
 
     def __repr__(self):
         try:
@@ -185,7 +185,7 @@ class RemotePodmanHost(PodmanContainerHost):
                 raise TimeoutError('container host failed to become ready')
             
             self.local_socket = local_socket
-        
+
 
     async def stop_container_host(self):
         async with self._operation_lock:
@@ -196,12 +196,12 @@ class RemotePodmanHost(PodmanContainerHost):
 
     def out_cb(self, data):
         logger.debug('%r: %s', self, data)
-        
+
     def process_done(self, *args):
         logger.info('%r: podman terminated', self)
         self.process = None
         self.local_socket = None
-        
+
     def podman(self, *args, _log=True,
                _bg=True, _bg_exc=False):
         options = {}
@@ -291,7 +291,7 @@ class RemotePodmanHost(PodmanContainerHost):
     def extra_args(self):
         '''Tell Ansible about container_host'''
         return f'--url=unix://{self.local_socket}'
-    
+
     tar_volume_context = LocalPodmanContainerHost.tar_volume_context
 __all__ += ['RemotePodmanHost']
 
@@ -323,4 +323,3 @@ async def find_container_host(target, *, container_host):
     assert isinstance(container_host, Machine), 'container_host must be a PodmanContainerHost or machine'
     target.container_host = await ainjector(RemotePodmanHost, machine=container_host)
     return
-    

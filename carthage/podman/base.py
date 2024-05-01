@@ -80,12 +80,12 @@ class PodmanNetworkMixin:
                 return ['--network', 'container:'+network_namespace.id]
             return []           # Joining a pod
         return await self._network_options() # Creating our own namespace
-           
+
     async def resolve_networking(self, force:bool = False):
         await super().resolve_networking(force=force)
         for net in set(map( lambda l:l.net, self.network_links.values())):
             net.assign_addresses()
-            
+
 @inject(
     podman_pod_options=InjectionKey('podman_pod_options', _optional=NotPresent),
 )
@@ -143,7 +143,7 @@ class PodmanPod(OciPod, PodmanNetworkMixin, carthage.machine.NetworkedModel):
 
 __all__ += ['PodmanPod']
 
-   
+
 
 @inject_autokwargs(
     oci_container_image=InjectionKey(oci_container_image, _optional=NotPresent),
@@ -174,7 +174,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             return self.model.podman_options
         except AttributeError:
             return []
-        
+
 
     @memoproperty
     def ssh_options(self):
@@ -228,7 +228,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         except Exception as e:
             raise ValueError(f'Invalid ISO string: {self.container_info["Created"]}')
 
-            
+
     async def do_create(self):
         image = self.oci_container_image
         if isinstance(image, OciImage):
@@ -577,8 +577,8 @@ class PodmanImage(OciImage, SetupTaskMixin):
         path = Path(config.output_dir)/"podman_image"/self.oci_image_tag.replace('/','_')
         path.mkdir(exist_ok=True, parents=True)
         return path
-    
-                            
+
+
 
 __all__ += ['PodmanImage']
 podman_image_volume_key = InjectionKey('carthage.podman/image_volume')
@@ -640,8 +640,8 @@ class ImageLayerTask(TaskWrapperBase):
     def stamp(self):
         #Overridden if an image_layer_task is assigned as a class property
         return self.customization.__name__
-    
-    
+
+
 @inject_autokwargs(
     config_layout=ConfigLayout,
     podman_options=InjectionKey('podman_options', _optional=NotPresent),
@@ -683,8 +683,8 @@ class ContainerfileImage(OciImage):
             self.setup_tasks.sort(key=lambda t: 1 if t.func == OciManaged.find_or_create.func else 0)
             self.container_context = self.output_path
         self.injector.add_provider(InjectionKey("podman_log"), self.stamp_path/'podman.log')
-                                   
-            
+
+
 
 
     @memoproperty
@@ -712,8 +712,8 @@ class ContainerfileImage(OciImage):
         source_mtime = self.container_context_mtime(self.source_container_context)
         if source_mtime > last_run: return False
         return False
-    
-        
+
+
     async def do_create(self):
         options = await self._build_options()
         return await self.container_host.podman(
@@ -752,8 +752,8 @@ class ContainerfileImage(OciImage):
             stat = p.stat()
             if stat.st_mtime >mtime: mtime = stat.st_mtime
         return mtime
-    
-    
+
+
 
     async def _build_options(self):
         options = []
@@ -779,7 +779,7 @@ class PodmanNetwork(TechnologySpecificNetwork, OciManaged):
     @property
     def podman(self):
         return self.container_host.podman
-    
+
     async def find(self):
         if not self.container_host:
             await self.ainjector(find_container_host, self)
@@ -794,7 +794,7 @@ class PodmanNetwork(TechnologySpecificNetwork, OciManaged):
         except (KeyError, ValueError):
             logger.error('Unable to understand network inspection result: %s', info)
             raise NotImplementedError('Podman too old')
-        
+
 
     async def do_create(self):
         options = ['-d', 'bridge']
@@ -822,7 +822,7 @@ class PodmanNetwork(TechnologySpecificNetwork, OciManaged):
         await self.podman(
             'network', 'rm', *force_options,
             self.network.name)
-        
+
     def link_options(self, link):
         def safe(s):
             assert ',' not in s

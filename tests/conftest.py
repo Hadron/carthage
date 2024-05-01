@@ -24,6 +24,11 @@ from carthage.pytest import *
 
 pytest_plugins = ('carthage.pytest_plugin',)
 
+def pytest_addoption(parser):
+    group = parser.getgroup('podman', 'Podman test options')
+    group.addoption('--remote-container-host',
+                    action='store_true',
+                    help='Use remote container host in AWS for Podman Carthage tests')
 
 @pytest.mark.no_rootless
 @pytest.fixture(scope='session')
