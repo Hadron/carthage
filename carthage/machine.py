@@ -758,7 +758,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
     def __getattr__(self, a):
         if a in ('ssh', 'ip_address', 'start_machine', 'stop_machine',
-                 "filesystem_access",
+                 'filesystem_access', 'run_command',
                  'model',
                  'name', 'ansible_inventory_name',
                  'machine_running', 'running',

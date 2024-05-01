@@ -302,6 +302,18 @@ class Container(Machine, SetupTaskMixin):
         return sh.nsenter.bake("-t" + self.container_leader, "-C", "-m", "-n", "-u", "-i", "-p",
                                _env=self._environment())
 
+    def run_command(self, *args, _bg=True,
+                          _bg_exc=False, _user=None,
+                          **kwargs):
+        if _user is None:
+            _user = self.runas_user
+        if _user != 'root':
+            raise NotImplementedError('Not currently supported for runas_user to be different than root')
+        if self.running:
+            return self.shell(*args, **kwargs)
+        else:
+            return self.container_command(*args, _bg=_bg, _bg_exc=_bg_exc, **kwargs)
+        
     def _environment(self, networking=False):
         env = os.environ.copy()
         env['DEBIAN_FRONTEND'] = 'noninteractive'
@@ -341,6 +353,5 @@ class Container(Machine, SetupTaskMixin):
 
     def _apply_to_filesystem_customization(self, customization):
         customization.path = self.volume.path
-        customization.run_command = self.container_command
 
 __all__ = ['container_volume', 'container_image', 'Container']

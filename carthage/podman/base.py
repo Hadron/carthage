@@ -325,6 +325,8 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     #: An alias to be more compatible with :class:`carthage.container.Container`
     shell = container_exec
+    #: container_exec meets the run_command interface
+    run_command = container_exec
 
     def _apply_to_filesystem_customization(self, customization):
         @contextlib.asynccontextmanager
@@ -334,7 +336,6 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
                 yield
             return
         customization.customization_context = customization_context()
-        customization.run_command = self.container_exec
 
     def filesystem_access(self, user='root'):
         assert self.container_host, 'call self.find first'
