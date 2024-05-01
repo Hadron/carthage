@@ -137,10 +137,11 @@ class RemotePodmanHost(PodmanContainerHost):
 
     async def start_container_host(self):
         machine = self.machine
-        await machine.start_machine()
         if self.local_socket:
             return
         async with self._operation_lock:
+            await machine.start_machine()
+            await machine.ssh_online()
             become_privileged_command = []
             if hasattr(machine, 'become_privileged_command'):
                 become_privileged_command = machine.become_privileged_command(self.user)
@@ -166,15 +167,23 @@ class RemotePodmanHost(PodmanContainerHost):
             'podman', 'system', 'service',
                 '--timeout', '90',
                 f'unix://{socket}',
+                _out=self.out_cb,
+                _err_to_out=True,
                 _bg=True, _bg_exc=False,
                 _done=self.process_done)
+            logger.debug('%r waiting for podman socket', self)
             for i in range(5):
                 try:
-                    await sh.podman('info')
+                    await sh.podman(
+                        '--url=unix://'+str(local_socket),
+                        'info')
+                    logger.info('%r is ready', self)
                     break
                 except sh.ErrorReturnCode:
                     await asyncio.sleep(0.5)
-                    
+            else:
+                raise TimeoutError('container host failed to become ready')
+            
             self.local_socket = local_socket
         
 
@@ -185,7 +194,11 @@ class RemotePodmanHost(PodmanContainerHost):
                 self.local_socket = None
                 self.process = None
 
+    def out_cb(self, data):
+        logger.debug('%r: %s', self, data)
+        
     def process_done(self, *args):
+        logger.info('%r: podman terminated', self)
         self.process = None
         self.local_socket = None
         
@@ -307,7 +320,6 @@ async def find_container_host(target, *, container_host):
     if isinstance(container_host, AbstractMachineModel):
         ainjector = container_host.injector.get_instance(AsyncInjector)
         container_host = await ainjector.get_instance_async(Machine)
-        
     assert isinstance(container_host, Machine), 'container_host must be a PodmanContainerHost or machine'
     target.container_host = await ainjector(RemotePodmanHost, machine=container_host)
     return
