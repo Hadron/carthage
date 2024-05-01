@@ -64,6 +64,8 @@ def pytest_addoption(parser):
     group = parser.getgroup("Carthage", "Carthage Continuous Integration Options")
     group.addoption('--carthage-config',
                     type=argparse.FileType('rt'),
+                    default=[],
+                    action='append',
                     help="Specify yaml carthage config; this configuration file describes where to put VMs and where to find hadron-operations.  It is not the test configuration for individual tests.  This option is typically used on the controller and not alongside --carthage-json on the system under test.",
                     metavar="file")
     group.addoption('--carthage-json',
@@ -89,12 +91,12 @@ def pytest_configure(config):
         logging.getLogger('sh').setLevel(logging.ERROR)
         logging.getLogger('carthage.sh').propagate = False
         carthage_config = config.getoption('carthage_config')
-    if carthage_config:
+    for c in carthage_config:
         config_layout = base_injector(ConfigLayout)
         try:
-            config_layout.load_yaml(carthage_config)
+            config_layout.load_yaml(c)
         finally:
-            carthage_config.close()
+            c.close()
     test_params_yaml = config.getoption('test_parameters')
     if test_params_yaml:
         config.carthage_test_parameters = yaml.load(test_params_yaml)
