@@ -595,7 +595,6 @@ class Machine(AsyncInjectable, SshMixin):
         Adapts the customization to this type of machine.  Overridden in machines that can customize a filesystem without booting.
         '''
         customization.customization_context = customization._machine_context()
-        customization.run_command = self.run_command
 
     def run_command(self,
                         *args,
@@ -693,8 +692,13 @@ it works like :meth:`carthage.container.Container.container_command` and is used
 @inject_autokwargs(config_layout=ConfigLayout)
 class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
+    runas_user = None #: The user to run as
+
     def __init__(self, apply_to: Machine,
                  stamp=None, **kwargs):
+        # Copy in the runas_user before replacing the customization with a machine
+        if self.runas_user is None:
+            self.runas_user = apply_to.runas_user
         if isinstance(apply_to, BaseCustomization):
             apply_to = apply_to.host
         self.host = apply_to
@@ -758,7 +762,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
     def __getattr__(self, a):
         if a in ('ssh', 'ip_address', 'start_machine', 'stop_machine',
-                 'filesystem_access', 'run_command',
+                 'filesystem_access',
                  'model',
                  'name', 'ansible_inventory_name',
                  'machine_running', 'running',
@@ -773,6 +777,13 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
     #: A description of the customization for inclusion in task logging
     description = ""
 
+    def run_command(self, *args, _user=None, **kwargs):
+        if _user is None:
+            _user = self.runas_user
+            return self.host.run_command(
+                *args, _user=_user,
+                **kwargs)
+        
 
 class MachineCustomization(BaseCustomization):
 
@@ -817,7 +828,7 @@ class FilesystemCustomization(BaseCustomization):
 
     @contextlib.asynccontextmanager
     async def _machine_context(self):
-        async with self.host.machine_running(), self.host.filesystem_access() as path:
+        async with self.host.machine_running(), self.host.filesystem_access(user=self.runas_user) as path:
             self.path = path
             yield
             return
