@@ -57,6 +57,12 @@ class PodmanContainerHost(AsyncInjectable):
     async def start_container_host(self):
         pass
 
+    @property
+    def extra_args(self):
+        '''Extra arguments to pass to podman from ansible plugin.
+        '''
+        return ''
+    
 class LocalPodmanContainerHost(PodmanContainerHost):
 
         
@@ -191,7 +197,7 @@ class RemotePodmanHost(PodmanContainerHost):
             options['_err_to_out'] = True
             #breakpoint()
         return sh.podman(
-                f'--url=unix://{self.local_socket}',
+            self.extra_args,
                 *args,
                 **options)
 
@@ -268,6 +274,11 @@ class RemotePodmanHost(PodmanContainerHost):
             return []
         return machine.become_privileged_command(user)
 
+    @property
+    def extra_args(self):
+        '''Tell Ansible about container_host'''
+        return f'--url=unix://{self.local_socket}'
+    
     tar_volume_context = LocalPodmanContainerHost.tar_volume_context
 __all__ += ['RemotePodmanHost']
 

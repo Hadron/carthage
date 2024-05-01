@@ -191,6 +191,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
     def ansible_inventory_overrides(self):
         return dict(
             ansible_connection='containers.podman.podman',
+            ansible_podman_extra_args=self.container_host.extra_args,
             ansible_pipelining=False,
             ansible_host=self.full_name,
         )
