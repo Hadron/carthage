@@ -32,9 +32,9 @@ def enable_podman():
     import carthage.plugins
     base_injector(carthage.plugins.load_plugin, 'carthage.podman')
 
-@pytest.fixture()
-def ainjector(ainjector, enable_podman, pytestconfig, loop):
-    ainjector = ainjector.claim("test_podman.py")
+@pytest.fixture(scope='module')
+def ainjector(enable_podman, pytestconfig, loop):
+    ainjector = base_injector.claim('test_podman.py')(AsyncInjector)
     config = ainjector.injector(carthage.ConfigLayout)
     config.state_dir = state_dir
     state_dir.mkdir(parents=True, exist_ok=True)
@@ -57,11 +57,12 @@ def ainjector(ainjector, enable_podman, pytestconfig, loop):
         logger.exception('error cleaning up container host')
         
     shutil.rmtree(state_dir, ignore_errors=True)
+    ainjector.close()
 
 @pytest.fixture()
 def layout_fixture(ainjector):
     loop = ainjector.loop
-    ainjector.add_provider(podman_layout)
+    ainjector.replace_provider(podman_layout)
     layout = loop.run_until_complete(ainjector.get_instance_async(CarthageLayout))
     yield layout
     try: loop.run_until_complete(
@@ -243,7 +244,8 @@ async def test_container_ssh(ainjector):
             await machine.apply_customization(SshAuthorizedKeyCustomizations)
             await machine.container_exec('mkdir', '/run/sshd')
             await machine.container_exec('/usr/sbin/sshd')
-            await machine.ssh_online()
+            with TestTiming(400):
+                await machine.ssh_online()
     finally:
         await machine.delete()
 
