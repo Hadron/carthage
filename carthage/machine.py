@@ -242,7 +242,11 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
             logger.debug(f'{self.name} is ssh_online')
             break
         if not online:
-            raise TimeoutError("{} not online".format(self.ip_address)) from last_error
+            if isinstance(last_error, sh.TimeoutException):
+                raise TimeoutError("{} not online".format(self._address)) from last_error
+            else:
+                raise TimeoutError(f'{self.ip_address} not online: {last_error}') from last_error
+            
 
     def ssh_recompute(self, *args):
         try:
