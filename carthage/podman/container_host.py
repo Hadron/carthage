@@ -202,17 +202,19 @@ class RemotePodmanHost(PodmanContainerHost):
         self.process = None
         self.local_socket = None
 
-    def podman(self, *args, _log=True,
+    async def podman(self, *args, _log=True,
                _bg=True, _bg_exc=False):
+        await self.start_container_host()
         options = {}
         if _log and self.podman_log:
             options['_out']=str(self.podman_log)
             options['_err_to_out'] = True
-            #breakpoint()
-        return sh.podman(
+        result = sh.podman(
             self.extra_args,
                 *args,
                 **options)
+        await result
+        return result
 
     @contextlib.asynccontextmanager
     async def filesystem_access(self, container):
@@ -321,5 +323,12 @@ async def find_container_host(target, *, container_host):
         ainjector = container_host.injector.get_instance(AsyncInjector)
         container_host = await ainjector.get_instance_async(Machine)
     assert isinstance(container_host, Machine), 'container_host must be a PodmanContainerHost or machine'
-    target.container_host = await ainjector(RemotePodmanHost, machine=container_host)
+    try:
+        target.container_host = container_host.injector.get_instance(
+            InjectionKey(PodmanContainerHost, host=container_host.name))
+    except KeyError: # does not exist yet
+        target.container_host = await ainjector(RemotePodmanHost, machine=container_host)
+        container_host.injector.add_provider(
+            InjectionKey(PodmanContainerHost, host=container_host.name),
+            target.container_host)
     return

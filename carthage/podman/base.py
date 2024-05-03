@@ -102,7 +102,6 @@ class PodmanPod(OciPod, PodmanNetworkMixin, carthage.machine.NetworkedModel):
     async def find(self):
         if not self.container_host:
             await self.ainjector(find_container_host, self)
-        await self.container_host.start_container_host()
         if self.id:
             inspect_arg = self.id
         else:
@@ -209,7 +208,6 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
     async def find(self):
         if not self.container_host:
             await self.ainjector(find_container_host, self)
-        await self.container_host.start_container_host()
         try:
             result = await self.podman(
                 'container', 'inspect', self.full_name,
@@ -421,7 +419,6 @@ class PodmanImage(OciImage, SetupTaskMixin):
     async def pull_base_image(self):
         if not self.container_host:
             await self.ainjector(find_container_host, self)
-        await self.container_host.start_container_host()
         if isinstance(self.base_image, OciImage):
             await self.base_image.async_become_ready()
             base_image = self.base_image.oci_image_tag
@@ -449,7 +446,6 @@ class PodmanImage(OciImage, SetupTaskMixin):
     async def find(self):
         if not self.container_host:
             await self.ainjector(find_container_host, self)
-        await self.container_host.start_container_host()
         if self.id:
             to_find = self.id
             self.oci_read_only = True
@@ -732,7 +728,6 @@ class ContainerfileImage(OciImage):
     async def find(self):
         if not self.container_host:
             await self.ainjector(find_container_host, self)
-        await self.container_host.start_container_host()
         try: inspect_result = await self.container_host.podman(
                 'image', 'inspect',
                 self.oci_image_tag, _log=False)
@@ -787,7 +782,6 @@ class PodmanNetwork(TechnologySpecificNetwork, OciManaged):
     async def find(self):
         if not self.container_host:
             await self.ainjector(find_container_host, self)
-            await self.container_host.start_container_host()
         try:
             inspect_result = await self.podman(
                 'network', 'inspect', self.network.name, _log=False)
