@@ -176,8 +176,8 @@ class SshMixin:
         else:
             ssh_agent = self.injector.get_instance(carthage.ssh.SshAgent)
             key_options = tuple()
-        options = self.ssh_options + ('-oUserKnownHostsFile=' +
-                                      os.path.join(self.config_layout.state_dir, 'ssh_known_hosts'),)
+        options = self.ssh_options + ('-F' +
+                                      str(ssh_agent.ssh_config),)
         if ssh_origin_container is not None:
             ip_address = self.ip_address
             ssh_origin_container.done_future().add_done_callback(self.ssh_recompute)

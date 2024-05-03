@@ -23,7 +23,7 @@ from .dependency_injection import *
 from . import sh, Machine, machine
 from .container import Container
 from .config import ConfigLayout
-from .ssh import SshKey
+from .ssh import SshKey, SshAgent
 from .utils import validate_shell_safe
 from types import SimpleNamespace
 from .network import access_ssh_origin
@@ -492,15 +492,18 @@ __all__ += ['run_play']
 
 
 @inject(ssh_key=InjectionKey(SshKey, _optional=True),
+        ssh_agent=InjectionKey(SshAgent, _optional=True),
         config=ConfigLayout)
 @contextlib.contextmanager
 def write_config(config_dir, inventory,
                  *, ssh_key, log,
                  config, origin,
                  inventory_overrides,
+                 ssh_agent,
                  ansible_config):
     private_key = ""
     if ssh_key:
+        ssh_agent = ssh_key.agent
         private_key = f"private_key_file = {ssh_key.key_path}"
     if not log:
         stdout_str = "stdout_callback = json"
@@ -553,7 +556,7 @@ pipelining=True
 ''')
         if origin is None or isinstance(origin, NetworkNamespaceOrigin):
             f.write(f'''\
-ssh_args = -o ControlMaster=auto -o ControlPersist=60s -oUserKnownHostsFile={config.state_dir}/ssh_known_hosts {config.global_ssh_options}
+ssh_args = -F{ssh_agent.ssh_config} -o ControlMaster=auto -o ControlPersist=60s -oUserKnownHostsFile={config.state_dir}/ssh_known_hosts {config.global_ssh_options}
 ''')
         else:
             f.write(f'''\

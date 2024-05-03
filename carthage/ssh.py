@@ -221,7 +221,7 @@ class SshAgent(Injectable):
 
     def __init__(self, injector, key):
         config_layout = injector(ConfigLayout)
-        run = config_layout.local_run_dir
+        run = Path(config_layout.local_run_dir)
         auth_sock = os.path.join(run, "ssh_agent")
         os.makedirs(run, exist_ok=True)
         try:
@@ -240,7 +240,17 @@ class SshAgent(Injectable):
         elif key:  # not ready
             future = asyncio.ensure_future(key.async_become_ready())
             future.add_done_callback(lambda f: self.handle_key(f.result()))
-
+        ssh_config = run.joinpath('ssh_config')
+        ssh_config_text = f'''
+UserKnownHostsFile {config_layout.state_dir}/ssh_known_hosts
+        '''
+        if os.path.exists('/etc/ssh/ssh_config'):
+            ssh_config_text += 'Include /etc/ssh/ssh_config\n'
+        if os.path.exists(os.path.expanduser('~/.ssh/config')):
+            ssh_config_text += 'Include config\n'
+        ssh_config.write_text(ssh_config_text)
+        self.ssh_config = ssh_config
+        
     def handle_key(self, key):
         key.add_to_agent(self)
 
