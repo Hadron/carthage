@@ -48,6 +48,7 @@ def ainjector(enable_podman, pytestconfig, loop):
     container_host_instance = ainjector.injector.get_instance(InjectionKey(podman_container_host, _ready=False))
     try:
         host_machine = container_host_instance.machine
+        logger.info('Deleting %s', host_machine)
         loop.run_until_complete(host_machine.ainjector(host_machine.delete))
         # AsyncRequired if the machine was never set up
         # AttributeError if it's a LocalPodmanContainerHost
