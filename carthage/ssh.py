@@ -170,7 +170,9 @@ async def rsync(*args, config_layout,
         if ssh_options:
             ssh_options = list(ssh_options)
 
-        ssh_options.extend(['-oUserKnownHostsFile=' + str(config_layout.state_dir) + "/ssh_known_hosts"])
+        ssh_options.extend(['-F'+str(ssh_agent.ssh_config)])
+        if key:
+            ssh_options.extend(['-i'+str(key.key_path)])
         ssh_options = " ".join(ssh_options)
         rsync_opts = ['-e', 'ssh ' + ssh_options]
         if rsync_command:
