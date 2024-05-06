@@ -12,6 +12,7 @@ dependencies:
     pypi: lmdb
   - deb: python3-netifaces
     pypi: netifaces
+  - deb: git
   - deb: socat
   - deb: systemd-container
   - deb: libvirt-clients
