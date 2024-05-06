@@ -20,7 +20,7 @@ try:
 except ImportError:
     raise ImportError('For --remote-container-host to work, your carthage config needs to reference the AWS plugin and include valid AWS account and VPC information.')
 
-class container_host(MachineModel):
+class container_host(MachineModel, AsyncInjectable):
     add_provider(machine_implementation_key, dependency_quote(aws.AwsVm))
     add_provider(ssh_jump_host, dependency_quote(None))
     ssh_login_user = 'admin'
