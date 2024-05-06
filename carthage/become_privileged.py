@@ -11,6 +11,8 @@ import typing
 import carthage.machine
 from . import machine, sh
 from .utils import memoproperty
+from .ssh import SshAgent
+
 __all__ = []
 
 #: List of sftp-server locations
@@ -75,7 +77,7 @@ async def sshfs_sftp_finder(
     :param prefix: Command inserted between the become_privileged_command and sftp invocation.  Can be used to enter the right namespace.
 
     '''
-    
+    agent = await machine.ainjector.get_instance_async(SshAgent)
     sftp_command_list = become_privileged_command + [
         '/bin/sh', '-c',
         f"'for sftp in {' '.join(sftp_server_locations)} ; do test -x $sftp && exec {prefix} $sftp; done'"]
@@ -87,5 +89,5 @@ async def sshfs_sftp_finder(
         f'{carthage.machine.ssh_user_addr(machine)}:/',
         sshfs_path,
         '-f',
-        )
+        _env=agent.agent_environ)
 

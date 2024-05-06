@@ -633,6 +633,7 @@ it works like :meth:`carthage.container.Container.container_command` and is used
     async def sshfs_process_factory(self, user):
         if user != self.ssh_login_user:
             raise ValueError(f'{self.__class__.__qualname__} cannot set up filesystem access when runas_user != ssh_login_user')
+        agent = await self.ainjector.get_instance_async(SshAgent)
         return sh.sshfs(
             '-o' 'ssh_command=' + " ".join(
                 str(self.ssh).split()[:-1]),
@@ -640,7 +641,8 @@ it works like :meth:`carthage.container.Container.container_command` and is used
             self.sshfs_path,
             '-f',
             _bg=True,
-            _bg_exc=False)
+            _bg_exc=False,
+            _env = agent.agent_environ)
 
     @contextlib.asynccontextmanager
     async def filesystem_access(self, user=None):
