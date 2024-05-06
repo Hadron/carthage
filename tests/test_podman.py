@@ -49,6 +49,18 @@ def ainjector(enable_podman, pytestconfig, loop):
         host_machine = loop.run_until_complete(container_host_instance.ainjector.get_instance_async(InjectionKey(Machine, _ready=False)))
     except KeyError:
         host_machine = None
+    try:
+        if host_machine:
+            loop.run_until_complete(host_machine.async_become_ready())
+    except Exception as e:
+        logger.exception('Error bringing container_host to ready:')
+        try:
+            logger.info('Deleting %s', host_machine)
+            loop.run_until_complete(host_machine.delete())
+            host_machine = None
+        except Exception:
+            logger.exception('Error deleting container_host')
+        raise e
     yield ainjector
     if host_machine:
         logger.info('Deleting %s', host_machine)
