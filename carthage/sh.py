@@ -14,12 +14,10 @@ import sh as _sh
 Monkey patch the sh module to include __await__.
 Also, by default for commands retrieved through this module set _bg=True and _bg_exc=False
 '''
-Command = _sh.Command
+_sh_context = _sh(_bg=True, _bg_exc=False)
 
 def __getattr__(name):
-    val = getattr(_sh, name)
-    if isinstance(val, Command):
-        val = val.bake(_bg=True, _bg_exc=False)
+    val = getattr(_sh_context, name)
     globals()[name] = val
     return val
 
