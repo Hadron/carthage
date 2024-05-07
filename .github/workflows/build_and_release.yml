@@ -125,7 +125,7 @@ jobs:
       run: |
         # It looks like podman create fails the first time with a resource busy
         podman run --rm debian:latest sleep 1 || true
-        pytest-3 tests/test_podman.py --carthage-config=.github/aws.yml --remote-container-host -v -s --log-cli-level=info
+        pytest-3 -k 'not no_rootless' tests/test_podman.py --carthage-config=.github/aws.yml --remote-container-host -v -s --log-cli-level=info
 
   github_release:
     runs-on: ubuntu-22.04
