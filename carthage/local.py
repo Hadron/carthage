@@ -1,4 +1,4 @@
-# Copyright (C) 2021, 2022, 2023, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -9,6 +9,7 @@
 import contextlib
 from ipaddress import IPv4Address
 from pathlib import Path
+import os
 from .machine import Machine
 from .dependency_injection import *
 from . import sh
@@ -28,7 +29,14 @@ When testing whether a :class:`Machine` is local, test for ``isinstance(machine,
     ip_address = "127.0.0.1"
 
     @contextlib.asynccontextmanager
-    async def filesystem_access(self):
+    async def filesystem_access(self, user=None):
+        if user is None:
+            user = self.runas_user
+        if user != os.getlogin():
+            async with super().filesystem_access(user=user) as path:
+                yield path
+                return
+            
         yield Path("/")
 
     async def stop_machine(self):
