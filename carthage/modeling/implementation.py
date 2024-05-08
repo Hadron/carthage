@@ -1,4 +1,4 @@
-# Copyright (C) 2021, 2022, 2023, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -123,34 +123,6 @@ class ModelingNamespace(dict):
         self.to_inject = dict()
 
 
-    def keys_for(self, name, state):
-        # returns key, (value, options)
-        def val(k):
-            value = state.value
-            if state.flags & NSFlags.dependency_quote:
-                return dependency_quote(value)
-            else:
-                return value
-
-        options = state.injection_options
-        state.extra_keys.sort(key=lambda k:k.globally_unique, reverse=True)
-        if state.flags & NSFlags.inject_by_name:
-            name_key = InjectionKey(name)
-            # If name_key is in extra_keys, use that, so we avoid
-            # differing in _globally_unique or _ready
-            if name_key not in state.extra_keys:
-                yield InjectionKey(name), (val(InjectionKey(name)), options)
-        if isinstance(state.value, type) and (state.flags & NSFlags.inject_by_class):
-            for b in state.value.__mro__:
-                if b in self.classes_to_inject:
-                    try:
-                        class_key = state.value.default_class_injection_key()
-                    except AttributeError:
-                        class_key = InjectionKey(b)
-                    class_key = InjectionKey(b, **class_key.constraints)
-                    yield class_key, (val(class_key), options)
-        for k in state.extra_keys:
-            yield k, (val(k), options)
 
     def __getitem__(self, k):
         # Normally when we set an item we drop it from initial
@@ -206,7 +178,7 @@ class ModelingNamespace(dict):
             return state.value
         transclusion_keys = None
         if state.transclusion_key: transclusion_keys = {state.transclusion_key}
-        for k, info in self.keys_for(name=k, state=state):
+        for k, info in keys_for(name=k, state=state, classes_to_inject=self.classes_to_inject):
             self.to_inject[k] = info
             if transclusion_keys: transclusion_keys.add(k)
         if transclusion_keys:
@@ -279,6 +251,38 @@ class ModelingNamespace(dict):
                 return res
             parent = parent.parent_context
         raise KeyError
+
+def keys_for(name, state, classes_to_inject):
+    '''
+    Returns the set of keys for a given state item.
+    '''
+    # returns key, (value, options)
+    def val(k):
+        value = state.value
+        if state.flags & NSFlags.dependency_quote:
+            return dependency_quote(value)
+        else:
+            return value
+
+    options = state.injection_options
+    state.extra_keys.sort(key=lambda k:k.globally_unique, reverse=True)
+    if state.flags & NSFlags.inject_by_name:
+        name_key = InjectionKey(name)
+        # If name_key is in extra_keys, use that, so we avoid
+        # differing in _globally_unique or _ready
+        if name_key not in state.extra_keys:
+            yield InjectionKey(name), (val(InjectionKey(name)), options)
+    if isinstance(state.value, type) and (state.flags & NSFlags.inject_by_class):
+        for b in state.value.__mro__:
+            if b in classes_to_inject:
+                try:
+                    class_key = state.value.default_class_injection_key()
+                except AttributeError:
+                    class_key = InjectionKey(b)
+                class_key = InjectionKey(b, **class_key.constraints)
+                yield class_key, (val(class_key), options)
+    for k in state.extra_keys:
+        yield k, (val(k), options)
 
 def check_already_provided(metaclass_proxy, v):
     if not hasattr(metaclass_proxy, '__namespace__'):
@@ -568,7 +572,7 @@ class ModelingContainer(InjectableModelType):
                 if not do_global: return
                 k_new = k_inner  # globally unique
             # Must be after we have chosen a globally unique key if there is one.
-            if k_new not in ns.to_inject and k_inner not in inner_key_map:
+            if k_new not in to_inject and k_inner not in inner_key_map:
                 inner_key_map[k_inner] = k_new
             if isinstance(v, decorators.injector_access):
                 # Normally injector_access will not actually get a key
@@ -587,15 +591,19 @@ class ModelingContainer(InjectableModelType):
             # already in the outer injector or by an overlapping
             # constraint.  Also, It just moves the recursion around.
             v = injector_xref(outer_key, k_inner)
-            if k_new not in ns.to_inject:
-                ns.to_inject[k_new] = (v, options)
-                ns.to_propagate.add(k_new)
+            if k_new not in to_inject:
+                to_inject[k_new] = (v, options)
+                outer_to_propagate.add(k_new)
 
         if not isinstance(state.value, ModelingContainer):
             return
         inner_key_map = {}
         val = state.value
+        if isinstance(ns, ModelingNamespace):
+            ns = ModelingNamespaceProxy(ns.cls, ns)
         outer_key = None
+        to_inject = ns.__initial_injections__
+        outer_to_propagate = ns.__container_propagations__
         to_propagate = val.__container_propagations__
         outer_keys = []
         if hasattr(val, '__provides_dependencies_for__'):
@@ -603,7 +611,7 @@ class ModelingContainer(InjectableModelType):
                     val.__provides_dependencies_for__,
                     key=lambda k: k.globally_unique,
                     reverse=True):
-                if outer_key not in ns.to_propagate: continue
+                if outer_key not in outer_to_propagate: continue
                 if  len(outer_key.constraints) > 0:
                     outer_keys.append(outer_key)
         if to_propagate and not outer_keys:
@@ -618,18 +626,21 @@ class ModelingContainer(InjectableModelType):
             for outer_key in outer_keys:
                 propagate_provider(outer_key, k_inner, v, options, do_global)
                 do_global = False
-        map_transclusions(ns.transclusions, val, inner_key_map)
+        map_transclusions(ns.__transclusions__, val, inner_key_map)
 
     def _propagate_filter(target_cls, ns, k, state):
+        if isinstance(ns, ModelingNamespace):
+            ns = ModelingNamespaceProxy(ns.cls, ns)
         if hasattr(state.value, '__container_propagation_keys__'):
             propagation_keys = set(state.value.__container_propagation_keys__)
         else: propagation_keys = set()
-        keys_for = set((x[0] for x in ns.keys_for(name=k, state=state)))
-        propagation_keys &= keys_for
+        value_keys = set((x[0] for x in keys_for(name=k, state=state, classes_to_inject=set())))
+        propagation_keys &= value_keys
         # ModelingContainers must propagate even if they have no explicit keys
         if (not propagation_keys ) and isinstance(state.value, ModelingContainer):
-            propagation_keys = keys_for
-        ns.to_propagate |= propagation_keys
+            propagation_keys = value_keys
+        if propagation_keys: 
+            ns.__container_propagations__  |= propagation_keys
         
     # propagate_filter must come before integrate_containment so that
     # integrate_containment can check whether outer_keys are in
@@ -672,16 +683,15 @@ class ModelingContainer(InjectableModelType):
                           allow_multiple=False,
                           dynamic_name=None,
                           **kwargs):
-        if not hasattr(cls, '__namespace__'):
-            raise TypeError('include_container can only be called within a class body')
-        ns = cls.__namespace__
+        if dynamic_name and not hasattr(cls, '__namespace__'):
+            raise TypeError('include_container can only be called within a class body if dynamic_name is used')
         def handle_function(func):
             params = set(inspect.signature(func).parameters.keys())
             open_params = params - set(kwargs.keys())
             for k in open_params:
-                if k not in ns:
+                if not hasattr(cls, k):
                     raise AttributeError(f'{k} not found in enclosing class')
-                kwargs[k] = ns[k]
+                kwargs[k] = getattr(cls, k)
             return func(**kwargs)
         if not hasattr(obj, '__provides_dependencies_for__') and callable(obj):
             obj = handle_function(obj)
@@ -693,20 +703,21 @@ class ModelingContainer(InjectableModelType):
             # decorators ourselves
             if (not close) or allow_multiple:
                 raise TypeError('If using dynamic_name, use decorators to adjust close and allow_multiple')
-            ns[fixup_dynamic_name(dynamic_name)] = obj
+            setattr(cls, fixup_dynamic_name(dynamic_name), obj)
             return
         # Since we're not able to use ns.__setitem__, do the injection key stuff ourself.
         if not close:
             state.flags &= ~NSFlags.close
         if allow_multiple:
             state.flags |= NSFlags.allow_multiple
+        state.flags &= ~NSFlags.inject_by_name
         state.extra_keys = obj.__provides_dependencies_for__
         options = state.injection_options
-        for k in obj.__provides_dependencies_for__:
-            if k not in ns.to_inject:
-                ns.to_inject[k] = (obj, options)
-        ModelingContainer._propagate_filter(cls, ns, obj.__name__, state)
-        ModelingContainer._integrate_containment(cls, ns, obj.__name__, state)
+        for k, _ in keys_for(name="", state=state, classes_to_inject=set()):
+            if k not in cls.__initial_injections__:
+                cls.__initial_injections__[k] = (obj, options)
+        ModelingContainer._propagate_filter(cls, cls, obj.__name__, state)
+        ModelingContainer._integrate_containment(cls, cls, obj.__name__, state)
 
 
 
