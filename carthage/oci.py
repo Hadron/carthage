@@ -1,4 +1,4 @@
-# Copyright (C)  2022, Hadron Industries, Inc.
+# Copyright (C)  2022, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -24,12 +24,12 @@ __all__ += ['oci_container_image']
 
 
 @inject_autokwargs(
-    oci_read_only=InjectionKey('oci_read_only', _optional=NotPresent)
+    readonly=InjectionKey('oci_read_only', _optional=NotPresent)
 )
 class OciManaged(SetupTaskMixin, AsyncInjectable):
 
     #:Should this object be treated as read only
-    oci_read_only = False
+    readonly = False
 
     async def find(self):
         '''Returns falsy if the object does not exist.  Ideally returns the creation time in unix time, otherwise returns True if the creation time cannot be determined.
@@ -46,7 +46,7 @@ class OciManaged(SetupTaskMixin, AsyncInjectable):
         if self._find_result:
             return  # find was successful
         del self._find_result
-        if self.oci_read_only:
+        if self.readonly:
             raise RuntimeError(f'{self} is read only but does not exist')
 
         await self.do_create()
@@ -194,7 +194,7 @@ class OciPod(OciManaged):
             raise TypeError('Either name or id is mandatory')
         super().__init__(**kwargs)
         if self.id:
-            self.oci_read_only = True
+            self.readonly = True
 
     @memoproperty
     def exposed_ports(self):

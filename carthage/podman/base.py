@@ -448,7 +448,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
             await self.ainjector(find_container_host, self)
         if self.id:
             to_find = self.id
-            self.oci_read_only = True
+            self.readonly = True
         else:
             to_find = self.oci_image_tag
         try:
