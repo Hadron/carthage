@@ -95,7 +95,6 @@ class PodmanPodModel( carthage.machine.NetworkedModel, ModelContainer):
     @classmethod
     def supplementary_injection_keys(self, k):
         if k.constraints:
-            yield InjectionKey(PodmanPod, **k.constraints)
             yield InjectionKey(PodmanPodModel, **k.constraints)
             if 'name' in k.constraints and not issubclass(k.target, carthage.machine.ResolvableModel):
                 yield InjectionKey(carthage.machine.ResolvableModel, name=k.constraints['name']+'-pod',
