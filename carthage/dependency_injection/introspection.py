@@ -194,7 +194,19 @@ class InstantiationContext(BaseInstantiationContext, InjectedDependencyInspector
             self.dependencies_waiting = ctx.dependencies_waiting
             break
         self.provider.instantiation_contexts.add(self)
-        return super().__enter__()
+        res =  super().__enter__()
+        loop_detect = set()
+        cur = self.parent
+        while cur:
+            try:
+                loop_tuple = cur.key, cur.injector
+                if loop_tuple in loop_detect:
+                    breakpoint()
+                    raise RuntimeError('injection loop detected')
+                loop_detect.add(loop_tuple)
+            except AttributeError: pass
+            cur = cur.parent
+        return res
 
     @property
     def description(self):
