@@ -12,12 +12,12 @@ import carthage.modeling.implementation
 from .base import *
 from carthage import *
 from carthage.dependency_injection import *
-from carthage.oci import OciImage
+from carthage.oci import OciImage, oci_container_network_config
 
 __all__ = []
 
 
-class PodmanPodModel( carthage.machine.NetworkedModel, ModelContainer):
+class PodmanPodModel( carthage.machine.NetworkedModel, ModelContainer, AsyncInjectable):
 
     '''A container that can group a number of :class:`MachineModels` representing Podman containers.
 
@@ -104,8 +104,27 @@ class PodmanPodModel( carthage.machine.NetworkedModel, ModelContainer):
 
     def __repr__(self):
         return f'<{self.__class__.__name__} name:{self.name}>'
-    
+    async def resolve_networking(self, force:bool = False):
+        '''Like
+        :meth:`carthage.machine.NetworkedModel.resolve_networking`
+        except that it looks for :data:`oci_container_network_config`.
+        If cthat key is present, that network config is used instead
+        of ``InjectionKey(NetworkConfig)``.  Doing so allows
+        containers that are lexically contained in their host to have
+        their own NetworkConfig.
 
+        '''
+        if not force and self.network_links:
+            return
+        container_config = await self.ainjector.get_instance_async(InjectionKey(oci_container_network_config, _optional=NotPresent))
+        if container_config is not NotPresent:
+            try:
+                self.injector.add_provider(InjectionKey(NetworkConfig), dependency_quote(container_config))
+            except ExistingProvider: pass
+        await super().resolve_networking(force=force)
+        for net in set(map( lambda l:l.net, self.network_links.values())):
+            net.assign_addresses()
+    
 __all__ += ['PodmanPodModel']
 
 

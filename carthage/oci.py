@@ -13,6 +13,7 @@ from .setup_tasks import setup_task, SetupTaskMixin
 from .utils import memoproperty
 from .config.types import ConfigPath
 import carthage.machine
+import carthage.network
 
 
 __all__ = []
@@ -21,6 +22,14 @@ __all__ = []
 oci_container_image = InjectionKey('oci/container_image')
 
 __all__ += ['oci_container_image']
+
+#: If provided this NetworkConfig will be used instead of
+#InjectionKey(NetworkConfig) within containers.  That typically means
+#that after resolve_networking, the container's injector will provide
+#InjectionKey(NetworkConfig) with whatever was provided by this key.  Note that MachineModel does not respect this key.  So it will be respected when containers are used directly or for pods and pod models.
+oci_container_network_config = InjectionKey(carthage.network.NetworkConfig, role='container')
+
+__all__ += ['oci_container_network_config']
 
 
 @inject_autokwargs(

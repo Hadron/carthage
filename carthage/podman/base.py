@@ -82,6 +82,20 @@ class PodmanNetworkMixin:
         return await self._network_options() # Creating our own namespace
 
     async def resolve_networking(self, force:bool = False):
+        '''Like
+        :meth:`carthage.machine.NetworkedModel.resolve_networking`
+        except that it looks for :data:`oci_container_network_config`.
+        If cthat key is present, that network config is used instead
+        of ``InjectionKey(NetworkConfig)``.  Doing so allows
+        containers that are lexically contained in their host to have
+        their own NetworkConfig.
+
+        '''
+        if not force and self.network_links:
+            return
+        container_config = await self.ainjector.get_instance_async(InjectionKey(oci_container_network_config, _optional=NotPresent))
+        if container_config is not NotPresent:
+            self.injector.add_provider(InjectionKey(NetworkConfig), dependency_quote(container_config))
         await super().resolve_networking(force=force)
         for net in set(map( lambda l:l.net, self.network_links.values())):
             net.assign_addresses()
