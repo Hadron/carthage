@@ -24,7 +24,7 @@ class container_host(MachineModel, AsyncInjectable):
     add_provider(machine_implementation_key, dependency_quote(aws.AwsVm))
     add_provider(ssh_jump_host, dependency_quote(None))
     ssh_login_user = 'admin'
-    runas_user = 'admin'
+    runas_user = 'poduser'
     machine_mixins = (become_privileged.BecomePrivilegedMixin, carthage.ansible.AnsibleIpAddressMixin)
     cloud_init = True
     add_provider(ci.DisableRootPlugin)
@@ -59,6 +59,7 @@ class container_host(MachineModel, AsyncInjectable):
             await self.run_command('apt', 'update')
             await self.run_command('apt', '-y',
                                    'install',
-                                   'podman', 'containers-storage')
-            await self.run_command('loginctl', 'enable-linger', 'admin')
+                                   'podman', 'containers-storage', 'acl')
+            await self.run_command('useradd', '-m', '-s', '/bin/bash', 'poduser')
+            await self.run_command('loginctl', 'enable-linger', 'poduser')
             
