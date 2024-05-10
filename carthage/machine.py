@@ -625,6 +625,7 @@ it works like :meth:`carthage.container.Container.container_command` and is used
             _user = self.runas_user
         if _user != self.ssh_login_user:
             raise ValueError(f'{self.__class__.__qualname__} Does not support runas_user different than ssh_login_user; consider BecomePrivilegedMixin or another privilege management solution.')
+        args = [str(a) if isinstance(a,Path) else a for a in args]
         return self.ssh(
             shlex.join(args),
             _bg=_bg, _bg_exc=_bg_exc)
