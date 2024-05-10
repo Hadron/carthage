@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import tempfile
 import shutil
+import shlex
 import uuid
 import dateutil.parser
 import carthage.machine
@@ -28,7 +29,7 @@ __all__ = []
 
 logger = logging.getLogger('carthage.podman')
 
-
+CARTHAGE_SOCKET_DIRECTORY = Path('/var/lib/carthage/podman_sockets')
 
 class PodmanContainerHost(AsyncInjectable):
 
@@ -131,7 +132,7 @@ class RemotePodmanHost(PodmanContainerHost):
 
     def __repr__(self):
         try:
-            return f'<PodmanContainerHost on {self.machine.name}'
+            return f'<PodmanContainerHost on {self.machine.name}>'
         except Exception:
             return '<PodmanContainerHost>'
 
@@ -140,6 +141,7 @@ class RemotePodmanHost(PodmanContainerHost):
         if self.local_socket:
             return
         async with self._operation_lock:
+            await machine.async_become_ready()
             await machine.start_machine()
             await machine.ssh_online()
             become_privileged_command = []
@@ -150,11 +152,42 @@ class RemotePodmanHost(PodmanContainerHost):
                 home_directory = '/root'
             else:
                 home_directory = '/home/'+self.user
-            socket_directory = home_directory+'/.carthage/podman_sockets'
-            socket = socket_directory+'/'+str(uuid.uuid4())
-            await machine.run_command(
-            'mkdir', '-p', socket_directory,
-            _user=self.user)
+            if become_privileged_command:
+                assert ':' not in machine.ssh_login_user
+                await machine.run_command(
+                    'mkdir',
+                    '-m755',
+                    '-p',
+                    CARTHAGE_SOCKET_DIRECTORY,
+                    _user='root')
+                await machine.run_command(
+                    'mkdir',
+                    '-m711',
+                    '-p',
+                    CARTHAGE_SOCKET_DIRECTORY/self.user,
+                    _user='root')
+                await machine.run_command(
+                    'chown', self.user,
+                    CARTHAGE_SOCKET_DIRECTORY/self.user,
+                    _user='root')
+                await machine.run_command(
+                    'mkdir',
+                    '-m700',
+                    '-p',
+                    CARTHAGE_SOCKET_DIRECTORY/self.user/machine.ssh_login_user,
+                    _user=self.user)
+                await machine.run_command(
+                    'setfacl', '-m',
+                    f'default:user:{machine.ssh_login_user}:rwx,user:{machine.ssh_login_user}:rwx',
+                    CARTHAGE_SOCKET_DIRECTORY/self.user/machine.ssh_login_user,
+                    _user=self.user)
+                socket_directory = CARTHAGE_SOCKET_DIRECTORY/self.user/machine.ssh_login_user
+            else:
+                socket_directory = home_directory+'/.carthage/podman_sockets'
+                await machine.run_command(
+                    'mkdir', '-p', socket_directory,
+                    _user=self.user)
+            socket = str(socket_directory)+'/'+str(uuid.uuid4())
             config = machine.injector(ConfigLayout)
             state_dir = Path(config.state_dir)
             local_socket = state_dir/'local_podman_sockets'/machine.name
@@ -174,6 +207,10 @@ class RemotePodmanHost(PodmanContainerHost):
             logger.debug('%r waiting for podman socket', self)
             for i in range(5):
                 try:
+                    if become_privileged_command:
+                        await machine.run_command(
+                            'chmod', 'g+rw',
+                            socket, _user=self.user)
                     await sh.podman(
                         '--url=unix://'+str(local_socket),
                         'info')
@@ -220,9 +257,9 @@ class RemotePodmanHost(PodmanContainerHost):
     async def filesystem_access(self, container):
         prefix = []
         if self.user != 'root':
-            prefix ='podman unshare'
+            prefix =['podman', 'unshare']
         res = await self.machine.run_command(
-            *prefix.split(' '),
+            *prefix,
             'podman',
             'container',
             'mount',
@@ -249,7 +286,7 @@ class RemotePodmanHost(PodmanContainerHost):
                         dir=self.machine.config_layout.state_dir, prefix=self.machine.name, suffix="sshfs_"+self.user)
                     self.sshfs_process = await become_privileged.sshfs_sftp_finder(
                         machine=self.machine,
-                        prefix=prefix,
+                        prefix=shlex.join(prefix),
                         sshfs_path=self.sshfs_path,
                         become_privileged_command=self.become_privileged_command
                     )
@@ -325,10 +362,10 @@ async def find_container_host(target, *, container_host):
     assert isinstance(container_host, Machine), 'container_host must be a PodmanContainerHost or machine'
     try:
         target.container_host = container_host.injector.get_instance(
-            InjectionKey(PodmanContainerHost, host=container_host.name))
+            InjectionKey(PodmanContainerHost, host=container_host.name, user=container_host.runas_user))
     except KeyError: # does not exist yet
         target.container_host = await ainjector(RemotePodmanHost, machine=container_host)
         container_host.injector.add_provider(
-            InjectionKey(PodmanContainerHost, host=container_host.name),
+            InjectionKey(PodmanContainerHost, host=container_host.name, user=container_host.runas_user),
             target.container_host)
     return
