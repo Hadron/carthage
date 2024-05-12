@@ -20,6 +20,7 @@ from .dependency_injection import *
 from .config import ConfigLayout
 from .files import checkout_git_repo
 
+from typing import Union
 
 logger = logging.getLogger('carthage.plugins')
 
@@ -67,11 +68,26 @@ class CarthagePlugin(Injectable):
     def resource_path(self, resource):
         return self._get_resource(resource)
 
+def _parse_plugin_spec(spec: Union[str, dict, Path]):
+    if isinstance(spec, dict):
+        return spec
+    if hasattr(spec, '__fspath__'):
+        return dict(type='path', path=spec.resolve())
+    assert isinstance(spec, str)
+    if ':' in spec:
+        prefix = spec.partition(':')[0]
+        if prefix in ('https', 'git+ssh'):
+            return dict(type='git', url=spec)
+        raise NotImplementedError(f'unrecognized plugin specification: {spec}')
+    if '/' in spec or spec == '.' or spec == '..':
+        return dict(type='path', path=Path(spec).resolve())
+    return dict(type='module', name=spec)
 
 @inject(injector=Injector)
-def load_plugin(spec: str,
+def load_plugin(spec: Union[str, dict, Path],
                 *, injector,
                 ignore_import_errors=False):
+
     '''
     Load a plugin from a plugin specification:
 
@@ -85,9 +101,27 @@ def load_plugin(spec: str,
 
     :param ignore_import_errors:  If True, succeed and register the plugin even if the python code raises.  This is intended to allow the plugin to be loaded so its metadata can be examined to determine dependencies.  Obviously the plugin is unlikely to be functional in such a state.
     '''
-    if ':' in str(spec):
-        spec = handle_plugin_url(str(spec), injector)
-    if hasattr(spec, "__fspath__") or '/' in spec or spec == '.' or spec == '..':
+
+    spec = _parse_plugin_spec(spec)
+
+    if spec['type'] == 'module':
+        package = importlib.import_module(spec['name'])
+        metadata = None
+        return injector(load_plugin_from_package, package, metadata)
+
+    elif spec['type'] == 'path':
+        return handle_path_url(spec['path'], injector, ignore_import_errors=ignore_import_errors)
+
+    elif spec['type'] == 'git':
+        path = handle_git_url(spec, injector)
+        return handle_path_url(path, injector, ignore_import_errors=ignore_import_errors)
+
+    else:
+        raise ValueError(f'unrecognized plugin type in {spec}')
+
+def handle_path_url(spec: dict, injector, ignore_import_errors):
+    # Defer whitespace churn by leaving this indented
+    if True:
         path = Path(spec).resolve()
         metadata_path = path / "carthage_plugin.yml"
         if not metadata_path.exists():
@@ -127,9 +161,10 @@ def load_plugin(spec: str,
                 )
             else:
                 module_spec = None
-    else:  # spec is a package
-        module_spec = find_spec(spec)
-        metadata = None
+    return handle_module_spec(injector, module_spec=module_spec, metadata=metadata,
+                              ignore_import_errors=ignore_import_errors)
+
+def handle_module_spec(injector, *, module_spec, metadata, ignore_import_errors):
     package = None
     import_error = None
     if module_spec:
@@ -161,16 +196,8 @@ def load_plugin(spec: str,
                     ignore_import_errors=ignore_import_errors,
                     import_error=import_error)
 
-
-def handle_plugin_url(url, injector):
-    parsed = urlparse(url)
-    if parsed.scheme in ('https', 'git+ssh'):
-        return handle_git_url(parsed, injector)
-    else:
-        raise NotImplementedError(f"Don't know how to handle {parsed.scheme} URL")
-
-
-def handle_git_url(parsed, injector):
+def handle_git_url(spec, injector):
+    parsed = urlparse(spec['url'])
     config = injector(ConfigLayout)
     stem = Path(parsed.path).name
     if stem.endswith('.git'):
@@ -179,7 +206,8 @@ def handle_git_url(parsed, injector):
     if dest.exists():
         return dest
     logger.info(f'Checking out {parsed.geturl()}')
-    injector(checkout_git_repo, parsed.geturl(), dest, foreground=True)
+    branch = spec.get('branch', None)
+    injector(checkout_git_repo, parsed.geturl(), dest, branch=branch, foreground=True)
     return dest
 
 
