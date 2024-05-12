@@ -506,10 +506,13 @@ class SetupTaskMixin:
                         context_entered = True
                     if not dry_run:
                         self.logger_for().info(f"Running {t.description} task for {self}")
+                        started = time.time()
                         with SetupTaskContext(self, t):
                             await ainjector(t, self)
                         dependency_last_run = time.time()
-                        self.logger_for().info(f"Finished running {t.description} task for {self} at {dependency_last_run}")
+                        a = datetime.datetime.fromtimestamp(started)
+                        b = datetime.datetime.fromtimestamp(dependency_last_run)
+                        self.logger_for().info(f"Finished running {t.description} task for {self} from {a.time()} to {b.time()} ({b - a})")
                     else:
                         self.logger_for().info(f'Would run {t.description} task for {self}')
                 except SkipSetupTask:
