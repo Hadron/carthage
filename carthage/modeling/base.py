@@ -21,6 +21,7 @@ import carthage.kvstore
 import carthage.network
 import carthage.machine
 from .utils import *
+from ..setup_tasks import TaskWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +223,121 @@ class ModelGroup(ModelContainer, AsyncInjectable):
             pass
         super().close(canceled_futures)
 
+    async def dump_injectors(self, models, futures):
+
+        import yaml
+
+        injectors = {}
+        providers = {}
+        keys = {}
+
+        def _class_setup_tasks(cls):
+            from carthage.setup_tasks import TaskWrapperBase
+            meth_names = {}
+            for c in cls.__mro__:
+                if not issubclass(c, SetupTaskMixin):
+                    continue
+                for m in c.__dict__:
+                    if m in meth_names:
+                        continue
+                    meth = getattr(c, m)
+                    meth_names[m] = True
+                    if isinstance(meth, TaskWrapperBase):
+                        yield meth
+        def to_json(o):
+
+            if isinstance(o, str): return o
+            if isinstance(o, list): return [ to_json(no) for no in o ]
+            if isinstance(o, tuple):
+                if len(o) == 2 and o[0] in ('http', 'https'):
+                    return o[0] + '://' + o[1]
+                return [ to_json(no) for no in o ]
+            if isinstance(o, dict): return { to_json(k): to_json(v) for k, v in o.items() }
+            if isinstance(o, set): return [ to_json(no) for no in o ]
+            if isinstance(o, (Injector, AsyncInjector)): return str(o)
+            if isinstance(o, (ConfigLayout,)): return str(o)
+            if isinstance(o, type): return str(o)
+            if isinstance(o, carthage.machine.CustomizationWrapper):
+                return [ to_json(t) for t in list(_class_setup_tasks(o.customization)) ]
+            if isinstance(o, (InjectionKey,)):
+                return dict(target=to_json(o.target), constraints=to_json(o.constraints))
+            return str(o)
+
+        def add_key(key):
+            if id(key) in keys:
+                return
+            record = dict(id=id(key), key=str(key)[13:-1], keydata=to_json(key))
+            keys[record['id']] = record
+
+        def add_provider(provider):
+            if id(provider) in providers:
+                return
+            record = dict(id=id(provider), allow_multiple=provider.allow_multiple, provider=to_json(provider.provider))
+            providers[record['id']] = record
+
+        def add_injector(injector):
+            if id(injector) in injectors:
+                return
+            for k, v in injector._providers.items():
+                add_key(k)
+                add_provider(v)
+            providers = { id(k): id(v) for k, v in injector._providers.items() }
+            claimed_by = str(type(injector.claimed_by())) if type(injector.claimed_by) != str else None
+            record = dict(id=id(injector),
+                          children=[ id(x) for x in injector._children ],
+                          parent=id(injector.parent_injector) if injector.parent_injector is not None else None,
+                          stamps=[],
+                          claimed_by=claimed_by,
+                          providers=providers,
+                          )
+            injectors[record['id']] = record
+            for i in injector._children:
+                add_injector(i)
+
+        root_injector = self.injector
+        while root_injector.parent_injector is not None:
+            root_injector = root_injector.parent_injector
+        add_injector(root_injector)
+
+        def all_injectors(injector):
+            yield injector
+            for i in injector._children:
+                yield from all_injectors(i)
+
+        stamps = {}
+
+        for injector in all_injectors(root_injector):
+
+            if not injector.claimed_by or isinstance(injector.claimed_by, str):
+                continue
+
+            instance = injector.claimed_by()
+            if not getattr(instance, 'stamp_path', None):
+                continue
+
+            for t in getattr(instance, 'setup_tasks', []):
+
+                if isinstance(t, carthage.machine.CustomizationWrapper):
+                    for tt in list(_class_setup_tasks(t.customization)):
+                        record = dict(path=os.path.join(instance.stamp_path, ".stamp-" + tt.stamp),
+                                      injector=id(injector),
+                                      instance=to_json(instance),
+                                      task=to_json(tt))
+                        record['id'] = id(record)
+                        injectors[id(injector)]['stamps'].append(id(record))
+                        stamps[id(record)] = record
+
+                record = dict(path=os.path.join(instance.stamp_path, ".stamp-" + t.stamp),
+                              injector=id(injector),
+                              instance=to_json(instance),
+                              task=to_json(t))
+                record['id'] = id(record)
+                injectors[id(injector)]['stamps'].append(id(record))
+                stamps[id(record)] = record
+
+        with open('/tmp/carthage.yml', 'w') as f:
+            yaml.dump(dict(injectors=injectors, providers=providers, keys=keys, stamps=stamps), f)
+
     async def generate(self):
         async def cb(m):
             try:
@@ -240,6 +356,7 @@ class ModelGroup(ModelContainer, AsyncInjectable):
             await asyncio.gather(*futures)
         if hasattr(super(), 'generate'):
             await super().generate()
+        await self.dump_injectors(models, futures)
 
     async def async_ready(self):
         await self.resolve_networking()

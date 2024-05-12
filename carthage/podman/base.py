@@ -452,8 +452,8 @@ class PodmanImage(OciImage, SetupTaskMixin):
         config = image_info['Config']
         if not self.oci_image_command and 'Cmd' in config:
             self.oci_image_command = config['Cmd']
-        if not self.oci_image_entry_point and 'EntryPoint' in config:
-            self.oci_image_entry_point = config['EntryPoint']
+        if not self.oci_image_entry_point and 'Entrypoint' in config:
+            self.oci_image_entry_point = config['Entrypoint']
         self.base_image_info = image_info
         self.last_layer = self.base_image_info['Id']
 

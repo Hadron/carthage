@@ -258,6 +258,7 @@ class Injector(Injectable, event.EventListener):
         self._pending = weakref.WeakSet()
         self.closed = False
         self._closing = False
+        self._children = []
         if parent_injector is None and len(providers) > 0:
             if isinstance(providers[0], Injector):
                 parent_injector = providers[0]
@@ -266,6 +267,7 @@ class Injector(Injectable, event.EventListener):
         self.parent_injector = parent_injector
         self.claimed_by = None
         if self.parent_injector:
+            self.parent_injector._children.append(self)
             event_scope = self.parent_injector._event_scope
             event_scope.add_child(parent_injector, self)
         else:
