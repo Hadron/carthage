@@ -99,7 +99,7 @@ The resulting setup_task has an attribute *repo_path* which is a function return
 
 
 @inject(injector=Injector)
-def checkout_git_repo(url, repo, *, foreground=False, injector):
+def checkout_git_repo(url, repo, *, injector, foreground=False, branch=None):
     if foreground:
         options = dict(_fg=True)
     else: options = dict(_bg=True, _bg_exc=False)
@@ -111,8 +111,10 @@ def checkout_git_repo(url, repo, *, foreground=False, injector):
                       _cwd=path,
                       **options)
     else:
+        branchargs = ['--branch', branch] if branch else []
         return sh.git("clone",
                       url, str(path),
+                      *branchargs,
                       **options)
 
 
