@@ -227,8 +227,8 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
         if not package.__spec__.origin:
             raise SyntaxError(f'{package.__name__} is not a Carthage plugin')
         try:
-            metadata = yaml.safe_load(importlib.resources.read_text(
-                package, "carthage_plugin.yml"))
+            metadata = yaml.safe_load(importlib.resources.files(
+                package).joinpath('carthage_plugin.yml').read_text())
             metadata_path = package.__file__
         except (FileNotFoundError, ImportError):
             # consider the case of hadron-operations
