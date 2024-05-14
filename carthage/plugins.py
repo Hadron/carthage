@@ -121,47 +121,45 @@ def load_plugin(spec: plugin_spec,
         raise ValueError(f'unrecognized plugin type in {spec}')
 
 def handle_path_url(spec: dict, injector, ignore_import_errors):
-    # Defer whitespace churn by leaving this indented
-    if True:
-        path = Path(spec).resolve()
-        metadata_path = path / "carthage_plugin.yml"
-        if not metadata_path.exists():
-            raise FileNotFoundError(f'{metadata_path} not found')
-        metadata = yaml.safe_load(metadata_path.read_text())
-        if 'resource_dir' not in metadata:
-            metadata['resource_dir'] = path
-        if 'name' not in metadata:
-            raise ValueError(f'metadata must contain a name when loading plugin from path')
-        # Stop early if already loaded
-        try:
-            injector.get_instance(InjectionKey(CarthagePlugin, name=metadata['name']))
-            logger.debug(f'Plugin {metadata["name"]} already loaded')
-            return
-        except KeyError:
-            pass
-        _handle_plugin_config(injector, metadata, metadata_path, ignore_import_errors=ignore_import_errors)
-        try:
-            python_path = metadata['python']
-            python_path = str(path.joinpath(python_path))
-            if python_path not in sys.path:
-                sys.path.insert(0, python_path)
-        except KeyError:
-            pass
-        if 'package' in metadata:
-            module_spec = find_spec(metadata['package'])
+    path = Path(spec).resolve()
+    metadata_path = path / "carthage_plugin.yml"
+    if not metadata_path.exists():
+        raise FileNotFoundError(f'{metadata_path} not found')
+    metadata = yaml.safe_load(metadata_path.read_text())
+    if 'resource_dir' not in metadata:
+        metadata['resource_dir'] = path
+    if 'name' not in metadata:
+        raise ValueError(f'metadata must contain a name when loading plugin from path')
+    # Stop early if already loaded
+    try:
+        injector.get_instance(InjectionKey(CarthagePlugin, name=metadata['name']))
+        logger.debug(f'Plugin {metadata["name"]} already loaded')
+        return
+    except KeyError:
+        pass
+    _handle_plugin_config(injector, metadata, metadata_path, ignore_import_errors=ignore_import_errors)
+    try:
+        python_path = metadata['python']
+        python_path = str(path.joinpath(python_path))
+        if python_path not in sys.path:
+            sys.path.insert(0, python_path)
+    except KeyError:
+        pass
+    if 'package' in metadata:
+        module_spec = find_spec(metadata['package'])
+    else:
+        package_path = path.joinpath("carthage_plugin.py")
+        name = metadata['name']
+        if '.' not in name:
+            name = "carthage.carthage_plugins." + name
+            _setup_carthage_plugins_module()
+        if package_path.exists():
+            module_spec = spec_from_file_location(
+                name, location=package_path,
+                submodule_search_locations=[str(path / "python")]
+            )
         else:
-            package_path = path.joinpath("carthage_plugin.py")
-            name = metadata['name']
-            if '.' not in name:
-                name = "carthage.carthage_plugins." + name
-                _setup_carthage_plugins_module()
-            if package_path.exists():
-                module_spec = spec_from_file_location(
-                    name, location=package_path,
-                    submodule_search_locations=[str(path / "python")]
-                )
-            else:
-                module_spec = None
+            module_spec = None
     return handle_module_spec(injector, module_spec=module_spec, metadata=metadata,
                               ignore_import_errors=ignore_import_errors)
 
@@ -181,7 +179,7 @@ def handle_module_spec(injector, *, module_spec, metadata, ignore_import_errors)
                 if parent:
                     parent_module = importlib.import_module(parent)
                     setattr(parent_module, stem, package)
-                    
+
                 sys.modules[module_name] = package
                 module_spec.loader.exec_module(package)
             except BaseException as e:
@@ -216,7 +214,7 @@ def handle_git_url(spec, injector):
 def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
                              metadata: dict = None,
                              *, ignore_import_errors=False,
-                             import_error=None, 
+                             import_error=None,
                              injector):
     if (not metadata) and (not package):
         raise RuntimeError('Either package or metadata must be supplied')
