@@ -1,8 +1,8 @@
 Source: hadron-carthage
 Section: devel
 Priority: optional
-Maintainer: Sam Hartman <sam.hartman@hadronindustries.com>
-Build-Depends: debhelper-compat  (= 13), dh-python, python3-all (>= 3.5), python3-openssl, python3-sqlalchemy, python3-setuptools, python3-pytest, python3-mako, python3-yaml, python3-pyvmomi, python3-sh, python3-lmdb, pybuild-plugin-pyproject
+Maintainer: Sam Hartman <hartmans@debian.org>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all (>= 3.5), python3-openssl, python3-sqlalchemy, python3-setuptools, python3-pytest, python3-mako, python3-yaml, python3-pyvmomi, python3-sh, python3-lmdb, pybuild-plugin-pyproject
 Standards-Version: 3.9.6
 X-Python3-Version: >= 3.11
 
@@ -10,19 +10,50 @@ X-Python3-Version: >= 3.11
 Package: python3-carthage
 Architecture: all
 Multi-Arch: foreign
-Depends: ${misc:Depends}, ${python3:Depends}, socat, systemd-container,  python3-hadron-inventory-admin, socat, libvirt-clients, hadron-entanglement-cli (>= 0.10~), qemu-utils, python3-mako, bridge-utils, python3-yaml, python3-pyvmomi, fai-setup-storage, python3-sh, sshfs, python3-lmdb
-Description: Burn it to the ground and Rebuild it Framework
+Depends: ${misc:Depends}, ${python3:Depends}, socat, systemd-container, python3-mako, bridge-utils, python3-yaml, python3-pyvmomi, python3-sh, sshfs, python3-lmdb
+Recommends: python3-hadron-inventory-admin, libvirt-clients, hadron-entanglement-cli (>= 0.10~), qemu-utils, fai-setup-storage
+Description: full-stack infrastructure-as-code framework in python 3
+Carthage is an infrastructure-as-code (IaC) framework. Carthage
+ provides models for infrastructure concepts such as machines,
+ networks, and domains or groups of machines. There are concrete
+ implementations of these models including containers and virtual
+ machines.
+.
+Carthage allows experts to quickly construct infrastructure from a
+ Carthage layout. Infrastructure can be real, virtual, or a
+ mixture.  Often the same layout is used to produce both real and
+ virtual infrastructure.
 
 Package: hadron-carthage-cli
 Section: net
 Architecture: all
 Multi-Arch: foreign
 Depends: python3-carthage(= ${binary:Version}), ${python3:Depends}
-Description: CLI scripts for Carthage
+Description: core CLI commands for the Carthage infrastructure-as-code framework
+Carthage is an infrastructure-as-code (IaC) framework. Carthage
+ provides models for infrastructure concepts such as machines,
+ networks, and domains or groups of machines. There are concrete
+ implementations of these models including containers and virtual
+ machines.
+.
+Carthage allows experts to quickly construct infrastructure from a
+ Carthage layout. Infrastructure can be real, virtual, or a
+ mixture.  Often the same layout is used to produce both real and
+ virtual infrastructure.
 
 
 Package: hadron-carthage
 Architecture: all
 Depends: hadron-carthage-cli (= ${binary:Version}), hadron-container-image, hadron-installer-direct, qemu-kvm, ovmf, libvirt-daemon-system
 Multi-Arch: foreign
-Description: Carthage run environment
+Description: full deployment of the Carthage infrastructure-as-code framework
+Carthage is an infrastructure-as-code (IaC) framework. Carthage
+ provides models for infrastructure concepts such as machines,
+ networks, and domains or groups of machines. There are concrete
+ implementations of these models including containers and virtual
+ machines.
+.
+Carthage allows experts to quickly construct infrastructure from a
+ Carthage layout. Infrastructure can be real, virtual, or a
+ mixture.  Often the same layout is used to produce both real and
+ virtual infrastructure.
