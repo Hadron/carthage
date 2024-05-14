@@ -106,9 +106,8 @@ def load_plugin(spec: plugin_spec,
     spec = _parse_plugin_spec(spec)
 
     if spec['type'] == 'module':
-        package = importlib.import_module(spec['name'])
-        metadata = None
-        return injector(load_plugin_from_package, package, metadata)
+        module_spec = find_spec(spec['name'])
+        return handle_module_spec(module_spec=module_spec, injector=injector, ignore_import_errors=ignore_import_errors, metadata=None)
 
     elif spec['type'] == 'path':
         return handle_path_url(spec['path'], injector, ignore_import_errors=ignore_import_errors)
