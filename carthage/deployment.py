@@ -563,7 +563,7 @@ async def find_deployables(
 
 __all__ += ['find_deployables']
 
-async def find_deployable(deployable: Deployable):
+async def find_deployable(deployable: Deployable, required:bool = False):
     '''
     Ideally, :meth:`Deployable.find` would return non-falsy if an object exists and falsy if it does not exist.  Unfortunately, some of the Carthage plugins do not follow this pattern.  This method:
 
@@ -573,12 +573,15 @@ async def find_deployable(deployable: Deployable):
 
     * Returns False otherwise
 
+    :param required: if true, raise if the object is not found
     '''
     result = await deployable.find()
     if bool(result): return result
     try:
         if deployable.mob is not None: return True
     except AttributeError: pass
+    if required:
+        raise LookupError(f'Failed to find {deployable}')
     return False
 
 __all__ += ['find_deployable']
