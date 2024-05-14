@@ -295,7 +295,8 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             _bg=True, _bg_exc=False)
 
     async def is_machine_running(self):
-        assert await self.find(), "Container does not exist"
+        if not await self.find():
+            return False # Containers that do not exist are not running
         self.running = self.container_info['State']['Running']
         return self.running
 
