@@ -51,8 +51,24 @@ def podman_mount_option(injector: Injector, m: OciMount):
 
 __all__ = []
 
+class HasContainerHostMixin(OciManaged):
+
+    '''
+    Provide dynamic_dependencies so podman objects are deleted after their host.
+    '''
+
+    async def dynamic_dependencies(self):
+        if self.container_host is None:
+            await self.ainjector(instantiate_container_host, self)
+        result = await super().dynamic_dependencies()
+        try:
+            result += [self.container_host.machine]
+        except AttributeError: pass
+        return result
+    
+        
 @inject_autokwargs(network=this_network)
-class PodmanNetwork(TechnologySpecificNetwork, OciManaged):
+class PodmanNetwork(HasContainerHostMixin, TechnologySpecificNetwork, OciManaged):
 
     container_host: PodmanContainerHost = None
 
@@ -65,6 +81,7 @@ class PodmanNetwork(TechnologySpecificNetwork, OciManaged):
             await self.ainjector(instantiate_container_host, self)
         if not await self.container_host.find():
             logger.debug('%s does not exist because its container host does not exist', self)
+            return False
         try:
             inspect_result = await self.podman(
                 'network', 'inspect', self.network.name, _log=False)
@@ -124,6 +141,7 @@ __all__ += ['PodmanNetwork']
 
 class PodmanNetworkMixin:
     network_implementation_class = PodmanNetwork
+
     async def _setup_networks(self):
         for l in self.network_links.values():
             if l.local_type: continue
@@ -174,7 +192,7 @@ class PodmanNetworkMixin:
 @inject(
     podman_pod_options=InjectionKey('podman_pod_options', _optional=NotPresent),
 )
-class PodmanPod(PodmanNetworkMixin, carthage.machine.NetworkedModel, OciPod):
+class PodmanPod(HasContainerHostMixin, PodmanNetworkMixin, carthage.machine.NetworkedModel, OciPod):
 
     #: A list of extra options to pass to pod create
     podman_pod_options = []
@@ -188,7 +206,8 @@ class PodmanPod(PodmanNetworkMixin, carthage.machine.NetworkedModel, OciPod):
         if not self.container_host:
             await self.ainjector(instantiate_container_host, self)
         if not await self.container_host.find():
-                logger.debug('%s does not exist because its container host does not exist', self)
+            logger.debug('%s does not exist because its container host does not exist', self)
+            return False
         if self.id:
             inspect_arg = self.id
         else:
@@ -237,7 +256,7 @@ __all__ += ['PodmanPod']
     pod=InjectionKey(PodmanPod, _optional=True),
     podman_options=InjectionKey('podman_options', _optional=NotPresent),
 )
-class PodmanContainer(PodmanNetworkMixin, Machine, OciContainer):
+class PodmanContainer(HasContainerHostMixin, PodmanNetworkMixin, Machine, OciContainer):
 
     '''
 An OCI container implemented using ``podman``.  While it is possible to set up a container to be accessible via ssh and to meet all the interfaces of :class:`~carthage.machine.SshMixin`, this is relatively uncommon.  Such containers often have an entry point that is not a full init, and only run one service or program.  Typically :meth:`container_exec` is used to execute an additional command in the scope of a container rather than using :meth:`ssh`.
@@ -297,6 +316,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             await self.ainjector(instantiate_container_host, self)
         if not await self.container_host.find():
             logger.debug('%s does not exist because its container host does not exist', self)
+            return False
         try:
             result = await self.podman(
                 'container', 'inspect', self.full_name,
@@ -538,6 +558,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
             await self.ainjector(instantiate_container_host, self)
         if not await self.container_host.find():
             logger.debug('%s does not exist because its container host does not exist', self)
+            return False
         if self.id:
             to_find = self.id
             self.readonly = True
@@ -822,6 +843,7 @@ class ContainerfileImage(OciImage):
             await self.ainjector(instantiate_container_host, self)
         if not await self.container_host.find():
             logger.debug('%s does not exist because its container host does not exist', self)
+            return False
         try: inspect_result = await self.container_host.podman(
                 'image', 'inspect',
                 self.oci_image_tag, _log=False)
