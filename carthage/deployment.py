@@ -594,7 +594,7 @@ async def find_orphan_deployables(
     '''Find any orphans in a set of Deployables. An orphan is a
     deployable that used to be deployed by a layout, but is no longer
     deployed.
-    Not all :class:`DeploymentFinders` are able to find orphans, so some orphaned objects might not be recognized.
+    Not all :class:`DeployableFinders` are able to find orphans, so some orphaned objects might not be recognized.
 
     :param deployments: If slpecified, this should be the result of :func:`find_deployments` with recurse set to True. If None, then find_deployments will be called with recursive and readonly set to True.
 
