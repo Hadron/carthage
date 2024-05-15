@@ -24,7 +24,7 @@ from ..utils import memoproperty
 from ..network import TechnologySpecificNetwork, Network, V4Config, this_network, NetworkConfig
 from ..oci import *
 from ..setup_tasks import setup_task, SetupTaskMixin, TaskWrapperBase, SkipSetupTask
-from .container_host import find_container_host
+from .container_host import instantiate_container_host
 
 
 logger = logging.getLogger('carthage.podman')
@@ -51,8 +51,79 @@ def podman_mount_option(injector: Injector, m: OciMount):
 
 __all__ = []
 
-class PodmanNetworkMixin:
+@inject_autokwargs(network=this_network)
+class PodmanNetwork(TechnologySpecificNetwork, OciManaged):
 
+    container_host: PodmanContainerHost = None
+
+    @property
+    def podman(self):
+        return self.container_host.podman
+
+    async def find(self):
+        if not self.container_host:
+            await self.ainjector(instantiate_container_host, self)
+        if not await self.container_host.find():
+            logger.debug('%s does not exist because its container host does not exist', self)
+        try:
+            inspect_result = await self.podman(
+                'network', 'inspect', self.network.name, _log=False)
+        except Exception: return False
+        info = json.loads(str(inspect_result))[0]
+        try:
+            return dateutil.parser.isoparse(info['created']).timestamp()
+        except (KeyError, ValueError):
+            logger.error('Unable to understand network inspection result: %s', info)
+            raise NotImplementedError('Podman too old')
+
+
+    async def do_create(self):
+        options = ['-d', 'bridge']
+        v4_config = getattr(self.network, 'v4_config', None)
+        if v4_config:
+            if v4_config.network:
+                options.extend([
+                    '--subnet', str(v4_config.network)])
+            if v4_config.gateway is False:
+                options.append('--internal')
+            elif v4_config.gateway and v4_config.gateway  is not True:
+                options.extend([
+                    '--gateway', str(v4_config.gateway)])
+            if v4_config.dhcp:
+                options.extend(['--ipam-driver=dhcp'])
+        await self.podman(
+            'network',
+            'create', self.network.name,
+            *options)
+
+    async def delete(self, force=True):
+        if force:
+            force_options = ['--force']
+        else: force_options = []
+        await self.podman(
+            'network', 'rm', *force_options,
+            self.network.name)
+
+    def link_options(self, link):
+        def safe(s):
+            assert ',' not in s
+            assert '=' not in s
+            return s
+        v4_config = link.merged_v4_config
+        options = ['interface_name='+safe(link.interface)]
+        if v4_config.address:
+            options.append('ip='+safe(str(v4_config.address)))
+        if link.mac:
+            options.append('mac='+safe(link.mac))
+        if link.mtu:
+            options.append('mtu='+safe(link.mtu))
+        assert ':' not in self.network.name
+        return safe(self.network.name)+':'+','.join(options)
+
+__all__ += ['PodmanNetwork']
+
+class PodmanNetworkMixin:
+    network_implementation_class = PodmanNetwork
     async def _setup_networks(self):
         for l in self.network_links.values():
             if l.local_type: continue
@@ -103,7 +174,7 @@ class PodmanNetworkMixin:
 @inject(
     podman_pod_options=InjectionKey('podman_pod_options', _optional=NotPresent),
 )
-class PodmanPod(OciPod, PodmanNetworkMixin, carthage.machine.NetworkedModel):
+class PodmanPod(PodmanNetworkMixin, carthage.machine.NetworkedModel, OciPod):
 
     #: A list of extra options to pass to pod create
     podman_pod_options = []
@@ -115,7 +186,9 @@ class PodmanPod(OciPod, PodmanNetworkMixin, carthage.machine.NetworkedModel):
         self.container_host = None
     async def find(self):
         if not self.container_host:
-            await self.ainjector(find_container_host, self)
+            await self.ainjector(instantiate_container_host, self)
+        if not await self.container_host.find():
+                logger.debug('%s does not exist because its container host does not exist', self)
         if self.id:
             inspect_arg = self.id
         else:
@@ -221,7 +294,9 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     async def find(self):
         if not self.container_host:
-            await self.ainjector(find_container_host, self)
+            await self.ainjector(instantiate_container_host, self)
+        if not await self.container_host.find():
+            logger.debug('%s does not exist because its container host does not exist', self)
         try:
             result = await self.podman(
                 'container', 'inspect', self.full_name,
@@ -283,7 +358,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     async def delete(self, force=True, volumes=True):
         if not self.container_host:
-            await self.ainjector(find_container_host, self)
+            await self.ainjector(instantiate_container_host, self)
         force_args = []
         if force:
             force_args.append('--force')
@@ -433,7 +508,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
 
     async def pull_base_image(self):
         if not self.container_host:
-            await self.ainjector(find_container_host, self)
+            await self.ainjector(instantiate_container_host, self)
         if isinstance(self.base_image, OciImage):
             await self.base_image.async_become_ready()
             base_image = self.base_image.oci_image_tag
@@ -460,7 +535,9 @@ class PodmanImage(OciImage, SetupTaskMixin):
 
     async def find(self):
         if not self.container_host:
-            await self.ainjector(find_container_host, self)
+            await self.ainjector(instantiate_container_host, self)
+        if not await self.container_host.find():
+            logger.debug('%s does not exist because its container host does not exist', self)
         if self.id:
             to_find = self.id
             self.readonly = True
@@ -742,7 +819,9 @@ class ContainerfileImage(OciImage):
 
     async def find(self):
         if not self.container_host:
-            await self.ainjector(find_container_host, self)
+            await self.ainjector(instantiate_container_host, self)
+        if not await self.container_host.find():
+            logger.debug('%s does not exist because its container host does not exist', self)
         try: inspect_result = await self.container_host.podman(
                 'image', 'inspect',
                 self.oci_image_tag, _log=False)
@@ -785,71 +864,3 @@ class ContainerfileImage(OciImage):
 
 __all__ += ['ContainerfileImage']
 
-@inject_autokwargs(network=this_network)
-class PodmanNetwork(TechnologySpecificNetwork, OciManaged):
-
-    container_host: PodmanContainerHost = None
-
-    @property
-    def podman(self):
-        return self.container_host.podman
-
-    async def find(self):
-        if not self.container_host:
-            await self.ainjector(find_container_host, self)
-        try:
-            inspect_result = await self.podman(
-                'network', 'inspect', self.network.name, _log=False)
-        except Exception: return False
-        info = json.loads(str(inspect_result))[0]
-        try:
-            return dateutil.parser.isoparse(info['created']).timestamp()
-        except (KeyError, ValueError):
-            logger.error('Unable to understand network inspection result: %s', info)
-            raise NotImplementedError('Podman too old')
-
-
-    async def do_create(self):
-        options = ['-d', 'bridge']
-        v4_config = getattr(self.network, 'v4_config', None)
-        if v4_config:
-            if v4_config.network:
-                options.extend([
-                    '--subnet', str(v4_config.network)])
-            if v4_config.gateway is False:
-                options.append('--internal')
-            elif v4_config.gateway and v4_config.gateway  is not True:
-                options.extend([
-                    '--gateway', str(v4_config.gateway)])
-            if v4_config.dhcp:
-                options.extend(['--ipam-driver=dhcp'])
-        await self.podman(
-            'network',
-            'create', self.network.name,
-            *options)
-
-    async def delete(self, force=True):
-        if force:
-            force_options = ['--force']
-        else: force_options = []
-        await self.podman(
-            'network', 'rm', *force_options,
-            self.network.name)
-
-    def link_options(self, link):
-        def safe(s):
-            assert ',' not in s
-            assert '=' not in s
-            return s
-        v4_config = link.merged_v4_config
-        options = ['interface_name='+safe(link.interface)]
-        if v4_config.address:
-            options.append('ip='+safe(str(v4_config.address)))
-        if link.mac:
-            options.append('mac='+safe(link.mac))
-        if link.mtu:
-            options.append('mtu='+safe(link.mtu))
-        assert ':' not in self.network.name
-        return safe(self.network.name)+':'+','.join(options)
-
-__all__ += ['PodmanNetwork']

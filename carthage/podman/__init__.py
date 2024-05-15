@@ -7,7 +7,7 @@
 # LICENSE for details.
 __all__ = []
 
-import carthage
+import carthage.deployment
 from .base import *
 __all__ += ['PodmanPod', 'PodmanContainer', 'PodmanImage',
             'PodmanFromScratchImage', 'podman_image_volume_key',
@@ -21,8 +21,25 @@ from .container_host import LocalPodmanContainerHost, RemotePodmanHost, podman_c
 
 __all__ += ['LocalPodmanContainerHost', 'RemotePodmanHost', 'podman_container_host']
 
+class PodmanDeployableFinder(carthage.DeployableFinder):
+
+    name = 'podman'
+
+    async def find(self, ainjector):
+        '''
+        Find all PodmanPods. PodmanContainers are found by the machine deployable finder.
+        '''
+        result = []
+        filter_result = await ainjector.filter_instantiate_async(
+            PodmanPod, ['name'],
+            ready=False,
+            stop_at=ainjector)
+        result += [x[1] for x in filter_result]
+        return result
+    
 
 @carthage.inject(injector=carthage.Injector)
 def carthage_plugin(injector):
     injector.add_provider(PodmanNetwork, allow_multiple=True)
+    injector.add_provider(PodmanDeployableFinder)
     

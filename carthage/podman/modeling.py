@@ -82,6 +82,11 @@ class PodmanPodModel( carthage.machine.NetworkedModel, ModelContainer, AsyncInje
                          close=False,
                          propagate=cls.pod_name_global,
                          transclusion_overrides=cls.pod_name_global)
+            cls.add_provider(InjectionKey(carthage.machine.ResolvableModel, name=cls.name_for(), role='pod', _globally_unique=cls.pod_name_global),
+                         injector_access(InjectionKey(PodmanPod)),
+                         close=False,
+                         propagate=cls.pod_name_global,
+                         transclusion_overrides=cls.pod_name_global)
             globally_unique_key(InjectionKey(carthage.machine.ResolvableModel, name=cls.name_for()+'-pod'))(cls)
                                          
                                           
