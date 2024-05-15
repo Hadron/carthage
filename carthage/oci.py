@@ -70,6 +70,9 @@ class OciManaged(SetupTaskMixin, AsyncInjectable):
     async def do_create(self):
         raise NotImplementedError
 
+    async def dynamic_dependencies(self):
+        return []
+
     def __repr__(self):
         res = f'<{self.__class__.__name__} '
         try: res += f'name:{self.name} '
