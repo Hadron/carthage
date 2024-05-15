@@ -34,6 +34,7 @@ jobs:
           sudo -E podman push carthage ghcr.io/hadron/carthage:latest
 
       - name: upload ansible log
+        if: always()
         uses: actions/upload-artifact@v3
         with:
           name: images ansible.log
