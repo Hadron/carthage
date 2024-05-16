@@ -11,7 +11,7 @@ import carthage.deployment
 from .base import *
 __all__ += ['PodmanPod', 'PodmanContainer', 'PodmanImage',
             'PodmanFromScratchImage', 'podman_image_volume_key',
-            'image_layer_task', 'ContainerfileImage']
+            'image_layer_task', 'ContainerfileImage', 'PodmanVolume']
 
 from .modeling import PodmanPodModel, PodmanImageModel, ContainerfileImageModel
 

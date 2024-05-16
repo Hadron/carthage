@@ -41,10 +41,15 @@ class PodmanContainerHost(AsyncInjectable):
                _bg=True, _bg_exc=True):
         raise NotImplementedError
 
-    async def filesystem_access(self, container):
+    async def filesystem_access(self, *args):
+        '''Gain filesystem access to a podman resource.  Arguments are
+        passed to podman; for things to work needs to be a container
+        or volume mount.
+        '''
         raise NotImplementedError
 
     async def tar_volume_context(self, volume):
+
         '''
         An asynchronous context manager that tars up a volume and provides a path to that tar file usable in ``podman import``.  Typical usage::
 
@@ -74,10 +79,9 @@ class LocalPodmanContainerHost(PodmanContainerHost):
 
 
     @contextlib.asynccontextmanager
-    async def filesystem_access(self, container):
+    async def filesystem_access(self, *args):
         result = await self.podman(
-            'container', 'mount',
-            container,
+*args,
             _bg=True, _bg_exc=False, _log=False)
         try:
             path = str(result).strip()
@@ -265,16 +269,14 @@ class RemotePodmanHost(PodmanContainerHost):
         return result
 
     @contextlib.asynccontextmanager
-    async def filesystem_access(self, container):
+    async def filesystem_access(self, *args):
         prefix = []
         if self.user != 'root':
             prefix =['podman', 'unshare']
         res = await self.machine.run_command(
             *prefix,
             'podman',
-            'container',
-            'mount',
-            container)
+            *args)
         remote_path_str = str(res.stdout, 'utf-8').strip()
         remote_path_str = os.path.relpath(remote_path_str,'/')
         # Copied and modified from Machine.filesystem_access.

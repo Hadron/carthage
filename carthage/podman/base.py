@@ -76,6 +76,11 @@ class PodmanNetwork(HasContainerHostMixin, TechnologySpecificNetwork, OciManaged
     def podman(self):
         return self.container_host.podman
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.name = self.network.name
+        self.container_host = None
+    
     async def find(self):
         if not self.container_host:
             await self.ainjector(instantiate_container_host, self)
@@ -452,7 +457,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     def filesystem_access(self, user='root'):
         assert self.container_host, 'call self.find first'
-        return self.container_host.filesystem_access(self.full_name)
+        return self.container_host.filesystem_access('mount', self.full_name)
 
     def __repr__(self):
         try:
@@ -886,3 +891,63 @@ class ContainerfileImage(OciImage):
 
 __all__ += ['ContainerfileImage']
 
+class PodmanVolume(HasContainerHostMixin, OciManaged):
+
+    name: str
+
+    def __init__(self, name:str=None, **kwargs):
+        self.container_host = None
+        super().__init__(**kwargs)
+        if name:
+            self.name = name
+        if not hasattr(self, 'name'):
+            raise TypeError(f'{self.__class__.__name__} requires a name either specified in a subclass or constructor.')
+
+    async def find(self):
+        if not self.container_host:
+            await self.ainjector(instantiate_container_host, self)
+        if not await self.container_host.find():
+            logger.debug(f'{self} does not exist because the container host does not exist.')
+            return False
+        try:
+            result = await self.podman(
+                'volume', 'inspect', self.name, _log=False)
+        except sh.ErrorReturnCode:
+            return False
+        info = json.loads(str(result))[0]
+        try:
+            return dateutil.parser.isoparse(info['CreatedAt']).timestamp()
+        except (KeyError, ValueError):
+            logger.error('Unable to understand volume inspection result: %s', info)
+            raise NotImplementedError('Podman too old')
+
+    async def do_create(self):
+        return await self.podman(
+            'volume', 'create',
+            self.name)
+
+    async def delete(self):
+        await self.podman(
+            'volume', 'rm',
+            self.name)
+
+    @property
+    def podman(self):
+        return self.container_host.podman
+
+    @contextlib.asynccontextmanager
+    async def filesystem_access(self):
+        '''
+        Like :meth:`carthage.Machine.filesystem_access` except gains access to a podman volume.
+
+        Usage::
+
+            async with volume.filesystem_access() as path:
+                 # Path points to a mount for the volume inside the context manager.
+        '''
+        async with self.container_host.filesystem_access(
+'volume', 'mount',
+                self.name) as path:
+            yield path
+
+__all__ += ['PodmanVolume']

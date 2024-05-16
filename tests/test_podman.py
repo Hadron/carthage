@@ -213,6 +213,9 @@ exit 0
         class container(MachineModel):
             pass
 
+    class volume(PodmanVolume):
+        name = 'test_volume'
+        
 @async_test
 async def test_podman_create(ainjector):
     l = await ainjector(podman_layout)
@@ -400,3 +403,15 @@ async def test_podman_pod_network(layout_fixture):
 @async_test
 async def test_podman_image_model(layout_fixture):
     await layout_fixture.ImageModelCustomizations.build_image()
+
+@async_test
+async def test_podman_volume(layout_fixture):
+    layout = layout_fixture
+    ainjector = layout.ainjector
+    await layout.volume.async_become_ready()
+    try:
+        async with layout.volume.filesystem_access() as path:
+            (path/'foo').write_text('bar')
+    finally:
+        await layout.volume.delete()
+        
