@@ -20,7 +20,7 @@ from carthage.ssh import SshKey
 from carthage import *
 from carthage.become_privileged import BecomePrivilegedMixin
 from carthage.machine import FilesystemCustomization
-import carthage
+import carthage.sh
 from carthage.pytest import *
 
 state_dir = Path(__file__).parent.joinpath("test_state")
@@ -410,8 +410,13 @@ async def test_podman_volume(layout_fixture):
     ainjector = layout.ainjector
     await layout.volume.async_become_ready()
     try:
-        async with layout.volume.filesystem_access() as path:
-            (path/'foo').write_text('bar')
+        try:
+            async with layout.volume.filesystem_access() as path:
+                (path/'foo').write_text('bar')
+        except  carthage.sh.ErrorReturnCode_125 as e:
+            if b'unrecognized' in e.stderr:
+                pytest.xfail('podman too old')
+            raise
     finally:
         await layout.volume.delete()
         
