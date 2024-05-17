@@ -196,13 +196,12 @@ class InstantiationContext(BaseInstantiationContext, InjectedDependencyInspector
         self.provider.instantiation_contexts.add(self)
         res =  super().__enter__()
         loop_detect = set()
-        cur = self.parent
+        cur = self
         while cur:
             try:
-                loop_tuple = cur.key, cur.injector
+                loop_tuple = cur.key, cur.injector, cur.key.ready is False
                 if loop_tuple in loop_detect:
-                    breakpoint()
-                    raise RuntimeError('injection loop detected')
+                    raise RuntimeError('injection loop detected: '+repr(self))
                 loop_detect.add(loop_tuple)
             except AttributeError: pass
             cur = cur.parent
@@ -404,5 +403,30 @@ def calculate_reverse_dependencies(obj: object, /, injector,
           obj, {obj})
 
 __all__ += ['calculate_reverse_dependencies']
+
+def instantiation_leaves():
+    '''Start from :data:`instantiation_roots` and chase down all the
+    dependencies.  Return all contexts that do not have any
+    dependencies waiting that have not already been seen.
+    '''
+    to_consider = list(instantiation_roots)
+    ids_seen = set()
+    leaves = set()
+    while to_consider:
+        to_consider_next = set()
+        for context in to_consider:
+            has_dependencies = False
+            ids_seen.add(id(context))
+            for dependency in context.dependencies_waiting.values():
+                if id(dependency) in ids_seen:
+                    continue
+                to_consider_next.add(dependency)
+                has_dependencies = True
+            if not has_dependencies:
+                leaves.add(context)
+        to_consider = to_consider_next
+    return leaves
+
+__all__ += ['instantiation_leaves']
 
 from . import base
