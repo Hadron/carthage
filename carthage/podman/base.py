@@ -315,6 +315,12 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         self._operation_lock = asyncio.Lock()
         self.container_host = None
 
+    @property
+    def _container_name(self):
+        if hasattr(self.model, 'container_name'):
+            return self.model.container_name
+        return self.name
+
     @memoproperty
     def podman(self):
         return self.container_host.podman
@@ -328,7 +334,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             return False
         try:
             result = await self.podman(
-                'container', 'inspect', self.full_name,
+                'container', 'inspect', self._container_name,
                 _bg=True, _bg_exc=False, _log=False)
         except sh.ErrorReturnCode:
             return False
@@ -356,9 +362,10 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         if self.oci_command:
             command_options = list(self.oci_command)
         network_options = await self._container_network_options()
+        hostname_options = [f'--hostname={self._container_name}'] if not self.pod else []
         await self.podman(
             'container', 'create',
-            f'--name={self.full_name}',
+            f'--name={self._container_name}',
             *(await self._podman_create_options()),
             *network_options,
             image,
@@ -395,7 +402,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             force_args.append('--volumes')
         await self.podman(
             'container', 'rm',
-            *force_args, self.full_name,
+            *force_args, self._container_name,
             _bg=True, _bg_exc=False)
 
     async def is_machine_running(self):
@@ -411,9 +418,9 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
                 return
             await self.start_dependencies()
             await super().start_machine()
-            logger.info(f'Starting {self.full_name}')
+            logger.info(f'Starting {self._container_name}')
             await self.podman(
-                'container', 'start', self.full_name,
+                'container', 'start', self._container_name,
                 _bg=True, _bg_exc=False)
         await self.is_machine_running()
 
@@ -422,11 +429,11 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             await self.is_machine_running()
             if not self.running:
                 return
-            logger.info(f'Stopping {self.full_name}')
+            logger.info(f'Stopping {self._container_name}')
             await self.podman(
                 'container', 'stop',
                 f'-t{self.stop_timeout}',
-                self.full_name,
+                self._container_name,
                 _bg=True, _bg_exc=False)
             self.running = False
             await super().stop_machine()
@@ -446,7 +453,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         result = self.podman(
             'container', 'exec',
             *interactive,
-            self.full_name,
+            self._container_name,
             *args,
             _log=False, _fg=_fg,
             )
@@ -468,7 +475,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     def filesystem_access(self, user='root'):
         assert self.container_host, 'call self.find first'
-        return self.container_host.filesystem_access('mount', self.full_name)
+        return self.container_host.filesystem_access('mount', self._container_name)
 
     def __repr__(self):
         try:
