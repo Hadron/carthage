@@ -161,6 +161,14 @@ class InjectedDependencyInspector:
         "If two inspectors have the same provider_id, they are guaranteed to refer to the same value.  It is possible that inspectors with different provider_id may refer to the same value.  Once is_final returns true, value_id will be stable."
         if not self.is_provided: return None
         return id(self.provider)
+
+    @property
+    def value_id(self):
+        '''The ID of the object that is the value once is_final returns True else none.
+        '''
+        if not self.is_final:
+            return None
+        return id(self.get_value_no_instantiate())
     
         
 
