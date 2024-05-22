@@ -90,11 +90,12 @@ class CarthageRegistry(SyncStoreRegistry):
             provider_info.state = InstantiationProgress.in_progress
 
         else: #dependency_final
-            if is_obj_ready(inspector.get_value(ready=False)):
+            if is_obj_ready(inspector.get_value_no_instantiate()):
                 provider_info.state = InstantiationProgress.ready
             else: provider_info.state = InstantiationProgress.not_ready
         try: provider_info.value_injector_id = id(inspector.get_value_no_instantiate().injector)
         except Exception: pass
+        provider_info.value_id = inspector.value_id
         self.store_synchronize(provider_info)
         value = inspector.get_value_no_instantiate()
         if isinstance(value, SetupTaskMixin):
@@ -208,7 +209,7 @@ class ProviderInfo(StoreInSyncStoreMixin):
     
     value_repr:str = sync_property(None)
     value_injector_id: int = sync_property(None)
-    
+    value_id:int = sync_property(None)
 
     sync_registry = carthage_registry
     sync_primary_keys = ('id',)
