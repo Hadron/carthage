@@ -15,7 +15,7 @@ __all__ = []
 
 class SystemDependency(abc.ABC, Injectable):
 
-    '''Represents a dependency that may be required by a :class:`carthage.Machine` before a machine is started.  These dependencies may also be required by a :func:`carthage.setup_tasks.setup_task`; see :func:`depend_on()`.
+    '''Represents a dependency that may be required by a :class:`carthage.Machine` before a machine is started.  These dependencies may also be required by a :func:`carthage.setup_tasks.setup_task`; see :meth:`carthage.setup_tasks.TaskWrapperBase.depend_on()`.
 
     Note that typically instances of this class rather than subclasses are used as dependency providers on an Injector.  That way, :meth:`~carthage.Injector.get_instance` returns the instance without processing injected dependencies.  These dependencies are later processed when a method like :meth:`carthage.Machine.start_dependencies()` calls the :meth:`__call__()` method.
 
@@ -71,7 +71,8 @@ class MachineDependency(SystemDependency):
         machine = await ainjector.get_instance_async(self.key)
         if not hasattr(machine, 'start_machine') and hasattr(machine, 'machine'):
             # Allow a dependency to be set on a MachineModel not just a machine
-            machine = machine.machine
+            ainjector = machine.injector(AsyncInjector)
+            machine = await ainjector.get_instance_async(InjectionKey(Machine, _ready=True))
         await machine.start_machine()
         if self.online is MachineDependency.ONLINE_DEFAULT:
             if machine.machine_running_ssh_online:
