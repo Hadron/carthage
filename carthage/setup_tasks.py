@@ -19,6 +19,7 @@ import typing
 import sys
 import shutil
 import weakref
+import hashlib
 import importlib.resources
 from pathlib import Path
 import carthage
@@ -724,9 +725,10 @@ If the template has a def called *hash*, this def will be rendered with the same
             template = self.lookup.get_template(self.template)
             if template.has_def('hash'):
                 hash_template = template.get_def("hash")
-                return hash_template.render(instance=instance, **kwargs)
+                s = hash_template.render(instance=instance, **kwargs)
             else:
-                return template.render(instance=instance, **kwargs)
+                s = template.render(instance=instance, **kwargs)
+            return hashlib.sha256(s.encode()).hexdigest()
         self.template = template
         if output is None:
             output = template
