@@ -19,6 +19,7 @@ import typing
 import sys
 import shutil
 import weakref
+import hashlib
 import importlib.resources
 from pathlib import Path
 import carthage
@@ -271,6 +272,12 @@ class TaskWrapperBase:
         :param run_methods: If False , no check_completed or invalidators are run.  If the task has a check_completed function, return None rather than True or False for wether the task should run.  Invalidators and hash functions are ignored, and the return is dependent only on stamps.
 
         '''
+        def _h(s):
+            '''Shorten cases where hash_func returns a long string rather than a hash
+            '''
+            if len(s) > 65:     # sha256 plus a newline
+                return hashlib.sha256(s.encode()).hexdigest()
+            return s
         if dependency_last_run is None:
             dependency_last_run = 0.0
         if self.check_completed_func:
@@ -292,7 +299,7 @@ class TaskWrapperBase:
         if (not self.check_completed_func) and run_methods:
             actual_hash_contents = await ainjector(self.hash_func, obj)
             if actual_hash_contents != hash_contents:
-                obj.logger_for().info(f'Task {self.description} invalidated by hash_func() change from `{hash_contents}` to `{actual_hash_contents}`; last run {_iso_time(last_run)}')
+                obj.logger_for().info(f'Task {self.description} invalidated by hash_func() change from `{_h(hash_contents)}` to `{_h(actual_hash_contents)}`; last run {_iso_time(last_run)}')
                 return (True, dependency_last_run)
         if self.invalidator_func and run_methods:
             if not await ainjector(self.invalidator_func, obj, last_run=last_run):
