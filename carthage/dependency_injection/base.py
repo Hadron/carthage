@@ -922,6 +922,9 @@ class InjectionKey:
         if require_type and not isinstance(target_, type):
             raise TypeError(
                 'Only types can be used as implicit injection keys; if this is intended then construct the injection key explicitly')
+        for k in constraints:
+            if k.startswith('_') and k not in cls.POSSIBLE_PARAMETERS:
+                raise TypeError(f'{k} is not an InjectionKey parameter')
         if isinstance(target_, InjectionKey):
             # mostly so you can take an existing injection key and mark it optional
             new_constraints = dict(target_.constraints)
@@ -978,7 +981,7 @@ class InjectionKey:
             return False
         if len(self.constraints) != len(other.constraints):
             return False
-        if all(map(lambda k: self.constraints[k] == other.constraints[k], self.constraints.keys())):
+        if all(map(lambda k: k in other.constraints and self.constraints[k] == other.constraints[k], self.constraints.keys())):
             return True
         return False
 

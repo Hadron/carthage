@@ -664,3 +664,11 @@ async def test_filter_failure(ainjector):
     ainjector.add_provider(not_found)
     with pytest.raises(InjectionFailed):
         await ainjector.filter_instantiate_async(Plugin, ['name'], ready=True)
+
+def test_injection_key_typos():
+    '''
+        Confirm that an invalid option to InjectionKey raises.
+        '''
+    with pytest.raises(TypeError, match='not an InjectionKey parameter'):
+        InjectionKey(Injector, _foo=42)
+            
