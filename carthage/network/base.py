@@ -179,6 +179,7 @@ class Network(AsyncInjectable):
 
         :return: The instance of *cls* for accessing this network
         '''
+        await self.async_become_ready()
         assert issubclass(cls, TechnologySpecificNetwork), \
             "Must request access by a subclass of TechnologySpecificNetwork"
         instance = None
