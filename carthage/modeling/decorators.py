@@ -286,7 +286,7 @@ def propagate_key(key, obj=None):
             @propagate_key(InjectionKey(Baz, target = 42))
             class ourbaz(Baz): ...
 
-    When *foo* is included ain a container, then the *Baz* injection
+    When *foo* is included in a container, then the *Baz* injection
     key will be propagated up to dependencies provided by that
     container.  Since the key was not marked globally unique,
     constraints from *foo.our_key()* will be added to it as it is
