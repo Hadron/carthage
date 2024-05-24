@@ -829,7 +829,7 @@ class ContainerfileImage(OciImage):
     def copy_context_if_needed(self, last_run):
         source_mtime = self.container_context_mtime(self.source_container_context)
         if source_mtime > last_run: return False
-        return False
+        return True
 
 
     async def do_create(self):
