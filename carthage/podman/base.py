@@ -418,6 +418,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             await self.is_machine_running()
             if not self.running:
                 return
+            logger.info(f'Stopping {self.full_name}')
             await self.podman(
                 'container', 'stop',
                 f'-t{self.stop_timeout}',
