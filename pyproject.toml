@@ -14,7 +14,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "carthage"
-version = "0.32"
+version = "0.33"
 authors = [
     { name = "Sam Hartman", email = "sam.hartman@hadronindustries.com" },
 ]
