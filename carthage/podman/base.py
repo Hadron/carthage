@@ -179,7 +179,7 @@ class PodmanNetworkMixin:
         '''Like
         :meth:`carthage.machine.NetworkedModel.resolve_networking`
         except that it looks for :data:`oci_container_network_config`.
-        If cthat key is present, that network config is used instead
+        If that key is present, that network config is used instead
         of ``InjectionKey(NetworkConfig)``.  Doing so allows
         containers that are lexically contained in their host to have
         their own NetworkConfig.
@@ -647,7 +647,8 @@ class PodmanImage(OciImage, SetupTaskMixin):
             options.append('-fdocker')
             options.append('--message=' + commit_message)
         # options must be quoted if it's going through ssh or something that can split args on space
-        commit_result = await self.podman(
+        # We use podman_nosocket because we have run into trouble with trixie podman driving a bookworm container host.
+        commit_result = await self.container_host.podman_nosocket(
             'container', 'commit',
             *options,
             container.id, _log=False)

@@ -41,7 +41,17 @@ class PodmanContainerHost(AsyncInjectable):
                _bg=True, _bg_exc=True):
         raise NotImplementedError
 
+    def podman_nosocket(*args, **kwargs):
+        '''Run podman directly on the container host rather than
+        using a podman socket.  Used for example for container commits
+        because for example podman 4.9 does not appear to understand
+        the commit results from podman 4.6.
+        '''
+        return self.podman(*args, **kwargs)
+    
+        
     async def filesystem_access(self, *args):
+
         '''Gain filesystem access to a podman resource.  Arguments are
         passed to podman; for things to work needs to be a container
         or volume mount.
@@ -268,6 +278,20 @@ class RemotePodmanHost(PodmanContainerHost):
         await result
         return result
 
+    async def podman_nosocket(self, *args, _log=True, **kwargs):
+        options = {}
+        await self.start_container_host()
+        if _log and self.podman_log:
+            options['_out']=str(self.podman_log)
+            options['_err_to_out'] = True
+        result = self.machine.run_command(
+            'podman',
+            *args,
+            _user=self.user,
+            **options,
+            **kwargs)
+        return await result
+    
     @contextlib.asynccontextmanager
     async def filesystem_access(self, *args):
         prefix = []
