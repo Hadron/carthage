@@ -41,7 +41,7 @@ class PodmanContainerHost(AsyncInjectable):
                _bg=True, _bg_exc=True):
         raise NotImplementedError
 
-    def podman_nosocket(*args, **kwargs):
+    def podman_nosocket(self, *args, **kwargs):
         '''Run podman directly on the container host rather than
         using a podman socket.  Used for example for container commits
         because for example podman 4.9 does not appear to understand
@@ -49,7 +49,6 @@ class PodmanContainerHost(AsyncInjectable):
         '''
         return self.podman(*args, **kwargs)
     
-        
     async def filesystem_access(self, *args):
 
         '''Gain filesystem access to a podman resource.  Arguments are
