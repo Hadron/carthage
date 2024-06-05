@@ -184,7 +184,7 @@ class TaskWrapperBase:
                 hash_contents = instance.injector(self.hash_func, instance)
                 instance.create_stamp(self.stamp, hash_contents)
             instance.injector.emit_event(
-                InjectionKey(SetupTaskMixin), "task_run",
+                InjectionKey(SetupTaskMixin), "task_ran",
                 instance, task=self,
                 adl_keys=instance.setup_task_event_keys())
             
