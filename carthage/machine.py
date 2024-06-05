@@ -485,7 +485,6 @@ class Machine(AsyncInjectable, SshMixin):
 
         '''
         from carthage.system_dependency import MachineDependency, SystemDependency
-
         def callback(d):
             def cb(future):
                 try:
