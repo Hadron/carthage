@@ -393,16 +393,28 @@ Return the first injector in our parent chain containing *k* or None if there is
 
     def filter(self,
                target: type,
-               predicate: typing.Union[list, typing.Callable] = None,
+               predicate: typing.Union[list, typing.Callable],
                stop_at: Injector = None):
-        '''
-        :return: list of :class:`InjectionKey` with target type of
+        ''':return: list of :class:`InjectionKey` with target type of
             *target* and satisfying *predicate* in the current injector
             and its parents.
 
-        :param predicate: A list of constraints that must all be present in the key, or a callable that returns true if the key should be included.
+        :param predicate: A list of constraints that must all be
+        present in the key, or a callable that returns true if the key
+        should be included. The predicate is a mandatory argument;
+        while it is possible to pass in something like ``lambda k:
+        True`` to get all keys, this is only likely to be desirable
+        when writing inspection code to examine the injection system.
+        Supplementary injection keys and third party plugins will add
+        InjectionKeys using targets in manners unexpected by the
+        target class.  When filtering for a target it is best to have
+        a constraint with a well-defined meaning in the context of
+        that class; as an example :class:`~carthage.Machine` uses the
+        *host* constraint for a FQDN.
 
-        :param target: A target type to filter against.
+        :param target: A target type to filter against. This can be
+        *None* to filter against all targets.  Again, that is likely
+        to be useful only in inspection logic.
 
         :param stop_at: An injector which must be a parent of this injector.  Do not progress past that injector in finding keys.  So if *stop_at* is *self*, only locally registered keys are returned.
 
