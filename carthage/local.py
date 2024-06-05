@@ -32,8 +32,8 @@ When testing whether a :class:`Machine` is local, test for ``isinstance(machine,
     async def filesystem_access(self, user=None):
         if user is None:
             user = self.runas_user
-        if user != os.getlogin():
-            async with super().filesystem_access(user=user) as path:
+        if user != os.environ['USER']:
+            with super().filesystem_access(user=user) as path:
                 yield path
                 return
             
