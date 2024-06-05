@@ -358,10 +358,10 @@ async def test_setup_task_events(ainjector):
     inspect = list(c_obj.inspect_setup_tasks())
     assert  await inspect[0].should_run(ainjector)
     with ainjector.event_listener_context(InjectionKey(c),
-                                          ['task_run', 'task_should_run'], cb):
+                                          ['task_ran', 'task_should_run'], cb):
         await  c_obj.async_become_ready()
     assert 'task_should_run' in events
-    assert 'task_run' in events
+    assert 'task_ran' in events
     assert 'task_already_run' not in events
     with ainjector.event_listener_context(
             InjectionKey(c), 'task_already_run', cb):
