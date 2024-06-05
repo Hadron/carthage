@@ -398,6 +398,20 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
     def __repr__(self):
         return f'<{self.__class__.__name__} model name: {self.name}>'
 
+    @classmethod
+    def supplementary_injection_keys(cls, k):
+        '''Exclude :class:`AbstractMachineModel` and
+        :class:`MachineModel` without constraints from the set of keys
+        that are registered.  These keys are searched to find the
+        current MachineModel, and if they are implicitly set it can
+        produce cases where a MachineModel is accidentally available.  Also, it makes it difficult to have one MachineModel contained within another.
+        '''
+        excluded = {InjectionKey(MachineModel), InjectionKey(carthage.machine.AbstractMachineModel)}
+        for key in super().supplementary_injection_keys(k):
+            if key in excluded: continue
+            yield key
+            
+
     network_config = injector_access(InjectionKey(carthage.network.NetworkConfig))
 
     #: A set of ansible groups to add a model to; see :func:`carthage.modeling.ansible.enable_modeling_ansible`.
