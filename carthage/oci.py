@@ -171,6 +171,16 @@ __all__ += ['OciImage']
 @dataclasses.dataclass
 class OciMount(Injectable):
 
+    '''
+    Represents a mount for a container.
+
+    * If *source* is a string, config and environment variables will be substituted in it.
+
+    * If *source* is an InjectionKey, it will be instantiated.
+
+    * Container implementations may permit a *source* to be a managed object.  For example :class:`carthage.podman.PodmanContainer` permits *source* to be a :class:`carthage.podman.PodmanVolume`.
+    '''
+    
     destination: str
     source: str
     options: str = ""
@@ -183,8 +193,12 @@ class OciMount(Injectable):
     def default_class_injection_key(self):
         return InjectionKey(OciMount, destination=self.destination)
 
-    def source_resolved(self, injector):
-        return injector(ConfigPath, self.source)
+    async def source_resolve(self, ainjector):
+        if isinstance(self.source, str):
+            return ainjector.injector(ConfigPath, self.source)
+        elif isinstance(self.source, InjectionKey):
+            return await ainjector.get_instance_async(self.source)
+        
 
 
 __all__ += ['OciMount']

@@ -215,6 +215,24 @@ exit 0
 
     class volume(PodmanVolume):
         name = 'test_volume'
+
+
+    class populated_volume(PodmanVolume):
+
+        name = 'populated_volume'
+
+        @setup_task("Write a file")
+        async def write_file(self):
+            async with self.filesystem_access() as path:
+                p = path/"foo"
+                p.write_text("some text goes here\n")
+
+    class populated_volume_container(MachineModel):
+        name = 'populated-volume-container'
+
+        add_provider(OciMount(
+            source=InjectionKey('populated_volume'),
+            destination='/volume'))
         
 @async_test
 async def test_podman_create(ainjector):
@@ -408,6 +426,8 @@ async def test_podman_image_model(layout_fixture):
 async def test_podman_volume(layout_fixture):
     layout = layout_fixture
     ainjector = layout.ainjector
+    machine = None
+    
     await layout.volume.async_become_ready()
     try:
         try:
@@ -417,6 +437,17 @@ async def test_podman_volume(layout_fixture):
             if b'unrecognized' in e.stderr:
                 pytest.xfail('podman too old')
             raise
+        machine = await ainjector.get_instance_async(InjectionKey(Machine, host='populated-volume-container'))
+        async with machine.machine_running():
+            await machine.run_command('cat', '/volume/foo')
+            
     finally:
         await layout.volume.delete()
+        if machine:
+            await machine.delete()
+        try:
+            await layout.populated_volume.delete()
+        except Exception:
+            logger.exception('deleting populated volume')
+            
         

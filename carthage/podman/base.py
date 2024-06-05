@@ -37,10 +37,14 @@ def podman_port_option(p: OciExposedPort):
     return res
 
 
-def podman_mount_option(injector: Injector, m: OciMount):
+async def podman_mount_option(ainjector: AsyncInjector, m: OciMount):
     res = f'--mount=type={m.mount_type}'
     if m.source:
-        res += f',source={m.source_resolved(injector)}'
+        source = await m.source_resolve(ainjector)
+        if isinstance(source, PodmanVolume):
+            await source.async_become_ready()
+            source = source.name
+        res += f',source={source}'
     if m.destination:
         res += f',destination={m.destination}'
     else:
@@ -355,13 +359,13 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         await self.podman(
             'container', 'create',
             f'--name={self.full_name}',
-            *self._podman_create_options(),
+            *(await self._podman_create_options()),
             *network_options,
             image,
             *command_options,
             _bg=True, _bg_exc=False)
 
-    def _podman_create_options(self):
+    async def _podman_create_options(self):
         options = []
         options.append('--restart=' + self.podman_restart)
         if self.oci_interactive:
@@ -377,7 +381,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         else:  # there is a pod
             options.append('--pod=' + self.pod.name)
         for m in self.mounts:
-            options.append(podman_mount_option(self.injector, m))
+            options.append(await podman_mount_option(self.ainjector, m))
         options.extend(self.podman_options)
         return options
 
@@ -932,6 +936,13 @@ class PodmanVolume(HasContainerHostMixin, OciManaged):
         await self.podman(
             'volume', 'rm',
             self.name)
+
+    @memoproperty
+    def stamp_path(self):
+        config = self.injector(ConfigLayout)
+        path =  Path(config.output_dir)/'volumes'/self.name
+        path.mkdir(exist_ok=True, parents=True)
+        return path
 
     @property
     def podman(self):
