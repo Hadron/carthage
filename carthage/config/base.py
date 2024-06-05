@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -67,7 +67,7 @@ class DebianConfig(ConfigSchema, prefix="debian"):
     #: The mirror to use when running debootstrap. May be a file mirror for example to be used on the machine that will eventually be a mirror server.
     stage1_mirror: ConfigString = "{debian.mirror}"
 
-    distribution: ConfigString = "bullseye"
+    distribution: ConfigString = "bookworm"
 
     #: Whether to include security.debian.org and the updates source
     include_security: bool = True
