@@ -99,15 +99,14 @@ class LocalPodmanContainerHost(PodmanContainerHost):
             pass  # Perhaps we should unmount, but we'd need a refcount to do that.
 
     def podman(self, *args,
-               _bg=True, _bg_exc=False, _log=True):
+               _bg=True, _bg_exc=False, _log=True, _fg=False):
         options = {}
         if _log and self.podman_log:
             options['_out']=str(self.podman_log)
             options['_err_to_out'] = True
         return sh.podman(
             *args,
-            _bg=_bg, _bg_exc=_bg_exc,
-            _encoding='utf-8',
+            _fg=_fg,
             **options)
 
     @contextlib.asynccontextmanager
@@ -264,7 +263,7 @@ class RemotePodmanHost(PodmanContainerHost):
         self.local_socket = None
 
     async def podman(self, *args, _log=True,
-               _bg=True, _bg_exc=False):
+                     _bg=True, _bg_exc=False, _fg=False):
         await self.start_container_host()
         options = {}
         if _log and self.podman_log:
@@ -273,7 +272,8 @@ class RemotePodmanHost(PodmanContainerHost):
         result = sh.podman(
             self.extra_args,
                 *args,
-                **options)
+                _fg=_fg,
+            **options)
         await result
         return result
 

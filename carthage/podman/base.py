@@ -431,7 +431,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             self.running = False
             await super().stop_machine()
 
-    def container_exec(self, *args, _user=None):
+    def container_exec(self, *args, _user=None, _fg=False):
         '''
 'Execute a command in a running container and return stdout.  This function intentionally has a differentname than :meth:`carthage.container.Container.container_command` because that method does not expect the container to be running.
 '''
@@ -439,11 +439,15 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             _user = self.runas_user
         if _user != 'root':
             raise NotImplementedError('only can run as root for now')
+        if _fg:
+            _bg = False
+            _bg_exc = False
         result = self.podman(
             'container', 'exec',
             self.full_name,
             *args,
-            _log=False)
+            _log=False, _fg=_fg,
+            _bg=_bg, _bg_exc=_bg_exc)
         return result
 
     #: An alias to be more compatible with :class:`carthage.container.Container`
