@@ -809,6 +809,6 @@ def map_transclusions(container_transclusions, contained, inner_key_map):
     inner_transclusions = contained.__transclusions__
     for transcluded_key in set(inner_transclusions) & set(inner_key_map):
         transcluded_keys = transclusions.setdefault(transcluded_key, set())
-        transcluded_keys.update({inner_key_map[ik] for ik in inner_transclusions[transcluded_key]})
+        transcluded_keys.update({inner_key_map[ik] for ik in inner_transclusions[transcluded_key] if ik in inner_key_map})
     
 from . import decorators

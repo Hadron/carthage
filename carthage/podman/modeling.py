@@ -87,7 +87,8 @@ class PodmanPodModel( carthage.machine.NetworkedModel, ModelContainer, AsyncInje
                          close=False,
                          propagate=cls.pod_name_global,
                          transclusion_overrides=cls.pod_name_global)
-            globally_unique_key(InjectionKey(carthage.machine.ResolvableModel, name=cls.name_for()+'-pod'))(cls)
+            propagate_key(InjectionKey(carthage.machine.ResolvableModel, name=cls.name_for()+'-pod', _globally_unique=True))(cls)
+            propagate_key(cls.our_key(), cls)
                                          
                                           
     pod_name_global = True  # : If True, the pod name is globally unique
@@ -95,7 +96,7 @@ class PodmanPodModel( carthage.machine.NetworkedModel, ModelContainer, AsyncInje
     @classmethod
     def our_key(self):
         name = self.name_for()
-        return InjectionKey(self.__class__, name=name)
+        return InjectionKey(self.__class__, name=name, _globally_unique=self.pod_name_global)
 
     @classmethod
     def supplementary_injection_keys(self, k):

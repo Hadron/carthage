@@ -330,9 +330,10 @@ class MachineModelType(RoleType):
                     close=True, allow_multiple=False,
                 ))
             self.__container_propagations__.add(machine_key)
-            globally_unique_key(InjectionKey(
+            propagate_key(InjectionKey(
                 carthage.machine.ResolvableModel,
-                name=self.name))(self)
+                name=self.name, _globally_unique=True), self)
+            propagate_key(InjectionKey(MachineModel, host=self.name, _globally_unique=True), self)
 
 
 class MachineModelMixin:

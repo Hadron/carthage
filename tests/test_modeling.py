@@ -1,4 +1,4 @@
-# Copyright (C) 2021, 2023, Hadron Industries, Inc.
+# Copyright (C) 2021, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -495,4 +495,23 @@ async def test_model_subclass_propagation(ainjector):
     l = await ainjector.get_instance_async(layout)
     nc = await l.ainjector.get_instance_async(InjectionKey(NetworkConfig, role='public'))
     l3 = await l.ainjector.get_instance_async(InjectionKey(FirstLevel, name='container'))
+    
+
+@async_test
+async def test_machine_model_leakage(ainjector):
+    '''
+    Test that MachineModel does not leak keys in up-propagations unless those keys are explicitly propagated.
+    Designed to confirm abug is not reintroduced.
+    '''
+    repository_key = InjectionKey(MachineModel, role='repository')
+    class layout(CarthageLayout):
+        
+        class model1(MachineModel):
+            @provides(repository_key)
+            class server(MachineModel):
+                pass
+
+    l = await ainjector(layout)
+    filter_result = l.injector.filter(MachineModel, ['role'])
+    assert filter_result == []
     
