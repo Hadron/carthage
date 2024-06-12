@@ -165,6 +165,18 @@ class TaskWrapperBase:
     invalidator_func = None
     check_completed_func = None
     hash_func: typing.Callable = staticmethod(lambda self: "")
+    dependencies: list = dataclasses.field(default_factory=lambda: [])
+
+    #: If True, then dependencies as well as any customization context
+    #in a :class:`~carthage.machine.BaseCustomization` will be
+    #called/entered while validating whether the task should run.
+    #That is these dependencies will be available when invalidators
+    #and check_completed functions are called.  If the outcome of
+    #should_run can be determined without calling invalidators or
+    #check_completed functions, dependencies may not be called.
+    #Currently customization contexts are entered more than required,
+    #but that is an implementation detail.
+    dependencies_always: bool = False
 
     @memoproperty
     def stamp(self):
@@ -247,7 +259,8 @@ class TaskWrapperBase:
 
     async def should_run_task(self, obj: SetupTaskMixin,
                               dependency_last_run: float = None,
-                              *, ainjector: AsyncInjector, run_methods=True):
+                              *, ainjector: AsyncInjector, dependencies_already_called:bool = False,
+                              run_methods=True):
 
         '''Indicate whether this task should be run for *obj*.
 
@@ -282,6 +295,8 @@ class TaskWrapperBase:
             dependency_last_run = 0.0
         if self.check_completed_func:
             if not run_methods: return (None, dependency_last_run)
+            if self.dependencies_always and not dependencies_already_called:
+                await self.call_dependencies(obj)
             last_run = await ainjector(self.check_completed_func, obj)
             hash_contents = ""
             if last_run is True:
@@ -297,17 +312,53 @@ class TaskWrapperBase:
                 f"Task {self.description} last run {_iso_time(last_run)}, but dependency run more recently at {_iso_time(dependency_last_run)}")
             return (True, dependency_last_run)
         if (not self.check_completed_func) and run_methods:
+            if self.dependencies_always and not dependencies_already_called:
+                await self.call_dependencies(obj)
+                dependencies_already_called = True
             actual_hash_contents = await ainjector(self.hash_func, obj)
             if actual_hash_contents != hash_contents:
                 obj.logger_for().info(f'Task {self.description} invalidated by hash_func() change from `{_h(hash_contents)}` to `{_h(actual_hash_contents)}`; last run {_iso_time(last_run)}')
                 return (True, dependency_last_run)
         if self.invalidator_func and run_methods:
+            if self.dependencies_always and not dependencies_already_called:
+                await self.call_dependencies(obj)
+                dependencies_already_called = True
             if not await ainjector(self.invalidator_func, obj, last_run=last_run):
                 obj.logger_for().info(f"Task {self.description} invalidated for {obj} by invalidator_func(); last run {_iso_time(last_run)}")
                 return (True, time.time())
         obj.logger_for().debug(f"Task {self.description} last run for {obj} at {_iso_time(last_run)}; re-running not required")
         return (False, last_run)
 
+    async def call_dependencies(self, instance):
+        '''
+        Make this tasks dependencies available; see :meth:`depend_on`
+        '''
+        ainjector = instance.ainjector
+        futures = []
+        for d in self.dependencies:
+            future = asyncio.ensure_future(ainjector(d))
+            futures.append(future)
+        if futures:
+            await asyncio.gather(futures)
+            
+    def depend_on(self, dependency):
+        '''
+        Decorator to  mark a particular task as depending on some :class:`~carthage.SystemDependency`.  Example Usage::
+
+            @setup_task("upload_files")
+            def upload_files(self):
+                # . . .
+
+            upload_files.depend_on(MachineDependency("fileserver"))
+
+        This requires that when the *upload_files* task runs, the "fileserver" machine is both brought to ready and started.  If :attr:`dependencies_always` is True,  then dependencies will be ready for  :meth:invalidators <invalidator>` and :meth:`check completed functions <check_completed>` as well.
+
+        Compare to :class:`cross_object_dependency` which sets up a dependency such that tasks in one object will re-run if tasks in another object have run more recently.
+        '''
+        from .system_dependency import SystemDependency
+        assert isinstance(dependency, SystemDependency)
+        self.dependencies.append(dependency)
+        
     def invalidator(self, slow=False):
         '''Decorator to indicate  an invalidation function for a :func:`setup_task`
 
@@ -652,6 +703,10 @@ class cross_object_dependency(TaskWrapper):
 
     :param relationship: The string name of a relationship such that calling the *relationship* method on an instance containing this dependency will yield the instance containing *task* that we want to depend on.
 
+    A cross object dependency will invalidate later tasks in this object if the depended on task has run more recently than these tasks.  That is in the example above, if the fileserver's *update_files* task has run more recently than this object's setup_tasks, then re-run this object's setup_tasks.
+
+    Compare to :meth:`TaskWrapper.depend_on`, which guarantees that when a particular task is running, certain dependencies are available.
+    
     '''
 
     dependent_task: typing.Union[TaskWrapper, TaskMethod, str]
