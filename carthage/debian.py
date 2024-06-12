@@ -143,7 +143,7 @@ def update_mirror(path, mirror, distribution, include_security):
 deb {mirror} {distribution} main contrib non-free
 deb-src {mirror} {distribution} main contrib non-free
 ''')
-        if include_security:
+        if include_security and distribution != 'unstable':
             f.write(f'''
 deb {mirror} {distribution}-updates main contrib non-free
 deb-src {mirror} {distribution}-updates main contrib non-free
