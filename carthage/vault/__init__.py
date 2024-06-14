@@ -198,6 +198,18 @@ class VaultConfigPlugin(ConfigLookupPlugin):
         secret, sep, field = selector.partition(':')
         if field == "":
             raise SyntaxError("The vault plugin requires a field")
+        if secret == "v2":
+            try:
+                mount, secret, field = field.split(":")
+            except ValueError: pass
+            if "mount" not in locals():
+                raise SyntaxError(
+                    f"Found vault plugin prefix \"v2\" and expected"
+                    f" mount:secret:field\" but instead found \"{field}\"."
+                )
+            result = client.secrets.kv.v2.read_secret(secret, mount)["data"]["data"][field]
+            return result
+
         result = client.read(secret)
         return result['data'][field]
 
