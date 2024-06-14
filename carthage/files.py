@@ -100,13 +100,23 @@ The resulting setup_task has an attribute *repo_path* which is a function return
 
 @inject(injector=Injector)
 def checkout_git_repo(url, repo, *, injector, foreground=False, branch=None):
+    '''
+    Checkout a git repo.
+    :param repo: where to put the repo; the path is not adjusted, so
+    if it should be relative to checkout_dir, that's the caller's
+    responsibility.
+    '''
     if foreground:
         options = dict(_fg=True)
     else: options = dict(_bg=True, _bg_exc=False)
     config = injector(ConfigLayout)
-    path = Path(config.checkout_dir) / repo
-    os.makedirs(config.checkout_dir, exist_ok=True)
+    path = Path(repo)
+    os.makedirs(path.parent, exist_ok=True)
     if path.exists():
+        if path.is_symlink():
+            # do not pull (especially rebase) a symlink into a developer's
+            # home directory. Instead simply confirm it is a git repo. 
+            return sh.git('status', _cwg=path, **options)
         return sh.git("pull", "--rebase",
                       _cwd=path,
                       **options)
