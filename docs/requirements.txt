@@ -4,4 +4,5 @@ sphinx-rtd-theme
 python-dateutil
 lmdb
 pyyaml
-sh
+sh ~= 1.14
+setuptools
