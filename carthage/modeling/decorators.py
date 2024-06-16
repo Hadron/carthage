@@ -255,8 +255,8 @@ class MachineMixin(ModelingDecoratorWrapper):
         self.name = name
 
     def handle(self, cls, ns, k, state):
-        super().handle(cls, ns, k. state)
-        state.flags &= ~(NSFlags.inject_by_name | NsFlags.inject_by_class | NSFlags.instantiate_on_access)
+        super().handle(cls, ns, k, state)
+        state.flags &= ~(NSFlags.inject_by_name | NSFlags.inject_by_class | NSFlags.instantiate_on_access)
         ns.to_inject[InjectionKey(MachineMixin,
                                   name=self.name)] = (
                                       dependency_quote(state.value), state.injection_options)
