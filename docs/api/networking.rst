@@ -1,5 +1,5 @@
-Networking Documentation
-========================
+Carthage Networking Module
+==========================
 
 .. autoclass:: carthage.Network
 

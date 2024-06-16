@@ -5,7 +5,7 @@ Carthage Core Documentation
    :maxdepth: 3
 
    intro
-   api/index
-   api/modeling
-   good_modeling
+   modeling/index
+   dependency_injection/index
    vault/vault_config
+   api/index
