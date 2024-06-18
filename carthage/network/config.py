@@ -146,6 +146,31 @@ class V4Config(L3ConfigMixin):
             if val is not None:
                 setattr(self, k, func(val))
 
+        def validate_network(field, address, self=self):
+            if not address in self.network:
+                raise ValueError(f"address {address} for field '{field}' is not contained in network {self.network}")
+
+        for field in ('address', 'gateway', 'public_address'):
+            if getattr(self, field):
+                validate_network(field, getattr(self, field))
+
+        if self.pool:
+            l, h = self.pool
+            validate_network('pool[0]', l)
+            validate_network('pool[1]', h)
+            if not (l < h):
+                raise ValueError(f"pool address {l} is not lower than address {h}")
+
+        for n, x in enumerate(self.dhcp_ranges or []):
+            l, h = x
+            validate_network(f'dhcp_ranges[{n}][0]', l)
+            validate_network(f'dhcp_ranges[{n}][1]', h)
+            if not (l < h):
+                raise ValueError(f"dhcp_ranges[{n}] address {l} is not lower than address {h}")
+
+        for n, x in enumerate(self.secondary_addresses or []):
+            validate_network(f'secondary_addresses[{n}]', x)
+
         super().after_resolve()
 
 
