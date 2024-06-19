@@ -42,7 +42,7 @@ class L3ConfigMixin:
     def after_resolve(self):
 
         def validate_network(field, address, self=self):
-            if not address in self.network:
+            if self.network and address not in self.network:
                 raise ValueError(f"address {address} for field '{field}' is not contained in network {self.network}")
 
         for field in ('address', 'gateway', 'public_address'):
@@ -64,8 +64,7 @@ class L3ConfigMixin:
                 raise ValueError(f"dhcp_ranges[{n}] address {l} is not lower than address {h}")
 
         for n, x in enumerate(self.secondary_addresses or []):
-            if self.network:
-                validate_network(f'secondary_addresses[{n}].private', x.private)
+            validate_network(f'secondary_addresses[{n}].private', x.private)
 
     def _handle_dhcp_ranges(self, func):
         def wrapper(ranges):
