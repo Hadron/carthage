@@ -251,7 +251,7 @@ def carthage_main_setup(parser=None, unknown_ok=False, ignore_import_errors=Fals
     root_logger.addHandler(console_handler)
     root_logger.setLevel('INFO')
     container_logger = logging.getLogger('carthage.container')
-    container_logger.addHandler(logging.FileHandler('container.log'))
+    container_logger.addHandler(logging.FileHandler('container.log', delay=True))
     container_logger.setLevel(10)
 
     def container_debug_filter(record):
