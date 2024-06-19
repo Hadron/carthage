@@ -40,14 +40,32 @@ class L3ConfigMixin:
         self.after_resolve()
 
     def after_resolve(self):
-        if self.dhcp_ranges:
-            for l, h in self.dhcp_ranges:
-                if l > h:
-                    raise ValueError(f'IN a dhcp range, the lower address {l} is not less than the upper address {h}')
-                if self.network and l not in self.network:
-                    raise ValueError(f'{l} is not in {self.network}')
-                if self.network and h not in self.network:
-                    raise ValueError(f'{h} is not in {self.network}')
+
+        def validate_network(field, address, self=self):
+            if not address in self.network:
+                raise ValueError(f"address {address} for field '{field}' is not contained in network {self.network}")
+
+        for field in ('address', 'gateway', 'public_address'):
+            if getattr(self, field):
+                validate_network(field, getattr(self, field))
+
+        if self.pool:
+            l, h = self.pool
+            validate_network('pool[0]', l)
+            validate_network('pool[1]', h)
+            if not (l < h):
+                raise ValueError(f"pool address {l} is not lower than address {h}")
+
+        for n, x in enumerate(self.dhcp_ranges or []):
+            l, h = x
+            validate_network(f'dhcp_ranges[{n}][0]', l)
+            validate_network(f'dhcp_ranges[{n}][1]', h)
+            if not (l < h):
+                raise ValueError(f"dhcp_ranges[{n}] address {l} is not lower than address {h}")
+
+        for n, x in enumerate(self.secondary_addresses or []):
+            if self.network:
+                validate_network(f'secondary_addresses[{n}].private', x.private)
 
     def _handle_dhcp_ranges(self, func):
         def wrapper(ranges):
@@ -145,31 +163,6 @@ class V4Config(L3ConfigMixin):
             val = getattr(self, k)
             if val is not None:
                 setattr(self, k, func(val))
-
-        def validate_network(field, address, self=self):
-            if not address in self.network:
-                raise ValueError(f"address {address} for field '{field}' is not contained in network {self.network}")
-
-        for field in ('address', 'gateway', 'public_address'):
-            if getattr(self, field):
-                validate_network(field, getattr(self, field))
-
-        if self.pool:
-            l, h = self.pool
-            validate_network('pool[0]', l)
-            validate_network('pool[1]', h)
-            if not (l < h):
-                raise ValueError(f"pool address {l} is not lower than address {h}")
-
-        for n, x in enumerate(self.dhcp_ranges or []):
-            l, h = x
-            validate_network(f'dhcp_ranges[{n}][0]', l)
-            validate_network(f'dhcp_ranges[{n}][1]', h)
-            if not (l < h):
-                raise ValueError(f"dhcp_ranges[{n}] address {l} is not lower than address {h}")
-
-        for n, x in enumerate(self.secondary_addresses or []):
-            validate_network(f'secondary_addresses[{n}]', x)
 
         super().after_resolve()
 
