@@ -106,7 +106,10 @@ def load_plugin(spec: plugin_spec,
     spec = _parse_plugin_spec(spec)
 
     if spec['type'] == 'module':
-        module_spec = find_spec(spec['name'])
+        module_name = spec['name']
+        module_spec = find_spec(module_name)
+        if not module_spec:
+            raise ValueError(f"no module found with name '{module_name}'")
         return handle_module_spec(module_spec=module_spec, injector=injector, ignore_import_errors=ignore_import_errors, metadata=None)
 
     elif spec['type'] == 'path':
