@@ -787,7 +787,7 @@ def install_mako_task(relationship, cross_dependency=True, *, relationship_ready
 
     :param cross_dependency: If true (the default), rerun the installation whenever any of the underlying mako_tasks change.
 
-    :param relationship_ready:  Bring the relationship to *async_become_ready* state before  installing mako tasks or checking cross-object dependencies.  Bringing the relationship to ready state allows the hash block in the mako template to access parts of the instance that are set up as part of bringing the instante to ready.  It also guarantees that the mako templates will be generated at least once.  However, it can produce dependency loops that hange Carthage in some circumstances.
+    :param relationship_ready:  Bring the relationship to *async_become_ready* state before  installing mako tasks or checking cross-object dependencies.  Bringing the relationship to ready state allows the hash block in the mako template to access parts of the instance that are set up as part of bringing the instante to ready.  It also guarantees that the mako templates will be generated at least once.  However, it can produce dependency loops that hang Carthage in some circumstances.
     
     This task is generally associated on a machine to install mako templates rendered on the model.  Typical usage might look like::
 
