@@ -90,6 +90,7 @@ jobs:
 
   test_remote_podman:
     runs-on: ubuntu-22.04
+    concurrency: only_one_remote_podman
     needs: build_python_dist
     container:
       image: 'debian:bookworm'
