@@ -439,8 +439,13 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             _user = self.runas_user
         if _user != 'root':
             raise NotImplementedError('only can run as root for now')
+        if _fg:
+            interactive = ['-ti']
+        else:
+            interactive = []
         result = self.podman(
             'container', 'exec',
+            *interactive,
             self.full_name,
             *args,
             _log=False, _fg=_fg,

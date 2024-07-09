@@ -1,4 +1,4 @@
-# Copyright (C)  2022, 2023, 2024, Hadron Industries, Inc.
+i# Copyright (C)  2022, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -98,16 +98,19 @@ class LocalPodmanContainerHost(PodmanContainerHost):
         finally:
             pass  # Perhaps we should unmount, but we'd need a refcount to do that.
 
-    def podman(self, *args,
+    async def podman(self, *args,
                _bg=True, _bg_exc=False, _log=True, _fg=False):
         options = {}
         if _log and self.podman_log:
             options['_out']=str(self.podman_log)
             options['_err_to_out'] = True
-        return sh.podman(
+        result = sh.podman(
             *args,
             _fg=_fg,
             **options)
+        if not _fg:
+            await result
+            return result
 
     @contextlib.asynccontextmanager
     async def tar_volume_context(self, volume):
@@ -274,7 +277,8 @@ class RemotePodmanHost(PodmanContainerHost):
                 *args,
                 _fg=_fg,
             **options)
-        await result
+        if not _fg:
+            await result
         return result
 
     async def podman_nosocket(self, *args, _log=True, **kwargs):
