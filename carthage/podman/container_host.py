@@ -404,7 +404,7 @@ async def instantiate_container_host(target, *, container_host):
         if isinstance(container_host, LocalMachineMixin):
             target.container_host = await target.ainjector(LocalPodmanContainerHost)
         else:
-            target.container_host = await ainjector(RemotePodmanHost, machine=container_host)
+            target.container_host = await container_host.ainjector(RemotePodmanHost, machine=container_host)
         container_host.injector.add_provider(
             InjectionKey(PodmanContainerHost, host=container_host.name, user=container_host.runas_user),
             target.container_host)
