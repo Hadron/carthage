@@ -1071,10 +1071,13 @@ class V4Pool(carthage.kvstore.HashedRangeAssignments):
                 self.force_assignment(key, link, link.v4_config.address)
             else:
                 self._assign(key, link)
+
     def str_to_assignment(self, assignment):
         return IPv4Address(assignment)
     
-                
+    def valid_key(self, k):
+        return k in self.valid_keys
+    
 __all__ += ['V4Pool']
 
 def match_link(links: dict[str,NetworkLink], 

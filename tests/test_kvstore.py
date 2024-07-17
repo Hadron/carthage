@@ -200,4 +200,8 @@ async def test_network_pool(ainjector):
     l = await ainjector.get_instance_async(layout)
     kvstore = ainjector.get_instance(KvStore)
     l.pool_network.assign_addresses()
+    v4_pool = await l.pool_network.ainjector.get_instance_async(V4Pool)
+    for l in l.pool_network.network_links:
+        assert v4_pool.valid_key(v4_pool.link_key(l))
+        
     
