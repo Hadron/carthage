@@ -937,6 +937,8 @@ class BareMetalMachine(Machine, SetupTaskMixin, AsyncInjectable):
     '''
 
     running = False
+    readonly = True #: Cannot be deleted or created.
+    
 
     async def start_machine(self):
         if self.running:
@@ -951,13 +953,19 @@ class BareMetalMachine(Machine, SetupTaskMixin, AsyncInjectable):
         self.running = False
 
     async def async_ready(self):
-        await self.resolve_networking()
+        await self.resolve_model()
         await self.run_setup_tasks()
         await super().async_ready()
 
     async def is_machine_running(self):
         return self.running
 
+    async def find(self):
+        '''
+        See if the machine exists. Override if it is desirable to do a dns check or similar.
+        '''
+        return True
+    
     @memoproperty
     def stamp_path(self):
         return Path(f'{self.config_layout.state_dir}/machines/{self.name}')
