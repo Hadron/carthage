@@ -220,9 +220,10 @@ class RemotePodmanHost(PodmanContainerHost):
             local_socket.parent.mkdir(exist_ok=True, parents=True)
             with contextlib.suppress(OSError):
                 local_socket.unlink()
-            self.process = machine.ssh(
+            self.process = machineG.ssh(
                 f'-L{local_socket}:{socket}',
                 *become_privileged_command,
+                'cd', '/', '&&',
             'podman', 'system', 'service',
                 '--timeout', '90',
                 f'unix://{socket}',
