@@ -193,7 +193,9 @@ class PodmanNetworkMixin:
             return
         container_config = await self.ainjector.get_instance_async(InjectionKey(oci_container_network_config, _optional=NotPresent))
         if container_config is not NotPresent:
-            self.injector.add_provider(InjectionKey(NetworkConfig), dependency_quote(container_config))
+            try:
+                self.injector.add_provider(InjectionKey(NetworkConfig), dependency_quote(container_config))
+            except ExistingProvider: pass
         await super().resolve_networking(force=force)
         for net in set(map( lambda l:l.net, self.network_links.values())):
             net.assign_addresses()
@@ -964,6 +966,8 @@ class PodmanVolume(HasContainerHostMixin, OciManaged):
             async with volume.filesystem_access() as path:
                  # Path points to a mount for the volume inside the context manager.
         '''
+        if not self.container_host:
+            await self.find()
         async with self.container_host.filesystem_access(
 'volume', 'mount',
                 self.name) as path:
