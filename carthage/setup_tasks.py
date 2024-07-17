@@ -746,6 +746,7 @@ If the template has a def called *hash*, this def will be rendered with the same
                          **kwargs)
 
     def __set_name__(self, owner, name):
+
         super().__set_name__(owner, name)
         import sys
         import mako.lookup
@@ -759,11 +760,19 @@ If the template has a def called *hash*, this def will be rendered with the same
                 resources = Path(module.__file__).parent
             else:
                 resources = import_resources_files(module.__package__)
-            templates = resources / 'templates'
-            if not templates.exists():
-                templates = resources
-            module._mako_lookup = mako.lookup.TemplateLookup([str(templates)], strict_undefined=True)
-            self.lookup = module._mako_lookup
+
+            paths = []
+
+            if hasattr(owner, 'container_context'):
+                paths.append(resources/owner.container_context/'templates')
+                paths.append(resources/owner.container_context)
+
+            paths.append(resources/'templates')
+            paths.append(resources)
+
+            lookup = mako.lookup.TemplateLookup([str(x) for x in paths], strict_undefined=True)
+            self.lookup = lookup
+            # module._mako_lookup = lookup
 
     def render(task, instance, **kwargs):
         template = task.lookup.get_template(task.template)
