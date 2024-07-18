@@ -7,11 +7,13 @@
 # LICENSE for details.
 
 from __future__ import annotations
+import dataclasses
 import importlib
 import logging
+import re
+import sys
 import types
 import typing
-import sys
 import yaml
 from pathlib import Path
 from importlib.util import spec_from_file_location, module_from_spec, find_spec
@@ -24,7 +26,81 @@ from .files import checkout_git_repo
 
 logger = logging.getLogger('carthage.plugins')
 
+@dataclasses.dataclass(frozen=True)
+class PluginMapping:
+    map:str
+    to: str
+    final:bool = False
+    regexp:bool = False
 
+    def map_url(self, url):
+        '''
+        Returns url, matched
+        '''
+        if bool(self.regexp) is False:
+            if self.map not in url:
+                return url, False
+            return url.replace(self.map, self.to), True
+        else: # regexp
+            if re.search(self.map, url):
+                return re.sub(self.map, self.to, url), True
+            return url, False
+
+class PluginMappings(Injectable):
+
+    '''
+    A collection of plugin mappins.  Often it is desirable to rewrite the URL for proprietry plugins, or to choose between https and ssh access to a git server.
+    In the configuration file, a mapping takes the form of a list of dictionaries having the following form:
+
+    map
+        The value to map from.
+
+    to
+        The value to replace *map* with.
+
+    final
+        Defaults to false. If true, then if the *map* value matches, this will be the last mapping executed for the given spec.
+
+    regexp
+        Defaults to false. If true, *map* is interpreted as a regular expression and *to* as a substitution pattern.
+
+    '''
+
+    mappings: list[PluginMapping]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.mappings = []
+        
+    def add_mapping(self, mapping:dict):
+        '''
+        Adds a mapping to the collection. Mappings should be added in preferred order--the first mapping added will be highest priority.
+        That means that as mappings are read in from configuration, the first configuration source processed will be highest priority.
+        '''
+        for k in ('map', 'to'):
+            if k not in mapping:
+                raise TypeError(f'{k} is required for a plugin mapping')
+        if set(mapping.keys()) - {'map', 'to', 'final', 'regexp'}:
+            raise TypeError(f'Unexpected keys in mapping {mapping}')
+        self.mappings.append(PluginMapping(**mapping))
+
+    def map(self, spec):
+        '''
+        Map the URL in *spec*.
+        If after mapping there is no ``:`` in the URL, convert to a path spec.
+        '''
+        if 'url' not in  spec:
+            return spec
+        url = spec['url']
+        for mapping in self.mappings:
+            url, matched = mapping.map_url(url)
+            if matched and mapping.final: break
+        if url != spec['url']:
+            result = _parse_plugin_spec(url)
+            result.update({k:spec[k] for k in spec.keys() if (k not in result) and k != 'url'})
+            return result
+        return spec
+    
 class CarthagePlugin(Injectable):
 
     name: str
@@ -102,8 +178,13 @@ def load_plugin(spec: plugin_spec,
 
     :param ignore_import_errors:  If True, succeed and register the plugin even if the python code raises.  This is intended to allow the plugin to be loaded so its metadata can be examined to determine dependencies.  Obviously the plugin is unlikely to be functional in such a state.
     '''
-
     spec = _parse_plugin_spec(spec)
+    orig_spec = spec
+    plugin_mappings = injector.get_instance(PluginMappings)
+    spec = plugin_mappings.map(spec)
+    if spec != orig_spec:
+        logger.debug('Mapped %s to %s', orig_spec, spec)
+    
 
     if spec['type'] == 'module':
         module_name = spec['name']

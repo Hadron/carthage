@@ -103,6 +103,7 @@ __all__ += ['CarthagePlugin']
 base_injector = carthage.dependency_injection.Injector()
 base_injector.claim("base injector")
 carthage.config.inject_config(base_injector)
+base_injector.add_provider(plugins.PluginMappings)
 base_injector.add_provider(deployment.MachineDeployableFinder)
 base_injector.add_provider(ssh.SshKey)
 base_injector.add_provider(ssh.AuthorizedKeysFile)
