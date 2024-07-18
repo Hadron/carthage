@@ -1,0 +1,24 @@
+- mappings:
+  - map: https://gitlab.com/hadron/carthage_extra
+    to: https://gitlab.example.com/hadron/carthage_extra
+    final: true
+  - map: '^https:'
+    to: 'git+ssh:'
+    regexp: true
+  - map: git+ssh://github.com/hadron/carthage-base
+    to: /home/developer/carthage-base
+  tests:
+  - spec: https://github.com/hadron/carthage
+    expected: git+ssh://github.com/hadron/carthage
+  - spec:
+      type: git
+      branch: next
+      url: https://github.com/hadron/carthage
+    expected:
+      type: git
+      branch: next
+      url: git+ssh://github.com/hadron/carthage
+  - spec: 'https://gitlab.com/hadron/carthage_extra'
+    expected: 'https://gitlab.example.com/hadron/carthage_extra'
+  - spec: 'https://github.com/hadron/carthage-base'
+    expected: '/home/developer/carthage-base'
