@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -220,6 +220,13 @@ def add_carthage_arguments(parser):
                         action='append',
                         help='Load a plugin into Carthage',
                         metavar='plugin')
+    parser.add_argument('--no-default-config',
+                        dest='default_config',
+                        action='store_false',
+                        default=True,
+                        help='Disable reading /etc/carthage_system.conf as root and ~/.carthage.conf for other users.'
+                        )
+    
     return parser
 
 
@@ -240,12 +247,6 @@ def carthage_main_setup(parser=None, unknown_ok=False, ignore_import_errors=Fals
     else:
         args = parser.parse_args()
         result = args
-    if len(args.config) > 0:
-        config = base_injector(ConfigLayout)
-        for f in args.config:
-            config.load_yaml(f, ignore_import_errors=ignore_import_errors)
-    for p in args.plugins:
-        base_injector(load_plugin, p, ignore_import_errors=ignore_import_errors)
     root_logger = logging.getLogger()
     console_handler = logging.StreamHandler()
     root_logger.addHandler(console_handler)
@@ -259,6 +260,14 @@ def carthage_main_setup(parser=None, unknown_ok=False, ignore_import_errors=Fals
             return 0
         return 1
     console_handler.addFilter(container_debug_filter)
+
+    config = base_injector(ConfigLayout)
+    if args.default_config:
+        load_default_config(config)
+    for f in args.config:
+        config.load_yaml(f, ignore_import_errors=ignore_import_errors)
+    for p in args.plugins:
+        base_injector(load_plugin, p, ignore_import_errors=ignore_import_errors)
     if not args.command_verbose:
         logging.getLogger('sh').setLevel(logging.ERROR)
         logging.getLogger('carthage.sh').propagate = False
@@ -281,6 +290,16 @@ def carthage_main_run(func, *args, **kwargs):
     finally:
         loop.run_until_complete(shutdown_injector(base_injector))
 
+def load_default_config(config):
+    if os.environ['USER'] == 'root':
+        config_file = '/etc/carthage_system.conf'
+    else:
+        config_file = os.path.expanduser('~/.carthage.conf')
+    config_path = pathlib.Path(config_file)
+    if config_path.exists():
+        with config_path.open('rt') as f:
+            config.load_yaml(f)
+            
 
 shell_safe_re = re.compile(r'^[a-zA-Z0-9_./ ]*$')
 
