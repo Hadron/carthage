@@ -110,11 +110,12 @@ class PodmanPodModel( carthage.machine.NetworkedModel, ModelContainer, AsyncInje
 
     def __repr__(self):
         return f'<{self.__class__.__name__} name:{self.name}>'
+
     async def resolve_networking(self, force:bool = False):
         '''Like
         :meth:`carthage.machine.NetworkedModel.resolve_networking`
         except that it looks for :data:`oci_container_network_config`.
-        If cthat key is present, that network config is used instead
+        If that key is present, that network config is used instead
         of ``InjectionKey(NetworkConfig)``.  Doing so allows
         containers that are lexically contained in their host to have
         their own NetworkConfig.

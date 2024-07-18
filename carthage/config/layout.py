@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2023, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -7,10 +7,11 @@
 # LICENSE for details.
 
 import importlib
+import logging
 import yaml
 from pathlib import Path
 from ..dependency_injection import inject, Injectable, InjectionKey, Injector, partial_with_dependencies
-
+import carthage
 
 from .schema import config_key, ConfigAccessor, ConfigSchema
 
@@ -103,6 +104,14 @@ class ConfigLayout(ConfigAccessor, Injectable):
                 continue
             setattr(self, early_key,
                     injector(ConfigPath, d[early_key]))
+        if 'debug_categories' in d:
+            for category in d.pop('debug_categories'):
+                logging.getLogger(category).setLevel(10)
+        if 'plugin_mappings' in d:
+            plugin_mappings = injector.get_instance(carthage.plugins.PluginMappings)
+            assert isinstance(d['plugin_mappings'], list), "plugin_mappings is a list of mappings"
+            for mapping in d.pop('plugin_mappings'):
+                plugin_mappings.add_mapping(mapping)
         if 'plugins' in d:
             for p in d['plugins']:
                 if (not ':' in p) and (p == '..' or p == '.' or '/' in p):

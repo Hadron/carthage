@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2021, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -9,8 +9,7 @@
 import os.path
 import pytest
 from carthage.pytest import *
-from carthage import base_injector, AsyncInjector, inject
-from carthage import ConfigLayout
+from carthage import base_injector, AsyncInjector, inject, ConfigLayout
 import carthage.ssh
 '''This is a test for the pytest plugins, not for the carthage plugin mechanism'''
 
