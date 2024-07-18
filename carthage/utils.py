@@ -13,6 +13,7 @@ import fcntl
 import functools
 import logging
 import os
+import posix
 import pathlib
 import re
 import typing
@@ -291,7 +292,8 @@ def carthage_main_run(func, *args, **kwargs):
         loop.run_until_complete(shutdown_injector(base_injector))
 
 def load_default_config(config):
-    if os.environ['USER'] == 'root':
+    is_root_uid = (posix.geteuid() == 0)
+    if is_root_uid or os.environ.get('USER') == 'root':
         config_file = '/etc/carthage_system.conf'
     else:
         config_file = os.path.expanduser('~/.carthage.conf')
