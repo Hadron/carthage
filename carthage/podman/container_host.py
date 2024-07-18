@@ -223,7 +223,6 @@ class RemotePodmanHost(PodmanContainerHost):
             self.process = machine.ssh(
                 f'-L{local_socket}:{socket}',
                 *become_privileged_command,
-                'cd', '/', '&&',
             'podman', 'system', 'service',
                 '--timeout', '90',
                 f'unix://{socket}',
