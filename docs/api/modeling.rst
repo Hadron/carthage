@@ -7,7 +7,7 @@ Base Models
 ***********
 
 .. automodule:: carthage.modeling
-  :members: 
+  :members: + InjectableModel, ModelContainer, ModelGrou, CarthageLayout, ModelTask, MachineModel
 
 Decorators
 **********
