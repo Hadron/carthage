@@ -6,7 +6,7 @@ Carthage Modeling Module
 Base Models
 ***********
 
-.. automodule:: carthage.modeling.base
+.. automodule:: carthage.modeling
   :members: 
 
 Decorators
