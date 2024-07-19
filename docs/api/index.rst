@@ -4,7 +4,8 @@ API Documentation
 .. toctree::
 
    dependency_injection
-   setup
+modeling
+setup
    networking
    machines
    oci

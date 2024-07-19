@@ -12,7 +12,7 @@ The modeling layer provides a domain-specific language for describing models.  P
 A Simple Model
 **************
 
-.. literalinclude:: modeling/example_1.py
+.. literalinclude:: example_1.py
     :linenos:
     :name: modeling:example_1
     :caption: A simple modeling layout to define a machine
@@ -155,7 +155,7 @@ Model classes sometimes involve a new construct called a **modelmethod**.  Unlik
 
     Sometimes upward propagation is desired.  Consider the following example:
 
-    .. literalinclude:: modeling/example_2.py
+    .. literalinclude:: example_2.py
 
     In this example machines can be accessed as ``layout.bank_com.server`` and ``layout.it_com.server``.  Once instantiated, the following injector access also works::
 
