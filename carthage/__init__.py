@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2023, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -115,7 +115,6 @@ base_injector.add_provider(carthage.network.external_network)
 base_injector.add_provider(carthage.network.BridgeNetwork, allow_multiple=True)
 
 base_injector.add_provider(InjectionKey(carthage.ssh.SshAgent), carthage.ssh.ssh_agent)
-base_injector.add_provider(carthage.pki.PkiManager)
 base_injector(carthage.cloud_init.enable_cloud_init_plugins)
 
 __all__ += ['base_injector']
