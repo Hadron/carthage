@@ -10,12 +10,14 @@ import os
 import os.path
 import pytest
 import shutil
+from pathlib import Path
 
-from carthage.pki import EntanglementPkiManager
+from carthage.pki import EntanglementPkiManager, PemBundleTrustStore
 from carthage.config import ConfigLayout
 from carthage import base_injector, Injector, AsyncInjector
 from carthage.pytest import *
 import carthage.sh
+resource_dir = Path(__file__).parent.joinpath('resources')
 
 
 @pytest.fixture(scope='module')
@@ -42,3 +44,10 @@ async def test_certify(pki_manager):
     key, cert = await pki_manager.issue_credentials('photon.cambridge', 'photon.cambridge machine cert')
     assert 'CERTIFICATE' in cert
     assert 'CERTIFICATE' in pki_manager.ca_cert
+
+@async_test
+async def test_pem_bundle_trust_store(ainjector):
+    pem_bundle = await ainjector(
+        PemBundleTrustStore, 'trust_root', resource_dir/'cacerts.pem')
+    tagged_certificates = {tag:cert async for tag, cert in pem_bundle.trusted_certificates()}
+    assert len(tagged_certificates) == 146
