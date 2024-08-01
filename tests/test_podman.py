@@ -18,6 +18,7 @@ from carthage.modeling import *
 from carthage.image import SshAuthorizedKeyCustomizations
 from carthage.ssh import SshKey
 from carthage import *
+from carthage.pki import PkiCustomizations, PemBundleTrustStore, trust_roots_key
 from carthage.become_privileged import BecomePrivilegedMixin
 from carthage.machine import FilesystemCustomization
 import carthage.sh
@@ -140,6 +141,10 @@ class podman_layout(CarthageLayout):
 
     class ansible_test(MachineModel):
 
+        add_provider(trust_roots_key, when_needed(
+            PemBundleTrustStore, 'root_certs',
+            Path(__file__).parent.joinpath('resources/cacerts.pem')))
+
         class cust(FilesystemCustomization):
 
             @setup_task("Install Ansible")
@@ -147,6 +152,7 @@ class podman_layout(CarthageLayout):
                 await self.run_command('apt', 'update')
                 await self.run_command('apt', '-y', 'install', 'ansible')
 
+            pki_cust = PkiCustomizations
             do_roles = ansible_role_task(os.path.dirname(__file__) + "/resources/test_ansible_role")
 
     class stamps_discarded(MachineModel):
