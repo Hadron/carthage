@@ -30,7 +30,8 @@ logger = logging.getLogger('carthage.plugins')
 class PluginMapping:
     map:str
     to: str
-    final:bool = False
+    stop:bool = False
+    late:bool = False
     regexp:bool = False
 
     def map_url(self, url):
@@ -58,8 +59,11 @@ class PluginMappings(Injectable):
     to
         The value to replace *map* with.
 
-    final
+    stop
         Defaults to false. If true, then if the *map* value matches, this will be the last mapping executed for the given spec.
+
+    late
+        Defaults to False. If True, this mapping is executed after all non-late mappings.
 
     regexp
         Defaults to false. If true, *map* is interpreted as a regular expression and *to* as a substitution pattern.
@@ -67,22 +71,28 @@ class PluginMappings(Injectable):
     '''
 
     mappings: list[PluginMapping]
+    late_mappings: list[PluginMapping]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.mappings = []
+        self.late_mappings = []
         
     def add_mapping(self, mapping:dict):
         '''
         Adds a mapping to the collection. Mappings should be added in preferred order--the first mapping added will be highest priority.
         That means that as mappings are read in from configuration, the first configuration source processed will be highest priority.
+        This is reversed for late mappings. The first late mapping added is the last executed.
         '''
         for k in ('map', 'to'):
             if k not in mapping:
                 raise TypeError(f'{k} is required for a plugin mapping')
-        if set(mapping.keys()) - {'map', 'to', 'final', 'regexp'}:
+        if set(mapping.keys()) - {'map', 'to', 'stop', 'late', 'regexp'}:
             raise TypeError(f'Unexpected keys in mapping {mapping}')
-        self.mappings.append(PluginMapping(**mapping))
+        if not mapping.get('late', False):
+            self.mappings.append(PluginMapping(**mapping))
+        else:
+            self.late_mappings.insert(0, PluginMapping(**mapping))
 
     def map(self, spec):
         '''
@@ -94,7 +104,10 @@ class PluginMappings(Injectable):
         url = spec['url']
         for mapping in self.mappings:
             url, matched = mapping.map_url(url)
-            if matched and mapping.final: break
+            if matched and mapping.stop: break
+        for mapping in self.late_mappings:
+            url, matched = mapping.map_url(url)
+            if matched and mapping.stop: break
         if url != spec['url']:
             result = _parse_plugin_spec(url)
             result.update({k:spec[k] for k in spec.keys() if (k not in result) and k != 'url'})

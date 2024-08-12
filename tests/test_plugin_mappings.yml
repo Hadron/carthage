@@ -1,7 +1,7 @@
 - mappings:
   - map: https://gitlab.com/hadron/carthage_extra
     to: https://gitlab.example.com/hadron/carthage_extra
-    final: true
+    stop: true
   - map: '^https:'
     to: 'git+ssh:'
     regexp: true
