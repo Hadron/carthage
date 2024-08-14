@@ -138,11 +138,11 @@ class EntanglementPkiManager(PkiManager):
         for cert in self.pki_dir.glob('*.pem'):
             yield cert.read_text()
 
-        async def trust_store(self):
-            return await self.ainjector(
-                SimpleTrustStore,
-                'carthage_root',
-                {'carthage_root': self.ca_cert})
+    async def trust_store(self):
+        return await self.ainjector(
+            SimpleTrustStore,
+            'carthage_root',
+            {'carthage_root': self.ca_cert})
         
     def _certify(self, host):
         self.ca_cert
