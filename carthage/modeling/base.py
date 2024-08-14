@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2022, 2023, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -646,3 +646,55 @@ class ModelTasks(ModelContainer, SetupTaskMixin, AsyncInjectable):
 
 
 __all__ += ['ModelTasks']
+
+def add_dynamic_machine_model(cls, name:str, key: InjectionKey):
+    '''*cls* must be a subclass of *ModelContainer*.
+    A *MachineModel* propagates several keys into its enclosing scope:
+
+    * A ``MachineModel`` key
+
+    * A ``ResolvableModel`` key
+
+    * a ``Machine`` key for the enclosed machine.
+
+    This function adds these keys for a model with hostname *name* to
+    *cls*, referring to the given keys in *key* using
+    :func:`injector_xref`.  It can be used when a model needs to be
+    built at runtime, but where the presence of the model needs to be
+    enumerated at modeling time so that the model can be included in
+    model and network resolution.  For example::
+
+        class e(Enclave):
+
+            def __init_subclass__(cls, **kwargs)
+                super().__init__subclass__(**kwargs)
+                add_dynamic_machine_model(cls, some_name, key)
+
+            def __init__(self, **kwargs):
+                super().__init__(**kwargs)
+                class model(*dynamic_set_of_bases):
+                    name = some_name
+                self.injector.add_provider(key, model)
+
+    Then the model with name *some_name* is added to the enclave, and the bases for that model can be dynamically computed at run time. The model should be accessed through a key like ``InjectionKey(MachineModel, host=some_name)`` rather than through ``key`` so that access can be properly transcluded by the enclosing layout.
+
+    Note that additional keys provided by the model  will not be propagated or made available. If these keys are required they should be handled manually.
+    '''
+    cls.add_provider(
+        InjectionKey(MachineModel, host=name, _globally_unique=True),
+        injector_xref(None, key),
+        transclusion_overrides=True,
+        propagate=True)
+    cls.add_provider(
+        InjectionKey(carthage.machine.ResolvableModel, name=name, _globally_unique=True),
+        injector_xref(None, key),
+        propagate=True,
+        transclusion_overrides=True)
+    cls.add_provider(
+        InjectionKey(carthage.machine.Machine, host=name, _globally_unique=True),
+        injector_xref(key, InjectionKey(carthage.machine.Machine)),
+        propagate=True,
+        transclusion_overrides=True)
+
+__all__ += ['add_dynamic_machine_model']
+    
