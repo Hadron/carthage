@@ -213,6 +213,7 @@ class PodmanPod(HasContainerHostMixin, PodmanNetworkMixin, carthage.machine.Netw
         self.injector.add_provider(InjectionKey(PodmanPod), dependency_quote(self))
         self.network_links = {}
         self.container_host = None
+
     async def find(self):
         if not self.container_host:
             await self.ainjector(instantiate_container_host, self)
@@ -229,6 +230,8 @@ class PodmanPod(HasContainerHostMixin, PodmanNetworkMixin, carthage.machine.Netw
         except sh.ErrorReturnCode:
             return False
         pod_info = json.loads(str(result.stdout, 'utf-8'))
+        if isinstance(pod_info, list):
+            pod_info = pod_info[0]
         self.pod_info = pod_info
         return dateutil.parser.isoparse(pod_info['Created']).timestamp()
 
