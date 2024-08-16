@@ -26,6 +26,8 @@ class BecomePrivilegedMixin(machine.Machine):
 
     '''
     Add ``sudo`` support to a :class:`~carthage.machine.Machine`.  For :meth:`run_command`, :meth:`filesystem_access`, and :func:`carthage.ssh.rsync`, use ``sudo`` to be come :attr:``runas_user` if :attr:`runas_user` differs from :attr:`ssh_login_user`.
+    The run_command implementation in this class is only useful for classes that depend on ssh. If there is another mechanism to run commands that does not directly support selecting a user, it is necessary to adjust the MRO so that this class comes before that implementation, and add some sort of _cwd support to run_command (and use it in this implementation).
+    
     '''
 
 
@@ -45,18 +47,15 @@ class BecomePrivilegedMixin(machine.Machine):
         else:
             return ['sudo', '-u', user]
         
-    def convert_to_shell(self, *args):
-        return [ 'bash', '-c', 'cd /; ' + ' '.join([ shlex.quote(str(arg)) for arg in args ]) ]
-
     async def run_command(self, *args, _bg=True, _bg_exc=False, _user=None):
         if _user is None:
             _user = self.runas_user
-        return await super().run_command(
-            *self.convert_to_shell(*[
-                *self.become_privileged_command(_user),
-                *args
-            ]),
-            _user=self.ssh_login_user)
+        if not self.become_privileged(_user):
+            return await super().run_command(*args, _user=_user)
+        return await self.ssh(
+            'cd / &&',
+            *self.become_privileged_command(_user),
+            shlex.join([str(a) for a in args]))
         
     async def sshfs_process_factory(self, user):
         become_privileged_command = self.become_privileged_command(user)

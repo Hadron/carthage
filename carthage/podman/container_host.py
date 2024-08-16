@@ -222,12 +222,11 @@ class RemotePodmanHost(PodmanContainerHost):
                 local_socket.unlink()
             self.process = machine.ssh(
                 f'-L{local_socket}:{socket}',
-                shlex.join(machine.convert_to_shell(*[
+                'cd / &&',
                     *become_privileged_command,
                     'podman', 'system', 'service',
                     '--timeout', '900',
-                    f'unix://{socket}'
-                ])),
+                    f'unix://{socket}',
                 _out=self.out_cb,
                 _err_to_out=True,
                 _bg=True, _bg_exc=False,
