@@ -222,10 +222,12 @@ class RemotePodmanHost(PodmanContainerHost):
                 local_socket.unlink()
             self.process = machine.ssh(
                 f'-L{local_socket}:{socket}',
-                *become_privileged_command,
-            'podman', 'system', 'service',
-                '--timeout', '90',
-                f'unix://{socket}',
+                shlex.join(machine.convert_to_shell(*[
+                    *become_privileged_command,
+                    'podman', 'system', 'service',
+                    '--timeout', '900',
+                    f'unix://{socket}'
+                ])),
                 _out=self.out_cb,
                 _err_to_out=True,
                 _bg=True, _bg_exc=False,
@@ -330,15 +332,17 @@ class RemotePodmanHost(PodmanContainerHost):
                         sshfs_path=self.sshfs_path,
                         become_privileged_command=self.become_privileged_command
                     )
-                    for x in range(5):
+                    for t in [0.5, 1, 1.5, 2, 2, 2, 2, 2, 4, 8]:
                         alive, *rest = self.sshfs_process.process.is_alive()
                         if not alive:
                             await self.sshfs_process
                             raise RuntimeError  # I'd expect that to have happened from an sh exit error already
-                        if os.path.exists(os.path.join(
-                                self.sshfs_path, remote_path_str)):
+                        path = os.path.join(self.sshfs_path, remote_path_str)
+                        if os.path.exists(path):
                             break
-                        await asyncio.sleep(0.4)
+                        else:
+                            logger.info(f'waiting for: {path}')
+                        await asyncio.sleep(t)
                     else:
                         raise TimeoutError("sshfs failed to mount")
             yield Path(self.sshfs_path)/remote_path_str
