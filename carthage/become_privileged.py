@@ -7,6 +7,7 @@
 # LICENSE for details.
 
 import os
+import shlex
 import typing
 import carthage.machine
 from . import machine, sh
@@ -44,12 +45,17 @@ class BecomePrivilegedMixin(machine.Machine):
         else:
             return ['sudo', '-u', user]
         
+    def convert_to_shell(self, *args):
+        return [ 'bash', '-c', 'cd /; ' + ' '.join([ shlex.quote(str(arg)) for arg in args ]) ]
+
     async def run_command(self, *args, _bg=True, _bg_exc=False, _user=None):
         if _user is None:
             _user = self.runas_user
         return await super().run_command(
-            *self.become_privileged_command(_user),
-            *args,
+            *self.convert_to_shell(*[
+                *self.become_privileged_command(_user),
+                *args
+            ]),
             _user=self.ssh_login_user)
         
     async def sshfs_process_factory(self, user):
@@ -80,7 +86,7 @@ async def sshfs_sftp_finder(
     agent = await machine.ainjector.get_instance_async(SshAgent)
     sftp_command_list = become_privileged_command + [
         '/bin/sh', '-c',
-        f"'for sftp in {' '.join(sftp_server_locations)} ; do test -x $sftp && exec {prefix} $sftp; done'"]
+        f"'cd /; for sftp in {' '.join(sftp_server_locations)} ; do test -x $sftp && exec {prefix} $sftp; done'"]
     sftp_command = " ".join(sftp_command_list)
     return sh.sshfs(
         '-o' 'ssh_command=' + " ".join(
