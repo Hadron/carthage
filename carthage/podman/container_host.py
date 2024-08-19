@@ -184,6 +184,12 @@ class RemotePodmanHost(PodmanContainerHost):
                     'mkdir',
                     '-m755',
                     '-p',
+                    CARTHAGE_SOCKET_DIRECTORY.parent,
+                    _user='root')
+                await machine.run_command(
+                    'mkdir',
+                    '-m755',
+                    '-p',
                     CARTHAGE_SOCKET_DIRECTORY,
                     _user='root')
                 await machine.run_command(
