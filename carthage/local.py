@@ -49,7 +49,7 @@ When testing whether a :class:`Machine` is local, test for ``isinstance(machine,
         return sh.nsenter.bake()
 
 
-class LocalMachine(LocalMachineMixin, Machine, SetupTaskMixin):
+class LocalMachine(LocalMachineMixin, Machine, SetupTaskMixin, AsyncInjectable):
 
     '''A machine representing the node on which carthage is running.
     '''
