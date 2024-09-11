@@ -17,10 +17,8 @@ disk_cache = getattr(model, 'disk_cache', 'writethrough')
      <feature policy='require' name='vmx' />
      %endif
 </cpu>
-<os>
+<os firmware='efi'>
     <type arch='x86_64' machine='pc-i440fx-2.6'>hvm</type>
-    <loader type='pflash' readonly='yes'>/usr/share/OVMF/OVMF_CODE.fd</loader>                         
-<nvram template='/usr/share/OVMF/OVMF_VARS.fd' />
     <bios useserial='yes'/>
 
     <bootmenu enable='yes'/>
