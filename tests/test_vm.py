@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -9,6 +9,7 @@
 from carthage.pytest import *
 import os.path
 import pytest
+from pathlib import Path
 from carthage.dependency_injection import *
 from carthage.dependency_injection import DependencyProvider
 from carthage import base_injector, network, rsync_git_tree, V4Config, vm, Machine, sh
@@ -120,3 +121,11 @@ async def test_cloud_init(test_ainjector, vm_image):
         m.ssh_rekeyed()
         async with m.machine_running(ssh_online=True):
             pass
+
+@async_test
+async def test_gen_iso():
+    iso_builder = carthage.files.CdContext(resource_dir, "test_cdcontext.iso")
+    async with iso_builder as tmpdir:
+        tmpdir.joinpath('foo').touch()
+    assert iso_builder.iso_path
+    

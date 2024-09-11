@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2019, 2021, 2022, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -6,6 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import dataclasses
 import os.path
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -129,3 +130,66 @@ def checkout_git_repo(url, repo, *, injector, foreground=False, branch=None):
 
 
 __all__ += ['git_checkout_task', 'checkout_git_repo']
+
+
+@dataclasses.dataclass
+class CdContext:
+
+    '''
+    Builds a temporary CD.
+    Typical usage::
+
+        iso_builder = CdContext(self.stamp_path 'cidata', '-Vcidata')
+        async with iso_builder as cd_info_path:
+            # write stuff out into directories under cd_info_path
+        # iso_builder.iso_path contains an iso with the information from path
+        #genisoimage will be called with -Vcidata per options
+
+    :param path: A path under which to create the cd and temporary directory.
+    :param iso_name: The name of the CD to create; the final output is ``path/iso_name``
+    :param *options:  any remaining positional arguments are passed as genisoimage options.
+
+    '''
+    
+    path: Path
+    iso_name: str
+    options: list[str]
+
+    def __init__(self, path, iso_name, *options):
+        self.path = Path(path)
+        self.iso_name = iso_name
+        self.options = options
+        self._iso_path = None
+        self.temp = None
+        assert '/' not in self.iso_name
+        
+
+    @property
+    def iso_path(self)-> Path:
+        '''If the context has been exited, return the path to the CD.
+        Else raise
+        '''
+        if self._iso_path:
+            return self._iso_path
+        raise RuntimeError('Run the context before the CD is created.')
+
+    async def __aenter__(self):
+        self.temp = TemporaryDirectory(dir=self.path, prefix='isobuild_', suffix=self.iso_name)
+        return Path(self.temp.name)
+
+    async def __aexit__(self, *exc_info):
+        if exc_info[0] is None:
+            iso_temp = self.path/(self.iso_name+'.tmp')
+            await sh.genisoimage(
+                '-J', '--rational-rock',
+                '-o', iso_temp,
+                *self.options,
+                self.temp.name,
+                _bg=True, bg_exc=False)
+            iso_path = self.path/self.iso_name
+            iso_temp.rename(iso_path)
+            self._iso_path = iso_path
+        else:
+            return False
+
+__all__ += ['CdContext']

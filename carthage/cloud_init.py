@@ -17,6 +17,7 @@ from .network import NetworkConfig, NetworkLink
 from .machine import AbstractMachineModel
 from . import sh, ConfigLayout
 import carthage.ssh
+from .files import CdContext
 
 __all__ = []
 
@@ -104,8 +105,9 @@ async def generate_cloud_init_cidata(
     config = await generate_cloud_init_cloud_config(ainjector=ainjector, model=model)
     if not config:
         return
-    with tempfile.TemporaryDirectory(dir=config_layout.state_dir) as tmp_dir:
-        tmp = Path(tmp_dir)
+    iso_builder = CdContext(model.stamp_path, 'cloud_init.iso',
+                            '-V', 'cidata')
+    async with  iso_builder as tmp:
         with tmp.joinpath("user-data").open("wt") as f:
             f.write("#cloud-config\n")
             f.write(yaml.dump(config.user_data))
@@ -115,17 +117,7 @@ async def generate_cloud_init_cidata(
             config.network_configuration.update(version=2)
             with tmp.joinpath("network-config").open("wt") as f:
                 f.write(yaml.dump(config.network_configuration))
-        output = Path(model.stamp_path) / "cloud_init.iso"
-        output_tmp = Path(model.stamp_path) / "cloud_init.iso.tmp"
-        await sh.genisoimage(
-            "-J", "--rational-rock",
-            "-o", output_tmp,
-            "-V", "cidata",
-            str(tmp),
-            _bg=True, _bg_exc=False)
-        os.rename(output_tmp, output)
-
-    return output
+    return iso_builder.iso_path
 
 __all__ += ['generate_cloud_init_cidata']
 
