@@ -174,13 +174,14 @@ class CdContext:
         raise RuntimeError('Run the context before the CD is created.')
 
     async def __aenter__(self):
+        self.path.mkdir(parents=True, exist_ok=True, mode=0o711)
         self.temp = TemporaryDirectory(dir=self.path, prefix='isobuild_', suffix=self.iso_name)
         return Path(self.temp.name)
 
     async def __aexit__(self, *exc_info):
         if exc_info[0] is None:
             iso_temp = self.path/(self.iso_name+'.tmp')
-            await sh.genisoimage(
+            await sh.xorrisofs(
                 '-J', '--rational-rock',
                 '-o', iso_temp,
                 *self.options,
