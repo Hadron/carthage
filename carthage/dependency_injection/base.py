@@ -802,7 +802,7 @@ Return the first injector in our parent chain containing *k* or None if there is
             # Don't bother running the resolve protocol for the base case
             if resolv and (obj._async_ready_state == ReadyState.NOT_READY):
                 res = await obj.async_resolve()
-                if res is None or res is obj:
+                if  res is obj:
                     if obj._async_ready_state == ReadyState.NOT_READY:
                         obj._async_ready_state = ReadyState.RESOLVED
                     res = obj
@@ -1217,7 +1217,7 @@ class AsyncInjectable(Injectable):
         return self
 
     async def async_resolve(self):
-        '''Returns None or an object that should replace *self* in providing dependencies.'''
+        '''Returns self or an object that should replace *self* in providing dependencies.'''
         return None
 
     async def async_become_ready(self, cycle_set=None, dependency_key=None):
@@ -1450,6 +1450,12 @@ class InjectorXrefMarker(AsyncInjectable, metaclass=InjectorXrefMarkerMeta):
     async def async_resolve(self):
         return await self.ainjector.get_instance_async(self.target_key)
 
+    @property
+    def injector(self):
+        '''For introspection logic
+        '''
+        return self.ainjector.injector
+    
 
 def injector_xref(injectable_key: InjectionKey,
                   target_key: InjectionKey,
