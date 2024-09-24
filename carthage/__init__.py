@@ -73,9 +73,9 @@ from .image import ContainerVolume, wrap_container_customization
 __all__ += ['ContainerVolume', 'wrap_container_customization']
 
 
-from .system_dependency import MachineDependency, SystemDependency, disable_system_dependency
+from .system_dependency import MachineDependency, CommandDependency, SystemDependency, disable_system_dependency
 
-__all__ += ['MachineDependency', 'SystemDependency', 'disable_system_dependency']
+__all__ += ['MachineDependency', 'SystemDependency', 'CommandDependency', 'disable_system_dependency']
 
 import carthage.container
 import carthage.local

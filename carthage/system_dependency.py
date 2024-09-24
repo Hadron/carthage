@@ -1,4 +1,4 @@
-# Copyright (C) 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -10,6 +10,8 @@ import abc
 from .dependency_injection import *
 from .machine import Machine
 from .utils import memoproperty
+from . import sh
+
 __all__ = []
 
 
@@ -66,7 +68,8 @@ class MachineDependency(SystemDependency):
 
         if not name and ('host' not in self.key.constraints):
             raise ValueError(f'when MachineDependency is called with an InjectionKey, either the key must have a `host` constraint or a name must be given explicitly')
-
+        self.machine = None
+        
     async def __call__(self, ainjector):
         machine = await ainjector.get_instance_async(self.key)
         if not hasattr(machine, 'start_machine') and hasattr(machine, 'machine'):
@@ -79,6 +82,7 @@ class MachineDependency(SystemDependency):
                 await machine.ssh_online()
         elif self.online:
             await getattr(machine, self.online)()
+        self.machine = machine
 
     @property
     def name(self):
@@ -92,6 +96,37 @@ class MachineDependency(SystemDependency):
 
 __all__ += ['MachineDependency']
 
+
+class CommandDependency(MachineDependency):
+
+    '''
+    A kind of :class:`MachineDependency` that repeatedly runs a command until it succeeds after the machine is online.
+    '''
+
+    def __init__(self, *args,
+                 command:list[str],
+                 **kwargs):
+        if not isinstance(command, (list, tuple)):
+            raise TypeError('Command should be a list of arguments suitable for run_command')
+        self.command = command
+        super().__init__(*args, **kwargs)
+
+    async def __call__(self, ainjector):
+        await super().__call__(ainjector)
+        wait = 1
+        tries = 0
+        while True:
+            try:
+                await self.machine.run_command(self.command)
+                break
+            except  sh.ErrorReturnCode:
+                tries += 1
+                if tries == 3:
+                    logger.info('Waiting for %s to succeed on %s', ' '.join(self.command), self.machine.name)
+                await asyncio.sleep(wait)
+                if wait < 16: wait = wait*2
+
+__all__ += ['CommandDependency']
 
 def disable_system_dependency(injector, dependency):
     "Mask out *dependency* in the scope of *injector*"
