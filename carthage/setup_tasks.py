@@ -700,7 +700,7 @@ class mako_task(TaskWrapper):
         dnsmasq_task = mako_task('dnsmasq.conf.mako',
             network = InjectionKey("some_network"))
 
-    Typically used in a :class:`~carthage.modeling.MachineModel`.  Introduces a setup task to render a mako template.  Extra keyword arguments can be :class:`InjectionKey` in which case they are instantiated in the context of the injector of the object to which the setup task is attached.  These arguments are made available in the mako template context.  The *instance* template context argument is introduced and points to  the object on which the setup task is run.
+    Typically used in a :class:`~carthage.modeling.MachineModel`.  Introduces a setup task to render a mako template.  Extra keyword arguments can be :class:`InjectionKey` in which case they are instantiated in the context of the injector of the object to which the setup task is attached.  These arguments are made available in the mako template context.  The *instance* template context argument is introduced and points to  the object on which the setup task is run. Arguments that are not InjectionKeys are passed directly to the template.
 
 If the template has a def called *hash*, this def will be rendered with the same arguments as the main template body.  This value will be stored in the completion stamp; if the hash changes, the template will be re-rendered.  For performance reasons, try to keep the hash easy to compute.
 
@@ -715,25 +715,28 @@ If the template has a def called *hash*, this def will be rendered with the same
     def __init__(self, template, output=None, **injections):
         kwargs = {}
         # Split kwargs; Leading _ is left as arguments to setup_task,
-        # others are injections.
-        for k in injections:
+        # InjectionKeys are injections; other args are passed through
+        template_args = {}
+        for k in list(injections.keys()):
             if k.startswith("_"):
                 kwargs[k[1:]] = injections.pop(k)
+            elif not isinstance(injections[k], InjectionKey):
+                template_args[k] = injections.pop(k)
 
         # A separate function so that injection works; consider
         # TaskMethod.__setattr__ to understand.
         @inject(**injections)
         def func(*args, **kwargs):
-            return self.render(*args, **kwargs)
+            return self.render(*args, **kwargs, **template_args)
 
         @inject(**injections)
         def hash_func(instance, **kwargs):
             template = self.lookup.get_template(self.template)
             if template.has_def('hash'):
                 hash_template = template.get_def("hash")
-                return hash_template.render(instance=instance, **kwargs)
+                return hash_template.render(instance=instance, **kwargs, **template_args)
             else:
-                return template.render(instance=instance, **kwargs)
+                return template.render(instance=instance, **kwargs, **template_args)
         self.template = template
         if output is None:
             output = template
