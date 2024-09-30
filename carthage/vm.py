@@ -19,8 +19,9 @@ import mako.template
 from pathlib import Path
 from .dependency_injection import *
 from .utils import when_needed, memoproperty
-from .image import SetupTaskMixin, setup_task, ImageVolume
-from .machine import Machine, SshMixin, ContainerCustomization, disk_config_from_model
+from .setup_tasks import SetupTaskMixin, setup_task
+from .image import  ImageVolume
+from .machine import Machine, SshMixin, ContainerCustomization, disk_config_from_model, AbstractMachineModel
 from . import sh
 from .config import ConfigLayout
 from .ports import PortReservation
@@ -322,4 +323,54 @@ async def qemu_disk_config(vm, ci_data, *, ainjector):
             path=ci_data,
             cache='writeback')
 
+class VmCreatedImage(ImageVolume):
+
+    '''
+    Represents an image created by booting a VM, often with CDs attached and running some operations. The resulting primary disk is used as the image.
+    The VM is created only if the image is not available.
+
+This class is almost always subclassed.  The following are expected to be overwridden:
+
+    model
+        This class is instantiated to create a :class:`AbstractMachineModel` which will be attached to the VM to build the image. If the instantiated class has a *machine_type* method, that will be used as the subclass of :class:`Vm` to instantiate. Typically this class is a :class`carthage.modeling.MachineModel`. In that case, customizations attached to the model will be run against the VM.
+    '''
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args,
+                         unpack=None,
+                         base_image=None,
+                         **kwargs)
+        from carthage.modeling import machine_implementation_key
+        self.injector.add_provider(InjectionKey(AbstractMachineModel),
+                                   self.model)
+        if isinstance(self.model, type):
+            self.model = None # instantiated in prepare_model
+        self.disk_config = None
+        if machine_implementation_key not in self.injector:
+            # If you want something other than VM, override it in the model.
+            self.injector.add_provider(machine_implementation_key, dependency_quote(Vm))
+
+    async def _prepare_model(self):
+        '''Prepare the model and self for image creation.
+        '''
+        if not self.model:
+            self.model = awaitself.ainjector.get_instance_async(AbstractMachineModel)
+            self.model.name = self.name
+        if not self.disk_config:
+            disk_config = disk_config_from_model(self.model, [dict()])
+            if 'volume' not in disk_config[0]:
+                disk_config[0]['volume'] = self
+            self.model.disk_config = self.disk_config = disk_config
+
+    async def _prepare_vm(self):
+        '''
+        Prepare the vm for the image creation.
+        '''
+        await self._prepare_model()
+        machine_type = getattr(self.model, 'machine_type', Vm)
+        with instantiation_not_ready():
+            self.vm = await self.ainjector(
+                machine_type, name=self.name)
+            self.model.injector.add_provider(InjectionKey(Machine), self.vm)
+            
         __all__ = ('VM', 'Vm', 'InstallQemuAgent')
