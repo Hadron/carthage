@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -249,19 +249,38 @@ Takes a :func:`setup_task` and wraps it in a :class:`ContainerCustomization` so 
 @inject_autokwargs(config_layout=ConfigLayout)
 class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
-    def __init__(self, name, path=None, create_size=None,
+    '''
+    Represents a raw disk image.
+    Can be unpacked from a compressed base image, or created by a callback (or eros if *unpack* is False).
+    If *base_image* is set, then ``cp --reflink`` is used to clone an image.
+
+    '''
+
+    base_image: 'str|ImageVolume' = None
+    preallocate:bool = False
+    def __init__(self, name=None, path=None, *,
+                 create_size=None,
                  unpack=None,
                  remove_stamps=False,
+                 base_image=None,
+                 preallocate=None,
                  **kwargs):
+        if name is None and not self.name:
+            raise TypeError('name must be set on the constructor or subclass')
         super().__init__(**kwargs)
-        name = str(name)  # in case it's a Path
+        if base_image:
+            self.base_image = base_image
+        if self.base_image and unpack:
+            raise TypeError('Cannot clone and unpack at the same time.')
+        if name:
+            name = str(name)  # in case it's a Path
+            self.name = name
         if path is None:
             path = self.config_layout.vm_image_dir
-        self.name = name
-        if name.startswith('/'):
-            self.path = name
+        if self.name.startswith('/'):
+            self.path = Path(self.name)
         else:
-            self.path = os.path.join(path, name + '.raw')
+            self.path = Path(path)/ (self.name + '.raw')
 
         if not os.path.exists(self.path):
             os.makedirs(os.path.dirname(self.path), exist_ok=True)
@@ -288,20 +307,23 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         await self.run_setup_tasks()
         return await super().async_ready()
 
-    def delete_volume(self):
+    def _delete_volume(self):
         try:
             os.unlink(self.path)
             shutil.rmtree(self.stamp_path)
         except FileNotFoundError:
             pass
 
+    async def delete(self):
+        return self._delete_volume()
+    
     @property
     def stamp_path(self):
         return Path(str(self.path) + '.stamps')
 
     def close(self, canceled_futures=None):
         if self.config_layout.delete_volumes:
-            self.delete_volume()
+            self._delete_volume()
         super().close(canceled_futures)
 
     def __del__(self):
@@ -311,8 +333,6 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         """Override this method in a subclass to implement alternate creation methods
             Alternatively specify unpack=func() in the constructor
         """
-        if self.create_size is None:
-            raise RuntimeError(f"{self.path} not found and creation disabled")
         await sh.gzip('-d', '-c',
                       self.config_layout.base_vm_image,
                       _out=self.path,
@@ -322,19 +342,44 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
                       _tty_out=False,
                       _bg=True,
                       _bg_exc=False)
-        if hasattr(self, 'create_size'):
-            os.truncate(self.path, self.create_size)
 
     @setup_task('unpack')
     async def unpack_installed_system(self):
         if os.path.exists(self.path):
             return  # mark as succeeded rather than skipped
+        if self.create_size is None:
+            raise RuntimeError(f"{self.path} not found and creation disabled")
 
         # We never want to unpack later after we've decided not to
-        if self._pass_self_to_unpack:
-            return await self.unpack(self)
-        return await self.unpack()
-
+        if self.base_image:
+            if isinstance(self.base_image, ImageVolume):
+                await self.base_image.async_become_ready()
+                base_image = self.base_image.path
+            else:
+                base_image = self.base_image
+            await sh.cp(
+                base_image,
+                self.path,
+                reflink='auto'
+                _bg=True,
+                _bg_exc=False,
+                )
+        elif self._pass_self_to_unpack:
+            await self.unpack(self)
+        else:
+            await self.unpack()
+        if isinstance(self.create_size, int):
+            result = self.path.stat()
+            if self.create_size > result.st_size:
+                if not self.preallocate:
+                    os.truncate(self.path, self.create_size)
+                else:
+                    await sh.fallocate(
+                        '-x',
+                        '-l',
+                        self.create_size,
+                        self.path)
+                    
     def qemu_config(self, disk_config):
         return dict(
             path=self.path,
