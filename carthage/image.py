@@ -285,12 +285,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         if not os.path.exists(self.path):
             os.makedirs(os.path.dirname(self.path), exist_ok=True)
             remove_stamps = True
-            if create_size:
-                with open(self.path, "w") as f:
-                    try:
-                        sh.chattr("+C", self.path, _bg=False)
-                    except sh.ErrorReturnCode_1:
-                        pass
+        if create_size:
             self.create_size = create_size
         if remove_stamps:
             shutil.rmtree(self.stamp_path, ignore_errors=True)
@@ -299,9 +294,28 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         if callable(unpack):
             self._pass_self_to_unpack = True
             self.unpack = unpack
+        self._do_create_volume()
 
     def __repr__(self):
         return f"<{self.__class__.__name__} path={self.path}>"
+
+    def _do_create_volume(self):
+        if self.path.exists(): return
+        if self.create_size:
+            with open(self.path, "w") as f:
+                try:
+                    sh.chattr("+C", self.path, _bg=False)
+                except sh.ErrorReturnCode_1:
+                    pass
+            if not self.preallocate:
+                os.truncate(self.path, self.create_size)
+            else:
+                sh.fallocate(
+                    '-x',
+                    '-l',
+                    self.create_size,
+                    self.path,
+                    _bg=False)
 
     async def async_ready(self):
         await self.run_setup_tasks()
@@ -316,7 +330,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
     async def delete(self):
         return self._delete_volume()
-    
+
     @property
     def stamp_path(self):
         return Path(str(self.path) + '.stamps')
@@ -360,7 +374,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
             await sh.cp(
                 base_image,
                 self.path,
-                reflink='auto'
+                reflink='auto',
                 _bg=True,
                 _bg_exc=False,
                 )
@@ -368,18 +382,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
             await self.unpack(self)
         else:
             await self.unpack()
-        if isinstance(self.create_size, int):
-            result = self.path.stat()
-            if self.create_size > result.st_size:
-                if not self.preallocate:
-                    os.truncate(self.path, self.create_size)
-                else:
-                    await sh.fallocate(
-                        '-x',
-                        '-l',
-                        self.create_size,
-                        self.path)
-                    
+
     def qemu_config(self, disk_config):
         return dict(
             path=self.path,
