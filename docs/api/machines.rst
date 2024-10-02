@@ -38,3 +38,8 @@ nested_virt
     Boolean indicating whether to allow nested virtualization
 
     
+hardware_tpm
+    Whether to provide a TPM in the virtual machine.
+
+console_needed
+    Whether a graphical console is needed.
