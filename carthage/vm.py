@@ -48,7 +48,7 @@ vm_image = InjectionKey('vm-image')
 )
 class VM(Machine, SetupTaskMixin):
 
-    def __init__(self, name, *, console_needed=False,
+    def __init__(self, name, *, console_needed=None,
                  **kwargs):
         super().__init__(name=name, **kwargs)
         injector = self.injector
@@ -62,10 +62,11 @@ class VM(Machine, SetupTaskMixin):
         self.vm_running = self.machine_running
         self._operation_lock = asyncio.Lock()
 
-    def gen_volume(self):
+    async def gen_volume(self):
         if self.volume is not None:
             return
-        self.volume = self.image.clone_for_vm(self.name)
+        if self.image:
+            self.volume = self.image.clone_for_vm(self.name)
         self.ssh_rekeyed()
         os.makedirs(self.stamp_path, exist_ok=True)
 
@@ -74,17 +75,21 @@ class VM(Machine, SetupTaskMixin):
         await self.resolve_networking()
         for i, link in self.network_links.items():
             await link.instantiate(carthage.network.BridgeNetwork)
+        if self.image:
             await self.image.async_become_ready()
-        self.gen_volume()
+        await self.gen_volume()
         ci_data = None
         if self.model and getattr(self.model, 'cloud_init', False):
             ci_data = await self.ainjector(carthage.cloud_init.generate_cloud_init_cidata)
         disk_config = []
         async for d in await self.ainjector(qemu_disk_config, self, ci_data):
             disk_config.append(types.SimpleNamespace(**d))
+        console_needed = self.console_needed
+        if console_needed is None:
+            console_needed = getattr(self.model, 'console_needed', False)
         with open(self.config_path, 'wt') as f:
             f.write(template.render(
-                console_needed=self.console_needed,
+                console_needed=console_needed,
                 console_port=self.console_port.port if self.console_needed else None,
                 name=self.full_name,
                 links=self.network_links,
@@ -129,6 +134,14 @@ class VM(Machine, SetupTaskMixin):
 
     start_machine = start_vm
 
+    def domid(self):
+        try:
+            bdomid =sh.virsh('domid', self.full_name, _bg=False).stdout
+            domid = str(bdomid, 'utf-8').strip()
+        except sh.ErrorReturnCode_1:
+            return None
+        return domid
+
     async def stop_vm(self):
         async with self._operation_lock:
             if not self.running:
@@ -139,11 +152,7 @@ class VM(Machine, SetupTaskMixin):
                            _bg_exc=False)
             for i in range(10):
                 await asyncio.sleep(5)
-                try:
-                    sh.virsh('domid', self.full_name, _bg=False)
-                except sh.ErrorReturnCode_1:
-                    # it's shut down
-                    self.running = False
+                if not await self.is_machine_running():
                     break
             if self.running:
                 try:
@@ -151,7 +160,7 @@ class VM(Machine, SetupTaskMixin):
                 except sh.ErrorReturnCode:
                     pass
                 self.running = False
-                await super().stop_machine()
+            await super().stop_machine()
 
     stop_machine = stop_vm
 
@@ -190,17 +199,29 @@ class VM(Machine, SetupTaskMixin):
         return await super().async_ready()
 
     async def is_machine_running(self):
-        try:
-            sh.virsh('domid', self.full_name, _bg=False)
+        domid = self.domid()
+        if domid and domid != '-':
             self.running = True
-            if self.running and (self.__class__.ip_address is Machine.ip_address):
-                try:
-                    self.ip_address
-                except NotImplementedError:
-                    await self._find_ip_address()
-        except sh.ErrorReturnCode_1:
+        else:
             self.running = False
+        if self.running and (self.__class__.ip_address is Machine.ip_address):
+            try:
+                self.ip_address
+            except NotImplementedError:
+                await self._find_ip_address()
         return self.running
+
+    async def wait_for_shutdown(self, timeout=30*60):
+        '''
+        Wait for up to timeout seconds for the machine to shut down.
+        '''
+        time_remaining = timeout
+        while await self.is_machine_running():
+            await asyncio.sleep(5)
+            time_remaining -= 5
+            if time_remaining <= 0:
+                raise TimeoutError
+
 
     async def _find_ip_address(self):
         for i in range(30):
@@ -229,10 +250,12 @@ class VM(Machine, SetupTaskMixin):
                     return
             await asyncio.sleep(3)
 
-    @property
+    @memoproperty
     def stamp_path(self):
-        return Path(str(self.volume.path) + '.stamps')
-
+        if self.volume:
+            return Path(str(self.volume.path) + '.stamps')
+        else:
+            return Path(self.config_layout.vm_image_dir)/f'{self.name}.stamps'
     def _console_json(self):
 
         d = {
@@ -286,33 +309,34 @@ async def qemu_disk_config(vm, ci_data, *, ainjector):
                                                   readonly=True)],
                                          )
 
-    for i, entry in enumerate(disk_config):
-        if i == 0:  # primary disk
-            if 'volume' not in entry:
-                entry['volume'] = vm.volume
-        if 'cache' not in entry:
-            try:
-                entry['cache'] = vm.model.disk_cache
-            except AttributeError:
-                entry['cache'] = 'writethrough'
-        if 'volume' not in entry and 'size' in entry:
-            entry['volume'] = await ainjector(
-                ImageVolume, name=vm.name + f'_disk_{i}',
-                create_size=entry.size,
-                unpack=False)
-        try:
-            await entry['volume'].async_become_ready()
-        except AttributeError:
-            pass  # QemuVolume is not AsyncInjectable
-        except KeyError:
-            pass  # volume not set
-        entry.setdefault('target_type', 'disk')
-        if 'volume' in entry:
-            entry.update(entry['volume'].qemu_config(entry))
-        entry.setdefault('source_type', 'file')
-        entry.setdefault('driver', 'raw')
-        entry.setdefault('qemu_source', 'dev' if entry['source_type'] == 'block' else 'file')
-        yield entry
+    # Unless a volume explicitly requests not ready, we bring it to ready.
+    with instantiation_not_ready(ready=True):
+        for i, entry in enumerate(disk_config):
+            if i == 0:  # primary disk
+                if 'volume' not in entry:
+                    entry['volume'] = vm.volume
+            if 'cache' not in entry:
+                try:
+                    entry['cache'] = vm.model.disk_cache
+                except AttributeError:
+                    entry['cache'] = 'writethrough'
+            if 'volume' not in entry and 'size' in entry:
+                entry['volume'] = await ainjector(
+                    ImageVolume, name=vm.name + f'_disk_{i}',
+                    create_size=entry['size'],
+                    unpack=False)
+            if 'volume' in entry and isinstance(entry['volume'], InjectionKey):
+                entry['volume'] = await vm.ainjector.get_instance_async(entry['volume'])
+            elif 'volume' in entry:
+                await entry['volume'].async_become_ready()
+            entry.setdefault('target_type', 'disk')
+            if 'volume' in entry:
+                entry.update(entry['volume'].qemu_config(entry))
+            entry.setdefault('source_type', 'file')
+            entry.setdefault('driver', 'raw')
+            entry.setdefault('qemu_source', 'dev' if entry['source_type'] == 'block' else 'file')
+            entry.setdefault('bus', 'scsi')
+            yield entry
     if ci_data:
         yield dict(
             target_type='cdrom',
@@ -323,7 +347,7 @@ async def qemu_disk_config(vm, ci_data, *, ainjector):
             path=ci_data,
             cache='writeback')
 
-class VmCreatedImage(ImageVolume):
+class LibvirtCreatedImage(ImageVolume):
 
     '''
     Represents an image created by booting a VM, often with CDs attached and running some operations. The resulting primary disk is used as the image.
@@ -331,46 +355,66 @@ class VmCreatedImage(ImageVolume):
 
 This class is almost always subclassed.  The following are expected to be overwridden:
 
-    model
-        This class is instantiated to create a :class:`AbstractMachineModel` which will be attached to the VM to build the image. If the instantiated class has a *machine_type* method, that will be used as the subclass of :class:`Vm` to instantiate. Typically this class is a :class`carthage.modeling.MachineModel`. In that case, customizations attached to the model will be run against the VM.
+    vm_customizations
+        A set of customizations to apply to the Vm while it is running.
     '''
 
+    disk_config: list[dict] = [{}]
+
+    #: From AbstractMachineModel
+    override_dependencies: bool = False
     def __init__(self, *args, **kwargs):
         super().__init__(*args,
                          unpack=None,
                          base_image=None,
                          **kwargs)
-        from carthage.modeling import machine_implementation_key
-        self.injector.add_provider(InjectionKey(AbstractMachineModel),
-                                   self.model)
-        if isinstance(self.model, type):
-            self.model = None # instantiated in prepare_model
-        self.disk_config = None
-        if machine_implementation_key not in self.injector:
-            # If you want something other than VM, override it in the model.
-            self.injector.add_provider(machine_implementation_key, dependency_quote(Vm))
+        self.injector.add_provider(InjectionKey(AbstractMachineModel), dependency_quote(self))
 
-    async def _prepare_model(self):
-        '''Prepare the model and self for image creation.
-        '''
-        if not self.model:
-            self.model = awaitself.ainjector.get_instance_async(AbstractMachineModel)
-            self.model.name = self.name
-        if not self.disk_config:
-            disk_config = disk_config_from_model(self.model, [dict()])
-            if 'volume' not in disk_config[0]:
-                disk_config[0]['volume'] = self
-            self.model.disk_config = self.disk_config = disk_config
 
     async def _prepare_vm(self):
-        '''
+        '''if 'volume' not in disk_config[0]:
+        disk_config[0]['volume'] = self
+        self.disk_config = disk_config
         Prepare the vm for the image creation.
         '''
-        await self._prepare_model()
-        machine_type = getattr(self.model, 'machine_type', Vm)
+        machine_type = getattr(self, 'machine_type', Vm)
+        disk_config = [dict(d) for d in self.disk_config]
+        
         with instantiation_not_ready():
             self.vm = await self.ainjector(
-                machine_type, name=self.name)
-            self.model.injector.add_provider(InjectionKey(Machine), self.vm)
-            
+                machine_type, name=self.name,
+                image=None)
+            self.vm.network_links = self.network_links = {}
+            self.vm.volume = self
+            self.vm.model = self
+            self.vm.ip_address = NotImplemented # We do not want the qemu guest agent probe.
+
+    async def _build_image(self):
+        '''
+        Prepare the vm and build the image; called from rebuild_image and unpack
+        '''
+        if not self.path.exists():
+            self._do_create_volume()
+        try:
+            await self._prepare_vm()
+            await self.vm.start_machine()
+            async with self.vm.machine_running(ssh_online=False):
+                await self.vm.async_become_ready()
+                for c in self.vm_customizations:
+                    await self.vm.apply_customization(c)
+        except Exception:
+            logger.info('Shutting down image creation for %s because of error', self.name)
+            await self.delete()
+            raise
+        finally:
+            await self.vm.is_machine_running()
+            await self.vm.stop_machine()
+
+    async def unpack(self):
+        '''
+        Called from the SetupTask to build the image.
+        '''
+        await self._build_image()
+
+
         __all__ = ('VM', 'Vm', 'InstallQemuAgent')
