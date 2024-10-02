@@ -379,7 +379,7 @@ This class is almost always subclassed.  The following are expected to be overwr
         '''
         machine_type = getattr(self, 'machine_type', Vm)
         disk_config = [dict(d) for d in self.disk_config]
-        
+
         with instantiation_not_ready():
             self.vm = await self.ainjector(
                 machine_type, name=self.name,
