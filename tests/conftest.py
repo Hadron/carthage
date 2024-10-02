@@ -30,7 +30,6 @@ def pytest_addoption(parser):
                     action='store_true',
                     help='Use remote container host in AWS for Podman Carthage tests')
 
-@pytest.mark.no_rootless
 @pytest.fixture(scope='session')
 def test_ainjector(loop):
     if posix.geteuid() != 0:
