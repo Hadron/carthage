@@ -1,6 +1,7 @@
 <%
 import uuid
 model = model_in or object()
+boot_order = 1
 memory_mb = getattr(model, 'memory_mb', 8192)
 cpus = getattr(model, 'cpus', 1)
 nested_virt = getattr(model, 'nested_virt', False)
@@ -11,7 +12,7 @@ disk_cache = getattr(model, 'disk_cache', 'writethrough')
   <uuid>${uuid.uuid4()}</uuid>
   <memory unit='KiB'>${memory_mb*1024}</memory>
 
-  <vcpu >${cpus}</vcpu>
+  <vcpu placement='static' >${cpus}</vcpu>
 <cpu mode='host-model'>
      %if nested_virt:
      <feature policy='require' name='vmx' />
@@ -26,11 +27,19 @@ disk_cache = getattr(model, 'disk_cache', 'writethrough')
   <features>
     <acpi/>
     <apic/>
+    <hyperv mode='custom'>
+      <relaxed state='on'/>
+      <vapic state='on'/>
+      <spinlocks state='on' retries='8191'/>
+    </hyperv>
+    <vmport state='off'/>
+    <smm state='on'/>
   </features>
   <clock offset='utc'>
     <timer name='rtc' tickpolicy='catchup'/>
     <timer name='pit' tickpolicy='delay'/>
     <timer name='hpet' present='no'/>
+    <timer name='hypervclock' present='yes'/>
   </clock>
   <on_poweroff>destroy</on_poweroff>
   <on_reboot>restart</on_reboot>
@@ -38,13 +47,13 @@ disk_cache = getattr(model, 'disk_cache', 'writethrough')
     <emulator>/usr/bin/kvm</emulator>
 %for disk_num, disk in enumerate(disk_config):
     <disk type='${disk.source_type}' device='${disk.target_type}'>
-      <driver name='qemu' type='${disk.driver}' cache='${disk.cache}'/>
+      <driver name='qemu' type='${disk.driver}' cache='${disk.cache}' discard='unmap'/>
 %if hasattr(disk, 'path'):
       <source ${disk.qemu_source}='${disk.path}'/>
 %endif
-      <target dev='hd${chr(ord('a')+disk_num)}' bus='scsi'/>
-%if disk_num == 0:
-      <boot order='1'/>
+      <target dev='hd${chr(ord('a')+disk_num)}' bus='${disk.bus}'/>
+%if disk_num == 0 or disk.target_type == 'cdrom':
+      <boot order='${boot_order}'/><%boot_order += 1 %>
 %endif
 %if getattr(disk, 'readonly', False):
       <readonly />
@@ -53,6 +62,12 @@ disk_cache = getattr(model, 'disk_cache', 'writethrough')
     </disk>
 %endfor
 <controller type='scsi' model='virtio-scsi' />
+    <controller type='sata' index='0' />
+%if getattr(model, 'hardware_tpm', True):
+    <tpm model='tpm-crb'>
+      <backend type='emulator' version='2.0'/>
+    </tpm>
+%endif
     %for i, link in links.items():
     <% if link.local_type: continue %>\
         <interface type='bridge'>
@@ -78,15 +93,14 @@ disk_cache = getattr(model, 'disk_cache', 'writethrough')
 
     <input type='mouse' bus='ps2'/>
     <input type='keyboard' bus='ps2'/>
-    <graphics type='spice' tlsPort='${console_port}'>
-      <listen type='address' address='0.0.0.0' />
+    <graphics type='spice' autoport='yes' >
+      <listen type='address'  />
     </graphics>
-    <sound model='ich6'>
+    <sound model='ich9'>
 
     </sound>
     <video>
-      <model type='qxl' ram='262144' vram='262144' vgamem='131072' heads='1' primary='yes'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+      <model type='qxl' ram='65536' vram='65536' vgamem='16384' heads='1' primary='yes'/>
     </video>
 % endif
     <channel type='unix'>
