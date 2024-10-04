@@ -181,12 +181,16 @@ class CdContext:
     async def __aexit__(self, *exc_info):
         if exc_info[0] is None:
             iso_temp = self.path/(self.iso_name+'.tmp')
-            await sh.xorrisofs(
-                '-J', '--rational-rock',
-                '-o', iso_temp,
-                *self.options,
-                self.temp.name,
-                _bg=True, bg_exc=False)
+            try:
+                await sh.xorrisofs(
+                    '-J', '--rational-rock',
+                    '-o', iso_temp,
+                    *self.options,
+                    self.temp.name,
+                    _bg=True, bg_exc=False)
+            except sh.ErrorReturnCode as e:
+                raise RuntimeError(str(e.stderr, 'utf-8'))
+
             iso_path = self.path/self.iso_name
             iso_temp.rename(iso_path)
             self._iso_path = iso_path
