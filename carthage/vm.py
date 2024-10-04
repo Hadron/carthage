@@ -345,6 +345,7 @@ async def qemu_disk_config(vm, ci_data, *, ainjector):
             driver='raw',
             readonly=True,
             path=ci_data,
+            bus='sata',
             cache='writeback')
 
 class LibvirtCreatedImage(ImageVolume):

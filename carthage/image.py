@@ -258,6 +258,8 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
     base_image: 'str|ImageVolume' = None
     preallocate:bool = False
+    create_size: int = 0
+
     def __init__(self, name=None, path=None, *,
                  create_size=None,
                  unpack=None,
@@ -294,19 +296,18 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         if callable(unpack):
             self._pass_self_to_unpack = True
             self.unpack = unpack
-        self._do_create_volume()
 
     def __repr__(self):
         return f"<{self.__class__.__name__} path={self.path}>"
 
     def _do_create_volume(self):
         if self.path.exists(): return
+        with open(self.path, "w") as f:
+            try:
+                sh.chattr("+C", self.path, _bg=False)
+            except sh.ErrorReturnCode_1:
+                pass
         if self.create_size:
-            with open(self.path, "w") as f:
-                try:
-                    sh.chattr("+C", self.path, _bg=False)
-                except sh.ErrorReturnCode_1:
-                    pass
             if not self.preallocate:
                 os.truncate(self.path, self.create_size)
             else:
@@ -365,24 +366,29 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
             raise RuntimeError(f"{self.path} not found and creation disabled")
 
         # We never want to unpack later after we've decided not to
-        if self.base_image:
-            if isinstance(self.base_image, ImageVolume):
-                await self.base_image.async_become_ready()
-                base_image = self.base_image.path
-            else:
-                base_image = self.base_image
-            await sh.cp(
-                base_image,
-                self.path,
-                reflink='auto',
-                _bg=True,
-                _bg_exc=False,
+        try:
+            self._do_create_volume()
+            if self.base_image:
+                if isinstance(self.base_image, ImageVolume):
+                    await self.base_image.async_become_ready()
+                    base_image = self.base_image.path
+                else:
+                    base_image = self.base_image
+                await sh.cp(
+                    base_image,
+                    self.path,
+                    reflink='auto',
+                    _bg=True,
+                    _bg_exc=False,
                 )
-        elif self._pass_self_to_unpack:
-            await self.unpack(self)
-        else:
-            await self.unpack()
-
+            elif self._pass_self_to_unpack:
+                await self.unpack(self)
+            else:
+                await self.unpack()
+        except Exception:
+            await self.delete()
+            raise
+        
     def qemu_config(self, disk_config):
         return dict(
             path=self.path,
@@ -395,8 +401,8 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         from .container import container_image, container_volume, Container
         injector = self.injector(Injector)
         ainjector = injector(AsyncInjector)
+        image_mount = await ainjector(ContainerImageMount, self)
         try:
-            image_mount = await ainjector(ContainerImageMount, self)
             injector.add_provider(container_image, image_mount)
             injector.add_provider(container_volume, image_mount)
             container = await ainjector(Container, name=os.path.basename(self.name), skip_ssh_keygen=True, network_config=None)
@@ -476,7 +482,7 @@ class BlockVolume(ImageVolume):
 @inject_autokwargs(
     config_layout=ConfigLayout,
 )
-class QcowCloneVolume(Injectable):
+class QcowCloneVolume(AsyncInjectable):
 
     def __init__(self, name, volume, **kwargs):
         super().__init__(**kwargs)
@@ -485,7 +491,7 @@ class QcowCloneVolume(Injectable):
         if not os.path.exists(self.path):
             sh.qemu_img(
                 'create', '-fqcow2',
-                '-obacking_file=' + volume.path,
+                '-obacking_file=' + str(volume.path),
                 '-obacking_fmt='+volume.qemu_config(dict())['driver'],
                 str(self.path),_bg=False)
 
@@ -596,7 +602,7 @@ class image_mounted(object):
 
     def __init__(self, image=None, mount=True, extra_dirs=[],
                  subvol="@", rootdir=None):
-        self.image = image
+        self.image = str(image) if image else image
         self.mount = mount
         self.mount_dirs = "dev proc sys dev/pts".split()
         self.mount_dirs.extend(extra_dirs)
