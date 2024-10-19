@@ -198,7 +198,8 @@ class OciMount(Injectable):
             return ainjector.injector(ConfigPath, self.source)
         elif isinstance(self.source, InjectionKey):
             return await ainjector.get_instance_async(self.source)
-        
+        else:
+            return self.source
 
 
 __all__ += ['OciMount']

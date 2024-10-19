@@ -41,9 +41,11 @@ async def podman_mount_option(ainjector: AsyncInjector, m: OciMount):
     res = f'--mount=type={m.mount_type}'
     if m.source:
         source = await m.source_resolve(ainjector)
+        assert source is not None,ValueError(f"'source' resolved to 'None' for {m}")
         if isinstance(source, PodmanVolume):
             await source.async_become_ready()
             source = source.name
+        assert isinstance(source, str), 'Unrecognized type of source'
         res += f',source={source}'
     if m.destination:
         res += f',destination={m.destination}'
