@@ -13,6 +13,7 @@ from .setup_tasks import setup_task, SetupTaskMixin
 from .utils import memoproperty
 from .config.types import ConfigPath
 import carthage.machine
+import carthage.modeling
 import carthage.network
 
 
@@ -198,7 +199,12 @@ class OciMount(Injectable):
             return ainjector.injector(ConfigPath, self.source)
         elif isinstance(self.source, InjectionKey):
             return await ainjector.get_instance_async(self.source)
-        
+        elif isinstance(self.source, carthage.modeling.decorators.injector_access):
+            return await ainjector.get_instance_async(self.source.key)
+        else:
+            raise TypeError(f":meth:`carthage.oci.OciMount.source_resolve`"
+                f" received unexpected type {type(self.source)}"
+                f" while processing 'source={self.source}' for <{self}>")
 
 
 __all__ += ['OciMount']
