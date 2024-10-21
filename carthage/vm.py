@@ -13,6 +13,7 @@ import os
 import os.path
 import shutil
 import types
+import uuid
 import mako
 import mako.lookup
 import mako.template
@@ -62,6 +63,16 @@ class VM(Machine, SetupTaskMixin):
         self.vm_running = self.machine_running
         self._operation_lock = asyncio.Lock()
 
+    @memoproperty
+    def uuid(self):
+        from .modeling import CarthageLayout
+        layout = self.injector.get_instance(InjectionKey(CarthageLayout, _optional=True))
+        if layout:
+            layout_uuid = layout.layout_uuid
+            return uuid.uuid5(layout_uuid, 'vm:'+self.full_name)
+        return uuid.uuid4()
+    
+    
     async def gen_volume(self):
         if self.volume is not None:
             return
@@ -97,6 +108,7 @@ class VM(Machine, SetupTaskMixin):
                 disk_config=disk_config,
                 if_name=lambda n: carthage.network.base.if_name(
                     "vn", self.config_layout.container_prefix, n.name, self.name),
+                uuid=self.uuid,
                 volume=self.volume))
             if self.console_needed:
                 with open(self.console_json_path, "wt") as f:

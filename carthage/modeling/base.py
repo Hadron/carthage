@@ -12,6 +12,7 @@ import os
 import types
 import typing
 from pathlib import Path
+import uuid
 from .implementation import *
 from .decorators import *
 from carthage.dependency_injection import *  # type: ignore
@@ -24,6 +25,7 @@ import carthage.vm
 from .utils import *
 
 logger = logging.getLogger(__name__)
+LAYOUT_UUID = uuid.UUID('040e488f-016b-43fe-b52d-5217f43fdf1c')
 
 __all__ = []
 
@@ -563,6 +565,14 @@ class CarthageLayout(ModelGroup):
                 if not kvstore.persistent_seed_path:
                     kvstore.load(str(seed_path))
 
+    @memoproperty
+    def layout_uuid(self):
+        '''
+        Returns a uuid for this layout; based on layout_name or the class's qualname.
+        '''
+        name = self.layout_name or self.__class__.__qualname__
+        return uuid.uuid5(LAYOUT_UUID, name)
+    
 
 __all__ += ['CarthageLayout']
 

@@ -1,5 +1,4 @@
 <%
-import uuid
 model = model_in or object()
 boot_order = 1
 memory_mb = getattr(model, 'memory_mb', 8192)
@@ -9,7 +8,7 @@ disk_cache = getattr(model, 'disk_cache', 'writethrough')
 %>
 <domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
   <name>${name}</name>
-  <uuid>${uuid.uuid4()}</uuid>
+  <uuid>${uuid}</uuid>
   <memory unit='KiB'>${memory_mb*1024}</memory>
 
   <vcpu placement='static' >${cpus}</vcpu>
