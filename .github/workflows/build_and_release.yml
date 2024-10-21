@@ -7,7 +7,7 @@ permissions:
   contents: read
   
 env:
-  core_dependencies: python3-requests python3-yaml python3-mako python3-sh python3-lmdb git
+  core_dependencies: python3-requests python3-yaml python3-mako python3-sh python3-lmdb python3-setuptools git
   run_tests: --carthage-config=build_test/authorized.yml -k "not no_rootless and not test_pki and not requires_podman_pod"
 jobs:
   build_python_dist:
