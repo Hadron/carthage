@@ -15,7 +15,7 @@ from carthage.dependency_injection import DependencyProvider
 from carthage import base_injector, network, rsync_git_tree, V4Config, vm, Machine, sh
 from carthage.network import random_mac_addr
 from carthage.config import ConfigLayout
-from carthage.vm import VM, vm_image
+from carthage.vm import VM, vm_image_key
 from carthage.network import NetworkConfig
 from carthage.machine import ssh_origin
 import carthage.ansible
@@ -107,7 +107,7 @@ async def test_cloud_init(test_ainjector, vm_image):
                                    network="10.2.0.0/24"))
 
         add_provider(machine_implementation_key, dependency_quote(VM))
-        add_provider(carthage.vm.vm_image, vm_image)
+        add_provider(carthage.vm.vm_image_key, vm_image)
 
         class vm_3(MachineModel):
             name = "vm-3"

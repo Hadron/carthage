@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -33,7 +33,7 @@ _resources_path = os.path.join(os.path.dirname(__file__), "resources")
 _templates = mako.lookup.TemplateLookup([_resources_path + '/templates'])
 
 
-vm_image = InjectionKey('vm-image')
+vm_image_key = InjectionKey('vm-image')
 
 # Our capitalization rules are kind of under-sspecified.  We're not
 # upcasing all letters of acronyms in camel-case compounds, but Vm
@@ -43,7 +43,7 @@ vm_image = InjectionKey('vm-image')
 @inject_autokwargs(
     config_layout=ConfigLayout,
     injector=Injector,
-    image=InjectionKey(vm_image, _ready=False),
+    image=InjectionKey(vm_image_key, _ready=False),
     network_config=carthage.network.NetworkConfig
 )
 class VM(Machine, SetupTaskMixin):
