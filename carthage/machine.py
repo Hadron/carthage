@@ -217,7 +217,7 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
         return RsyncPath(self, p)
 
     #: The command run remotely by :meth:`ssh_online`
-    ssh_online_command = 'date'
+    ssh_online_command = 'echo online'
 
     async def ssh_online(self):
         online = False
