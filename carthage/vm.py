@@ -238,10 +238,11 @@ class VM(Machine, SetupTaskMixin):
     async def _find_ip_address(self):
         for i in range(30):
             try:
-                res = await sh.virsh("qemu-agent-command",
+                res = sh.virsh("qemu-agent-command",
                                      self.full_name,
                                      '{"execute":"guest-network-get-interfaces"}',
                                      _bg=True, _bg_exc=False, _timeout=5)
+                await res
             except sh.ErrorReturnCode_1 as e:
                 # We should retry in a bit if the message contains 'not connected' and fail for other errors
                 if b'connected' not in e.stderr:
@@ -258,6 +259,8 @@ class VM(Machine, SetupTaskMixin):
                 for addr in item['ip-addresses']:
                     if addr['ip-address'].startswith('fe80'):
                         continue
+                    elif addr['ip-address'].startswith('169.25'):
+                        continue
                     self.ip_address = addr['ip-address']
                     return
             await asyncio.sleep(3)
@@ -268,6 +271,7 @@ class VM(Machine, SetupTaskMixin):
             return Path(str(self.volume.path) + '.stamps')
         else:
             return Path(self.config_layout.vm_image_dir)/f'{self.name}.stamps'
+
     def _console_json(self):
 
         d = {
@@ -295,6 +299,11 @@ class VM(Machine, SetupTaskMixin):
                 return ca
         raise FileNotFoundError
 
+    async def delete(self):
+        await self.is_machine_running()
+        if self.running:
+            await self.stop_machine()
+        await self.volume.delete()
 
 Vm = VM
 

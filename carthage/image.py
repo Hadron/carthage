@@ -501,6 +501,9 @@ class QcowCloneVolume(AsyncInjectable):
         except FileNotFoundError:
             pass
 
+    async def delete(self):
+        self.delete_volume()
+
     def close(self, canceled_futures=None):
         if self.config_layout.delete_volumes:
             self.delete_volume()
