@@ -8,6 +8,7 @@
 
 import asyncio
 import dataclasses
+import ipaddress
 import os
 import tempfile
 import yaml
@@ -147,6 +148,13 @@ class NetworkPlugin(CloudInitPlugin):
                 eth_dict['dhcp4'] = True
             else:
                 eth_dict['dhcp4'] = False
+                if isinstance(v4_config.gateway, ipaddress.IPv4Address):
+                    eth_dict['gateway4'] = str(v4_config.gateway)
+                if v4_config.dns_servers:
+                    eth_nameservers = eth_dict.setdefault('nameservers', {})
+                    nameservers_addresses = eth_nameservers.setdefault('addresses', [])
+                    for address in v4_config.dns_servers:
+                        nameservers_addresses.append(str(address))
                 if v4_config.address:
                     eth_dict.setdefault('addresses', [])
                     eth_addresses = eth_dict['addresses']
