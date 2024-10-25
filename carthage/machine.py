@@ -953,7 +953,6 @@ class BareMetalMachine(Machine, SetupTaskMixin, AsyncInjectable):
         self.running = False
 
     async def async_ready(self):
-        await self.resolve_model()
         await self.run_setup_tasks()
         await super().async_ready()
 
