@@ -715,6 +715,7 @@ class LibvirtImageModel(carthage.vm.LibvirtCreatedImage, ImageRole):
     A :class:`carthage.vm.LibvirtCreatedImage`  that is a modeling class, so modeling language constructs work.  In addition, any customization in the class is included in the default *vm_customizations*.
     '''
 
+    disk_cache = 'unsafe' #Volume is destroyed on failure
     @classmethod
     def our_key(cls):
         return InjectionKey(carthage.vm.LibvirtCreatedImage, name=cls.name)
