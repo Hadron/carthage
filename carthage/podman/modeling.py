@@ -149,6 +149,10 @@ class PodmanImageModel(ImageRole, PodmanImage):
     # We need to have some of the attributes from AbstractMachineModel so that start_machine can work
     override_dependencies: typing.Union[bool, Injector, Injectable, InjectionKey] = False
 
+    # And we want to register as the model so that customizations can find us
+    self_provider(InjectionKey(AbstractMachineModel))
+    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.injected_tasks_added = False
