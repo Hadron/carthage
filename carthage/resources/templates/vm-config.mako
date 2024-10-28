@@ -17,7 +17,7 @@ disk_cache = getattr(model, 'disk_cache', 'writethrough')
      <feature policy='require' name='vmx' />
      %endif
 </cpu>
-<os firmware='efi'>
+<os ${"firmware='efi'" if (getattr(model, 'firmware_type', 'efi') in ('uefi', 'efi')) else ""} >
     <type arch='x86_64' machine='pc-i440fx-2.6'>hvm</type>
     <bios useserial='yes'/>
 
