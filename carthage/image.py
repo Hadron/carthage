@@ -295,7 +295,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
         self._pass_self_to_unpack = False
         if callable(unpack):
             self._pass_self_to_unpack = True
-            self.unpack = unpack
+        self.unpack = unpack
 
     def __repr__(self):
         return f"<{self.__class__.__name__} path={self.path}>"
