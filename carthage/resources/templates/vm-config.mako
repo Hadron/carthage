@@ -5,6 +5,16 @@ memory_mb = getattr(model, 'memory_mb', 8192)
 cpus = getattr(model, 'cpus', 1)
 nested_virt = getattr(model, 'nested_virt', False)
 disk_cache = getattr(model, 'disk_cache', 'writethrough')
+def is_spice():
+    if console_needed is True or (isinstance(console_needed, str) and console_needed.startswith('spice')):
+        return True
+    return false
+
+def is_vnc():
+    if isinstance(console_needed, str) and console_needed.startswith('vnc'):
+        return True
+    return False
+
 %>
 <domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
   <name>${name}</name>
@@ -84,24 +94,40 @@ disk_cache = getattr(model, 'disk_cache', 'writethrough')
     <console type='pty'>
       <target type='serial' port='0'/>
     </console>
-    %if console_needed:
-    <channel type='spicevmc'>
-      <target type='virtio' name='com.redhat.spice.0'/>
-      <address type='virtio-serial' controller='0' bus='0' port='1'/>
-    </channel>
-
-    <input type='mouse' bus='ps2'/>
+    %if is_spice() or is_vnc():
+        <input type='mouse' bus='ps2'/>
     <input type='keyboard' bus='ps2'/>
-    <graphics type='spice' autoport='yes' >
-      <listen type='address'  />
-    </graphics>
     <sound model='ich9'>
 
     </sound>
     <video>
       <model type='qxl' ram='65536' vram='65536' vgamem='16384' heads='1' primary='yes'/>
     </video>
+    %endif
+%if is_spice():
+    <channel type='spicevmc'>
+      <target type='virtio' name='com.redhat.spice.0'/>
+      <address type='virtio-serial' controller='0' bus='0' port='1'/>
+    </channel>
+
+    <graphics type='spice' >
+      <listen type='socket'  />
+    </graphics>
 % endif
+%if is_vnc():
+    <graphics type='vnc' >
+      <listen type='socket'  />
+      <audio id='1' />
+    </graphics>
+<channel type="qemu-vdagent">
+  <source>
+    <clipboard copypaste="yes"/>
+  </source>
+  <target type="virtio" name="com.redhat.spice.0"/>
+</channel>
+
+%endif
+
     <channel type='unix'>
       <target type='virtio' name='org.qemu.guest_agent.0'/>
     </channel>
