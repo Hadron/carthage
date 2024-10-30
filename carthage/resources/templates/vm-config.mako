@@ -4,6 +4,7 @@ boot_order = 1
 memory_mb = getattr(model, 'memory_mb', 8192)
 cpus = getattr(model, 'cpus', 1)
 nested_virt = getattr(model, 'nested_virt', False)
+firmware = getattr(model, 'firmware_type', 'efi')
 disk_cache = getattr(model, 'disk_cache', 'writethrough')
 def is_spice():
     if console_needed is True or (isinstance(console_needed, str) and console_needed.startswith('spice')):
@@ -27,8 +28,17 @@ def is_vnc():
      <feature policy='require' name='vmx' />
      %endif
 </cpu>
-<os ${"firmware='efi'" if (getattr(model, 'firmware_type', 'efi') in ('uefi', 'efi')) else ""} >
-    <type arch='x86_64' machine='pc-i440fx-2.6'>hvm</type>
+<os ${"firmware='efi'" if firmware.startswith('efi') else ""} >
+    <type arch='x86_64' machine='pc-q35-9.0'>hvm</type>
+    %if firmware.startswith('efi'):
+    <firmware>
+        %if firmware == 'efi-enrolled':
+        <feature enabled='yes' name='enrolled-keys'/>
+        %endif
+        <feature enabled='yes' name='secure-boot'/>
+    </firmware>
+    <loader readonly='yes' secure='yes' />
+    %endif
     <bios useserial='yes'/>
 
     <bootmenu enable='yes'/>
@@ -95,8 +105,9 @@ def is_vnc():
       <target type='serial' port='0'/>
     </console>
     %if is_spice() or is_vnc():
-        <input type='mouse' bus='ps2'/>
-    <input type='keyboard' bus='ps2'/>
+    <input type='tablet' bus='usb'/>
+    <input type='mouse' bus='usb'/>
+    <input type='keyboard' bus='usb'/>
     <sound model='ich9'>
 
     </sound>
