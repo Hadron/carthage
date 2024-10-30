@@ -240,7 +240,7 @@ class Container(Machine, SetupTaskMixin):
         self.find_output(r'\].*Reached target.*Basic System', started_callback, True)
         # run_container calls start_dependencies
         await super().start_machine()
-        await self.run_container("--kill-signal=SIGRTMIN+3", *args, "/bin/systemd",
+        await self.run_container("--kill-signal=SIGRTMIN+3", *args, "/sbin/init",
                                  networking=True, as_pid2=False,
                                  raise_on_running=False)
         done_future = self.done_future()
