@@ -200,11 +200,12 @@ class TaskWrapperBase:
                 adl_keys=instance.setup_task_event_keys())
     
 
+        mark_context_done = True
         with contextlib.ExitStack() as stack:
             context = current_instantiation()
             if isinstance(context, SetupTaskContext) \
                and context.instance is instance and context.task is self:
-                pass  # This is the right context to use; set up by run_setup_tasks
+                mark_context_done = False # Will be handled by caller
             else:
                 context = SetupTaskContext(instance, self)
                 stack.enter_context(context)
@@ -225,7 +226,8 @@ class TaskWrapperBase:
                 fail(e)
                 raise
             finally:
-                context.done()
+                if mark_context_done:
+                    context.done()
 
     async def should_run_task(self, obj: SetupTaskMixin,
                               dependency_last_run: float = None,
@@ -467,10 +469,12 @@ class SetupTaskMixin:
         # xxx reorder either here or in run_setup_tasks
 
     async def run_setup_tasks(self, context=None):
-        '''Run the set of collected setup tasks.  If context is provided, it
+        '''Run the set of collected setup tasks.  If *context* is provided, it
         is used as an asynchronous context manager that will be entered before the
         first task and eventually exited.  The context is never
         entered if no tasks are run.
+        This execution context is different from :class:`SetupTaskContext`. The *SetupTaskContext* is an introspection mechanism that tracks which setup task is running and why; the asynchronous context allows a set of tasks for example in a customization to have common resources available.
+        
         '''
         injector = getattr(self, 'injector', carthage.base_injector)
         ainjector = getattr(self, 'ainjector', None)
@@ -483,39 +487,46 @@ class SetupTaskMixin:
         dry_run = config.tasks.dry_run
         dependency_last_run = 0.0
         for t in self.setup_tasks:
-            should_run, dependency_last_run = await t.should_run_task(self, dependency_last_run, ainjector=ainjector)
-            if should_run:
-                self.injector.emit_event(
-                    InjectionKey(SetupTaskMixin), "task_should_run",
-                    self, task=t,
-                    adl_keys=self.setup_task_event_keys())
+            with SetupTaskContext(self, t) as introspection_context:
                 try:
-                    if (not context_entered) and context is not None:
-                        await context.__aenter__()
-                        context_entered = True
-                    if not dry_run:
-                        self.logger_for().info(f"Running {t.description} task for {self}")
-                        started = time.time()
-                        with SetupTaskContext(self, t):
-                            await ainjector(t, self)
-                        dependency_last_run = time.time()
-                        a = datetime.datetime.fromtimestamp(started)
-                        b = datetime.datetime.fromtimestamp(dependency_last_run)
-                        self.logger_for().info(f"Finished running {t.description} task for {self} from {a.time()} to {b.time()} ({b - a})")
-                    else:
-                        self.logger_for().info(f'Would run {t.description} task for {self}')
-                except SkipSetupTask:
-                    pass
-                except Exception:
-                    self.logger_for().exception(f"Error running {t.description} for {self}:")
-                    if context_entered:
-                        await context.__aexit__(*sys.exc_info())
+                    should_run, dependency_last_run = await t.should_run_task(self, dependency_last_run, ainjector=ainjector)
+                except:
+                    introspection_context.done()
                     raise
-            else:           # not should_run
-                self.injector.emit_event(
+                if should_run:
+                    self.injector.emit_event(
+                        InjectionKey(SetupTaskMixin), "task_should_run",
+                        self, task=t,
+                        adl_keys=self.setup_task_event_keys())
+                    try:
+                        if (not context_entered) and context is not None:
+                            await context.__aenter__()
+                            context_entered = True
+                        if not dry_run:
+                            self.logger_for().info(f"Running {t.description} task for {self}")
+                            started = time.time()
+                            await ainjector(t, self)
+                            dependency_last_run = time.time()
+                            a = datetime.datetime.fromtimestamp(started)
+                            b = datetime.datetime.fromtimestamp(dependency_last_run)
+                            self.logger_for().info(f"Finished running {t.description} task for {self} from {a.time()} to {b.time()} ({b - a})")
+                        else:
+                            self.logger_for().info(f'Would run {t.description} task for {self}')
+                    except SkipSetupTask:
+                        pass
+                    except Exception:
+                        self.logger_for().exception(f"Error running {t.description} for {self}:")
+                        if context_entered:
+                            await context.__aexit__(*sys.exc_info())
+                            raise
+                    finally:
+                        introspection_context.done()
+                else:           # not should_run
+                    self.injector.emit_event(
                         InjectionKey(SetupTaskMixin), "task_already_run",
                         self, task=t,
                         adl_keys=self.setup_task_event_keys())
+                    introspection_context.done()
         if context_entered:
             await context.__aexit__(None, None, None)
 
