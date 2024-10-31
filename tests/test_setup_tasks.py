@@ -268,6 +268,7 @@ async def test_setup_task_context(ainjector):
             assert isinstance(ctx, SetupTaskContext)
             assert ctx.instance is self
             assert ctx.parent.key is InjectionKey(ContextTest)
+            assert not isinstance(ctx.parent, SetupTaskContext)
             called = 1
 
     ainjector.add_provider(ContextTest)
