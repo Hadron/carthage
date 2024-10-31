@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2022, 2023, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -178,10 +178,10 @@ class TaskWrapperBase:
             return self
         return TaskMethod(self, instance)
 
-    def __call__(self, instance, *args, **kwargs):
-        def success():
+    async def __call__(self, instance, *args, **kwargs):
+        async def success():
             if not self.check_completed_func:
-                hash_contents = instance.injector(self.hash_func, instance)
+                hash_contents = await instance.ainjector(self.hash_func, instance)
                 instance.create_stamp(self.stamp, hash_contents)
             instance.injector.emit_event(
                 InjectionKey(SetupTaskMixin), "task_ran",
@@ -199,19 +199,7 @@ class TaskWrapperBase:
                 exception=e,
                 adl_keys=instance.setup_task_event_keys())
     
-        def final():
-            context.done()
 
-        def callback(fut):
-            exc = fut.exception()
-            if exc is None:
-                success()
-            elif isinstance(exc,SkipSetupTask):
-                pass
-            else:
-                fail(exc)
-            final()
-        mark_context_done = True
         with contextlib.ExitStack() as stack:
             context = current_instantiation()
             if isinstance(context, SetupTaskContext) \
@@ -223,27 +211,21 @@ class TaskWrapperBase:
             try:
                 res = self.func(instance, *args, **kwargs)
                 if isinstance(res, collections.abc.Coroutine):
-                    res = instance.ainjector.loop.create_task(res)
-                    res.add_done_callback(callback)
-                    mark_context_done = False
                     instance.injector.emit_event(
                         InjectionKey(SetupTaskMixin), "task_start",
                         instance, task=self,
                         adl_keys=instance.setup_task_event_keys())
-                    if hasattr(instance, 'name'):
-                        res.purpose = f'setup task: {self.stamp} for {instance.name}'
-                    return res
-                else:
-                    success()
-                    return res
+                    res = await res
+
+                await success()
+                return res
             except SkipSetupTask:
                 raise
             except Exception as e:
                 fail(e)
                 raise
             finally:
-                if mark_context_done:
-                    final()
+                context.done()
 
     async def should_run_task(self, obj: SetupTaskMixin,
                               dependency_last_run: float = None,

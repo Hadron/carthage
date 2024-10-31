@@ -155,7 +155,7 @@ async def test_failure_forces_rerun(ainjector):
     o = await ainjector(c)
     assert called == 1
     with pytest.raises(RuntimeError):
-        o.setup_test_error_explicit()
+        await o.setup_test_error_explicit()
     assert called == 2
     should_fail = False
     await ainjector(c)
@@ -221,7 +221,7 @@ async def test_hash_func(ainjector):
             return fake_hash
     o = await ainjector(c)
     test_hash_run = 0
-    o.test_hash()
+    await o.test_hash()
     assert test_hash_run == 1
     await o.run_setup_tasks()
     assert test_hash_run == 1
