@@ -27,7 +27,7 @@ def random_mac_addr():
 __all__ = ['random_mac_addr']
 
 
-@inject_autokwargs(config_layout=ConfigLayout,
+@inject_autokwargs(
                    injector=Injector,
                    kvstore=carthage.kvstore.KvStore)
 class MacStore(Injectable):
@@ -39,6 +39,7 @@ class MacStore(Injectable):
     def __init__(self, **kwargs):
         from .base import NetworkConfig
         super().__init__(**kwargs)
+        self.config_layout = self.injector(ConfigLayout)
         state_dir = Path(self.config_layout.state_dir)
         self.path = state_dir / "macs.yml"
         self.domain = self.kvstore.domain('mac', True)

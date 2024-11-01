@@ -42,7 +42,6 @@ vm_image_key = InjectionKey('vm-image')
 
 
 @inject_autokwargs(
-    config_layout=ConfigLayout,
     injector=Injector,
     image=InjectionKey(vm_image_key, _ready=False),
     network_config=carthage.network.NetworkConfig
@@ -52,6 +51,7 @@ class VM(Machine, SetupTaskMixin):
     def __init__(self, name, *, console_needed=None,
                  **kwargs):
         super().__init__(name=name, **kwargs)
+        self.config_layout = self.injector(ConfigLayout)
         injector = self.injector
         config_layout = self.config_layout
         self.console_needed = console_needed

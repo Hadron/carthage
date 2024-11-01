@@ -36,7 +36,7 @@ persistent_seed_path = InjectionKey('carthage.kvstore/persistent_seed_path')
 
 __all__ += ['persistent_seed_path']
 
-@inject_autokwargs(config_layout=ConfigLayout,
+@inject_autokwargs(injector=Injector,
                    persistent_seed_path=InjectionKey(persistent_seed_path, _optional=True),
                    )
 class KvStore(Injectable):
@@ -45,6 +45,7 @@ class KvStore(Injectable):
             self, store_dir="persistent_assignments", max_size=4*2**30,
             **kwargs):
         super().__init__(**kwargs)
+        self.config_layout = self.injector(ConfigLayout)
         store_path = Path(store_dir)
         if not store_path.is_absolute():
             store_path = Path(self.config_layout.state_dir)/store_path
