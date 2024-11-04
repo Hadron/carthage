@@ -10,7 +10,6 @@ from pathlib import Path
 import contextlib
 import os
 import os.path
-import pkg_resources
 import re
 import shutil
 import sys

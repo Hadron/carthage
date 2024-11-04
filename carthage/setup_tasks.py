@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import dataclasses
 import datetime
+import importlib.resources
 import logging
 import os
 import os.path
@@ -820,11 +821,11 @@ If the template has a def called *hash*, this def will be rendered with the same
             self.lookup = module._mako_lookup
         except AttributeError:
             if hasattr(module, '__path__'):
-                resources = import_resources_files(module)
+                resources = importlib.resources.files(module)
             elif module.__package__ == "":
                 resources = Path(module.__file__).parent
             else:
-                resources = import_resources_files(module.__package__)
+                resources = importlib.resources.files(module.__package__)
             templates = resources / 'templates'
             if not templates.exists():
                 templates = resources

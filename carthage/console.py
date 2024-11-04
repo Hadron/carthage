@@ -17,7 +17,7 @@ import functools
 import shlex
 import re
 import time
-import pkg_resources
+import importlib.resources
 import os.path
 import readline
 import rlcompleter
@@ -96,7 +96,7 @@ class CarthageConsole(code.InteractiveConsole):
         }
 
     def exec_resource(self, pkg, resource):
-        res_str = pkg_resources.resource_string(pkg, resource)
+        res_str = importlib.resources.files(pkg).joinpath(resource).read_text()
         exec(compile(res_str, resource, mode="exec"), self.locals)
 
     def __init__(self, locals=None, extra_locals=None,
