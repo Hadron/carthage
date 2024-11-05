@@ -24,7 +24,7 @@ import hashlib
 import importlib.resources
 from pathlib import Path
 import carthage
-from carthage.dependency_injection import AsyncInjector, inject, BaseInstantiationContext, InjectionKey
+from carthage.dependency_injection import AsyncInjector, inject, BaseInstantiationContext, InjectionKey, NotPresent
 from carthage.dependency_injection.introspection import current_instantiation
 from carthage.config import ConfigLayout
 from carthage.utils import memoproperty, import_resources_files
@@ -183,15 +183,12 @@ class TaskWrapperBase:
     hash_func: typing.Callable = staticmethod(lambda self: "")
     dependencies: list = dataclasses.field(default_factory=lambda: [])
 
-    #: If True, then dependencies as well as any customization context
-    #in a :class:`~carthage.machine.BaseCustomization` will be
+    #: If True, then dependencies will be
     #called/entered while validating whether the task should run.
     #That is these dependencies will be available when invalidators
     #and check_completed functions are called.  If the outcome of
     #should_run can be determined without calling invalidators or
     #check_completed functions, dependencies may not be called.
-    #Currently customization contexts are entered more than required,
-    #but that is an implementation detail.
     dependencies_always: bool = False
 
     @memoproperty
@@ -535,6 +532,35 @@ class SetupTaskMixin:
         self.setup_tasks.append(task)
         # xxx reorder either here or in run_setup_tasks
 
+    @memoproperty
+    def readonly(self):
+        '''
+        If ``bool(readonly)``, then automated Carthage functions should not disturb the real state of the object:
+
+        * run_setup_tasks will not run setup tasks
+
+        * The deployment engine will not deploy  or destroy the object
+
+        * Carthage plugins should not create the object.
+
+        Explicit calls to methods like :meth:`delete`  or :meth:`do_create` will still affect the state of the object.
+
+        By default, readonly looks up ``InjectionKey('readonly')`` in the object's injector, and returns False if that injection key is not provided. As a consequence:
+
+        * Setting readonly in the class body of a modeling object affects readonly for that object and any object that inherits from its injector.
+
+        * Setting readonly in a non-modeling class body sets the default readonly state for objects of that class and detaches those objects from looking at their injectors to determine readonly. This should generally be avoided as it produces surprising behavior.
+
+        * Setting readonly on an instance sets the readonly state for that object and detaches the object from tracking injectors.
+
+        * Setting the readonly injection key on an injector affects objects downstream of that object that have not already cached their readonly state.
+
+        '''
+        readonly = self.injector.get_instance(InjectionKey('readonly', _optional=NotPresent))
+        if readonly is NotPresent:
+            return False
+        return readonly
+    
     async def run_setup_tasks(self, context=None):
         '''Run the set of collected setup tasks.  If *context* is provided, it
         is used as an asynchronous context manager that will be entered before the
@@ -553,12 +579,16 @@ class SetupTaskMixin:
         context_entered = False
         dry_run = config.tasks.dry_run
         dependency_last_run = 0.0
+        if self.readonly:
+            self.logger_for().info('Not running tasks for %s which is readonly', self)
         for t in self.setup_tasks:
             with SetupTaskContext(self, t) as introspection_context:
                 try:
                     should_run, dependency_last_run = await t.should_run_task(self, dependency_last_run, ainjector=ainjector, introspection_context=introspection_context)
                 except:
                     introspection_context.done()
+                    if context_entered:
+                        await context.__aexit__(*sys.exc_info())
                     raise
                 if should_run:
                     self.injector.emit_event(
@@ -585,7 +615,7 @@ class SetupTaskMixin:
                         self.logger_for().exception(f"Error running {t.description} for {self}:")
                         if context_entered:
                             await context.__aexit__(*sys.exc_info())
-                            raise
+                        raise
                     finally:
                         introspection_context.done()
                 else:           # not should_run
