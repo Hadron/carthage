@@ -537,7 +537,7 @@ class Machine(AsyncInjectable, SshMixin):
 
     def setup_task_event_keys(self):
         return self.supplementary_injection_keys(InjectionKey(Machine, host=self.name))
-    
+
     async def start_machine(self):
 
         '''
@@ -618,7 +618,7 @@ class Machine(AsyncInjectable, SshMixin):
         This method is the machine-specific part of :meth:`run_command`.  Override in subclasses if there is a better way to run a command than sshing into a machine.  This method is async, although that is not reflected in the signature because this implementation returns an awaitable.
 
         :param user: The user to run as.  defaults to :attr:`runas_user`.
-        
+
         This implementation calls :meth:`ssh`.
         Ssh has really bad quoting; it effectively  removes one level of quoting from the input.
 This handles quoting and  makes sure each argument is a separate argument on the eventual shell;
@@ -633,7 +633,7 @@ it works like :meth:`carthage.container.Container.container_command` and is used
             shlex.join(args),
             _bg=_bg, _bg_exc=_bg_exc)
 
-        
+
     async def sshfs_process_factory(self, user):
         if user != self.ssh_login_user:
             raise ValueError(f'{self.__class__.__qualname__} cannot set up filesystem access when runas_user != ssh_login_user')
@@ -760,7 +760,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
     def inspect_setup_tasks(self):
         return super().inspect_setup_tasks(
             stamp_stem=self.stamp_stem+'-', instance_id=id(self.host))
-    
+
     async def last_run(self):
         '''
         :return: the most recent time any setup task on this Customization has run against the given host. Returns false if the tasks definitely need to run.
@@ -799,7 +799,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
             return self.host.run_command(
                 *args, _user=_user,
                 **kwargs)
-        
+
 
 class MachineCustomization(BaseCustomization):
 
@@ -859,7 +859,7 @@ class CustomizationInspectorProxy:
 
     def check_stamp(self, s, *args):
         return self.obj.check_stamp(self.stamp_stem+'-'+s, *args)
-    
+
 
     @property
     def logger_for(self):
@@ -871,7 +871,7 @@ class CustomizationInspectorProxy:
 
     def __repr__(self):
         return f'CustomizationInspectorProxy({repr(self.obj)})'
-    
+
 class CustomizationWrapper(TaskWrapperBase):
 
     customization: typing.Type[BaseCustomization]
@@ -916,7 +916,7 @@ class CustomizationWrapper(TaskWrapperBase):
             prev_inspector.stamp = self.stamp+'-'+prev_inspector.stamp
             prev_inspector.instance_id = instance_id
             yield prev_inspector
-            
+
 
 def customization_task(c: BaseCustomization, order: int = None,
                        before=None):
@@ -942,7 +942,7 @@ class BareMetalMachine(Machine, SetupTaskMixin, AsyncInjectable):
 
     running = False
     readonly = True #: Cannot be deleted or created.
-    
+
 
     async def start_machine(self):
         if self.running:
@@ -968,7 +968,7 @@ class BareMetalMachine(Machine, SetupTaskMixin, AsyncInjectable):
         See if the machine exists. Override if it is desirable to do a dns check or similar.
         '''
         return True
-    
+
     @memoproperty
     def stamp_path(self):
         return Path(f'{self.config_layout.state_dir}/machines/{self.name}')
