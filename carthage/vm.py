@@ -19,6 +19,7 @@ import mako.lookup
 import mako.template
 from pathlib import Path
 from .dependency_injection import *
+from . import deployment
 from .utils import when_needed, memoproperty
 from .setup_tasks import SetupTaskMixin, setup_task
 from .image import  ImageVolume
@@ -81,7 +82,18 @@ class VM(Machine, SetupTaskMixin):
         self.ssh_rekeyed()
         os.makedirs(self.stamp_path, exist_ok=True)
 
+    async def find(self):
+        if self.domid():
+            return True
+        return False
+
+    async def find_or_create(self):
+        if await self.find():
+            return
+        await self.start_machine()
+
     async def write_config(self):
+        from .modeling import CarthageLayout
         template = _templates.get_template("vm-config.mako")
         await self.resolve_networking()
         for i, link in self.network_links.items():
@@ -89,6 +101,17 @@ class VM(Machine, SetupTaskMixin):
         if self.image:
             await self.image.async_become_ready()
         await self.gen_volume()
+        layout = await self.ainjector.get_instance_async(InjectionKey(CarthageLayout, _ready=False, _optional=True))
+        if layout:
+            layout_name = layout.layout_name
+            try:
+                orphan_policy = layout.injector.get_instance(deployment.orphan_policy)
+            except KeyError:
+                orphan_policy = deployment.DeletionPolicy.delete
+        else:
+            layout_name = ''
+            orphan_policy  = deployment.DeletionPolicy.retain
+        
         ci_data = None
         if self.model and getattr(self.model, 'cloud_init', False):
             ci_data = await self.ainjector(carthage.cloud_init.generate_cloud_init_cidata)
@@ -103,6 +126,8 @@ class VM(Machine, SetupTaskMixin):
                 console_needed=console_needed,
                 console_port=self.console_port.port if self.console_needed else None,
                 name=self.full_name,
+                layout_name=layout_name,
+                orphan_policy=orphan_policy,
                 links=self.network_links,
                 model_in=self.model,
                 disk_config=disk_config,
@@ -440,3 +465,5 @@ This class is almost always subclassed.  The following are expected to be overwr
 
 
         __all__ = ('VM', 'Vm', 'InstallQemuAgent')
+
+        

@@ -250,7 +250,7 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
     '''
     Represents a raw disk image.
-    Can be unpacked from a compressed base image, or created by a callback (or eros if *unpack* is False).
+    Can be unpacked from a compressed base image, or created by a callback (or zeros if *unpack* is False).
     If *base_image* is set, then ``cp --reflink`` is used to clone an image.
 
     '''
