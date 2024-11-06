@@ -246,7 +246,7 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
                 raise TimeoutError("{} not online".format(self.ip_address)) from last_error
             else:
                 raise TimeoutError(f'{self.ip_address} not online: {last_error}') from last_error
-            
+
 
     def ssh_recompute(self, *args):
         try:
@@ -286,7 +286,7 @@ class ResolvableModel(Injectable):
     This class is defined here rather than in the modeling layer so that :class:`AbstractMachineModel` does not need to depend on the modeling layer.
 
     Subclasses of this model will typically need to override default_class_injection_key and probably supplimentary_injection_keys.
-    
+
     '''
 
     async def resolve_model(self, force):
@@ -300,7 +300,7 @@ class NetworkedModel(ResolvableModel):
     '''Represents something like a :class:`AbstractMachineModel` or a :class:`carthage.podman.PodmanPod` that generates a set of network_links from a :class:`~NetworkConfig`.
 
     When :meth:`resolve_networking` is called, if *self.injector* provides :ref:`network_namespace_key`,  then the network_links are reused from the object providing that dependency.  Typical usage is for a :class:`~carthage.oci.OciPod` or similar network namespace in which a :class:`AbstractMachineModel` will be run to provide *network_namespace_key*.
-    
+
 
     '''
 
@@ -362,7 +362,7 @@ class AbstractMachineModel(NetworkedModel):
     The most common concrete implementation of a machine model is :class:`carthage.modeling.MachineModel`.
 
     '''
-    
+
     name: str
 
     #: If True, :meth:`Machine.start_dependencies()` will stop collecting dependencies at the injector of this model.  In the normal situation where the :class:`Machine` is instantiated within the model's dependency context, what this means is that  only system dependencies declared on the model will be started.  This may also be an :class:`InjectionKey`, an :class:`Injector`, or an :class:`Injectable`.  Se the documentation of :meth:`Machine.start_dependencies()`.
@@ -385,7 +385,7 @@ class AbstractMachineModel(NetworkedModel):
         if name:
             yield InjectionKey(ResolvableModel, name=name)
         yield from super().supplementary_injection_keys(k)
-        
+
 
 
 @inject_autokwargs(config_layout=ConfigLayout)
@@ -446,7 +446,11 @@ class Machine(AsyncInjectable, SshMixin):
         return {}
 
     #: If true, use self.filesystem_access for rsync, otherwise use ssh.
-    rsync_uses_filesystem_access = False
+    rsync_uses_filesystem_access:bool = False
+
+    async def deploy(self):
+        await self.async_become_ready()
+        await self.start_machine()
 
     async def start_dependencies(self):
         '''Interface point that should be called by :meth:`start_machine` to start any dependent machines such as routers needed by this machine.
