@@ -895,7 +895,7 @@ class CustomizationWrapper(TaskWrapperBase):
     async def func(self, machine):
         await machine.apply_customization(self.customization, stamp=self.stamp)
 
-    async def should_run_task(self, obj, dependency_last_run=0.0, *, ainjector):
+    async def should_run_task(self, obj, dependency_last_run=0.0, *, introspection_context=None, ainjector):
         res = await obj.apply_customization(self.customization, method="last_run", stamp=self.stamp)
         # unfortunately if we return a last_run and one of our
         # dependencies has run more recently, we will continue to
