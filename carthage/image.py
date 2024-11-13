@@ -8,6 +8,7 @@
 
 from pathlib import Path
 import contextlib
+import functools
 import os
 import os.path
 import re
@@ -245,82 +246,223 @@ Takes a :func:`setup_task` and wraps it in a :class:`ContainerCustomization` so 
     return carthage.machine.customization_task(cust, **kwargs)
 
 
-@inject_autokwargs(config_layout=ConfigLayout)
-class ImageVolume(AsyncInjectable, SetupTaskMixin):
+# We need a mapping because we store qcow2 files as .qcow.
+extension_to_qemu_format = dict(
+    qcow='qcow2',
+    qcow2='qcow2',
+    raw='raw',
+    vmdk='vmdk',
+    )
 
-    '''
-    Represents a raw disk image.
-    Can be unpacked from a compressed base image, or created by a callback (or zeros if *unpack* is False).
-    If *base_image* is set, then ``cp --reflink`` is used to clone an image.
+def btrfs_touch(path:Path):
+    # For qcow2 there is an option to set nowcow on btrfs, but not for raw. So to handle both cases we touch and chattr before. chattr may fail, for example if not on btrfs.
+    path.touch()
+    try:
+        sh.chattr('+C', path)
+    except sh.ErrorReturnCode: pass
+
+@inject_autokwargs(config_layout=ConfigLayout)
+class ImageVolume(SetupTaskMixin, AsyncInjectable):
+
+    '''Represents a file-based disk image.
+    Can be initially blank (eros) or can be a copy of another image.
+    Supports a populate callback to populate an image before first use.
+
+    :param directory: The directory where unqualified images are
+    searched for and where any new files are created (when an image is
+    uncompressed for example). Defaults to {vm_image_dir}.
+
+    :param name: The name of the image. It can be either an unqualified image name like ``base_vm`` or a full path name including extension.
+
+    :param base_image: Rather than creating a zero-filled image, create an image as a copy of this file or :class:`ImageVolume`.
+
+    :param size: If the image is not at least this large (MiB), resize it to be that large.
+    
 
     '''
 
     base_image: 'str|ImageVolume' = None
     preallocate:bool = False
-    create_size: int = 0
+    size:int = 0
+    directory:Path = None
 
-    def __init__(self, name=None, path=None, *,
-                 create_size=None,
-                 unpack=None,
-                 remove_stamps=False,
+    def __init__(self, name=None, directory=None, *,
+                 size=None,
+                 populate=None,
                  base_image=None,
                  preallocate=None,
                  **kwargs):
         if name is None and not self.name:
             raise TypeError('name must be set on the constructor or subclass')
         super().__init__(**kwargs)
+        self.config_layout = self.injector(ConfigLayout)
+        self.path = None
         if base_image:
             self.base_image = base_image
-        if self.base_image and unpack:
-            raise TypeError('Cannot clone and unpack at the same time.')
         if name:
             name = str(name)  # in case it's a Path
             self.name = name
-        if path is None:
+        if directory:
+            self.directory = directory
+        if self.directory is None:
+            self.directory = Path(self.config_layout.vm_image_dir)
             path = self.config_layout.vm_image_dir
-        if self.name.startswith('/'):
-            self.path = Path(self.name)
-        else:
-            self.path = Path(path)/ (self.name + '.raw')
+        if populate:
+            self.populate = functools.partial(populate, self)
+        if size:
+            self.size = size
 
-        if not os.path.exists(self.path):
-            os.makedirs(os.path.dirname(self.path), exist_ok=True)
-            remove_stamps = True
-        if create_size:
-            self.create_size = create_size
-        if remove_stamps:
-            shutil.rmtree(self.stamp_path, ignore_errors=True)
-        os.makedirs(self.stamp_path, exist_ok=True)
-        self._pass_self_to_unpack = False
-        if callable(unpack):
-            self._pass_self_to_unpack = True
-        if unpack is not None:
-            self.unpack = unpack
+    async def find(self):
+        if self.path and self.path.exists():
+            assert not self.creating_path.exists(), 'Within a single run find should not be called while do_create runs.'
+            return True
+        name = self.name
+        path = self.directory.joinpath(name)
+        match list(map(lambda s: s[1:], path.suffixes)):
+            case ['raw', 'gz']:
+                raise ValueError(f'{path} is supported as a base_image but not an image destination.')
+            case [*rest, extension] if extension in extension_to_qemu_format:
+                # A single supported image format.
+                self.path = path
+                self.qemu_format = extension_to_qemu_format[extension]
+                self.creating_path = path.with_suffix('.carthage-creating')
+                return path.exists() and not self.creating_path.exists()
+            case _:
+                suffix = path.suffix
+                # We need to see if any of our supported extensions exist.
+                # If not we pick the default format.
+                # This is made more complicated because often images are named after domain names.
+                # Let us hope the .qcow2 .raw and .vmdk gtlds do not become popular.
+                for extension in extension_to_qemu_format:
+                    path = path.with_suffix(suffix+'.'+extension)
+                    # with_suffix only strips off one suffix, so clear out any existing suffix
+                    suffix = ''
+                    if path.exists():
+                        self.path = path
+                        self.qemu_format = extension_to_qemu_format[extension]
+                        self.creating_path = self.path.with_suffix('.carthage-creating')
+                        return not self.creating_path.exists()
+                # None of the formats exists, so choose our preferred format.
+                # We assume that the actual format name is the most canonical extension for that format.
+                extension = self.config_layout.libvirt.preferred_format
+                self.qemu_format = extension
+                path = path.with_suffix('.'+extension)
+                assert extension in extension_to_qemu_format, 'Illegal format chosen for preferred format'
+                assert not path.exists(), 'We have a logic error and should have found the image in the loop above'
+                self.path = path
+                self.creating_path = path.with_suffix('.carthage-creating')
+                return False
 
-    def __repr__(self):
-        return f"<{self.__class__.__name__} path={self.path}>"
-
-    def _do_create_volume(self):
-        if self.path.exists(): return
-        with open(self.path, "w") as f:
-            try:
-                sh.chattr("+C", self.path, _bg=False)
-            except sh.ErrorReturnCode_1:
-                pass
-        if self.create_size:
-            if not self.preallocate:
-                os.truncate(self.path, self.create_size)
+    async def do_create(self):
+        if self.readonly:
+            raise LookupError('Tried to create but readonly')
+        assert self.path
+        assert self.qemu_format
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.creating_path.touch()
+        if base_image:= self.base_image:
+            base_image = await resolve_deferred(self.ainjector, base_image, {})
+            if isinstance(base_image, ImageVolume):
+                await base_image.async_become_ready()
+                base_path = base_image.path
+            elif isinstance(base_image, (str, Path)):
+                base_path = Path(base_image)
             else:
-                sh.fallocate(
-                    '-x',
-                    '-l',
-                    self.create_size,
-                    self.path,
-                    _bg=False)
+                raise TypeError('Do not know what to do with base_image')
+            match [s[1:] for s in base_path.suffixes]:
+                case [*rest, 'raw', 'gz']:
+                    await sh.qemu_img(
+                        'dd',
+                        '-O'+self.qemu_format,
+                        '-fraw',
+                        'of='+self.path,
+                        sh.gzip(
+                            '-d', '-c', base_path,
+                            _piped=True))
+                case [*rest, 'raw'] if self.qemu_format == 'raw' and not self.config_layout.libvert.use_backing_file:
+                    # This is the special case where we are cloning a
+                    # raw image, and where we do not want to use a
+                    # backing file. In this case we want to use cp
+                    # --reflink. You might notice that qemu-img
+                    # convert has a -C argument that uses optimized
+                    # copies (copy_file_range)and think that ought to
+                    # be about the same as cp --reflink. Perhaps it
+                    # ought, but with qemu-img 9.1.1 on Linux 6.11.4,
+                    # it is not. With xfs, about the first 2G of an
+                    # image is reflinked (around the first 1024 or so
+                    # calls to copy_file_bytes), and the rest are not shared. On btrfs things appear worse. So we call cp --reflink ourselves in this case.
+                    btrfs_touch(self.path)
+                    await sh.cp(
+                        '--reflink=auto',
+                        '-p',
+                        base_path,
+                        self.path)
+                case [*rest, extension] if extension in extension_to_qemu_format:
+                    if self.config_layout.libvirt.use_backing_file:
+                        #We want a thin clone
+                        btrfs_touch(self.path)
+                        await sh.qemu_img(
+                            'create',
+                            '-b'+str(base_path),
+                            '-F'+extension_to_qemu_format[extension],
+                            '-f'+self.qemu_format,
+                            self.path)
+                    else:
+                        btrfs_touch(self.path)
+                        await sh.qemu_img(
+                            'convert',
+                            '-C', #Perhaps copy_file_range will actually work in the future
+                            '-f'+extension_to_qemu_format[extension],
+                            '-O'+self.qemu_format,
+                            str(base_path),
+                            str(self.path))
+                case _:
+                    raise RuntimeError(f'Do not know how to create image {self.path} based on {base_path}')
+        else: # No base image
+            if not self.size:
+                raise RuntimeError('Cannot create unless size is set')
+            btrfs_touch(self.path)
+            await sh.qemu_img(
+                'create',
+                '-f'+self.qemu_format,
+                self.path,
+                self.size*1024**2)
+        shutil.rmtree(self.stamp_path, ignore_errors=True)
+        self.stamp_path.mkdir(parents=True, exist_ok=True)
+        if self.populate:
+            await self.populate()
+        self.creating_path.unlink()
 
-    async def async_ready(self):
-        await self.run_setup_tasks()
-        return await super().async_ready()
+    async def resize(self, size):
+        if self.readonly:
+            logger.info('Not resizing %s because readonly', self)
+            return
+        try:
+            await sh.qemu_img(
+                'resize',
+                '-f'+self.qemu_format,
+                str(self.path),
+                size*1024**2)
+        except sh.ErrorReturnCode_1:
+            pass #Tried to shrink
+        
+    @setup_task("Find or Create Volume")
+    async def find_or_create(self):
+        if not await self.find():
+            await self.do_create()
+        if self.size:
+            await self.resize(self.size)
+
+    @find_or_create.invalidator()
+    async def find_or_create(self):
+        return await self.find()
+                            
+                
+    def __repr__(self):
+        if self.path:
+            return f"<{self.__class__.__name__} path={self.path}>"
+        return f"<{self.__class__.__name__} name={self.name}>"
+        
 
     def _delete_volume(self):
         try:
@@ -344,51 +486,6 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
     def __del__(self):
         self.close()
 
-    async def unpack(self):
-        """Override this method in a subclass to implement alternate creation methods
-            Alternatively specify unpack=func() in the constructor
-        """
-        await sh.gzip('-d', '-c',
-                      self.config_layout.base_vm_image,
-                      _out=self.path,
-                      _no_pipe=True,
-                      _no_out=True,
-                      _out_bufsize=1024 * 1024,
-                      _tty_out=False,
-                      _bg=True,
-                      _bg_exc=False)
-
-    @setup_task('unpack')
-    async def unpack_installed_system(self):
-        if os.path.exists(self.path):
-            return  # mark as succeeded rather than skipped
-        if self.create_size is None:
-            raise RuntimeError(f"{self.path} not found and creation disabled")
-
-        # We never want to unpack later after we've decided not to
-        try:
-            self._do_create_volume()
-            if self.base_image:
-                if isinstance(self.base_image, ImageVolume):
-                    await self.base_image.async_become_ready()
-                    base_image = self.base_image.path
-                else:
-                    base_image = self.base_image
-                await sh.cp(
-                    base_image,
-                    self.path,
-                    reflink='auto',
-                    _bg=True,
-                    _bg_exc=False,
-                )
-            elif self._pass_self_to_unpack:
-                await self.unpack(self)
-            else:
-                await self.unpack()
-        except Exception:
-            await self.delete()
-            raise
-        
     def qemu_config(self, disk_config):
         return dict(
             path=self.path,
@@ -457,6 +554,8 @@ class ImageVolume(AsyncInjectable, SetupTaskMixin):
 
 class BlockVolume(ImageVolume):
 
+    qemu_format = 'raw'
+    
     def __init__(self, path, **kwargs):
         if 'name' in kwargs:
             raise ValueError('BlockVolume does not take name even though ImageVolume does')
@@ -464,9 +563,16 @@ class BlockVolume(ImageVolume):
         assert path[1] != '/'  # otherwise stamp_path needs to be more clever
         super().__init__(name=path, unpack=False)
 
+    async def find(self):
+        self.path = Path(self.name)
+        return self.path.exists()
+
+    async def do_create(self):
+        raise NotImplementedError('Cannot create block device')
+    
     @memoproperty
     def stamp_path(self):
-        res = Path(self.config_layout.state_dir) / "block_volume_stamps" / self.path[1:]
+        res = Path(self.config_layout.state_dir) / "block_volume_stamps" / str(self.path)[1:]
         os.makedirs(res, exist_ok=True)
         return res
 
