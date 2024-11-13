@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2018, 2020, 2021, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -10,13 +10,14 @@ from carthage.pytest import *
 import os.path
 import pytest
 from pathlib import Path
-from carthage.dependency_injection import AsyncInjector, InjectionKey
+from carthage.dependency_injection import AsyncInjector, InjectionKey, instantiation_not_ready
 from carthage import base_injector, sh
 from carthage.config import ConfigLayout
-from carthage.image import BtrfsVolume, ReflinkVolume, ContainerVolume, ContainerImage, image_factory
+from carthage.image import BtrfsVolume, ReflinkVolume, ContainerVolume, ContainerImage, ImageVolume
 import posix
 import gc
 
+resource_dir = Path(__file__).parent.joinpath('resources')
 
 @pytest.fixture()
 def a_injector():
@@ -92,3 +93,39 @@ async def test_image_unpack(loop, a_injector, vm_image):
     print(vm_image.path)
     with vm_image.image_mounted() as mount:
         assert os.path.exists(os.path.join(mount.rootdir, "bin/bash"))
+
+@pytest.mark.parametrize(
+    'input,path,format',
+    [('foo', 'image_dir/foo.raw', 'raw'),
+     ('google.com', 'image_dir/google.com.raw', 'raw'),
+     ('google.com.qcow', 'image_dir/google.com.qcow', 'qcow2'),
+     ('/google.com.image', '/google.com.image.raw', 'raw'),
+     ])
+@async_test
+async def test_image_volume_find(input, path, format, ainjector):
+    ainjector.add_provider(ConfigLayout)
+    cl = await ainjector.get_instance_async(ConfigLayout)
+    cl.vm_image_dir = 'image_dir'
+    with instantiation_not_ready():
+        volume = await ainjector(ImageVolume, name=input)
+        await volume.find()
+        assert str(volume.path) == path
+        assert volume.qemu_format == format
+        
+
+@async_test
+async def test_image_volume_unpack_clone(a_injector):
+    ainjector = a_injector
+    volume = await ainjector(
+        ImageVolume,
+        name='some_volume.qcow',
+        base_image=resource_dir/'base_test.raw.gz',
+        )
+    clone_1 = await ainjector(
+        ImageVolume, name='clone_1.qcow',
+        base_image=volume)
+    clone_2 = await ainjector(
+        ImageVolume,
+        name='clone_2.raw',
+        base_image=volume)
+    

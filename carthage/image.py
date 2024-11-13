@@ -285,7 +285,7 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
     preallocate:bool = False
     size:int = 0
     directory:Path = None
-
+    populate = None
     def __init__(self, name=None, directory=None, *,
                  size=None,
                  populate=None,
@@ -371,14 +371,17 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
                 raise TypeError('Do not know what to do with base_image')
             match [s[1:] for s in base_path.suffixes]:
                 case [*rest, 'raw', 'gz']:
-                    await sh.qemu_img(
-                        'dd',
-                        '-O'+self.qemu_format,
-                        '-fraw',
-                        'of='+self.path,
-                        sh.gzip(
-                            '-d', '-c', base_path,
-                            _piped=True))
+                    with tempfile.NamedTemporaryFile(dir=self.directory) as t:
+                        await sh.gzip(
+                            '-d', '-c',
+                            base_path,
+                            _out=t.name)
+                        await sh.qemu_img(
+                            'convert',
+                            '-O'+self.qemu_format,
+                            '-fraw',
+                            t.name,
+                            self.path)
                 case [*rest, 'raw'] if self.qemu_format == 'raw' and not self.config_layout.libvert.use_backing_file:
                     # This is the special case where we are cloning a
                     # raw image, and where we do not want to use a
