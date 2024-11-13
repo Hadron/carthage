@@ -232,7 +232,7 @@ async def debian_container_to_vm(
         data = data.strip()
         logger.debug("Image Creation: %s", data)
 
-    async def unpack_callback(image_volume):
+    async def populate_callback(image_volume):
         nonlocal volume
         if isinstance(volume, type):
             # Allow usage specifying volume in a when_needed
@@ -273,7 +273,8 @@ async def debian_container_to_vm(
 
     output_path = Path(config.vm_image_dir).joinpath(output)
     return await ainjector(image_volume_class, name=output_path.absolute(),
-                           unpack=unpack_callback,
+                           populate=populate_callback,
+                           size=1, #Will override as file is replaced.
                            )
 
 __all__ += ['debian_container_to_vm']
