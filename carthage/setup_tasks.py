@@ -687,11 +687,12 @@ class SetupTaskMixin:
 
     def check_stamp(self, stamp, raise_on_error=False):
         '''
-        :returns: a tuple containing the unix time of the stamp and the tex t contents of the stamp.  The first element of the tuple is False if the stamp does not exist
+        :returns: a tuple containing the unix time of the stamp and the text contents of the stamp.  The first element of the tuple is False if the stamp does not exist
         '''
         if raise_on_error not in (True, False):
             raise SyntaxError(f'raise_on_error must be a boolean. current value: {raise_on_error}')
         try:
+            if not self.stamp_path: raise FileNotFoundError
             path = Path(self.stamp_path) / f'.stamp-{stamp}'
             res = os.stat(path)
         except FileNotFoundError:
