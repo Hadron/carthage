@@ -15,7 +15,8 @@ import shutil
 import sys
 from pathlib import Path
 from .dependency_injection import *
-from .image import SetupTaskMixin, setup_task, SkipSetupTask, ContainerVolume
+from .setup_tasks import SetupTaskMixin, setup_task, SkipSetupTask
+from .image import ContainerVolume
 from . import sh, ConfigLayout
 from .utils import memoproperty
 from .machine import MachineRunning, Machine, SshMixin, ssh_origin
