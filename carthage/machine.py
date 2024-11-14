@@ -306,8 +306,6 @@ class NetworkedModel(ResolvableModel):
 
     network_links: typing.Mapping[str, carthage.network.NetworkLink]
 
-    #: A class of :class:`~carthage.network.TechnologySpecificNetwork` that will be instantiated for the links on this NetworkedModel.
-    network_implementation_class: carthage.network.TechnologySpecificNetwork = None
 
     async def resolve_networking(self, force: bool = False):
         '''
@@ -340,19 +338,6 @@ class NetworkedModel(ResolvableModel):
         await self.resolve_networking(force=force)
         return await super().resolve_model(force=force)
 
-    async def dynamic_dependencies(self):
-        '''See :func:`carthage.deployment.Deployable.dynamic_dependencies` for documentation.
-        Returns technology specific networks for links where that is possible.
-        '''
-        if not self.network_implementation_class: return []
-        await self.resolve_networking()
-        results = []
-        network_class = self.network_implementation_class
-        for l in self.network_links.values():
-            if l.local_type: continue
-            instance = await l.net.access_by(network_class, ready=False)
-            results.append(instance)
-        return results
 
 class AbstractMachineModel(NetworkedModel):
 
@@ -410,6 +395,8 @@ class Machine(AsyncInjectable, SshMixin):
     model: typing.Optional[AbstractMachineModel]
     name: str
     network_links: typing.Mapping[str, carthage.network.NetworkLink]
+    #: A class of :class:`~carthage.network.TechnologySpecificNetwork` that will be instantiated for the links on this NetworkedModel.
+    network_implementation_class: type[carthage.network.TechnologySpecificNetwork] = None
 
     #: Should machine_running default to calling ssh_online
     machine_running_ssh_online: bool = True
@@ -451,6 +438,20 @@ class Machine(AsyncInjectable, SshMixin):
     async def deploy(self):
         await self.async_become_ready()
         await self.start_machine()
+
+    async def dynamic_dependencies(self):
+        '''See :func:`carthage.deployment.Deployable.dynamic_dependencies` for documentation.
+        Returns technology specific networks for links where that is possible.
+        '''
+        if not self.network_implementation_class: return []
+        await self.resolve_networking()
+        results = []
+        network_class = self.network_implementation_class
+        for l in self.network_links.values():
+            if l.local_type: continue
+            instance = await l.net.access_by(network_class, ready=False)
+            results.append(instance)
+        return results
 
     async def start_dependencies(self):
         '''Interface point that should be called by :meth:`start_machine` to start any dependent machines such as routers needed by this machine.
