@@ -105,6 +105,8 @@ base_injector.claim("base injector")
 carthage.config.inject_config(base_injector)
 base_injector.add_provider(plugins.PluginMappings)
 base_injector.add_provider(deployment.MachineDeployableFinder)
+base_injector.add_provider(carthage.vm.LibvirtDeployableFinder, allow_multiple=True)
+
 base_injector.add_provider(ssh.SshKey)
 base_injector.add_provider(ssh.AuthorizedKeysFile)
 base_injector.add_provider(asyncio.get_event_loop(), close=False)

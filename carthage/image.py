@@ -487,6 +487,7 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
             pass
 
     async def delete(self):
+        await self.find()
         return self._delete_volume()
 
     async def dynamic_dependencies(self):

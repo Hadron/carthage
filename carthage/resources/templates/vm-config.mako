@@ -21,7 +21,7 @@ def is_vnc():
   <name>${name}</name>
   <uuid>${uuid}</uuid>
   <metadata>
-    <carthage:layout xmlns:carthage='https://github.com/hadron/carthage' layout='${layout_name}' orphan_policy='${orphan_policy}'/>
+    <carthage:layout xmlns:carthage='https://github.com/hadron/carthage' layout='${layout_name}' orphan_policy='${orphan_policy.name}'/>
     </metadata>
   <memory unit='KiB'>${memory_mb*1024}</memory>
 

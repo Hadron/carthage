@@ -14,6 +14,7 @@ import os.path
 import shutil
 import types
 import uuid
+import xml.etree.ElementTree
 import mako
 import mako.lookup
 import mako.template
@@ -54,7 +55,8 @@ class Vm(Machine, SetupTaskMixin):
     A libvirt VM implementation.
     '''
 
-    network_implementation_class = carthage.network.BridgeNetwork
+    # For now BridgeNetwork is not really a deployable
+    # network_implementation_class = carthage.network.BridgeNetwork
 
     def __init__(self, name, *, console_needed=None,
                  **kwargs):
@@ -83,7 +85,7 @@ class Vm(Machine, SetupTaskMixin):
     async def gen_volume(self):
         if self.volume is not None:
             return
-        if self.image:
+        with instantiation_not_ready():
             self.volume = await self.ainjector(
                 ImageVolume,
                 name=self.name,
@@ -93,8 +95,11 @@ class Vm(Machine, SetupTaskMixin):
         os.makedirs(self.stamp_path, exist_ok=True)
 
     async def find(self):
+        await self.gen_volume()
         if self.domid():
             return True
+        if self.volume:
+            return await self.volume.find()
         return False
 
     async def find_or_create(self):
@@ -113,7 +118,7 @@ class Vm(Machine, SetupTaskMixin):
         if layout:
             layout_name = layout.layout_name
             try:
-                orphan_policy = layout.injector.get_instance(deployment.orphan_policy)
+                orphan_policy = self.injector.get_instance(deployment.orphan_policy)
             except KeyError:
                 orphan_policy = deployment.DeletionPolicy.delete
         else:
@@ -355,7 +360,8 @@ class Vm(Machine, SetupTaskMixin):
         await self.is_machine_running()
         if self.running:
             await self.stop_machine()
-        await self.volume.delete()
+            if self.volume:
+                await self.volume.delete()
 
         try:
             shutil.rmtree(self.stamp_path)
@@ -499,5 +505,57 @@ This class is almost always subclassed.  The following are expected to be overwr
         '''
         await self._build_image()
 
+class LibvirtDeployableFinder(carthage.deployment.DeployableFinder):
+
+    name = 'libvirt'
+
+    async def find(self, ainjector):
+        '''
+        MachineDeployableFinder already finds Vms.
+        '''
+        return []
+
+    async def find_orphans(self, deployables):
+        try:
+            import libvirt
+            import carthage.modeling
+        except ImportError:
+            logger.debug('Not looking for libvirt orphans because libvirt API is not available')
+            return []
+        con = libvirt.open('')
+        vm_names = [v.full_name for v in deployables if isinstance(v, Vm)]
+        try:
+            layout = await self.ainjector.get_instance_async(carthage.modeling.CarthageLayout)
+            layout_name = layout.layout_name
+        except KeyError:
+            layout_name = None
+        if layout_name is None:
+            logger.info('Unable to find libvirt orphans because layout name not set')
+            return []
+        results = []
+        for d in con.listAllDomains():
+            try:
+                metadata_str = d.metadata(libvirt.VIR_DOMAIN_METADATA_ELEMENT, 'https://github.com/hadron/carthage')
+            except libvirt.libvirtError: continue
+            metadata = xml.etree.ElementTree.fromstring(metadata_str)
+            if metadata.attrib['layout'] != layout_name: continue
+            if d.name() in vm_names:
+                continue
+            with instantiation_not_ready():
+                vm = await self.ainjector(
+                    Vm,
+                    name=d.name(),
+                    image=None,
+                    )
+                vm.injector.add_provider(deployment.orphan_policy, deployment.DeletionPolicy[metadata.attrib['orphan_policy']])
+            if await vm.find():
+                results.append(vm)
+        return results
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.injector.add_provider(ConfigLayout)
+        cl = self.injector.get_instance(ConfigLayout)
+        cl.container_prefix = ""
 
         __all__ = ('VM', 'Vm', 'InstallQemuAgent')
