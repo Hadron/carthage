@@ -48,7 +48,13 @@ vm_image_key = InjectionKey('vm-image')
     image=InjectionKey(vm_image_key, _ready=False),
     network_config=carthage.network.NetworkConfig
 )
-class VM(Machine, SetupTaskMixin):
+class Vm(Machine, SetupTaskMixin):
+
+    '''
+    A libvirt VM implementation.
+    '''
+
+    network_implementation_class = carthage.network.BridgeNetwork
 
     def __init__(self, name, *, console_needed=None,
                  **kwargs):
@@ -72,13 +78,17 @@ class VM(Machine, SetupTaskMixin):
             layout_uuid = layout.layout_uuid
             return uuid.uuid5(layout_uuid, 'vm:'+self.full_name)
         return uuid.uuid4()
-    
-    
+
+
     async def gen_volume(self):
         if self.volume is not None:
             return
         if self.image:
-            self.volume = self.image.clone_for_vm(self.name)
+            self.volume = await self.ainjector(
+                ImageVolume,
+                name=self.name,
+                base_image=self.image,
+                size=self.config_layout.vm_image_size)
         self.ssh_rekeyed()
         os.makedirs(self.stamp_path, exist_ok=True)
 
@@ -98,8 +108,6 @@ class VM(Machine, SetupTaskMixin):
         await self.resolve_networking()
         for i, link in self.network_links.items():
             await link.instantiate(carthage.network.BridgeNetwork)
-        if self.image:
-            await self.image.async_become_ready()
         await self.gen_volume()
         layout = await self.ainjector.get_instance_async(InjectionKey(CarthageLayout, _ready=False, _optional=True))
         if layout:
@@ -111,7 +119,7 @@ class VM(Machine, SetupTaskMixin):
         else:
             layout_name = ''
             orphan_policy  = deployment.DeletionPolicy.retain
-        
+
         ci_data = None
         if self.model and getattr(self.model, 'cloud_init', False):
             ci_data = await self.ainjector(carthage.cloud_init.generate_cloud_init_cidata)
@@ -292,10 +300,29 @@ class VM(Machine, SetupTaskMixin):
 
     @memoproperty
     def stamp_path(self):
+        res = Path(self.config_layout.output_dir)/'libvirt_stamps'/self.name
+        res.mkdir(parents=True, exist_ok=True)
+        return res
+
+    async def dynamic_dependencies(self):
+        await self.gen_volume()
+        results = await super().dynamic_dependencies()
         if self.volume:
-            return Path(str(self.volume.path) + '.stamps')
-        else:
-            return Path(self.config_layout.vm_image_dir)/f'{self.name}.stamps'
+            results.append(self.volume)
+        disk_config = disk_config_from_model(getattr(self, 'model', {}),
+                                         default_disk_config=[
+                                             dict(),
+                                             dict(target_type='cdrom',
+                                                  source_type='file',
+                                                  driver='raw',
+                                                  qemu_source='file',
+                                                  readonly=True)],
+                                             )
+        disk_config = await resolve_deferred(self.ainjector, disk_config, {})
+        for entry in disk_config:
+            if 'volume' in entry:
+                results.append(entry['volume'])
+        return results
 
     def _console_json(self):
 
@@ -330,7 +357,12 @@ class VM(Machine, SetupTaskMixin):
             await self.stop_machine()
         await self.volume.delete()
 
-Vm = VM
+        try:
+            shutil.rmtree(self.stamp_path)
+        except Exception: pass
+        del self.stamp_path
+
+VM = Vm
 
 
 class InstallQemuAgent(ContainerCustomization):
@@ -361,20 +393,24 @@ async def qemu_disk_config(vm, ci_data, *, ainjector):
             if i == 0:  # primary disk
                 if 'volume' not in entry:
                     entry['volume'] = vm.volume
+                if 'size' not in entry:
+                    entry['size'] = vm.config_layout.vm_image_size
             if 'cache' not in entry:
                 try:
                     entry['cache'] = vm.model.disk_cache
                 except AttributeError:
-                    entry['cache'] = 'writethrough'
+                    entry['cache'] = 'writeback'
             if 'volume' not in entry and 'size' in entry:
                 entry['volume'] = await ainjector(
                     ImageVolume, name=vm.name + f'_disk_{i}',
-                    create_size=entry['size'],
-                    unpack=False)
+                    size=entry['size'],
+                    )
             if 'volume' in entry and isinstance(entry['volume'], InjectionKey):
                 entry['volume'] = await vm.ainjector.get_instance_async(entry['volume'])
             elif 'volume' in entry:
                 await entry['volume'].async_become_ready()
+            if 'size' in entry and 'volume' in entry:
+                await entry['volume'].resize(entry['size'])
             entry.setdefault('target_type', 'disk')
             if 'volume' in entry:
                 entry.update(entry['volume'].qemu_config(entry))
@@ -412,7 +448,7 @@ This class is almost always subclassed.  The following are expected to be overwr
     override_dependencies: bool = False
     def __init__(self, *args, **kwargs):
         super().__init__(*args,
-                         unpack=None,
+                         populate=None,
                          base_image=None,
                          **kwargs)
         self.injector.add_provider(InjectionKey(AbstractMachineModel), dependency_quote(self))
@@ -457,7 +493,7 @@ This class is almost always subclassed.  The following are expected to be overwr
             await self.vm.is_machine_running()
             await self.vm.stop_machine()
 
-    async def unpack(self):
+    async def populate(self):
         '''
         Called from the SetupTask to build the image.
         '''
@@ -465,5 +501,3 @@ This class is almost always subclassed.  The following are expected to be overwr
 
 
         __all__ = ('VM', 'Vm', 'InstallQemuAgent')
-
-        
