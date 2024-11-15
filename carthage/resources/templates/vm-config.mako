@@ -20,6 +20,9 @@ def is_vnc():
 <domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
   <name>${name}</name>
   <uuid>${uuid}</uuid>
+  <metadata>
+    <carthage:layout xmlns:carthage='https://github.com/hadron/carthage' layout='${layout_name}' orphan_policy='${orphan_policy.name}'/>
+    </metadata>
   <memory unit='KiB'>${memory_mb*1024}</memory>
 
   <vcpu placement='static' >${cpus}</vcpu>

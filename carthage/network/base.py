@@ -114,6 +114,7 @@ class TechnologySpecificNetwork(AsyncInjectable):
 
 '''
 
+    readonly = False
     async def also_accessed_by(self, others: typing.List[TechnologySpecificNetwork]):
         '''
         Abstract method to notify a class of other technology specific networks.

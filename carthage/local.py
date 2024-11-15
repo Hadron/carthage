@@ -63,6 +63,9 @@ class LocalMachine(LocalMachineMixin, Machine, SetupTaskMixin, AsyncInjectable):
         await self.run_setup_tasks()
         await super().async_ready()
 
+    async def find(self):
+        return True
+    
     async def start_machine(self):
         await self.start_dependencies()
         await super().start_machine()

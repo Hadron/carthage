@@ -246,7 +246,7 @@ A marker in a call to :meth:`rsync` indicating that *p* should be copied to or f
                 raise TimeoutError("{} not online".format(self.ip_address)) from last_error
             else:
                 raise TimeoutError(f'{self.ip_address} not online: {last_error}') from last_error
-            
+
 
     def ssh_recompute(self, *args):
         try:
@@ -286,7 +286,7 @@ class ResolvableModel(Injectable):
     This class is defined here rather than in the modeling layer so that :class:`AbstractMachineModel` does not need to depend on the modeling layer.
 
     Subclasses of this model will typically need to override default_class_injection_key and probably supplimentary_injection_keys.
-    
+
     '''
 
     async def resolve_model(self, force):
@@ -300,14 +300,12 @@ class NetworkedModel(ResolvableModel):
     '''Represents something like a :class:`AbstractMachineModel` or a :class:`carthage.podman.PodmanPod` that generates a set of network_links from a :class:`~NetworkConfig`.
 
     When :meth:`resolve_networking` is called, if *self.injector* provides :ref:`network_namespace_key`,  then the network_links are reused from the object providing that dependency.  Typical usage is for a :class:`~carthage.oci.OciPod` or similar network namespace in which a :class:`AbstractMachineModel` will be run to provide *network_namespace_key*.
-    
+
 
     '''
 
     network_links: typing.Mapping[str, carthage.network.NetworkLink]
 
-    #: A class of :class:`~carthage.network.TechnologySpecificNetwork` that will be instantiated for the links on this NetworkedModel.
-    network_implementation_class: carthage.network.TechnologySpecificNetwork = None
 
     async def resolve_networking(self, force: bool = False):
         '''
@@ -340,19 +338,6 @@ class NetworkedModel(ResolvableModel):
         await self.resolve_networking(force=force)
         return await super().resolve_model(force=force)
 
-    async def dynamic_dependencies(self):
-        '''See :func:`carthage.deployment.Deployable.dynamic_dependencies` for documentation.
-        Returns technology specific networks for links where that is possible.
-        '''
-        if not self.network_implementation_class: return []
-        await self.resolve_networking()
-        results = []
-        network_class = self.network_implementation_class
-        for l in self.network_links.values():
-            if l.local_type: continue
-            instance = await l.net.access_by(network_class, ready=False)
-            results.append(instance)
-        return results
 
 class AbstractMachineModel(NetworkedModel):
 
@@ -362,7 +347,7 @@ class AbstractMachineModel(NetworkedModel):
     The most common concrete implementation of a machine model is :class:`carthage.modeling.MachineModel`.
 
     '''
-    
+
     name: str
 
     #: If True, :meth:`Machine.start_dependencies()` will stop collecting dependencies at the injector of this model.  In the normal situation where the :class:`Machine` is instantiated within the model's dependency context, what this means is that  only system dependencies declared on the model will be started.  This may also be an :class:`InjectionKey`, an :class:`Injector`, or an :class:`Injectable`.  Se the documentation of :meth:`Machine.start_dependencies()`.
@@ -385,7 +370,7 @@ class AbstractMachineModel(NetworkedModel):
         if name:
             yield InjectionKey(ResolvableModel, name=name)
         yield from super().supplementary_injection_keys(k)
-        
+
 
 
 @inject_autokwargs(config_layout=ConfigLayout)
@@ -410,6 +395,8 @@ class Machine(AsyncInjectable, SshMixin):
     model: typing.Optional[AbstractMachineModel]
     name: str
     network_links: typing.Mapping[str, carthage.network.NetworkLink]
+    #: A class of :class:`~carthage.network.TechnologySpecificNetwork` that will be instantiated for the links on this NetworkedModel.
+    network_implementation_class: type[carthage.network.TechnologySpecificNetwork] = None
 
     #: Should machine_running default to calling ssh_online
     machine_running_ssh_online: bool = True
@@ -446,7 +433,25 @@ class Machine(AsyncInjectable, SshMixin):
         return {}
 
     #: If true, use self.filesystem_access for rsync, otherwise use ssh.
-    rsync_uses_filesystem_access = False
+    rsync_uses_filesystem_access:bool = False
+
+    async def deploy(self):
+        await self.async_become_ready()
+        await self.start_machine()
+
+    async def dynamic_dependencies(self):
+        '''See :func:`carthage.deployment.Deployable.dynamic_dependencies` for documentation.
+        Returns technology specific networks for links where that is possible.
+        '''
+        if not self.network_implementation_class: return []
+        await self.resolve_networking()
+        results = []
+        network_class = self.network_implementation_class
+        for l in self.network_links.values():
+            if l.local_type: continue
+            instance = await l.net.access_by(network_class, ready=False)
+            results.append(instance)
+        return results
 
     async def start_dependencies(self):
         '''Interface point that should be called by :meth:`start_machine` to start any dependent machines such as routers needed by this machine.
@@ -533,7 +538,7 @@ class Machine(AsyncInjectable, SshMixin):
 
     def setup_task_event_keys(self):
         return self.supplementary_injection_keys(InjectionKey(Machine, host=self.name))
-    
+
     async def start_machine(self):
 
         '''
@@ -614,7 +619,7 @@ class Machine(AsyncInjectable, SshMixin):
         This method is the machine-specific part of :meth:`run_command`.  Override in subclasses if there is a better way to run a command than sshing into a machine.  This method is async, although that is not reflected in the signature because this implementation returns an awaitable.
 
         :param user: The user to run as.  defaults to :attr:`runas_user`.
-        
+
         This implementation calls :meth:`ssh`.
         Ssh has really bad quoting; it effectively  removes one level of quoting from the input.
 This handles quoting and  makes sure each argument is a separate argument on the eventual shell;
@@ -629,7 +634,7 @@ it works like :meth:`carthage.container.Container.container_command` and is used
             shlex.join(args),
             _bg=_bg, _bg_exc=_bg_exc)
 
-        
+
     async def sshfs_process_factory(self, user):
         if user != self.ssh_login_user:
             raise ValueError(f'{self.__class__.__qualname__} cannot set up filesystem access when runas_user != ssh_login_user')
@@ -756,7 +761,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
     def inspect_setup_tasks(self):
         return super().inspect_setup_tasks(
             stamp_stem=self.stamp_stem+'-', instance_id=id(self.host))
-    
+
     async def last_run(self):
         '''
         :return: the most recent time any setup task on this Customization has run against the given host. Returns false if the tasks definitely need to run.
@@ -795,7 +800,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
             return self.host.run_command(
                 *args, _user=_user,
                 **kwargs)
-        
+
 
 class MachineCustomization(BaseCustomization):
 
@@ -855,7 +860,7 @@ class CustomizationInspectorProxy:
 
     def check_stamp(self, s, *args):
         return self.obj.check_stamp(self.stamp_stem+'-'+s, *args)
-    
+
 
     @property
     def logger_for(self):
@@ -867,7 +872,7 @@ class CustomizationInspectorProxy:
 
     def __repr__(self):
         return f'CustomizationInspectorProxy({repr(self.obj)})'
-    
+
 class CustomizationWrapper(TaskWrapperBase):
 
     customization: typing.Type[BaseCustomization]
@@ -891,7 +896,7 @@ class CustomizationWrapper(TaskWrapperBase):
     async def func(self, machine):
         await machine.apply_customization(self.customization, stamp=self.stamp)
 
-    async def should_run_task(self, obj, dependency_last_run=0.0, *, ainjector):
+    async def should_run_task(self, obj, dependency_last_run=0.0, *, introspection_context=None, ainjector):
         res = await obj.apply_customization(self.customization, method="last_run", stamp=self.stamp)
         # unfortunately if we return a last_run and one of our
         # dependencies has run more recently, we will continue to
@@ -912,7 +917,7 @@ class CustomizationWrapper(TaskWrapperBase):
             prev_inspector.stamp = self.stamp+'-'+prev_inspector.stamp
             prev_inspector.instance_id = instance_id
             yield prev_inspector
-            
+
 
 def customization_task(c: BaseCustomization, order: int = None,
                        before=None):
@@ -938,7 +943,7 @@ class BareMetalMachine(Machine, SetupTaskMixin, AsyncInjectable):
 
     running = False
     readonly = True #: Cannot be deleted or created.
-    
+
 
     async def start_machine(self):
         if self.running:
@@ -964,7 +969,7 @@ class BareMetalMachine(Machine, SetupTaskMixin, AsyncInjectable):
         See if the machine exists. Override if it is desirable to do a dns check or similar.
         '''
         return True
-    
+
     @memoproperty
     def stamp_path(self):
         return Path(f'{self.config_layout.state_dir}/machines/{self.name}')

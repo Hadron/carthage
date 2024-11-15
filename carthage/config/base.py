@@ -33,9 +33,8 @@ class BaseSchema(ConfigSchema, prefix=""):
     state_dir: ConfigPath = "{base_dir}/state"
     #: Directory for local ephemeral state like ssh_agent sockets
     local_run_dir: ConfigPath = "{state_dir}"
-    vm_image_size: int = 20000000000  # : default size of VM disks in Mb
+    vm_image_size: int = 20*1024  # : default size of VM disks in Mb
     base_container_image: str = "/usr/share/hadron-installer/hadron-container-image.tar.gz"
-    base_vm_image: str = "/usr/share/hadron-installer/direct-install-efi.raw.gz"
     #: All containers and VMs are prefixed with this string in their machine names
     container_prefix: str = 'carthage-'
     min_port: int = 9000  # : Minimum port for displays and databases
@@ -74,3 +73,16 @@ class DebianConfig(ConfigSchema, prefix="debian"):
 
     #: Any debootstrap option to include
     debootstrap_options: str = ""
+
+class LibvirtSchema(ConfigSchema, prefix='libvirt'):
+
+    #: The preferred format for newly created disk images
+    preferred_format: str = 'raw'
+
+    #: When creating a format like qcow2 that can be represented as a
+    #delta on top of another file, should we use such a backing
+    #file. If true, then that file must remain unmodified. Generally
+    #it is better to use OS-level facilities like reflinks to obtain
+    #copy-on-write.
+    use_backing_file: bool = False
+    

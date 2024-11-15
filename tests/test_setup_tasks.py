@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2022, 2023, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -155,7 +155,7 @@ async def test_failure_forces_rerun(ainjector):
     o = await ainjector(c)
     assert called == 1
     with pytest.raises(RuntimeError):
-        o.setup_test_error_explicit()
+        await o.setup_test_error_explicit()
     assert called == 2
     should_fail = False
     await ainjector(c)
@@ -221,7 +221,7 @@ async def test_hash_func(ainjector):
             return fake_hash
     o = await ainjector(c)
     test_hash_run = 0
-    o.test_hash()
+    await o.test_hash()
     assert test_hash_run == 1
     await o.run_setup_tasks()
     assert test_hash_run == 1
@@ -268,6 +268,7 @@ async def test_setup_task_context(ainjector):
             assert isinstance(ctx, SetupTaskContext)
             assert ctx.instance is self
             assert ctx.parent.key is InjectionKey(ContextTest)
+            assert not isinstance(ctx.parent, SetupTaskContext)
             called = 1
 
     ainjector.add_provider(ContextTest)
@@ -367,4 +368,36 @@ async def test_setup_task_events(ainjector):
             InjectionKey(c), 'task_already_run', cb):
         c_2 = await ainjector(c)
     assert 'task_already_run' in events
+    
+@async_test
+async def test_depend_on(ainjector):
+    class Dep(carthage.SystemDependency):
+        name = 'test_dependency'
+        async def __call__(self, ainjector):
+            nonlocal called
+            called += 1
+    dep = Dep()
+    class c(Stampable):
+        @setup_task("Requires a dependency")
+        def requires_dependency(self):
+            assert called == 1
+        requires_dependency.depend_on(dep)
+
+    class d(Stampable):
+        @setup_task("requires dependencies even if task never called")
+        def requires_dependencies(self):
+            raise RuntimeError
+        requires_dependencies.depend_on(dep)
+        requires_dependencies.dependencies_always = True
+        @requires_dependencies.check_completed()
+        async def requires_dependencies(self):
+            assert called == 1
+            return True
+
+    called = 0
+    await ainjector(c)
+    assert called == 1
+    called = 0
+    await ainjector(d)
+    assert called == 1
     

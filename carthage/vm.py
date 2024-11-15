@@ -14,11 +14,13 @@ import os.path
 import shutil
 import types
 import uuid
+import xml.etree.ElementTree
 import mako
 import mako.lookup
 import mako.template
 from pathlib import Path
 from .dependency_injection import *
+from . import deployment
 from .utils import when_needed, memoproperty
 from .setup_tasks import SetupTaskMixin, setup_task
 from .image import  ImageVolume
@@ -46,7 +48,14 @@ vm_image_key = InjectionKey('vm-image')
     image=InjectionKey(vm_image_key, _ready=False),
     network_config=carthage.network.NetworkConfig
 )
-class VM(Machine, SetupTaskMixin):
+class Vm(Machine, SetupTaskMixin):
+
+    '''
+    A libvirt VM implementation.
+    '''
+
+    # For now BridgeNetwork is not really a deployable
+    # network_implementation_class = carthage.network.BridgeNetwork
 
     def __init__(self, name, *, console_needed=None,
                  **kwargs):
@@ -71,24 +80,51 @@ class VM(Machine, SetupTaskMixin):
             layout_uuid = layout.layout_uuid
             return uuid.uuid5(layout_uuid, 'vm:'+self.full_name)
         return uuid.uuid4()
-    
-    
+
+
     async def gen_volume(self):
         if self.volume is not None:
             return
-        if self.image:
-            self.volume = self.image.clone_for_vm(self.name)
+        with instantiation_not_ready():
+            self.volume = await self.ainjector(
+                ImageVolume,
+                name=self.name,
+                base_image=self.image,
+                size=self.config_layout.vm_image_size)
         self.ssh_rekeyed()
         os.makedirs(self.stamp_path, exist_ok=True)
 
+    async def find(self):
+        await self.gen_volume()
+        if self.domid():
+            return True
+        if self.volume:
+            return await self.volume.find()
+        return False
+
+    async def find_or_create(self):
+        if await self.find():
+            return
+        await self.start_machine()
+
     async def write_config(self):
+        from .modeling import CarthageLayout
         template = _templates.get_template("vm-config.mako")
         await self.resolve_networking()
         for i, link in self.network_links.items():
             await link.instantiate(carthage.network.BridgeNetwork)
-        if self.image:
-            await self.image.async_become_ready()
         await self.gen_volume()
+        layout = await self.ainjector.get_instance_async(InjectionKey(CarthageLayout, _ready=False, _optional=True))
+        if layout:
+            layout_name = layout.layout_name
+            try:
+                orphan_policy = self.injector.get_instance(deployment.orphan_policy)
+            except KeyError:
+                orphan_policy = deployment.DeletionPolicy.delete
+        else:
+            layout_name = ''
+            orphan_policy  = deployment.DeletionPolicy.retain
+
         ci_data = None
         if self.model and getattr(self.model, 'cloud_init', False):
             ci_data = await self.ainjector(carthage.cloud_init.generate_cloud_init_cidata)
@@ -103,6 +139,8 @@ class VM(Machine, SetupTaskMixin):
                 console_needed=console_needed,
                 console_port=self.console_port.port if self.console_needed else None,
                 name=self.full_name,
+                layout_name=layout_name,
+                orphan_policy=orphan_policy,
                 links=self.network_links,
                 model_in=self.model,
                 disk_config=disk_config,
@@ -267,10 +305,29 @@ class VM(Machine, SetupTaskMixin):
 
     @memoproperty
     def stamp_path(self):
+        res = Path(self.config_layout.output_dir)/'libvirt_stamps'/self.name
+        res.mkdir(parents=True, exist_ok=True)
+        return res
+
+    async def dynamic_dependencies(self):
+        await self.gen_volume()
+        results = await super().dynamic_dependencies()
         if self.volume:
-            return Path(str(self.volume.path) + '.stamps')
-        else:
-            return Path(self.config_layout.vm_image_dir)/f'{self.name}.stamps'
+            results.append(self.volume)
+        disk_config = disk_config_from_model(getattr(self, 'model', {}),
+                                         default_disk_config=[
+                                             dict(),
+                                             dict(target_type='cdrom',
+                                                  source_type='file',
+                                                  driver='raw',
+                                                  qemu_source='file',
+                                                  readonly=True)],
+                                             )
+        disk_config = await resolve_deferred(self.ainjector, disk_config, {})
+        for entry in disk_config:
+            if 'volume' in entry:
+                results.append(entry['volume'])
+        return results
 
     def _console_json(self):
 
@@ -303,9 +360,15 @@ class VM(Machine, SetupTaskMixin):
         await self.is_machine_running()
         if self.running:
             await self.stop_machine()
-        await self.volume.delete()
+            if self.volume:
+                await self.volume.delete()
 
-Vm = VM
+        try:
+            shutil.rmtree(self.stamp_path)
+        except Exception: pass
+        del self.stamp_path
+
+VM = Vm
 
 
 class InstallQemuAgent(ContainerCustomization):
@@ -336,20 +399,24 @@ async def qemu_disk_config(vm, ci_data, *, ainjector):
             if i == 0:  # primary disk
                 if 'volume' not in entry:
                     entry['volume'] = vm.volume
+                if 'size' not in entry:
+                    entry['size'] = vm.config_layout.vm_image_size
             if 'cache' not in entry:
                 try:
                     entry['cache'] = vm.model.disk_cache
                 except AttributeError:
-                    entry['cache'] = 'writethrough'
+                    entry['cache'] = 'writeback'
             if 'volume' not in entry and 'size' in entry:
                 entry['volume'] = await ainjector(
                     ImageVolume, name=vm.name + f'_disk_{i}',
-                    create_size=entry['size'],
-                    unpack=False)
+                    size=entry['size'],
+                    )
             if 'volume' in entry and isinstance(entry['volume'], InjectionKey):
                 entry['volume'] = await vm.ainjector.get_instance_async(entry['volume'])
             elif 'volume' in entry:
                 await entry['volume'].async_become_ready()
+            if 'size' in entry and 'volume' in entry:
+                await entry['volume'].resize(entry['size'])
             entry.setdefault('target_type', 'disk')
             if 'volume' in entry:
                 entry.update(entry['volume'].qemu_config(entry))
@@ -387,7 +454,7 @@ This class is almost always subclassed.  The following are expected to be overwr
     override_dependencies: bool = False
     def __init__(self, *args, **kwargs):
         super().__init__(*args,
-                         unpack=None,
+                         populate=None,
                          base_image=None,
                          **kwargs)
         self.injector.add_provider(InjectionKey(AbstractMachineModel), dependency_quote(self))
@@ -432,11 +499,63 @@ This class is almost always subclassed.  The following are expected to be overwr
             await self.vm.is_machine_running()
             await self.vm.stop_machine()
 
-    async def unpack(self):
+    async def populate(self):
         '''
         Called from the SetupTask to build the image.
         '''
         await self._build_image()
 
+class LibvirtDeployableFinder(carthage.deployment.DeployableFinder):
+
+    name = 'libvirt'
+
+    async def find(self, ainjector):
+        '''
+        MachineDeployableFinder already finds Vms.
+        '''
+        return []
+
+    async def find_orphans(self, deployables):
+        try:
+            import libvirt
+            import carthage.modeling
+        except ImportError:
+            logger.debug('Not looking for libvirt orphans because libvirt API is not available')
+            return []
+        con = libvirt.open('')
+        vm_names = [v.full_name for v in deployables if isinstance(v, Vm)]
+        try:
+            layout = await self.ainjector.get_instance_async(carthage.modeling.CarthageLayout)
+            layout_name = layout.layout_name
+        except KeyError:
+            layout_name = None
+        if layout_name is None:
+            logger.info('Unable to find libvirt orphans because layout name not set')
+            return []
+        results = []
+        for d in con.listAllDomains():
+            try:
+                metadata_str = d.metadata(libvirt.VIR_DOMAIN_METADATA_ELEMENT, 'https://github.com/hadron/carthage')
+            except libvirt.libvirtError: continue
+            metadata = xml.etree.ElementTree.fromstring(metadata_str)
+            if metadata.attrib['layout'] != layout_name: continue
+            if d.name() in vm_names:
+                continue
+            with instantiation_not_ready():
+                vm = await self.ainjector(
+                    Vm,
+                    name=d.name(),
+                    image=None,
+                    )
+                vm.injector.add_provider(deployment.orphan_policy, deployment.DeletionPolicy[metadata.attrib['orphan_policy']])
+            if await vm.find():
+                results.append(vm)
+        return results
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.injector.add_provider(ConfigLayout)
+        cl = self.injector.get_instance(ConfigLayout)
+        cl.container_prefix = ""
 
         __all__ = ('VM', 'Vm', 'InstallQemuAgent')

@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2022, 2023, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import dataclasses
 import datetime
+import importlib.resources
 import logging
 import os
 import os.path
@@ -23,7 +24,7 @@ import hashlib
 import importlib.resources
 from pathlib import Path
 import carthage
-from carthage.dependency_injection import AsyncInjector, inject, BaseInstantiationContext, InjectionKey
+from carthage.dependency_injection import AsyncInjector, inject, BaseInstantiationContext, InjectionKey, NotPresent
 from carthage.dependency_injection.introspection import current_instantiation
 from carthage.config import ConfigLayout
 from carthage.utils import memoproperty, import_resources_files
@@ -48,10 +49,15 @@ def _inc_task_order():
 
 class SetupTaskContext(BaseInstantiationContext):
 
+    instance: 'SetupTaskMixin'
+    task: 'TaskWrapperBase'
+    dependencies_have_run: bool #: Have SystemDependencies marked with depend_on been run
+    
     def __init__(self, instance, task):
         super().__init__(instance.injector)
         self.instance = instance
         self.task = task
+        self.dependencies_have_run = False
 
     def __enter__(self):
         res = super().__enter__()
@@ -70,8 +76,18 @@ class SetupTaskContext(BaseInstantiationContext):
 
     def get_dependencies(self):
         from .dependency_injection.introspection import get_dependencies_for
-        return get_dependencies_for(self.task, self.instance.injector)
+        return get_dependencies_for(self.task.func, self.instance.injector)
 
+    async def call_dependencies_once(self):
+        '''
+        If dependencies have not already been called, then  call them.
+        See :meth:`TaskWrapperBase.depend_on`.
+        This function is not reentrant; it is intended to avoid the task calling dependencies if sholud_run has already done so.
+        '''
+        if self.dependencies_have_run: return
+        await self.task.call_dependencies(self.instance)
+        self.dependencies_have_run = True
+        
 @dataclasses.dataclass
 class TaskInspector:
 
@@ -165,6 +181,15 @@ class TaskWrapperBase:
     invalidator_func = None
     check_completed_func = None
     hash_func: typing.Callable = staticmethod(lambda self: "")
+    dependencies: list = dataclasses.field(default_factory=lambda: [])
+
+    #: If True, then dependencies will be
+    #called/entered while validating whether the task should run.
+    #That is these dependencies will be available when invalidators
+    #and check_completed functions are called.  If the outcome of
+    #should_run can be determined without calling invalidators or
+    #check_completed functions, dependencies may not be called.
+    dependencies_always: bool = False
 
     @memoproperty
     def stamp(self):
@@ -178,10 +203,10 @@ class TaskWrapperBase:
             return self
         return TaskMethod(self, instance)
 
-    def __call__(self, instance, *args, **kwargs):
-        def success():
+    async def __call__(self, instance, *args, **kwargs):
+        async def success():
             if not self.check_completed_func:
-                hash_contents = instance.injector(self.hash_func, instance)
+                hash_contents = await instance.ainjector(self.hash_func, instance)
                 instance.create_stamp(self.stamp, hash_contents)
             instance.injector.emit_event(
                 InjectionKey(SetupTaskMixin), "task_ran",
@@ -199,43 +224,28 @@ class TaskWrapperBase:
                 exception=e,
                 adl_keys=instance.setup_task_event_keys())
     
-        def final():
-            context.done()
 
-        def callback(fut):
-            exc = fut.exception()
-            if exc is None:
-                success()
-            elif isinstance(exc,SkipSetupTask):
-                pass
-            else:
-                fail(exc)
-            final()
         mark_context_done = True
         with contextlib.ExitStack() as stack:
             context = current_instantiation()
             if isinstance(context, SetupTaskContext) \
                and context.instance is instance and context.task is self:
-                pass  # This is the right context to use; set up by run_setup_tasks
+                mark_context_done = False # Will be handled by caller
             else:
                 context = SetupTaskContext(instance, self)
                 stack.enter_context(context)
             try:
+                await context.call_dependencies_once()
                 res = self.func(instance, *args, **kwargs)
                 if isinstance(res, collections.abc.Coroutine):
-                    res = instance.ainjector.loop.create_task(res)
-                    res.add_done_callback(callback)
-                    mark_context_done = False
                     instance.injector.emit_event(
                         InjectionKey(SetupTaskMixin), "task_start",
                         instance, task=self,
                         adl_keys=instance.setup_task_event_keys())
-                    if hasattr(instance, 'name'):
-                        res.purpose = f'setup task: {self.stamp} for {instance.name}'
-                    return res
-                else:
-                    success()
-                    return res
+                    res = await res
+
+                await success()
+                return res
             except SkipSetupTask:
                 raise
             except Exception as e:
@@ -243,11 +253,12 @@ class TaskWrapperBase:
                 raise
             finally:
                 if mark_context_done:
-                    final()
+                    context.done()
 
     async def should_run_task(self, obj: SetupTaskMixin,
                               dependency_last_run: float = None,
-                              *, ainjector: AsyncInjector, run_methods=True):
+                              *, ainjector: AsyncInjector, introspection_context:SetupTaskContext = None,
+                              run_methods=True):
 
         '''Indicate whether this task should be run for *obj*.
 
@@ -282,6 +293,8 @@ class TaskWrapperBase:
             dependency_last_run = 0.0
         if self.check_completed_func:
             if not run_methods: return (None, dependency_last_run)
+            if self.dependencies_always and introspection_context:
+                await introspection_context.call_dependencies_once()
             last_run = await ainjector(self.check_completed_func, obj)
             hash_contents = ""
             if last_run is True:
@@ -297,17 +310,51 @@ class TaskWrapperBase:
                 f"Task {self.description} last run {_iso_time(last_run)}, but dependency run more recently at {_iso_time(dependency_last_run)}")
             return (True, dependency_last_run)
         if (not self.check_completed_func) and run_methods:
+            if self.dependencies_always and introspection_context:
+                await introspection_context.call_dependencies_once()
             actual_hash_contents = await ainjector(self.hash_func, obj)
             if actual_hash_contents != hash_contents:
                 obj.logger_for().info(f'Task {self.description} invalidated by hash_func() change from `{_h(hash_contents)}` to `{_h(actual_hash_contents)}`; last run {_iso_time(last_run)}')
                 return (True, dependency_last_run)
         if self.invalidator_func and run_methods:
+            if self.dependencies_always and introspection_context:
+                await introspection_context.call_dependencies_once()
             if not await ainjector(self.invalidator_func, obj, last_run=last_run):
                 obj.logger_for().info(f"Task {self.description} invalidated for {obj} by invalidator_func(); last run {_iso_time(last_run)}")
                 return (True, time.time())
         obj.logger_for().debug(f"Task {self.description} last run for {obj} at {_iso_time(last_run)}; re-running not required")
         return (False, last_run)
 
+    async def call_dependencies(self, instance):
+        '''
+        Make this tasks dependencies available; see :meth:`depend_on`
+        '''
+        ainjector = instance.ainjector
+        futures = []
+        for d in self.dependencies:
+            future = asyncio.ensure_future(ainjector(d, ainjector=ainjector))
+            futures.append(future)
+        if futures:
+            await asyncio.gather(*futures)
+            
+    def depend_on(self, dependency):
+        '''
+        Decorator to  mark a particular task as depending on some :class:`~carthage.SystemDependency`.  Example Usage::
+
+            @setup_task("upload_files")
+            def upload_files(self):
+                # . . .
+
+            upload_files.depend_on(MachineDependency("fileserver"))
+
+        This requires that when the *upload_files* task runs, the "fileserver" machine is both brought to ready and started.  If :attr:`dependencies_always` is True,  then dependencies will be ready for  :meth:invalidators <invalidator>` and :meth:`check completed functions <check_completed>` as well.
+
+        Compare to :class:`cross_object_dependency` which sets up a dependency such that tasks in one object will re-run if tasks in another object have run more recently.
+        '''
+        from .system_dependency import SystemDependency
+        assert isinstance(dependency, SystemDependency)
+        self.dependencies.append(dependency)
+        
     def invalidator(self, slow=False):
         '''Decorator to indicate  an invalidation function for a :func:`setup_task`
 
@@ -402,7 +449,8 @@ class TaskWrapper(TaskWrapperBase):
     extra_attributes = frozenset()
 
     def __setattr__(self, a, v):
-        if a in ('func', 'stamp', 'order',
+        if a in ('func',
+                 'dependencies_always', 'stamp', 'order',
                  'invalidator_func', 'check_completed_func', 'hash_func') or a in self.__class__.extra_attributes:
             return super().__setattr__(a, v)
         else:
@@ -484,11 +532,42 @@ class SetupTaskMixin:
         self.setup_tasks.append(task)
         # xxx reorder either here or in run_setup_tasks
 
+    @memoproperty
+    def readonly(self):
+        '''
+        If ``bool(readonly)``, then automated Carthage functions should not disturb the real state of the object:
+
+        * run_setup_tasks will not run setup tasks
+
+        * The deployment engine will not deploy  or destroy the object
+
+        * Carthage plugins should not create the object.
+
+        Explicit calls to methods like :meth:`delete`  or :meth:`do_create` will still affect the state of the object.
+
+        By default, readonly looks up ``InjectionKey('readonly')`` in the object's injector, and returns False if that injection key is not provided. As a consequence:
+
+        * Setting readonly in the class body of a modeling object affects readonly for that object and any object that inherits from its injector.
+
+        * Setting readonly in a non-modeling class body sets the default readonly state for objects of that class and detaches those objects from looking at their injectors to determine readonly. This should generally be avoided as it produces surprising behavior.
+
+        * Setting readonly on an instance sets the readonly state for that object and detaches the object from tracking injectors.
+
+        * Setting the readonly injection key on an injector affects objects downstream of that object that have not already cached their readonly state.
+
+        '''
+        readonly = self.injector.get_instance(InjectionKey('readonly', _optional=NotPresent))
+        if readonly is NotPresent:
+            return False
+        return readonly
+    
     async def run_setup_tasks(self, context=None):
-        '''Run the set of collected setup tasks.  If context is provided, it
+        '''Run the set of collected setup tasks.  If *context* is provided, it
         is used as an asynchronous context manager that will be entered before the
         first task and eventually exited.  The context is never
         entered if no tasks are run.
+        This execution context is different from :class:`SetupTaskContext`. The *SetupTaskContext* is an introspection mechanism that tracks which setup task is running and why; the asynchronous context allows a set of tasks for example in a customization to have common resources available.
+        
         '''
         injector = getattr(self, 'injector', carthage.base_injector)
         ainjector = getattr(self, 'ainjector', None)
@@ -500,40 +579,51 @@ class SetupTaskMixin:
         context_entered = False
         dry_run = config.tasks.dry_run
         dependency_last_run = 0.0
+        if self.readonly:
+            self.logger_for().info('Not running tasks for %s which is readonly', self)
         for t in self.setup_tasks:
-            should_run, dependency_last_run = await t.should_run_task(self, dependency_last_run, ainjector=ainjector)
-            if should_run:
-                self.injector.emit_event(
-                    InjectionKey(SetupTaskMixin), "task_should_run",
-                    self, task=t,
-                    adl_keys=self.setup_task_event_keys())
+            with SetupTaskContext(self, t) as introspection_context:
                 try:
-                    if (not context_entered) and context is not None:
-                        await context.__aenter__()
-                        context_entered = True
-                    if not dry_run:
-                        self.logger_for().info(f"Running {t.description} task for {self}")
-                        started = time.time()
-                        with SetupTaskContext(self, t):
-                            await ainjector(t, self)
-                        dependency_last_run = time.time()
-                        a = datetime.datetime.fromtimestamp(started)
-                        b = datetime.datetime.fromtimestamp(dependency_last_run)
-                        self.logger_for().info(f"Finished running {t.description} task for {self} from {a.time()} to {b.time()} ({b - a})")
-                    else:
-                        self.logger_for().info(f'Would run {t.description} task for {self}')
-                except SkipSetupTask:
-                    pass
-                except Exception:
-                    self.logger_for().exception(f"Error running {t.description} for {self}:")
+                    should_run, dependency_last_run = await t.should_run_task(self, dependency_last_run, ainjector=ainjector, introspection_context=introspection_context)
+                except:
+                    introspection_context.done()
                     if context_entered:
                         await context.__aexit__(*sys.exc_info())
                     raise
-            else:           # not should_run
-                self.injector.emit_event(
+                if should_run:
+                    self.injector.emit_event(
+                        InjectionKey(SetupTaskMixin), "task_should_run",
+                        self, task=t,
+                        adl_keys=self.setup_task_event_keys())
+                    try:
+                        if (not context_entered) and context is not None:
+                            await context.__aenter__()
+                            context_entered = True
+                        if not dry_run:
+                            self.logger_for().info(f"Running {t.description} task for {self}")
+                            started = time.time()
+                            await ainjector(t, self)
+                            dependency_last_run = time.time()
+                            a = datetime.datetime.fromtimestamp(started)
+                            b = datetime.datetime.fromtimestamp(dependency_last_run)
+                            self.logger_for().info(f"Finished running {t.description} task for {self} from {a.time()} to {b.time()} ({b - a})")
+                        else:
+                            self.logger_for().info(f'Would run {t.description} task for {self}')
+                    except SkipSetupTask:
+                        pass
+                    except Exception:
+                        self.logger_for().exception(f"Error running {t.description} for {self}:")
+                        if context_entered:
+                            await context.__aexit__(*sys.exc_info())
+                        raise
+                    finally:
+                        introspection_context.done()
+                else:           # not should_run
+                    self.injector.emit_event(
                         InjectionKey(SetupTaskMixin), "task_already_run",
                         self, task=t,
                         adl_keys=self.setup_task_event_keys())
+                    introspection_context.done()
         if context_entered:
             await context.__aexit__(None, None, None)
 
@@ -597,11 +687,12 @@ class SetupTaskMixin:
 
     def check_stamp(self, stamp, raise_on_error=False):
         '''
-        :returns: a tuple containing the unix time of the stamp and the tex t contents of the stamp.  The first element of the tuple is False if the stamp does not exist
+        :returns: a tuple containing the unix time of the stamp and the text contents of the stamp.  The first element of the tuple is False if the stamp does not exist
         '''
         if raise_on_error not in (True, False):
             raise SyntaxError(f'raise_on_error must be a boolean. current value: {raise_on_error}')
         try:
+            if not self.stamp_path: raise FileNotFoundError
             path = Path(self.stamp_path) / f'.stamp-{stamp}'
             res = os.stat(path)
         except FileNotFoundError:
@@ -652,6 +743,10 @@ class cross_object_dependency(TaskWrapper):
 
     :param relationship: The string name of a relationship such that calling the *relationship* method on an instance containing this dependency will yield the instance containing *task* that we want to depend on.
 
+    A cross object dependency will invalidate later tasks in this object if the depended on task has run more recently than these tasks.  That is in the example above, if the fileserver's *update_files* task has run more recently than this object's setup_tasks, then re-run this object's setup_tasks.
+
+    Compare to :meth:`TaskWrapper.depend_on`, which guarantees that when a particular task is running, certain dependencies are available.
+    
     '''
 
     dependent_task: typing.Union[TaskWrapper, TaskMethod, str]
@@ -757,11 +852,11 @@ If the template has a def called *hash*, this def will be rendered with the same
             self.lookup = module._mako_lookup
         except AttributeError:
             if hasattr(module, '__path__'):
-                resources = import_resources_files(module)
+                resources = importlib.resources.files(module)
             elif module.__package__ == "":
                 resources = Path(module.__file__).parent
             else:
-                resources = import_resources_files(module.__package__)
+                resources = importlib.resources.files(module.__package__)
             templates = resources / 'templates'
             if not templates.exists():
                 templates = resources

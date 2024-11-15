@@ -99,9 +99,9 @@ class FailureList(list):
     '''
 
     def __contains__(self, item):
-        if isinstance(item, Deployable):
+        if isinstance(item, DeployableProtocol):
             return any(x.deployable == item for x in self)
-        return super.__contains__(item)
+        return super().__contains__(item)
     
     
 @dataclasses.dataclass(frozen=True)
@@ -240,7 +240,7 @@ Ran {self.method} on the following objects successfully:
     
         
 
-    def __contains__(self, d:Deployable):
+    def __contains__(self, d:DeployableProtocol):
         if d in self.successes:
             return True
         if d in self.ignored:
@@ -274,7 +274,7 @@ Ran {self.method} on the following objects successfully:
             if deployment_failure and deployable not in self:
                 self.dependency_failures.append(deployment_failure)
 
-    def method_callback(self, deployable:Deployable):
+    def method_callback(self, deployable:DeployableProtocol):
         def callback(future):
             if  deployable in self:
                 # We already noticed an instantiation failure
@@ -361,7 +361,22 @@ class DeploymentIntrospection(dependency_introspection.BaseInstantiationContext)
 __all__ += ['DeploymentIntrospection']
 
 @typing.runtime_checkable
-class Deployable(typing.Protocol):
+class DeployableProtocol(typing.Protocol):
+
+    '''The minimum methods to be a :cless:`Deployable`. See that class for documentation.
+    '''
+
+    async def async_ready(self): ...
+
+    async def find(self): ...
+
+    async def delete(self): ...
+
+    async def find_or_create(self): ...
+    
+__all__ += ['DeployableProtocol']
+
+class Deployable(DeployableProtocol):
 
 
     '''An object that can be deployed either by calling :meth:`find_or_create` or :meth:`async_become_ready`.
@@ -399,6 +414,12 @@ class Deployable(typing.Protocol):
 
         '''
         return []
+
+    async def deploy(self):
+        '''If this method is present it is called rather than :func:`async_ready` to fully deploy the object.
+        Consider classes like :class:`~carthage.machine.Machine` where deployment should include a call to *start_machine*.
+        '''
+        raise NotIplementedError
     
 
 __all__ += ['Deployable']
@@ -720,7 +741,10 @@ async def run_deployment(
                     future.add_done_callback(result.find_callback(d))
                     futures.append(future)
                 else:
-                    future = asyncio.ensure_future(d.async_become_ready())
+                    if hasattr(d, 'deploy'):
+                        future = asyncio.ensure_future(d.deploy())
+                    else:
+                        future = asyncio.ensure_future(d.async_become_ready())
                     future.add_done_callback(result.method_callback(d))
                     futures.append(future)
             else: # dry_run
@@ -749,7 +773,7 @@ async def find_deployables_reverse_dependencies(*, readonly=False,
                                                 deployables: list[Deployable]=None,
                                                 ainjector):
     def add_dependency(depending, on, /):
-        if isinstance(on, Deployable):
+        if isinstance(on, DeployableProtocol):
             reverse_dependencies.setdefault(on, set())
             reverse_dependencies[on] |= {depending}
     reverse_dependencies = {}
@@ -770,7 +794,7 @@ async def find_deployables_reverse_dependencies(*, readonly=False,
         dependency_introspection.calculate_reverse_dependencies(
             d, injector=d.injector,
             reverse_dependencies=reverse_dependencies,
-            filter=lambda d:isinstance(d,Deployable))
+            filter=lambda d:isinstance(d,DeployableProtocol))
     return reverse_dependencies
 
 __all__ += ['find_deployables_reverse_dependencies']
