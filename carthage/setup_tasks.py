@@ -581,6 +581,7 @@ class SetupTaskMixin:
         dependency_last_run = 0.0
         if self.readonly:
             self.logger_for().info('Not running tasks for %s which is readonly', self)
+            return
         for t in self.setup_tasks:
             with SetupTaskContext(self, t) as introspection_context:
                 try:
