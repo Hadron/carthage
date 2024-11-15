@@ -469,7 +469,7 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
             await self.resize(self.size)
 
     @find_or_create.invalidator()
-    async def find_or_create(self):
+    async def find_or_create(self, last_run):
         return await self.find()
                             
                 
