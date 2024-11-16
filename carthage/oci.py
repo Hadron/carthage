@@ -32,13 +32,7 @@ oci_container_network_config = InjectionKey(carthage.network.NetworkConfig, role
 __all__ += ['oci_container_network_config']
 
 
-@inject_autokwargs(
-    readonly=InjectionKey('oci_read_only', _optional=NotPresent)
-)
 class OciManaged(SetupTaskMixin, AsyncInjectable):
-
-    #:Should this object be treated as read only
-    readonly = False
 
     async def find(self):
         '''Returns falsy if the object does not exist.  Ideally returns the creation time in unix time, otherwise returns True if the creation time cannot be determined.
