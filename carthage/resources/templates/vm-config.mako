@@ -26,7 +26,8 @@ def is_vnc():
   <memory unit='KiB'>${memory_mb*1024}</memory>
 
   <vcpu placement='static' >${cpus}</vcpu>
-<cpu mode='host-model'>
+  <cpu mode='host-model'>
+  <topology sockets='1' cores='${cpus}' threads='1' />
      %if nested_virt:
      <feature policy='require' name='vmx' />
      %endif
