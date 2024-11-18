@@ -176,7 +176,7 @@ class Vm(Machine, SetupTaskMixin):
                 except NotImplementedError:
                     try:
                         await self._find_ip_address()
-                    except e:
+                    except Exception as e:
                         sh.virsh("destroy", self.full_name,
                                  _bg=True, _bg_exc=False)
                         raise e from None
@@ -298,6 +298,10 @@ class Vm(Machine, SetupTaskMixin):
                     if addr['ip-address'].startswith('fe80'):
                         continue
                     elif addr['ip-address'].startswith('169.25'):
+                        continue
+                    elif addr['ip-address'].startswith('::'):
+                        continue
+                    elif addr['ip-address'].startswith('127.'):
                         continue
                     self.ip_address = addr['ip-address']
                     return
