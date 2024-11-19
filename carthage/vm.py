@@ -396,7 +396,6 @@ async def qemu_disk_config(vm, ci_data, *, ainjector):
                                                   qemu_source='file',
                                                   readonly=True)],
                                          )
-
     # Unless a volume explicitly requests not ready, we bring it to ready.
     with instantiation_not_ready(ready=True):
         for i, entry in enumerate(disk_config):
@@ -440,6 +439,7 @@ async def qemu_disk_config(vm, ci_data, *, ainjector):
             bus='sata',
             cache='writeback')
 
+@inject(base_image=None)
 class LibvirtCreatedImage(ImageVolume):
 
     '''
@@ -456,18 +456,23 @@ This class is almost always subclassed.  The following are expected to be overwr
 
     #: From AbstractMachineModel
     override_dependencies: bool = False
+    qemu_agent_probe:bool = False #:If True, do not override ip_address and let the qemu agent probe run
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args,
                          populate=None,
-                         base_image=None,
                          **kwargs)
+        if not self.qemu_agent_probe:
+            try:
+                self.ip_address
+            except AttributeError:
+                self.ip_address = NotImplemented
+                
         self.injector.add_provider(InjectionKey(AbstractMachineModel), dependency_quote(self))
 
 
     async def _prepare_vm(self):
-        '''if 'volume' not in disk_config[0]:
-        disk_config[0]['volume'] = self
-        self.disk_config = disk_config
+        '''
         Prepare the vm for the image creation.
         '''
         machine_type = getattr(self, 'machine_type', Vm)
@@ -480,7 +485,7 @@ This class is almost always subclassed.  The following are expected to be overwr
             self.vm.network_links = self.network_links = {}
             self.vm.volume = self
             self.vm.model = self
-            self.vm.ip_address = NotImplemented # We do not want the qemu guest agent probe.
+
 
     async def _build_image(self):
         '''
