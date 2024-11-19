@@ -46,6 +46,13 @@ class VirtiofsMount(Injectable):
     readonly:bool = False
     priority:int = 100
 
+    def __init__(self, *, destination, source, readonly=None, priority=None, **kwargs):
+        self.destination = destination
+        self.source = source
+        if readonly is not None: self.readonly = readonly
+        if priority is not None: self.priority = priority
+        super().__init__(**kwargs)
+        
     def default_instance_injection_key(self):
         return InjectionKey(VirtiofsMount, destination=self.destination, priority=self.priority)
 
