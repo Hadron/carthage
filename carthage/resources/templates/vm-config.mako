@@ -24,6 +24,12 @@ def is_vnc():
     <carthage:layout xmlns:carthage='https://github.com/hadron/carthage' layout='${layout_name}' orphan_policy='${orphan_policy.name}'/>
     </metadata>
   <memory unit='KiB'>${memory_mb*1024}</memory>
+%if virtiofs_mounts:
+  <memoryBacking>
+    <source type='memfd'/>
+    <access mode='shared'/>
+  </memoryBacking>
+%endif
 
   <vcpu placement='static' >${cpus}</vcpu>
   <cpu mode='host-model'>
@@ -91,7 +97,17 @@ def is_vnc():
       <backend type='emulator' version='2.0'/>
     </tpm>
 %endif
-    %for i, link in links.items():
+%for mount in virtiofs_mounts:
+    <filesystem type='mount' accessmode='passthrough'>
+      <driver type='virtiofs'/>
+      <source dir='${mount.source}'/>
+      <target dir='${mount.destination}'/>
+      %if mount.readonly:
+      <readonly />
+      %endif
+    </filesystem>
+    %endfor
+%for i, link in links.items():
     <% if link.local_type: continue %>\
         <interface type='bridge'>
 %if link.mac is not None:

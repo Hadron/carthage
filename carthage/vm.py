@@ -38,10 +38,18 @@ _templates = mako.lookup.TemplateLookup([_resources_path + '/templates'])
 
 vm_image_key = InjectionKey('vm-image')
 
-# Our capitalization rules are kind of under-sspecified.  We're not
-# upcasing all letters of acronyms in camel-case compounds, but Vm
-# seems strange.  VM is canonical but Vm is an accepted alias.
+#dataclasses.dataclass
+class VirtiofsMount(Injectable):
 
+    destination: str
+    source:str
+    readonly:bool = False
+    priority:int = 100
+
+    def default_instance_injection_key(self):
+        return InjectionKey(VirtiofsMount, destination=self.destination, priority=self.priority)
+
+    
 
 @inject_autokwargs(
     injector=Injector,
@@ -144,6 +152,7 @@ class Vm(Machine, SetupTaskMixin):
                 links=self.network_links,
                 model_in=self.model,
                 disk_config=disk_config,
+                virtiofs_mounts=self.virtiofs_mounts,
                 if_name=lambda n: carthage.network.base.if_name(
                     "vn", self.config_layout.container_prefix, n.name, self.name),
                 uuid=self.uuid,
@@ -372,6 +381,15 @@ class Vm(Machine, SetupTaskMixin):
         except Exception: pass
         del self.stamp_path
 
+    @memoproperty
+    def virtiofs_mounts(self):
+        '''
+        Return a list of VirtiofsMounts that should be mounted by this VM in config order. By default self.injector.filter_instantiate is used.
+        '''
+        res =  [x[1] for x in self.injector.filter_instantiate(VirtiofsMount, ['destination'])]
+        res.sort(key=lambda k:k.priority)
+        return res
+    
 VM = Vm
 
 
@@ -567,4 +585,4 @@ class LibvirtDeployableFinder(carthage.deployment.DeployableFinder):
         cl = self.injector.get_instance(ConfigLayout)
         cl.container_prefix = ""
 
-        __all__ = ('VM', 'Vm', 'InstallQemuAgent')
+        __all__ = ('VM', 'Vm', 'InstallQemuAgent', 'VirtiofsMount')
