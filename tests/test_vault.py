@@ -12,7 +12,9 @@ import sys
 import time
 from carthage.pytest import *
 from carthage import *
-from carthage.vault import *
+try:
+    from carthage.vault import *
+except ImportError: pass
 
 
 
@@ -23,6 +25,7 @@ def vault():
     Start a vault in dev mode
     '''
     try:
+        import carthage.vault
         from sh import vault as vault_cmd
     except Exception:
         pytest.skip('vault not installed')
