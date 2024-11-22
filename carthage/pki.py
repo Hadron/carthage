@@ -80,14 +80,22 @@ class PkiManager(SetupTaskMixin, AsyncInjectable):
     '''
 
     async def issue_credentials(self, hostname: str, tag: str) -> list[str, str]:
-        '''
-        Issue a set of credentials for a given host.
+        '''Issue a set of credentials for a given host.
 
         :param host: the hostname to use as the CN and in a DNS SAN.
 
-        :param tag: A tag that describes the context in which a given credential is requested. For example this could include the name of the setup_task and name of the :class:`carthage.Machine` that credentials are being installed on. It is an error to request credentials for the same hostname and for different tags within the same invocation of Carthage. PkiManagers should return different keys for situations when different tags are used across Carthage runs. (Return different keys all the time is even better.
+        :param tag: A tag that describes the context in which a given
+        credential is requested. For example this could include the
+        name of the setup_task and name of the
+        :class:`carthage.Machine` that credentials are being installed
+        on. It is an error to request credentials for the same
+        hostname and for different tags within the same invocation of
+        Carthage. PkiManagers should return different keys for
+        situations when different tags are used across Carthage
+        runs. (Return different keys all the time is even better.
 
         :returns: key, certificate
+
         '''
         raise NotImplementedError
 
@@ -180,9 +188,9 @@ class TrustStore(AsyncInjectable):
     '''
 
     #: a name of this trust store. Trust stores with a different set of trusted certificates must have different names.
-
-    _ca_file = None
     name: str
+    _ca_file = None
+
     async def trusted_certificates(self):
         '''
         An asynchronous iterator yielding pairs of anchor_name, certificate. The anchor_name is used by interfaces like ``ca-certificates`` that need to name each trust root. If the underlying store does not have anchor names, hashes can be used.

@@ -18,9 +18,13 @@ from carthage.setup_tasks import setup_task
 from carthage.ssh import AuthorizedKeysFile, SshAgent, SshKey
 from carthage.utils import memoproperty
 
+__all__ = []
+
 
 class VaultError(RuntimeError):
     pass
+
+__all__ += ['VaultError']
 
 
 class VaultConfig(ConfigSchema, prefix="vault"):
@@ -44,11 +48,11 @@ vault_token_key = InjectionKey('vault.token')
 )
 class Vault(Injectable):
 
-    def __init__(self, injector, token=None):
+    def __init__(self,  token=None, **kwargs):
+        super().__init__(**kwargs)
+        injector = self.injector
         config = injector(ConfigLayout)
         self.vault_config = config.vault
-        self.injector = injector
-        super().__init__()
         #: The hvac client for this vault
         self.client = None
         self.setup_client(token)
@@ -107,6 +111,8 @@ Writes unseal keys and root token to the given output directory, which hopefully
         '''
         _apply_config_to_vault(self.client, config)
         return
+
+__all__ += ['Vault']
 
 
 def _apply_config_to_vault(client, config):
@@ -286,6 +292,10 @@ class VaultSshKey(SshKey):
     def pubkey_contents(self):
         return self._pubs
 
+
+from .pki import VaultPkiManager
+
+__all__ += ['VaultPkiManager']
 
 @inject(injector=Injector)
 def carthage_plugin(injector):
