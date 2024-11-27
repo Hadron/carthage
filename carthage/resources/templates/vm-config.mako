@@ -72,6 +72,10 @@ def is_vnc():
   </clock>
   <on_poweroff>destroy</on_poweroff>
   <on_reboot>restart</on_reboot>
+  <pm>
+    <suspend-to-mem enabled='no'/>
+    <suspend-to-disk enabled='no'/>
+  </pm>
   <devices>
     <emulator>/usr/bin/kvm</emulator>
 %for disk_num, disk in enumerate(disk_config):
