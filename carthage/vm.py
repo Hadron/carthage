@@ -60,7 +60,7 @@ class VirtiofsMount(Injectable):
 
 @inject_autokwargs(
     injector=Injector,
-    image=InjectionKey(vm_image_key, _ready=False),
+    image=InjectionKey(vm_image_key, _defer=True),
     network_config=carthage.network.NetworkConfig
 )
 class Vm(Machine, SetupTaskMixin):
@@ -325,6 +325,8 @@ class Vm(Machine, SetupTaskMixin):
 
     @memoproperty
     def stamp_path(self):
+        if self.volume:
+            return Path(self.volume.stamp_path)
         res = Path(self.config_layout.output_dir)/'libvirt_stamps'/self.name
         res.mkdir(parents=True, exist_ok=True)
         return res
@@ -592,4 +594,19 @@ class LibvirtDeployableFinder(carthage.deployment.DeployableFinder):
         cl = self.injector.get_instance(ConfigLayout)
         cl.container_prefix = ""
 
-        __all__ = ('VM', 'Vm', 'InstallQemuAgent', 'VirtiofsMount')
+def vm_as_image(key):
+    '''
+    Return the volume of a VM to be used for cloning.  Typical usage::
+
+      add_provider(vm_image_key, vm_as_image(InjectionKey(Machine, host='host_to_clone'), allow_multiple=True)
+
+    Allow_multiple is recommended simply to make sure that the VM is stopped every time it is used as a clone base.
+    '''
+    @inject(vm=InjectionKey(key, _ready=True))
+    async def image_volume(vm):
+        await vm.deploy()
+        await vm.stop_machine()
+        return vm.volume
+    return image_volume
+
+__all__ = ('VM', 'Vm', 'vm_as_image', 'InstallQemuAgent', 'VirtiofsMount')

@@ -281,7 +281,7 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
 
     '''
 
-    base_image: 'str|ImageVolume' = None
+    base_image: 'str|ImageVolume|DeferredInjection' = None
     preallocate:bool = False
     size:int = 0
     directory:Path = None
@@ -371,82 +371,92 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
         assert self.path
         assert self.qemu_format
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.creating_path.touch()
-        if base_image:= self.base_image:
-            base_image = await resolve_deferred(self.ainjector, base_image, {})
-            if isinstance(base_image, ImageVolume):
-                await base_image.async_become_ready()
-                base_path = base_image.path
-            elif isinstance(base_image, (str, Path)):
-                base_path = Path(base_image)
-            else:
-                raise TypeError('Do not know what to do with base_image')
-            match [s[1:] for s in base_path.suffixes]:
-                case [*rest, 'raw', 'gz']:
-                    with tempfile.NamedTemporaryFile(dir=self.directory) as t:
-                        await sh.gzip(
-                            '-d', '-c',
+        try:
+            self.creating_path.touch()
+            if base_image:= self.base_image:
+                if isinstance(base_image, DeferredInjection):
+                    await base_image.instantiate_async()
+                    base_image = base_image.value
+                base_image = await resolve_deferred(self.ainjector, base_image, {})
+                if isinstance(base_image, ImageVolume):
+                    await base_image.async_become_ready()
+                    base_path = base_image.path
+                elif isinstance(base_image, (str, Path)):
+                    base_path = Path(base_image)
+                else:
+                    raise TypeError('Do not know what to do with base_image')
+                match [s[1:] for s in base_path.suffixes]:
+                    case [*rest, 'raw', 'gz']:
+                        with tempfile.NamedTemporaryFile(dir=self.directory) as t:
+                            await sh.gzip(
+                                '-d', '-c',
+                                base_path,
+                                _out=t.name)
+                            await sh.qemu_img(
+                                'convert',
+                                '-O'+self.qemu_format,
+                                '-fraw',
+                                t.name,
+                                self.path)
+                    case [*rest, 'raw'] if self.qemu_format == 'raw' and not self.config_layout.libvirt.use_backing_file:
+                        # This is the special case where we are cloning a
+                        # raw image, and where we do not want to use a
+                        # backing file. In this case we want to use cp
+                        # --reflink. You might notice that qemu-img
+                        # convert has a -C argument that uses optimized
+                        # copies (copy_file_range)and think that ought to
+                        # be about the same as cp --reflink. Perhaps it
+                        # ought, but with qemu-img 9.1.1 on Linux 6.11.4,
+                        # it is not. With xfs, about the first 2G of an
+                        # image is reflinked (around the first 1024 or so
+                        # calls to copy_file_bytes), and the rest are not shared. On btrfs things appear worse. So we call cp --reflink ourselves in this case.
+                        btrfs_touch(self.path)
+                        await sh.cp(
+                            '--reflink=auto',
+                            '-p',
                             base_path,
-                            _out=t.name)
-                        await sh.qemu_img(
-                            'convert',
-                            '-O'+self.qemu_format,
-                            '-fraw',
-                            t.name,
                             self.path)
-                case [*rest, 'raw'] if self.qemu_format == 'raw' and not self.config_layout.libvirt.use_backing_file:
-                    # This is the special case where we are cloning a
-                    # raw image, and where we do not want to use a
-                    # backing file. In this case we want to use cp
-                    # --reflink. You might notice that qemu-img
-                    # convert has a -C argument that uses optimized
-                    # copies (copy_file_range)and think that ought to
-                    # be about the same as cp --reflink. Perhaps it
-                    # ought, but with qemu-img 9.1.1 on Linux 6.11.4,
-                    # it is not. With xfs, about the first 2G of an
-                    # image is reflinked (around the first 1024 or so
-                    # calls to copy_file_bytes), and the rest are not shared. On btrfs things appear worse. So we call cp --reflink ourselves in this case.
-                    btrfs_touch(self.path)
-                    await sh.cp(
-                        '--reflink=auto',
-                        '-p',
-                        base_path,
-                        self.path)
-                case [*rest, extension] if extension in extension_to_qemu_format:
-                    if self.config_layout.libvirt.use_backing_file:
-                        #We want a thin clone
-                        btrfs_touch(self.path)
-                        await sh.qemu_img(
-                            'create',
-                            '-b'+str(base_path),
-                            '-F'+extension_to_qemu_format[extension],
-                            '-f'+self.qemu_format,
-                            self.path)
-                    else:
-                        btrfs_touch(self.path)
-                        await sh.qemu_img(
-                            'convert',
-                            '-C', #Perhaps copy_file_range will actually work in the future
-                            '-f'+extension_to_qemu_format[extension],
-                            '-O'+self.qemu_format,
-                            str(base_path),
-                            str(self.path))
-                case _:
-                    raise RuntimeError(f'Do not know how to create image {self.path} based on {base_path}')
-        else: # No base image
-            if not self.size:
-                raise RuntimeError('Cannot create unless size is set')
-            btrfs_touch(self.path)
-            await sh.qemu_img(
-                'create',
-                '-f'+self.qemu_format,
-                self.path,
-                self.size*1024**2)
-        shutil.rmtree(self.stamp_path, ignore_errors=True)
-        self.stamp_path.mkdir(parents=True, exist_ok=True)
-        if self.populate:
-            await self.populate()
-        self.creating_path.unlink()
+                    case [*rest, extension] if extension in extension_to_qemu_format:
+                        if self.config_layout.libvirt.use_backing_file:
+                            #We want a thin clone
+                            btrfs_touch(self.path)
+                            await sh.qemu_img(
+                                'create',
+                                '-b'+str(base_path),
+                                '-F'+extension_to_qemu_format[extension],
+                                '-f'+self.qemu_format,
+                                self.path)
+                        else:
+                            btrfs_touch(self.path)
+                            await sh.qemu_img(
+                                'convert',
+                                '-C', #Perhaps copy_file_range will actually work in the future
+                                '-f'+extension_to_qemu_format[extension],
+                                '-O'+self.qemu_format,
+                                str(base_path),
+                                str(self.path))
+                    case _:
+                        raise RuntimeError(f'Do not know how to create image {self.path} based on {base_path}')
+            else: # No base image
+                if not self.size:
+                    raise RuntimeError('Cannot create unless size is set')
+                btrfs_touch(self.path)
+                await sh.qemu_img(
+                    'create',
+                    '-f'+self.qemu_format,
+                    self.path,
+                    self.size*1024**2)
+            shutil.rmtree(self.stamp_path, ignore_errors=True)
+            self.stamp_path.mkdir(parents=True, exist_ok=True)
+            if self.populate:
+                await self.populate()
+            self.creating_path.unlink()
+        except Exception:
+            try:
+                self.path.unlink()
+            except FileNotFoundError: pass
+            self.creating_path.unlink()
+            raise
 
     async def resize(self, size):
         if self.readonly:
