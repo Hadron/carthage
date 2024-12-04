@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -672,3 +672,34 @@ def test_injection_key_typos():
     with pytest.raises(TypeError, match='not an InjectionKey parameter'):
         InjectionKey(Injector, _foo=42)
             
+@async_test
+async def test_deferred_injections(ainjector):
+    class DeferMe(AsyncInjectable):
+        async def async_ready(self):
+            nonlocal defer_me_instantiated
+            defer_me_instantiated = 1
+            await super().async_ready()
+
+    @inject_autokwargs(dependency=InjectionKey('dependency', _defer=True))
+    class DeferredReceiver(Injectable):
+        pass
+
+    ainjector.add_provider(InjectionKey('dependency'), DeferMe)
+    defer_me_instantiated = 0
+    res = await ainjector(DeferredReceiver, dependency=42)
+    assert defer_me_instantiated == 0
+    assert isinstance(res.dependency, DeferredInjection)
+    await res.dependency.instantiate_async()
+    assert res.dependency.value == 42
+    assert defer_me_instantiated == 0
+    res2 = DeferredReceiver(dependency=45)
+    assert isinstance(res2.dependency, DeferredInjection)
+    await res2.dependency.instantiate_async()
+    assert res2.dependency.value == 45
+    assert defer_me_instantiated == 0
+    res3 = await ainjector(DeferredReceiver)
+    assert defer_me_instantiated == 0
+    await res3.dependency.instantiate_async()
+    assert defer_me_instantiated == 1
+    assert res3.dependency.value is ainjector.get_instance(DeferMe)
+    

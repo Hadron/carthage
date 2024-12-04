@@ -5,3 +5,5 @@ Dependency Injection
   :glob:
    
   dependency_injection
+  deferred_dependencies
+  

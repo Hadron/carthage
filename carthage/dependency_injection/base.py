@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -107,6 +107,8 @@ class Injectable:
                     injector = kwargs.pop(k)
                     setattr(self, k, injector.claim(self))
                 else:
+                    if d and d.defer and not isinstance(kwargs[k],DeferredInjection):
+                        kwargs[k] = DeferredInjection(value_=kwargs[k])
                     setattr(self, k, kwargs.pop(k))
                 try:
                     autokwargs.remove(k)
@@ -502,14 +504,20 @@ Return the first injector in our parent chain containing *k* or None if there is
 
     def get_instance(self, k,
                      placement=None,
-                     loop=None, futures=None):
-        '''
-        Get an instance satisfying a given :class:`InjectionKey`.
+                     loop=None, futures=None,
+                     defer_dependencies:bool = False):
+        '''Get an instance satisfying a given :class:`InjectionKey`.
 
         :param loop: An asyncio loop.  If provided, then asynchronous activities  can take place.
         :param placement: A function taking one argument.  Once the dependency is resolved, this function will be called with the result.  More convenient for asyncronous  operations.
         :param futures: If the result cannot be determined immediately, then a future will be added to this list.
 
+        :param defer_dependencies: If *key.defer* is True and
+        *defer_dependencies* is True, return (and place) a
+        :class:`DeferredInjection`. Unless *key.optional* is True, it
+        is an error if the injector hierarchy provides no dependency
+        for *key* at the time *get_instance* is called. If *defer_dependencies* is false, then *key.defer* is ignored. *defer_dependencies* is True when *get_instance* is called while instantiating a class and handling its dependencies.
+        
         Note that If any of *loop* or *futures*,  are provided, both must be provided.  If *loop* is provided, then the return may be a future.
 
         '''
@@ -536,11 +544,18 @@ Return the first injector in our parent chain containing *k* or None if there is
             self._check_closed()
             if k.optional:
                 res = None if k.optional is True else k.optional
+                if k.defer and defer_dependencies:
+                    res = DeferredInjection(injector=self, key=k)
                 if placement:
                     placement(res)
                 return res
             raise KeyError("No dependency for {}".format(k)) from None
         mark_instantiation_done = True
+        if k.defer and defer_dependencies:
+            res = DeferredInjection(injector=self, key=k)
+            if placement:
+                placement(res)
+                return res
         with InstantiationContext(
                 satisfy_against, self, k, provider,
                 k.ready if (k.ready is not None) else instantiate_to_ready.get()) as instantiation_context:
@@ -708,6 +723,8 @@ Return the first injector in our parent chain containing *k* or None if there is
                 for k in kwarg_dependencies:
                     provider = kwargs.pop(k)
                     dependency = cls._injection_dependencies[k]
+                    if isinstance(provider, DeferredInjection):
+                        provider = provider.value_to_provide()
                     if isinstance(provider, Injectable) and not provider.satisfies_injection_key(dependency):
                         raise UnsatisfactoryDependency(dependency, provider)
                     sub_injector.add_provider(dependency, provider, close=False)
@@ -716,7 +733,8 @@ Return the first injector in our parent chain containing *k* or None if there is
                     continue
                 try:
                     injector.get_instance(d, placement=kwarg_place(k),
-                                      loop=_loop, futures=futures)
+                                          loop=_loop, futures=futures,
+                                          defer_dependencies=True)
                 except KeyError as e:
                     if _instantiation_context:
                         raise InjectionFailed(current_instantiation()) from e
@@ -897,6 +915,7 @@ Return the first injector in our parent chain containing *k* or None if there is
 
 
 _INJECTION_KEY_DEFAULTS = {
+    'defer': False,
     'optional': False,
     'globally_unique': False,
     'ready': None}
@@ -911,11 +930,13 @@ class InjectionKey:
 
         * A type indicating an object of that type is desired
 
-        * An object such as a string that is a unique identifier for what is desired
+        * An object such as a s tring that is a unique identifier for what is desired
 
-    :param _optional: If *True*, then if no provider for the dependency is registered, None will be passed rather than raising; if some other true value, that value will be returned by default.  If *NotPresent*, then no kwarg will be specified if the dependency is not provided. Because of the historical API, there is no current way to have an optional key default to *True*.  The *optional* parameter is read from the call to :meth:`Injector.add_provider`.
+    :param _optional: If *True*, then if no provider for the dependency is registered, None will be passed rather than raising; if some other true value, that value will be returned by default.  If *NotPresent*, then no kwarg will be specified if the dependency is not provided. Because of the historical API, there is no current way to have an optional key default to *True*.
 
     :param _ready:  If None (the default), then use the same readyness as the object into which this is being injected (or full readyness if this is a base operation).  If True, then to satisfy this dependency, the provided object must be fully ready.  If False, then a not ready object is preferred.
+
+    :param _defer: If True, then this dependency is a :ref:`Deferred Dependency <deferred_dependency>` and will be passed into the object as a :class:`DeferredInjection`.
 
     :param _globally_unique:  If true, then this provided dependency (typically in a call to :func:`carthage.modeling.provides`) is globally unique and need not be modified during :class:`container propagation <carthage.modeling.ModelingContainer>`.
 
@@ -1014,6 +1035,64 @@ class InjectionKey:
 _injector_injection_key = InjectionKey(Injector)
 
 
+@dataclass
+class DeferredInjection:
+
+    injector:Injector = None
+    key: InjectionKey = None
+    value_: object = NotPresent
+
+    async def instantiate_async(self):
+        '''
+        Instantiates the deferred injection.
+        After the first successful call, *``self.value`` returns the result of ``self.injector.get_instance(self.key)``
+        Handles the case where an explicit value is passed in rather than an injector and injection key.
+        '''
+        if self.value_ is not NotPresent:
+            return
+        ainjector = self.injector(AsyncInjector)
+        self.value_ = await ainjector.get_instance_async(self.key)
+
+    def value_to_provide(self):
+        '''
+        Return the value such that::
+
+          injector.add_provider(key, self.value_to_provide())
+
+        Will be the same as::
+
+          await self.instantiate()
+          injector.add_provider(key, self.value)
+
+        while still keeping the value deferred.
+
+        * If a specific value is passed into the constructor, use that value directly.
+
+        * Otherwise construct an injector_xref
+
+        '''
+
+        if self.value_ is not NotPresent:
+            return self.value
+        # We cannot quite just use injector_xref because injector_xref
+        # wants a key corresponding to the injector we use.  Probably,
+        # InjectionKey(Injector) refers to the right injector, but
+        # perhaps not if a DeferredInjection is passed across
+        # injection hierarchies. So we directly subclass
+        # InjectorXrefMarker, setting injectable_key so __repr__ works
+        # but overriding __new__ to pass in the injector directly.
+        class marker(InjectorXrefMarker):
+            injectable_key = InjectionKey(Injector)
+            target_key = self.key
+            def __new__(cls):
+                return                 super().__new__(cls, injectable=self.injector)
+
+    @property
+    def value(self):
+        if self.value_ is not NotPresent:
+            return self.value_
+        raise ValueError('Must instantiate first')
+    
 @dataclass
 class UnsatisfactoryDependency(RuntimeError):
     dependency: InjectionKey
@@ -1694,7 +1773,9 @@ __all__ = [
     'AsyncInjectable', 'AsyncInjector', 'AsyncRequired',
     'DependencyProvider',
     'ExistingProvider', 'Injectable', 'InjectionFailed',
-    'InjectionKey', 'Injector', 'InstantiationContext', 'aspect_for',
+    'InjectionKey', 'Injector',
+    'DeferredInjection',
+    'InstantiationContext', 'aspect_for',
     'NotPresent',
     'dependency_quote', 'inject',
     'inject_autokwargs', 'injector_xref',

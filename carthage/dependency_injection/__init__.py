@@ -13,6 +13,7 @@ from .introspection import *
 __all__ = [
     'AsyncInjectable', 'AsyncInjector', 'AsyncRequired',
     'DependencyProvider',
+    'DeferredInjection',
     'ExistingProvider', 'Injectable', 'InjectionFailed',
     'InjectionKey', 'Injector', 'InstantiationContext', 'aspect_for',
     'NotPresent',

@@ -16,6 +16,7 @@ Often in developing IAC systems, the part of the system that needs to know somet
    constructed workstations.  Other parts of the layout will instantiate the template multiple times.
 
 
+.. _dependency_injection:how
 How Dependency Injection Works
 ******************************
 
