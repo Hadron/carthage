@@ -390,7 +390,7 @@ def calculate_reverse_dependencies(obj: object, /, injector,
         for dependency in dependencies:
             try:
                 inner_val = dependency.get_value(ready=False)
-            except KeyError: continue
+            except (KeyError, base.AsyncRequired): continue
             if not filter(inner_val): continue
             if inner_val in cycle: continue
             found_dependency = True
