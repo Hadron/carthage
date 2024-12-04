@@ -106,6 +106,7 @@ class Vm(Machine, SetupTaskMixin):
                 name=self.name,
                 base_image=self.image,
                 size=self.config_layout.vm_image_size)
+            await self.volume.find()
         self.ssh_rekeyed()
         os.makedirs(self.stamp_path, exist_ok=True)
 
@@ -218,7 +219,7 @@ class Vm(Machine, SetupTaskMixin):
                            _bg_exc=False)
             for i in range(10):
                 await asyncio.sleep(5)
-                if not await self.is_machine_running():
+                if not await self.is_machine_running(find_ip_address=False):
                     break
             if self.running:
                 try:
@@ -264,13 +265,13 @@ class Vm(Machine, SetupTaskMixin):
         await self.run_setup_tasks(context=self.machine_running(ssh_online=True))
         return await super().async_ready()
 
-    async def is_machine_running(self):
+    async def is_machine_running(self, find_ip_address:bool=True):
         domid = self.domid()
         if domid and domid != '-':
             self.running = True
         else:
             self.running = False
-        if self.running and (self.__class__.ip_address is Machine.ip_address):
+        if self.running and find_ip_address and (self.__class__.ip_address is Machine.ip_address):
             try:
                 self.ip_address
             except NotImplementedError:
@@ -297,11 +298,13 @@ class Vm(Machine, SetupTaskMixin):
                                      '{"execute":"guest-network-get-interfaces"}',
                                      _bg=True, _bg_exc=False, _timeout=5)
                 await res
+            except sh.TimeoutException:
+                await asyncio.sleep(3)
             except sh.ErrorReturnCode_1 as e:
                 # We should retry in a bit if the message contains 'not connected' and fail for other errors
                 if b'connected' not in e.stderr:
                     raise
-                await asyncio.sleep(3)
+                await asyncio.sleep(5)
                 continue
 
             js_res = json.loads(res.stdout)
@@ -379,11 +382,12 @@ class Vm(Machine, SetupTaskMixin):
         raise FileNotFoundError
 
     async def delete(self):
-        await self.is_machine_running()
+        await self.is_machine_running(find_ip_address=False)
         if self.running:
             await self.stop_machine()
-            if self.volume:
-                await self.volume.delete()
+        await self.gen_volume()
+        if self.volume:
+            await self.volume.delete()
 
         try:
             shutil.rmtree(self.stamp_path)
@@ -604,6 +608,9 @@ def vm_as_image(key):
     '''
     @inject(vm=InjectionKey(key, _ready=True))
     async def image_volume(vm):
+        if isinstance(vm, AbstractMachineModel):
+            ainjector = vm.injector(AsyncInjector)
+            vm = await ainjector.get_instance_async(Machine)
         await vm.deploy()
         await vm.stop_machine()
         return vm.volume
