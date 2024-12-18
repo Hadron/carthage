@@ -59,6 +59,10 @@ class MockDeployable(InjectableModel, SetupTaskMixin, AsyncInjectable):
     async def dynamic_dependencies(self):
         return []
 
+    @property
+    def deployable_names(self):
+        return ['mock:'+self.name]
+    
     def __str__(self):
         return 'Deployable:'+self.name
 
@@ -293,4 +297,58 @@ async def test_find_orphans(ainjector):
     orphans = await lainjector(find_orphan_deployables)
     assert len(orphans) == 1
     assert orphan in orphans
+    
+@pytest.mark.parametrize(
+    'input,result',
+    [(r'foo?', r'foo.'),
+     (r'foo*', r'foo.*'),
+     (r'foo\*', r'foo\*'),
+     (r'*foo*', '.*foo.*'),
+     ])
+def test_glob_to_re(input, result):
+    from carthage.deployment import _glob_to_re
+    assert _glob_to_re(input) == result
+
+@pytest.mark.parametrize(
+    'test',[
+        dict(
+            name='foo',
+            include=['foo'],
+            result=True),
+        dict(
+            name='foo',
+            include=['foo', 'bar'],
+            result=True),
+        dict(
+            name='foo',
+            exclude=['foo'],
+            include=['foo'],
+            result=False),
+        dict(
+            name='foo',
+            exclude=['machine:foo'],
+            include=['foo'],
+            result=True),
+        dict(
+            name='foo.bar.com',
+            exclude=['foo'],
+            result=None),
+        dict(
+            name='foo.bar.com',
+            include=['foo'],
+            result=False),
+                        dict(
+            name='foo.bar.com',
+            exclude=['*foo*'],
+                            result=False),
+            ])
+@async_test
+async def test_name_filter(ainjector, test):
+    test.setdefault('exclude', [])
+    test.setdefault('include', [])
+    filter = deployable_name_filter(include=test['include'], exclude=test['exclude'])
+    class Deployable(MockDeployable):
+        name = test['name']
+    deployable = await ainjector(Deployable)
+    assert filter(deployable) == test['result']
     

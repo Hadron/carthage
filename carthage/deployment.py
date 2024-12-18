@@ -12,6 +12,7 @@ import contextlib
 import dataclasses
 import enum
 import logging
+import re
 import typing
 import warnings
 from .dependency_injection import *
@@ -378,7 +379,11 @@ class DeployableProtocol(typing.Protocol):
     async def delete(self): ...
 
     async def find_or_create(self): ...
-    
+
+    @property
+    def deployable_names(self)->list[str]:
+        ...
+        
 __all__ += ['DeployableProtocol']
 
 class Deployable(DeployableProtocol):
@@ -409,6 +414,15 @@ class Deployable(DeployableProtocol):
     # affects what the instantiation process does.
     readonly: typing.Union[bool, DryRun]
 
+    @property
+    def deployable_names(self)->list[str]:
+        '''
+        Returns a list of names by which this Deployable is known.
+        Names are the form *prefix:name*.
+        See :func:`deployable_name_filter`.
+        '''
+        raise NotImplementedError
+    
     async def dynamic_dependencies(self):
         '''
         Returns a iterable of dependencies that are dynamically used.  Typically used for better introspection and for calculating the order of destroy operations.  Members of the iterable can be :class:Deployables <Deployable>` or :class:InjectionKeys <InjectionKey>` that are instantiated. Examples of dynamic dependencies include:
@@ -837,6 +851,65 @@ async def filter_deployable(
     return outcome
 
 __all__ += ['filter_deployable']
+
+GLOB_TO_RE_RE = re.compile(
+    r'(?P<escape>(?:[^\\\*\?]|\\$)+)' \
+    r'|(?P<backslash>\\.)' \
+    r'|(?P<glob>[\*\?])')
+
+def _glob_to_re(pattern):
+    r'''
+    Turn glob patterns into regexp.  \* matches  zero or more; ? matches one or more. Similar to :func:`fnmatch.translate` except that \\ escapes and that the resulting regexp is not anchored.
+    '''
+    def replace(match):
+        if res := match.group('escape'):
+            return re.escape(res)
+        elif res := match.group('backslash'):
+            return re.escape(res[1])
+        elif res := match.group('glob'):
+            if res == '*':
+                return '.*'
+            elif res == '?':
+                return '.'
+        raise ValueError
+    return GLOB_TO_RE_RE.sub(replace, pattern)
+
+def deployable_name_filter(include:list[str], exclude:list[str]):
+    def name_to_re(pattern):
+        name_type = None
+        # A non-backslashed : splits a name type from a glob pattern
+        match re.split(r'((?<!\\):)', pattern, maxsplit=1):
+            case [name_type, sep, glob_pattern]:
+                # all we need is the assignments
+                pass
+            case [glob_pattern]:
+                pass
+        glob_pattern = _glob_to_re(glob_pattern)
+        if name_type:
+            return fr'\A{re.escape(name_type)}:{glob_pattern}\Z'
+        else:
+            return fr'\A[^:]+:{glob_pattern}\Z'
+    def filter(deployable):
+        if exclude_re:
+            if not deployable.deployable_names:
+                return False
+            for name in deployable.deployable_names:
+                if re.search(exclude_re, name):
+                    return False
+        if include_re:
+            for name in deployable.deployable_names:
+                if re.search(include_re, name):
+                    return True
+            # include filter present but does not match
+            return False
+        # No include filter present and exclude filter does not match;
+        # fall back to auto_deploy_policy
+        return None
+    include_re = '|'.join(map(name_to_re, include))
+    exclude_re = '|'.join(map(name_to_re, exclude))
+    return filter
+
+__all__ += ['deployable_name_filter']
 
 
 @inject(ainjector=AsyncInjector)
