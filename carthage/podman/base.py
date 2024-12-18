@@ -326,6 +326,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
     def podman(self):
         return self.container_host.podman
 
+    deployable_name_prefixes = ['PodmanContainer', 'OciContainer', 'Machine']
 
     async def find(self):
         if not self.container_host:

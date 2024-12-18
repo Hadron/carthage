@@ -439,6 +439,13 @@ class Machine(AsyncInjectable, SshMixin):
         await self.async_become_ready()
         await self.start_machine()
 
+    @property
+    def deployable_names(self):
+        if hasattr(super(), 'deployment_names'):
+            extra = super().deployment_names
+        else: extra = []
+        return ['Machine:'+self.name, *extra]
+        
     async def dynamic_dependencies(self):
         '''See :func:`carthage.deployment.Deployable.dynamic_dependencies` for documentation.
         Returns technology specific networks for links where that is possible.
