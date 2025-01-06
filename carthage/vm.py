@@ -611,7 +611,7 @@ def vm_as_image(key):
         if isinstance(vm, AbstractMachineModel):
             ainjector = vm.injector(AsyncInjector)
             vm = await ainjector.get_instance_async(Machine)
-        await vm.deploy()
+        await vm.async_become_ready()
         await vm.stop_machine()
         return vm.volume
     return image_volume
