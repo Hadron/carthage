@@ -201,7 +201,7 @@ class VaultConfigPlugin(ConfigLookupPlugin):
 
     def __call__(self, selector):
         client = self.vault.client
-        secret, sep, field = selector.partition(':')
+        secret, sep, field = selector.rpartition(':')
         if field == "":
             raise SyntaxError("The vault plugin requires a field")
         if secret == "v2":
