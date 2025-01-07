@@ -141,7 +141,7 @@ class ContainerVolume(AsyncInjectable, SetupTaskMixin):
             try:
                 sh.btrfs(
                     "filesystem", "df", str(path.parent),
-                    _bg=False)
+                    _bg=False, _async=False)
                 implementation = BtrfsVolume
             except sh.ErrorReturnCode:
                 implementation = ReflinkVolume
