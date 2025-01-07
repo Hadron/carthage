@@ -14,7 +14,10 @@ import sh as _sh
 Monkey patch the sh module to include __await__.
 Also, by default for commands retrieved through this module set _bg=True and _bg_exc=False
 '''
-_sh_context = _sh(_bg=True, _bg_exc=False)
+try:
+    _sh_context = _sh.bake(_return_cmd=True,_async=True, _bg=True)
+except AttributeError:
+    _sh_context = _sh(_bg=True, _bg_exc=False)
 
 def __getattr__(name):
     val = getattr(_sh_context, name)
