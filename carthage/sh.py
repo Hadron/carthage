@@ -18,11 +18,18 @@ try:
     # Setting _async to true doesn't do much except it tends to override _bg, and too much of our code gets confused by that.
     _sh_context = _sh.bake(_return_cmd=True, _bg=True, _bg_exc=False)
     async def test_return_cmd():
+        import warnings
         c = await _sh_context.ls(_async=True, _return_cmd=True)
         if not isinstance(c, _sh.RunningCommand):
-            import warnings
             warnings.warn('This sh is too old to properly handle _async _return_cmd=True')
             return True
+        try:
+            await _sh_context.false(_return_cmd=True, _async=True)
+            warnings.warn('sh drops exceptions on await')
+            return True
+        except _sh.ErrorReturnCode:
+            return False
+        
         return False
     force_override_await = _asyncio.get_event_loop().run_until_complete(test_return_cmd())
 except AttributeError:
