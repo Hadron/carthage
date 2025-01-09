@@ -617,11 +617,12 @@ class Machine(AsyncInjectable, SshMixin):
         '''
         customization.customization_context = customization._machine_context()
 
-    def run_command(self,
+    async def run_command(self,
                         *args,
                         _bg=True,
                         _bg_exc=False,
-                    _user=None):
+                          _user=None,
+                          **kwargs):
         '''
         This method is the machine-specific part of :meth:`run_command`.  Override in subclasses if there is a better way to run a command than sshing into a machine.  This method is async, although that is not reflected in the signature because this implementation returns an awaitable.
 
@@ -631,15 +632,16 @@ class Machine(AsyncInjectable, SshMixin):
         Ssh has really bad quoting; it effectively  removes one level of quoting from the input.
 This handles quoting and  makes sure each argument is a separate argument on the eventual shell;
 it works like :meth:`carthage.container.Container.container_command` and is used to give a consistent interface by :meth:`run_command`.
+        By the time *run_command* is awaited, the command will have completed.
 '''
         if _user is None:
             _user = self.runas_user
         if _user != self.ssh_login_user:
             raise ValueError(f'{self.__class__.__qualname__} Does not support runas_user different than ssh_login_user; consider BecomePrivilegedMixin or another privilege management solution.')
         args = [str(a) if isinstance(a,Path) else a for a in args]
-        return self.ssh(
+        return await self.ssh(
             shlex.join(args),
-            _bg=_bg, _bg_exc=_bg_exc)
+            _bg=_bg, _bg_exc=_bg_exc, **kwargs)
 
 
     async def sshfs_process_factory(self, user):
