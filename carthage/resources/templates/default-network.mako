@@ -43,8 +43,8 @@ Gateway=${v4_config.gateway}
 <%if not nontrivial:
     raise NotNeeded
 %>
-[DHCPv4]
 %if v4_config.dhcp and (v4_config.gateway is False):
+[DHCPv4]
 UseGateway=no
 %endif
 </%block>
