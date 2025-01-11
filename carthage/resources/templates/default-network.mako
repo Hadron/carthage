@@ -30,7 +30,9 @@ KeepConfiguration = dhcp
 Domains=${v4_config.domains}
 %endif
 %if v4_config.dns_servers:
-DNS=${" ".join(v4_config.dns_servers)}
+%for s in v4_config.dns_servers:
+DNS=${s}
+%endfor
 %endif
 %if v4_config.masquerade:
 IPMasquerade=yes
