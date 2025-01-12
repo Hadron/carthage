@@ -1,5 +1,5 @@
 <%inherit file="netdev-base.mako"/>
 <%block name="local_type">
-[Vlan]
+[VLAN]
 Id=${link.vlan_id}
 </%block>
