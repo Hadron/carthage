@@ -38,7 +38,11 @@ DNS=${s}
 IPMasquerade=yes
 %endif
 %if v4_config.gateway and not v4_config.dhcp:
+[Route]
 Gateway=${v4_config.gateway}
+%if v4_config.metric:
+Metric=${v4_config.metric}
+%endif
 %endif
 <%if not nontrivial:
     raise NotNeeded
