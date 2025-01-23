@@ -7,5 +7,6 @@ Carthage Core Documentation
    intro
    modeling/index
    dependency_injection/index
+   deployment/index
    vault/vault_config
    api/index

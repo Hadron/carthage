@@ -20,7 +20,37 @@ In order to meet these use cases Carthage provides mechanisms to adjust what :cl
 
 #. Functions such as :func:`run_deployment` or :func:`run_deployment_destroy` take a *filter* argument that can make per-call adjustments.
 
-   
+
+Name Filters
+************
+
+:func:`deployable_name_filter` provides an
+interface to generate a filter based on the names of *Deployables*.
+This mechanism is used by the ``--include`` and ``--exclude`` options
+of deployment related command line operations.  For example,
+``carthage-runner deploy --include *.example.com`` will include all
+objects whose name ends with ``example.com``.
+
+The argument to a name filter consists of:
+
+* An optional name prefix such as ``Machine`` followed by a colon (``:``)
+
+* A string to match. The string may include the ``\*`` wildcard which matches zero or more characters and the ``?`` wildcard which matches exactly one character. Characters with special meanings may be quoted using a leading backslash (``\\``).
+
+:func:`deployable_name_filter` takes a set of include filters (specified on the command line by the ``--include`` argument or by positional arguments) and an exclude filter (specified on the command line by the ``--exclude`` argument).
+
+If only an exclude filter is specified, then all objects that would be deployed by default are deployed, excluding those matched by the include filter.
+
+If only an include filter is specified, then only objects included by the include filter (regardless of whether they would be deployed by default) will be included in the deployment.
+
+If both filters are specified, then the exclude filter takes priority over the include filter.
+
+Deployable Names
+****************
+
+The :class:`Deployable` protocol includes a method :meth:`~Deployable.deployable_names` which returns a list of names for a *Deployable*.
+Names take the form of a name prefix such as ``Machine``, followed by a colon, followed by  a name in the namespace defined by the prefix.
+
 Filter Outcomes
 ***************
 
