@@ -189,7 +189,8 @@ async def subtest_controller(request, target, pytest_args,
                      'pytest-3', *pytest_args,
                      _bg=True, _bg_exc=False,
                      _out=sys.stdout)
-    json_out = await target.ssh('cat', json_frag)
+    json_out =  target.ssh('cat', json_frag)
+    await json_out
     report_list = json.loads(json_out.stdout)
     for i in report_list:
         try:

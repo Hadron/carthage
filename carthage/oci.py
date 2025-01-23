@@ -34,6 +34,23 @@ __all__ += ['oci_container_network_config']
 
 class OciManaged(SetupTaskMixin, AsyncInjectable):
 
+    @property
+    def deployable_names(self):
+        '''Uses each of self.deployable_name_prefixes as a name_type for self.name and self.id.
+        '''
+        res = []
+        if self.name:
+            for name_type in self.deployable_name_prefixes:
+                res.append(f'{name_type}:{self.name}')
+        if self.id:
+            for name_type in self.deployable_name_prefixes:
+                res.append(f'{name_type}Id:{self.id}')
+        return res
+
+    @property
+    def deployable_name_prefixes(self):
+        return [self.__class__.__name__]
+    
     async def find(self):
         '''Returns falsy if the object does not exist.  Ideally returns the creation time in unix time, otherwise returns True if the creation time cannot be determined.
         '''

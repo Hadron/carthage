@@ -1,4 +1,4 @@
-# Copyright (C)  2024, Hadron Industries, Inc.
+# Copyright (C)  2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -47,15 +47,16 @@ class BecomePrivilegedMixin(machine.Machine):
         else:
             return ['sudo', '-u', user]
         
-    async def run_command(self, *args, _bg=True, _bg_exc=False, _user=None):
+    async def run_command(self, *args, _bg=True, _bg_exc=False, _user=None,
+                          **kwargs):
         if _user is None:
             _user = self.runas_user
         if not self.become_privileged(_user):
-            return await super().run_command(*args, _user=_user)
+            return await super().run_command(*args, _user=_user, **kwargs)
         return await self.ssh(
             'cd / &&',
             *self.become_privileged_command(_user),
-            shlex.join([str(a) for a in args]))
+            shlex.join([str(a) for a in args]), **kwargs)
         
     async def sshfs_process_factory(self, user):
         become_privileged_command = self.become_privileged_command(user)

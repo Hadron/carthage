@@ -109,8 +109,8 @@ class LocalPodmanContainerHost(PodmanContainerHost):
             _fg=_fg,
             **options)
         if not _fg:
-            await result
-            return result
+            return await result
+        return result
 
     @contextlib.asynccontextmanager
     async def tar_volume_context(self, volume):
@@ -285,7 +285,7 @@ class RemotePodmanHost(PodmanContainerHost):
                 _fg=_fg,
             **options)
         if not _fg:
-            await result
+            return await result
         return result
 
     async def podman_nosocket(self, *args, _log=True, **kwargs):

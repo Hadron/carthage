@@ -3,6 +3,7 @@ dependencies:
   - deb: python3-dateutil
     pypi: python_dateutil
   - deb: podman
+  - deb: nftables
   - deb: containers-storage
   - deb: fuse-overlayfs
   - deb: catatonit

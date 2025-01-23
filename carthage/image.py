@@ -141,7 +141,7 @@ class ContainerVolume(AsyncInjectable, SetupTaskMixin):
             try:
                 sh.btrfs(
                     "filesystem", "df", str(path.parent),
-                    _bg=False)
+                    _bg=False, _async=False)
                 implementation = BtrfsVolume
             except sh.ErrorReturnCode:
                 implementation = ReflinkVolume
@@ -470,7 +470,14 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
                 size*1024**2)
         except sh.ErrorReturnCode_1:
             pass #Tried to shrink
-        
+
+    @property
+    def deployable_names(self):
+        # find may not be called at this point so path may not be set.
+        return [
+            'ImageVolume:'+self.name,
+            'Volume:'+self.name
+            ]
     @setup_task("Find or Create Volume")
     async def find_or_create(self):
         if not await self.find():

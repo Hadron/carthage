@@ -12,6 +12,7 @@ import contextlib
 import dataclasses
 import enum
 import logging
+import re
 import typing
 import warnings
 from .dependency_injection import *
@@ -57,6 +58,11 @@ __all__ += ['destroy_policy']
 orphan_policy = InjectionKey(DeletionPolicy, policy='orphan')
 
 __all__ += ['orphan_policy']
+
+#: An injection key for the auto deployment policy. If instantiating this key for an object results in a True value, the object is deployed. If instantiating this key results in a falsy value, the object is not deployed.
+auto_deploy_policy = InjectionKey('carthage.deployment.auto_deploy_policy')
+
+__all__ += ['auto_deploy_policy']
 
 class DryRunType:
 
@@ -373,7 +379,11 @@ class DeployableProtocol(typing.Protocol):
     async def delete(self): ...
 
     async def find_or_create(self): ...
-    
+
+    @property
+    def deployable_names(self)->list[str]:
+        ...
+        
 __all__ += ['DeployableProtocol']
 
 class Deployable(DeployableProtocol):
@@ -404,6 +414,15 @@ class Deployable(DeployableProtocol):
     # affects what the instantiation process does.
     readonly: typing.Union[bool, DryRun]
 
+    @property
+    def deployable_names(self)->list[str]:
+        '''
+        Returns a list of names by which this Deployable is known.
+        Names are the form *prefix:name*.
+        See :func:`deployable_name_filter`.
+        '''
+        raise NotImplementedError
+    
     async def dynamic_dependencies(self):
         '''
         Returns a iterable of dependencies that are dynamically used.  Typically used for better introspection and for calculating the order of destroy operations.  Members of the iterable can be :class:Deployables <Deployable>` or :class:InjectionKeys <InjectionKey>` that are instantiated. Examples of dynamic dependencies include:
@@ -682,15 +701,15 @@ async def run_deployment(
         *,
         dry_run=False,
         deployables: typing.Union[DeploymentResult, list[Deployable]] = None,
-        filter=lambda d:True,
-        delete_orphans: bool=True,
+        filter=lambda d:None,
+        delete_orphans: bool=False,
         orphans:list[Deployable]=None,
         ainjector):
     '''Run a deployment.
 
     #. Find the objects using :func:`find_deployables`
 
-    #. For each object returned, call some deployment method on the object.  For an actual deployment, that is :meth:`async_become_ready`.
+    #. For each object returned, call some deployment method on the object.  For an actual deployment, that is :meth:`deploy` or if that is not present, :meth:`async_become_ready`.
 
     :returns: A :class:`DeploymentResult` capturing the results of the deployment.  Will raise if find_deployments fails.
 
@@ -712,6 +731,31 @@ async def run_deployment(
     called.
 
     '''
+    async def callback(d):
+        future = None
+        if not await filter_deployable(d, filter):
+            logger.debug('Not deploying %s: excluded by filter', d)
+            result.ignored.append(d)
+            return
+        if not dry_run:
+            if d.readonly:
+                future = asyncio.ensure_future(ainjector(
+                    find_deployable, d))
+                future.add_done_callback(result.find_callback(d))
+            else:
+                if hasattr(d, 'deploy'):
+                    future = asyncio.ensure_future(d.deploy())
+                else:
+                    future = asyncio.ensure_future(d.async_become_ready())
+                future.add_done_callback(result.method_callback(d))
+        else: # dry_run
+            if d not in result:
+                result.successes.append(d)
+        if future:
+            try: await future
+            # Done callbacks will record appropriately
+            except Exception: pass
+
     find_readonly = dry_run
     match deployables:
         case DeploymentResult():
@@ -734,23 +778,7 @@ async def run_deployment(
     futures = []
     with DeploymentIntrospection(ainjector.injector, result):
         for d in deployables_list:
-            if not dry_run:
-                if d.readonly:
-                    future = asyncio.ensure_future(ainjector(
-                        find_deployable, d))
-                    future.add_done_callback(result.find_callback(d))
-                    futures.append(future)
-                else:
-                    if hasattr(d, 'deploy'):
-                        future = asyncio.ensure_future(d.deploy())
-                    else:
-                        future = asyncio.ensure_future(d.async_become_ready())
-                    future.add_done_callback(result.method_callback(d))
-                    futures.append(future)
-            else: # dry_run
-                if d not in result:
-                    result.successes.append(d)
-
+            futures.append(asyncio.ensure_future(callback(d)))
         if futures:
             await asyncio.wait(futures) # We should already have captured in result
     if delete_orphans and len(orphans) > 0:
@@ -758,6 +786,7 @@ async def run_deployment(
             run_deployment_destroy,
             dry_run=dry_run,
             deployables=orphans,
+            filter=filter,
             _policy_key=orphan_policy,
             )
         result.orphans = orphan_result.successes
@@ -800,11 +829,95 @@ async def find_deployables_reverse_dependencies(*, readonly=False,
 __all__ += ['find_deployables_reverse_dependencies']
 
 @inject(ainjector=AsyncInjector)
+async def filter_deployable(
+        deployable:Deployable,
+        filter:typing.Callable,
+        ):
+    '''
+    Internal function to filter a :class:`Deployable`
+
+    :param filter: A filter function that takes a :class:`Deployable` and returns a filter outcome.
+
+    :returns: A boolean indicating whether the Deployable should be included in the deployment.
+
+    '''
+    outcome = await deployable.ainjector(filter, deployable)
+    if outcome is None:
+        try:
+            outcome = await deployable.ainjector.get_instance_async(auto_deploy_policy)
+        except KeyError:
+            outcome = True
+    assert outcome in (True, False)
+    return outcome
+
+__all__ += ['filter_deployable']
+
+GLOB_TO_RE_RE = re.compile(
+    r'(?P<escape>(?:[^\\\*\?]|\\$)+)' \
+    r'|(?P<backslash>\\.)' \
+    r'|(?P<glob>[\*\?])')
+
+def _glob_to_re(pattern):
+    r'''
+    Turn glob patterns into regexp.  \* matches  zero or more; ? matches one or more. Similar to :func:`fnmatch.translate` except that \\ escapes and that the resulting regexp is not anchored.
+    '''
+    def replace(match):
+        if res := match.group('escape'):
+            return re.escape(res)
+        elif res := match.group('backslash'):
+            return re.escape(res[1])
+        elif res := match.group('glob'):
+            if res == '*':
+                return '.*'
+            elif res == '?':
+                return '.'
+        raise ValueError
+    return GLOB_TO_RE_RE.sub(replace, pattern)
+
+def deployable_name_filter(include:list[str], exclude:list[str]):
+    def name_to_re(pattern):
+        name_type = None
+        # A non-backslashed : splits a name type from a glob pattern
+        match re.split(r'((?<!\\):)', pattern, maxsplit=1):
+            case [name_type, sep, glob_pattern]:
+                # all we need is the assignments
+                pass
+            case [glob_pattern]:
+                pass
+        glob_pattern = _glob_to_re(glob_pattern)
+        if name_type:
+            return fr'\A{re.escape(name_type)}:{glob_pattern}\Z'
+        else:
+            return fr'\A[^:]+:{glob_pattern}\Z'
+    def filter(deployable):
+        if exclude_re:
+            if not deployable.deployable_names:
+                return False
+            for name in deployable.deployable_names:
+                if re.search(exclude_re, name):
+                    return False
+        if include_re:
+            for name in deployable.deployable_names:
+                if re.search(include_re, name):
+                    return True
+            # include filter present but does not match
+            return False
+        # No include filter present and exclude filter does not match;
+        # fall back to auto_deploy_policy
+        return None
+    include_re = '|'.join(map(name_to_re, include))
+    exclude_re = '|'.join(map(name_to_re, exclude))
+    return filter
+
+__all__ += ['deployable_name_filter']
+
+
+@inject(ainjector=AsyncInjector)
 async def run_deployment_destroy(
         *,
         dry_run=False,
         deployables: typing.Union[DeploymentResult, list[Deployable]] = None,
-        filter=lambda d:True,
+        filter=lambda d:None,
         _policy_key: InjectionKey=destroy_policy,
         ainjector):
     '''
@@ -812,7 +925,7 @@ async def run_deployment_destroy(
 
     #. Find the objects using :func:`find_deployables_reverse_dependencies`
 
-    #. Exclude Deployables for which *filter* returns falsy and any reverse dependencies of those objects.
+    #. Exclude Deployables for which *:func:`filter_deployables`* returns False and any reverse dependencies of those objects.
 
     #. Delete the remaining objects or in a *dry_run* report which objects would be deleted
     
@@ -856,7 +969,7 @@ async def run_deployment_destroy(
                 good_to_go.add(d)
                 more_work()
                 return False
-            if d.readonly not in (DryRun, False, None) or not filter(d):
+            if d.readonly not in (DryRun, False, None) or not await filter_deployable(d, filter):
                 logger.debug('Ignoring %s and its reverse dependencies', d)
                 raise IgnoreDeployable
             policy = d.injector.get_instance(InjectionKey(_policy_key, _optional=True))
@@ -925,3 +1038,4 @@ async def run_deployment_destroy(
     return result
 
 __all__ += ['run_deployment_destroy']
+

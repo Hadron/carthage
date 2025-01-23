@@ -37,7 +37,7 @@ dependencies = [
     "netifaces",
     "requests",
     "setuptools",
-    "sh ~= 1.14",
+    "sh",
 ]
 
 [project.optional-dependencies]

@@ -28,6 +28,26 @@ class DeploymentCommand(CarthageRunnerCommand):
         subparser.add_argument('--force-confirm', '-y',
                                action='store_true',
                                help='Skip printing a dry run report and immediately perform the deployment')
+        subparser.add_argument(
+            'include',
+            nargs='*',
+            action='extend',
+            help='Deployments to include')
+        subparser.add_argument(
+            #Also provide an explicit option for --include so includes and excludes can be mixed.
+            '--include',
+            action='extend',
+            nargs='+',
+            metavar='deployables',
+            )
+        subparser.add_argument(
+            '--exclude',
+            nargs='+',
+            action='extend',
+            default=[],
+            help='Deployables to exclude',
+            metavar='Deployables'
+            )
         subparser.add_argument('--report-out', '-o',
                                type=argparse.FileType('wt'),
                                help='Where to write output report for the final deployment report')
@@ -37,6 +57,7 @@ class DeploymentCommand(CarthageRunnerCommand):
     async def run(self, args):
         '''Execute deployment with optional dry run step
         '''
+        filter = deployable_name_filter(include=args.include, exclude=args.exclude)
         if args.force_confirm and args.dry_run:
             raise RuntimeError('Cannot force confirm and run in dry run only mode')
         ainjector = self.ainjector
@@ -44,7 +65,7 @@ class DeploymentCommand(CarthageRunnerCommand):
                                       recurse=(self.method == 'run_deployment_destroy'))
         method_func = getattr(carthage.deployment, self.method)
         if not args.force_confirm:
-            dry_run_results = await ainjector(method_func, dry_run=True, deployables=deployables)
+            dry_run_results = await ainjector(method_func, dry_run=True, deployables=deployables, filter=filter)
             print(dry_run_results.report(dry_run=True))
             if not args.dry_run:
                 # If we are just doing a dry run, that's all
@@ -57,7 +78,7 @@ class DeploymentCommand(CarthageRunnerCommand):
         # By this point either the deployment has been confirmed by
         # the user or by args.force_confirmation
         if not args.dry_run:
-            result = await ainjector(method_func, deployables=deployables)
+            result = await ainjector(method_func, deployables=deployables, filter=filter)
             print(result.report(), file=args.report_out, flush=True)
             if args.report_out:
                 # summary to stdout if main report to file

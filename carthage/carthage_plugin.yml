@@ -1,7 +1,7 @@
 name: core
 dependencies:
   - deb: python3-sh
-    pypi: sh ~=1.14
+    pypi: sh
   - deb: python3-requests
     pypi: requests
   - deb: python3-yaml
