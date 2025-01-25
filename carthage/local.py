@@ -33,7 +33,7 @@ When testing whether a :class:`Machine` is local, test for ``isinstance(machine,
         if user is None:
             user = self.runas_user
         if user != os.environ['USER']:
-            with super().filesystem_access(user=user) as path:
+            async with super().filesystem_access(user=user) as path:
                 yield path
                 return
             
