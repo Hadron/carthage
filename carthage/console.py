@@ -225,7 +225,7 @@ class CarthageConsole(code.InteractiveConsole):
             subcommands[v.name] = v
         return subcommands
 
-    def runsource(self, source, filename):
+    def runsource(self, source, filename, **kwargs):
         if self.subcommands:
             match = subcommands_re.match(source)
             if match:
@@ -246,7 +246,7 @@ class CarthageConsole(code.InteractiveConsole):
                 except Exception as e:
                     traceback.print_exception(e)
                 return
-        return super().runsource(source, filename)
+        return super().runsource(source, filename, **kwargs)
 
     async def setup_from_plugins(self, injector=None):
         from .plugins import CarthagePlugin
