@@ -129,9 +129,10 @@ class EntanglementPkiManager(PkiManager):
    '''
 
     async def issue_credentials(self, hostname:str, tag:str) -> list[str, str]:
-        current_tag = self.tags_by_hostname.get(hostname)
-        if current_tag and current_tag != tag:
-            raise RunitemError(f'{hostname} credentials retrieved with {current_tag} and {tag}')
+        current_tags = self.tags_by_hostname.setdefault(hostname, set())
+        if tag in current_tags:
+            raise RuntimeError(f'{hostname} credentials already retrieved with {tag}')
+        current_tags.add(tag)
         self._certify(hostname)
         self.tags_by_hostname[hostname] = tag
         key_path = self.pki_dir/f'{hostname}.key'
