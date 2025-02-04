@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2024, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -126,17 +126,17 @@ class ReflinkVolume(ContainerVolumeImplementation):
         super().close(canceled_futures)
 
 
-@inject(config_layout=ConfigLayout)
+
 class ContainerVolume(AsyncInjectable, SetupTaskMixin):
 
     def __init__(self, name, *,
                  clone_from=None,
                  implementation=None,
-                 config_layout,
                  **kwargs):
         super().__init__(**kwargs)
-        path = Path(config_layout.image_dir).joinpath(name)
+        path = Path(self.config_layout.image_dir).joinpath(name)
         os.makedirs(path.parent, exist_ok=True)
+        already_created = path.exists()
         if implementation is None:
             try:
                 sh.btrfs(
@@ -148,8 +148,10 @@ class ContainerVolume(AsyncInjectable, SetupTaskMixin):
         self.impl = implementation(name=name,
                                    path=path,
                                    injector=self.injector,
-                                   config_layout=config_layout,
+                                   config_layout=self.config_layout,
                                    clone_from=clone_from)
+        if not already_created:
+            self.clear_stamps_and_cache()
 
     async def async_ready(self):
         await self.impl.async_ready()
@@ -169,15 +171,20 @@ class ContainerVolume(AsyncInjectable, SetupTaskMixin):
         return self.impl.name
 
     @property
-    def config_layout(self): return self.impl.config_layout
+    def config_layout(self): 
+        return self._config_layout
 
     @config_layout.setter
     def config_layout(self, cfg):
-        self.impl.config_layout = cfg
+        self._config_layout = cfg
+        try:
+            self.impl.config_layout = cfg
+        except AttributeError: pass
         return cfg
 
     @property
-    def stamp_path(self): return self.impl.path
+    def stamp_subdir(self):
+        return f'container_volume/{str(self.impl.path).replace("/","_")}'
 
     def __repr__(self):
         return f"<Container {self.impl.__class__.__name__} path:{self.impl.path}>"
@@ -277,7 +284,7 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
     :param base_image: Rather than creating a zero-filled image, create an image as a copy of this file or :class:`ImageVolume`.
 
     :param size: If the image is not at least this large (MiB), resize it to be that large.
-    
+
 
     '''
 
@@ -296,7 +303,6 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
         if name is None and not self.name:
             raise TypeError('name must be set on the constructor or subclass')
         super().__init__(**kwargs)
-        self.config_layout = self.injector(ConfigLayout)
         self.path = None
         if base_image:
             self.base_image = base_image
@@ -322,8 +328,8 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
         await self.run_setup_tasks()
         if not self.path: await self.find()
         return await AsyncInjectable.async_ready(self)
-    
-        
+
+
     async def find(self):
         if self.path and self.path.exists():
             assert not self.creating_path.exists(), 'Within a single run find should not be called while do_create runs.'
@@ -371,6 +377,7 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
         assert self.path
         assert self.qemu_format
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.clear_stamps_and_cache()
         try:
             self.creating_path.touch()
             if base_image:= self.base_image:
@@ -485,23 +492,22 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
         if self.size:
             await self.resize(self.size)
 
-    @find_or_create.invalidator()
-    async def find_or_create(self, last_run):
+    @find_or_create.check_completed()
+    async def find_or_create(self):
         return await self.find()
-                            
-                
+
+
     def __repr__(self):
         if self.path:
             return f"<{self.__class__.__name__} path={self.path}>"
         return f"<{self.__class__.__name__} name={self.name}>"
-        
+
 
     def _delete_volume(self):
         try:
             os.unlink(self.path)
-            shutil.rmtree(self.stamp_path)
-        except FileNotFoundError:
-            pass
+        except FileNotFoundError: pass
+        self.clear_stamps_and_cache()
 
     async def delete(self):
         await self.find()
@@ -511,10 +517,10 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
         if self.base_image and isinstance(self.base_image, ImageVolume):
             return [self.base_image]
         return []
-    
+
     @property
-    def stamp_path(self):
-        return Path(str(self.path) + '.stamps')
+    def stamp_subdir(self):
+        return 'libvirt/'+str(self.path.relative_to('/'))
 
     def close(self, canceled_futures=None):
         if self.config_layout.delete_volumes:
@@ -577,13 +583,13 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
                             else:
                                 raise
 
-                            
+
 
 
 class BlockVolume(ImageVolume):
 
     qemu_format = 'raw'
-    
+
     def __init__(self, path, **kwargs):
         if 'name' in kwargs:
             raise ValueError('BlockVolume does not take name even though ImageVolume does')
@@ -597,12 +603,6 @@ class BlockVolume(ImageVolume):
 
     async def do_create(self):
         raise NotImplementedError('Cannot create block device')
-    
-    @memoproperty
-    def stamp_path(self):
-        res = Path(self.config_layout.state_dir) / "block_volume_stamps" / str(self.path)[1:]
-        os.makedirs(res, exist_ok=True)
-        return res
 
     def qemu_config(self, disk_config):
         res = dict(

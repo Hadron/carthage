@@ -107,6 +107,10 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
         return Path(self.config_layout.state_dir)
 
     @memoproperty
+    def state_path(self):
+        return Path(self.config_layout.state_dir)
+    @memoproperty
+
     def ssh(self):
         return sh.ssh.bake(_env=self.agent.agent_environ)
 

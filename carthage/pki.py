@@ -49,8 +49,8 @@ def ca_file(certificates, *,
     '''
     assert name, 'Currently support for name=None is unimplemented; probably the right approach is to hash the certificates.'
     config = injector(ConfigLayout)
-    output_dir = pathlib.Path(config.output_dir)
-    truststores = output_dir/'truststores'
+    cache_dir = pathlib.Path(config.cache_dir)
+    truststores = cache_dir/'truststores'
     truststores.mkdir(parents=True, exist_ok=True)
     name = name.replace('/', '_')
     ca_path = truststores/name

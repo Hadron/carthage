@@ -89,7 +89,7 @@ async def start(config, machines):
     layout = await get_layout(config)
     ainjector = layout.ainjector
     config_layout = await ainjector(ConfigLayout)
-    async with file_locked(Path(config_layout.output_dir)/"generation_lock"):
+    async with file_locked(Path(config_layout.cache_dir)/"generation_lock"):
         await layout.generate()
     models = await get_machines(layout, machines)
     import carthage_base.hosted
@@ -118,7 +118,7 @@ async def stop(config, machines):
         return ocf.OCF_ERR_UNIMPLEMENTED
     ainjector = layout.ainjector
     config_layout = await ainjector(ConfigLayout)
-    async with file_locked(Path(config_layout.output_dir)/"generation_lock"):
+    async with file_locked(Path(config_layout.cache_dir)/"generation_lock"):
         await layout.resolve_networking()
     models = await get_machines(layout, machines)
     for m in reversed(models):

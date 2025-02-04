@@ -486,12 +486,8 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         return f'<{self.__class__.__name__} {self.name} on {host}>'
 
     @memoproperty
-    def stamp_path(self):
-        state_dir = Path(self.config_layout.state_dir)
-        result = state_dir.joinpath("podman", self.name)
-        result.mkdir(exist_ok=True, parents=True)
-        return result
-
+    def stamp_subdir(self):
+        return 'podman/'+self.name
 
     def check_stamp(self, stamp, raise_on_error=False):
         mtime, text = super().check_stamp(stamp, raise_on_error)
@@ -710,12 +706,8 @@ class PodmanImage(OciImage, SetupTaskMixin):
 
 
     @memoproperty
-    def stamp_path(self):
-        config = self.injector(ConfigLayout)
-        path = Path(config.output_dir)/"podman_image"/self.oci_image_tag.replace('/','_')
-        path.mkdir(exist_ok=True, parents=True)
-        return path
-
+    def stamp_subdir(self):
+        return 'podman_image/'+self.oci_image_tag
 
 
 __all__ += ['PodmanImage']
@@ -819,21 +811,19 @@ class ContainerfileImage(OciImage):
         if len(self.setup_tasks) > 2:
             # More than just find_or_create and copy_context_if_needed
             self.setup_tasks.sort(key=lambda t: 1 if t.func == OciManaged.find_or_create.func else 0)
-            self.container_context = self.output_path
-        self.injector.add_provider(InjectionKey("podman_log"), self.stamp_path/'podman.log')
+            self.container_context = self.stamp_path
+        self.injector.add_provider(InjectionKey("podman_log"), self.log_path/'podman.log')
 
 
 
 
     @memoproperty
     def output_path(self):
-        path = Path(self.config_layout.output_dir)/'podman_image'
-        tag = self.oci_image_tag.replace('/', '_')
-        path /= tag
-        path.mkdir(exist_ok=True, parents=True)
-        return path
+        return self.stamp_path
 
-    stamp_path = output_path
+    @property
+    def stamp_subdir(self):
+        return 'podman_image/'+self.oci_image_tag
 
     @setup_task("Copy Context if Needed", order=10)
     async def copy_context_if_needed(self):
@@ -952,11 +942,8 @@ class PodmanVolume(HasContainerHostMixin, OciManaged):
             self.name)
 
     @memoproperty
-    def stamp_path(self):
-        config = self.injector(ConfigLayout)
-        path =  Path(config.output_dir)/'volumes'/self.name
-        path.mkdir(exist_ok=True, parents=True)
-        return path
+    def stamp_subdir(self):
+        return 'podman_volume/'+self.name
 
     @property
     def podman(self):

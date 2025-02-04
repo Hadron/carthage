@@ -31,6 +31,7 @@ def ainjector(ainjector):
     config = ainjector.injector(carthage.ConfigLayout)
     config.state_dir = state_dir
     os.makedirs(state_dir, exist_ok=True)
+    config.cache_dir = os.path.join(state_dir, 'cache')
     yield ainjector
     shutil.rmtree(state_dir, ignore_errors=True)
 

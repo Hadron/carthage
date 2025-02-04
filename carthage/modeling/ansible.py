@@ -51,7 +51,7 @@ class AnsibleModelMixin(InjectableModel, AsyncInjectable):
         self.injector.add_provider(
             InjectionKey(AnsibleInventory),
             when_needed(AnsibleInventory,
-                        destination=self.config_layout.output_dir + "/inventory.yml"))
+                        destination=self.config_layout.cache_dir + "/inventory.yml"))
         enable_modeling_ansible(self.injector)
 
     async def generate(self):

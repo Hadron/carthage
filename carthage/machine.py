@@ -752,7 +752,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
             pass
 
     @property
-    def stamp_path(self):
+    def stamp_subdir(self):
         return self.host.stamp_path
 
     def create_stamp(self, stamp, contents):
@@ -980,8 +980,8 @@ class BareMetalMachine(Machine, SetupTaskMixin, AsyncInjectable):
         return True
 
     @memoproperty
-    def stamp_path(self):
-        return Path(f'{self.config_layout.state_dir}/machines/{self.name}')
+    def stamp_subdir(self):
+        return 'machines/'+self.name
 
 
 def disk_config_from_model(model, default_disk_config):

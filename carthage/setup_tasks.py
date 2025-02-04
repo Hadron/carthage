@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 import asyncio
+import collections.abc
 import contextlib
 import dataclasses
 import datetime
@@ -21,22 +22,80 @@ import sys
 import shutil
 import weakref
 import hashlib
-import importlib.resources
 from pathlib import Path
 import carthage
-from carthage.dependency_injection import AsyncInjector, inject, BaseInstantiationContext, InjectionKey, NotPresent
+from carthage.dependency_injection import AsyncInjector, inject, BaseInstantiationContext, InjectionKey, NotPresent, inject_autokwargs, Injectable, Injector
 from carthage.dependency_injection.introspection import current_instantiation
 from carthage.config import ConfigLayout
 from carthage.utils import memoproperty, import_resources_files
-import collections.abc
 
-__all__ = ['logger', 'TaskWrapper', 'TaskMethod', 'setup_task', 'SkipSetupTask', 'SetupTaskMixin',
+__all__ = ['logger', 'PathMixin', 'TaskWrapper', 'TaskMethod', 'setup_task', 'SkipSetupTask', 'SetupTaskMixin',
            'cross_object_dependency',
            'mako_task',
            'install_mako_task']
 
 logger = logging.getLogger('carthage.setup_tasks')
 
+@inject_autokwargs(injector=Injector)
+class PathMixin(Injectable):
+    '''
+    Provide the commond :meth:`stamp_path`, :meth:`log_path`, and :meth:`state_path`.
+    Requires that subclasses fill in :attr:`stamp_subdir`.
+
+    Also provides :attr:`config_layout`.
+    
+
+    '''
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if not hasattr(self, 'config_layout'):
+            self.config_layout = self.injector(ConfigLayout)
+            
+    @property
+    def stamp_subdir(self):
+        '''The part of :meth:`stamp_path` after *config.stamp_dir*.
+        For example for a podman container called ``example.com`` this might be ``podman/containers/example.com``
+        '''
+        raise NotImplementedError
+
+    @memoproperty
+    def stamp_path(self)->Path:
+        '''A  place to store cached information like completion stamps for setup tasks.
+        Removing *config.cache_dir* may decrease performance but should not remove hard-to-recover state like keys.
+        '''
+        res =  Path(self.config_layout.cache_dir)/self.stamp_subdir
+        res.mkdir(parents=True, exist_ok=True)
+        return res
+
+    @memoproperty
+    def state_path(self)->Path:
+        '''
+        A place to store state that should be preserved like keys, tokens, or assignment databases.
+        '''
+        res =  Path(self.config_layout.state_dir)/self.stamp_subdir
+        res.mkdir(parents=True, exist_ok=True)
+        return res
+
+    @memoproperty
+    def log_path(self)->Path:
+        '''
+        A place to store logs.
+        '''
+        res = Path(self.config_layout.log_dir)/self.stamp_subdir
+        res.mkdir(parents=True, exist_ok=True)
+        return res
+
+    def clear_stamps_and_cache(self):
+        cache_dir = Path(self.config_layout.cache_dir)
+        if str(self.stamp_path).startswith(str(cache_dir)):
+            shutil.rmtree(self.stamp_path, ignore_errors=True)
+            try:
+                del self.stamp_path # so it gets recreated
+            except (AttributeError, TypeError): pass
+        else:
+            logger.warn('Failed to clear stamps for %s: stamps not under cache_dir', self)
+            
 _task_order = 0
 
 
@@ -513,7 +572,7 @@ class SkipSetupTask(Exception):
     pass
 
 
-class SetupTaskMixin:
+class SetupTaskMixin(PathMixin):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

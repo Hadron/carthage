@@ -17,7 +17,7 @@ from .implementation import *
 from .decorators import *
 from carthage.dependency_injection import *  # type: ignore
 from carthage.utils import when_needed, memoproperty
-from carthage import ConfigLayout, SetupTaskMixin
+from carthage import ConfigLayout, SetupTaskMixin, PathMixin
 import carthage.kvstore
 import carthage.network
 import carthage.machine
@@ -348,7 +348,7 @@ class MachineModelMixin:
 @inject_autokwargs(
     config_layout=ConfigLayout,
                    )
-class MachineModel(ModelContainer, carthage.machine.AbstractMachineModel, metaclass=MachineModelType, template=True):
+class MachineModel(ModelContainer, carthage.machine.AbstractMachineModel, PathMixin, metaclass=MachineModelType, template=True):
 
     '''
 
@@ -469,10 +469,8 @@ Every :class:`carthage.machine.BaseCustomization` (including MachineCustomizatio
         return res
 
     @memoproperty
-    def stamp_path(self):
-        path = self.config_layout.output_dir + f"/hosts/{self.name}"
-        os.makedirs(path, exist_ok=True)
-        return Path(path)
+    def stamp_subdir(self):
+        return 'machine_model/'+self.name
 
     async def resolve_networking(self, *args, **kwargs):
         '''
@@ -651,9 +649,9 @@ class ModelTasks(ModelContainer, SetupTaskMixin, AsyncInjectable):
         return InjectionKey(ModelTasks, name=name)
 
     @memoproperty
-    def stamp_path(self):
+    def stamp_subdir(self):
         name = getattr(self.__class__, 'name', self.__class__.__name__)
-        return Path(self.config_layout.output_dir) / name
+        return name
 
 
 __all__ += ['ModelTasks']

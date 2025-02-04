@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2024, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -327,12 +327,10 @@ class Vm(Machine, SetupTaskMixin):
             await asyncio.sleep(3)
 
     @memoproperty
-    def stamp_path(self):
+    def stamp_subdir(self):
         if self.volume:
-            return Path(self.volume.stamp_path)
-        res = Path(self.config_layout.output_dir)/'libvirt_stamps'/self.name
-        res.mkdir(parents=True, exist_ok=True)
-        return res
+            return self.volume.stamp_subdir
+        return 'libvirt/'+self.name
 
     async def dynamic_dependencies(self):
         await self.gen_volume()

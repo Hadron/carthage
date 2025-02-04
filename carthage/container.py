@@ -80,11 +80,8 @@ class Container(Machine, SetupTaskMixin):
         return self.running
 
     @memoproperty
-    def stamp_path(self):
-        if self.volume is None:
-            raise RuntimeError('Volume not yet created')
-        return self.volume.path
-
+    def stamp_subdir(self):
+        return f'nspawn/{self.name}'
     async def do_network_config(self, networking):
         if networking and self.network_links:
             namespace = carthage.network.NetworkNamespace(self.full_name, self.network_links)

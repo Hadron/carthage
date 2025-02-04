@@ -27,8 +27,9 @@ class BaseSchema(ConfigSchema, prefix=""):
 
     base_dir: ConfigPath = "~/.carthage"
     checkout_dir: ConfigPath = "{base_dir}/checkout"
-    output_dir: ConfigPath = "{base_dir}/output"
+    cache_dir:ConfigPath = '{base_dir}/cache'
     image_dir: ConfigPath = "{base_dir}"
+    log_dir:ConfigPath = '{base_dir}/log'
     vm_image_dir: ConfigPath = "{base_dir}/vm"
     state_dir: ConfigPath = "{base_dir}/state"
     #: Directory for local ephemeral state like ssh_agent sockets

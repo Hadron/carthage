@@ -60,12 +60,9 @@ class VmwareStampable(SetupTaskMixin, AsyncInjectable):
         raise NotImplementedError(type(self))
 
     @memoproperty
-    def stamp_path(self):
-        p = self.config_layout.state_dir
-        p = os.path.join(p, "vmware_stamps", self.stamp_type)
+    def stamp_subdir(self):
+        p = os.path.join("vmware_stamps", self.stamp_type)
         p = os.path.join(p, *self.stamp_descriptor.lstrip('/').split('/'))
-        p += ".stamps"
-        os.makedirs(p, exist_ok=True)
         return p
 
 

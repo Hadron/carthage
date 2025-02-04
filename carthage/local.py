@@ -76,8 +76,8 @@ class LocalMachine(LocalMachineMixin, Machine, SetupTaskMixin, AsyncInjectable):
         return True
 
     @memoproperty
-    def stamp_path(self):
-        return Path(self.config_layout.state_dir + "/localhost")
+    def stamp_subdir(self):
+        return 'localhost_machine'
 
 
 def process_local_network_config(model):
