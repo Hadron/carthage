@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -64,6 +64,7 @@ class Container(Machine, SetupTaskMixin):
             vol = await self.ainjector(ContainerVolume,
                                        clone_from=self.image,
                                        name="containers/" + self.name)
+            self.clear_stamps_and_cache()
             self.injector.add_provider(container_volume, vol)
         self.volume = vol
         await self.resolve_networking()
