@@ -13,7 +13,9 @@ async def run(ainjector):
     cl = await ainjector(ConfigLayout)
     cl.container_prefix = ""
     ainjector.add_provider(container_volume, await ainjector(ContainerVolume, container_dir))
-    container = await ainjector(Container, name=name, image=None)
+    with instantiation_not_ready():
+        container = await ainjector(Container, name=name, image=None)
+        await container.is_machine_running()
     return container.shell("/bin/sh", "-c", sys.argv[4], _fg=True)
 
 if __name__ == "__main__":
