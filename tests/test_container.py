@@ -108,7 +108,7 @@ class LayoutTest(ModelGroup):
 async def test_ansible_and_modeling(test_ainjector, config):
     ainjector = test_ainjector
     layout = await ainjector(LayoutTest)
-    layout.injector.add_provider(when_needed(AnsibleInventory, config.state_dir + "/ansible.yml"))
+    layout.injector.add_provider(when_needed(AnsibleInventory, config.cache_dir + "/ansible.yml"))
     ainjector.add_provider(InjectionKey("layout"), layout)  # So it is cleaned up
     await ainjector.get_instance_async(carthage.ssh.SshKey)
     await layout.generate()
