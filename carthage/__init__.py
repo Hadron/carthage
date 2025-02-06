@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2023, 2024, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2023, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -35,10 +35,11 @@ __all__ += ['persistent_seed_path']
 
 from . import deployment
 from .deployment import  (
+    auto_deploy_policy,
     find_deployables, DeployableFinder,
     find_orphan_deployables,
     run_deployment, run_deployment_destroy, find_deployable, destroy_policy, DeletionPolicy)
-__all__ += ['find_deployable', 'find_deployables', 'DeployableFinder',
+__all__ += ['auto_deploy_policy', 'find_deployable', 'find_deployables', 'DeployableFinder',
             'find_orphan_deployables',
             'run_deployment', 'run_deployment_destroy',
             'destroy_policy', 'DeletionPolicy']
