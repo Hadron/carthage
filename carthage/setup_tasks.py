@@ -24,7 +24,7 @@ import weakref
 import hashlib
 from pathlib import Path
 import carthage
-from carthage.dependency_injection import AsyncInjector, inject, BaseInstantiationContext, InjectionKey, NotPresent, inject_autokwargs, Injectable, Injector
+from carthage.dependency_injection import AsyncInjector, AsyncInjectable, inject, BaseInstantiationContext, InjectionKey, NotPresent, inject_autokwargs, Injectable, Injector
 from carthage.dependency_injection.introspection import current_instantiation
 from carthage.config import ConfigLayout
 from carthage.utils import memoproperty, import_resources_files
@@ -572,7 +572,7 @@ class SkipSetupTask(Exception):
     pass
 
 
-class SetupTaskMixin(PathMixin):
+class SetupTaskMixin(PathMixin, AsyncInjectable):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -28,7 +28,7 @@ from .machine import ContainerCustomization, FilesystemCustomization, customizat
 
 
 @inject_autokwargs(config_layout=ConfigLayout)
-class ContainerVolumeImplementation(AsyncInjectable, SetupTaskMixin):
+class ContainerVolumeImplementation(AsyncInjectable):
 
     def __init__(self, name, path, clone_from=None, **kwargs):
         super().__init__(**kwargs)
@@ -127,7 +127,7 @@ class ReflinkVolume(ContainerVolumeImplementation):
 
 
 
-class ContainerVolume(AsyncInjectable, SetupTaskMixin):
+class ContainerVolume( SetupTaskMixin):
 
     def __init__(self, name, *,
                  clone_from=None,
@@ -155,12 +155,7 @@ class ContainerVolume(AsyncInjectable, SetupTaskMixin):
 
     async def async_ready(self):
         await self.impl.async_ready()
-        await self.populate_volume()
         await super().async_ready()
-
-    async def populate_volume(self):
-        "Populate the container volume; called for volumes that exist or are empty"
-        return await self.run_setup_tasks()
 
     @property
     def path(self):
@@ -618,7 +613,7 @@ class BlockVolume(ImageVolume):
 )
 
 @inject_autokwargs(config_layout=ConfigLayout)
-class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
+class ContainerImageMount(SetupTaskMixin):
 
     '''Mount a disk image for use as a container_image or
     container_volume.  Note that this works for LVM and raw images, but
@@ -661,7 +656,6 @@ class ContainerImageMount(AsyncInjectable, SetupTaskMixin):
 
     async def async_ready(self):
         try:
-            await self.run_setup_tasks()
             return await super().async_ready()
         except BaseException:
             self.close()

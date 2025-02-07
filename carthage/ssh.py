@@ -65,7 +65,7 @@ class RsyncPath:
 
 @inject(
     ainjector=AsyncInjector)
-class SshKey(AsyncInjectable, SetupTaskMixin):
+class SshKey(SetupTaskMixin):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -76,9 +76,8 @@ class SshKey(AsyncInjectable, SetupTaskMixin):
         return Path(self.config_layout.state_dir)/"ssh_known_hosts"
 
     async def async_ready(self):
-        await self.run_setup_tasks()
+        await super().async_ready()
         self.agent = await self.ainjector(ssh_agent, key=dependency_quote(self))
-        return await super().async_ready()
 
     @setup_task('gen-key')
     async def generate_key(self):
