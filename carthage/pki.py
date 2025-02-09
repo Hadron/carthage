@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2020, 2024, Hadron Industries, Inc.
+# Copyright (C) 2018, 2020, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -18,6 +18,8 @@ from .utils import memoproperty
 from . import machine
 from .setup_tasks import *
 
+from .pki_utils import *
+
 RESOURCES_DIR = pathlib.Path(__file__).parent.joinpath('resources')
 
 __all__ = []
@@ -31,7 +33,7 @@ def split_pem(s):
         m = re.search(f'{bstr}[^-]+{estr}', s)
         if not m:
             break
-        yield m.group(0)
+        yield x509_annotate_str(m.group(0))
         s = s[m.end(0):]
 
 @inject(injector=Injector)
@@ -58,9 +60,6 @@ def ca_file(certificates, *,
         certificates = list(split_pem(certificates))
     with ca_path.open('wt') as ca_file:
         for certificate in certificates:
-            try:
-                certificate = x509_modify(certificate)
-            except (NameError, ImportError): pass
             ca_file.write(certificate)
     return ca_path
 
@@ -138,14 +137,12 @@ class EntanglementPkiManager(PkiManager):
         key_path = self.pki_dir/f'{hostname}.key'
         cert_path = self.pki_dir/f'{hostname}.pem'
         cert = cert_path.read_text()
-        try:
-            cert = x509_modify(cert)
-        except (NameError, ImportError): pass
+        cert = x509_annotate(cert)
         return key_path.read_text(), cert
 
     async def certificates(self, include_expired=True):
         for cert in self.pki_dir.glob('*.pem'):
-            yield cert.read_text()
+            yield x509_annotate(cert.read_text())
 
     async def trust_store(self):
         return await self.ainjector(
@@ -160,15 +157,19 @@ class EntanglementPkiManager(PkiManager):
     @memoproperty
     def pki_dir(self):
         ret = pathlib.Path(self.config_layout.state_dir)/"pki"
-        ret.mkdir(exist_ok=True, parents=True)
+        ret.mkdir(exist_ok=True, parents=True, mode=0o700)
         return ret
 
     @property
     def ca_cert(self):
+        ca_path = self.pki_dir/'ca.pem'
+        try:
+            if certificate_is_expired(ca_path.read_text(), fraction_left=0.33):
+                ca_path.unlink()
+        except FileNotFoundError: pass
         sh.entanglement_pki('-d', self.pki_dir,
                             '--ca-name', "Carthage Root CA", _bg=False)
-        with open(self.pki_dir / 'ca.pem', 'rt') as f:
-            return f.read()
+        return ca_path.read_text()
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
