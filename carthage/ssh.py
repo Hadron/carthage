@@ -244,7 +244,7 @@ class SshAgent(Injectable):
             self.handle_key(key)
         elif key:  # not ready
             future = asyncio.ensure_future(key.async_become_ready())
-            future.add_done_callback(lambda f: self.handle_key(f.result( or key)))
+            future.add_done_callback(lambda f: self.handle_key(f.result() or key))
         ssh_config = run.joinpath('ssh_config')
         ssh_config_text = f'''
 UserKnownHostsFile {config_layout.state_dir}/ssh_known_hosts
