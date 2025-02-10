@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2024, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -244,7 +244,7 @@ class SshAgent(Injectable):
             self.handle_key(key)
         elif key:  # not ready
             future = asyncio.ensure_future(key.async_become_ready())
-            future.add_done_callback(lambda f: self.handle_key(f.result()))
+            future.add_done_callback(lambda f: self.handle_key(f.result( or key)))
         ssh_config = run.joinpath('ssh_config')
         ssh_config_text = f'''
 UserKnownHostsFile {config_layout.state_dir}/ssh_known_hosts
