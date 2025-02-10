@@ -19,7 +19,7 @@ jobs:
       - name: install dependencies
         run: |
           sudo apt -q update
-          sudo apt -y install systemd-container socat qemu-utils fai-setup-storage fai-server python3-mako python3-sh python3-pyvmomi python3-yaml python3-pytest python3-lmdb python3-dateutil ansible genisoimage
+          sudo apt -y install systemd-container socat qemu-utils fai-setup-storage fai-server python3-mako python3-sh python3-pyvmomi python3-yaml python3-pytest python3-lmdb python3-dateutil ansible python3-six genisoimage
       - name: Login to ghcr.io
         uses: redhat-actions/podman-login@v1
         with:

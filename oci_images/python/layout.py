@@ -36,7 +36,7 @@ class layout(CarthageLayout):
         oci_image_tag = 'localhost/carthage_debian_base:latest'
 
         class install(ContainerCustomization):
-            install_software = install_stage1_packages_task(['ansible', 'systemd'])
+            install_software = install_stage1_packages_task(['ansible', 'systemd', 'python3-six'])
 
         debian_customizations = DebianContainerCustomizations
 
