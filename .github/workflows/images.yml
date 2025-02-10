@@ -35,7 +35,7 @@ jobs:
 
       - name: upload ansible log
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: images ansible.log
           path: oci_images/ansible.log

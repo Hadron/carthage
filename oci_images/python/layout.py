@@ -26,13 +26,13 @@ _dir = Path(__file__).parent.parent
 
 class layout(CarthageLayout):
     add_provider(carthage.ansible.ansible_log, str(_dir/"ansible.log"))
-    add_provider(config_key('debian.distribution'), 'bookworm')
+    add_provider(config_key('debian.distribution'), 'trixie')
     add_provider(ConfigLayout)
 
     @inject(base_image=None)
     class OurBaseImage(PodmanImageModel):
         name = 'base-carthage'
-        base_image ='debian:bookworm'
+        base_image ='debian:trixie'
         oci_image_tag = 'localhost/carthage_debian_base:latest'
 
         class install(ContainerCustomization):
