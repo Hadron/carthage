@@ -424,7 +424,7 @@ __all__ += ['run_playbook']
         )
 async def run_play(hosts, play,
                    *, raise_on_failure=True,
-                   gather_facts=True,
+                   gather_facts=False,
                    base_vars=None,
                    vars=None, inventory=None,
                    log=None,
