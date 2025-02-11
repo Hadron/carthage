@@ -1,4 +1,4 @@
-# Copyright (C)  2022, 2023, Hadron Industries, Inc.
+# Copyright (C)  2022, 2023, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -82,12 +82,6 @@ class PodmanPodModel( carthage.machine.NetworkedModel, ModelContainer, AsyncInje
                          close=False,
                          propagate=cls.pod_name_global,
                          transclusion_overrides=cls.pod_name_global)
-            cls.add_provider(InjectionKey(carthage.machine.ResolvableModel, name=cls.name_for(), role='pod', _globally_unique=cls.pod_name_global),
-                         injector_access(InjectionKey(PodmanPod)),
-                         close=False,
-                         propagate=cls.pod_name_global,
-                         transclusion_overrides=cls.pod_name_global)
-            propagate_key(InjectionKey(carthage.machine.ResolvableModel, name=cls.name_for()+'-pod', _globally_unique=True))(cls)
             propagate_key(cls.our_key(), cls)
                                          
                                           
