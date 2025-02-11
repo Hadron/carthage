@@ -29,22 +29,28 @@ from carthage.modeling import CarthageLayout, instantiate_layout
 logger = logging.getLogger('carthage')
 
 machines = []
-        
-async def queue_worker():
-    global machines
-    while True:
-        name, action = await machine_queue.get()
-        try:
-            m_new = await ainjector.get_instance_async(InjectionKey(Machine, host = name))
-            if isinstance(m_new, LocalMachine): continue
-            if action == 'start':
-                await m_new.start_machine()
-            elif action == 'stop':
-                await m_new.stop_machine()
-        except Exception:
-            print('Error Creating {}'.format(name))
-            traceback.print_exc()
 
+async def queue_worker_one(ainjector):
+    '''One round of queue worker action
+    '''
+    global machines
+    name, action = await machine_queue.get()
+    try:
+        m_new = await ainjector.get_instance_async(InjectionKey(Machine, host = name, _ready=(True if action == 'start' else False)))
+        if isinstance(m_new, LocalMachine): return
+        if action == 'start':
+            await m_new.start_machine()
+        elif action == 'stop':
+            await m_new.is_machine_running()
+            await m_new.stop_machine()
+    except Exception:
+        print('Error Creating {}'.format(name))
+        traceback.print_exc()
+
+async def queue_worker():
+    while True:
+        await queue_worker_one(ainjector)
+        
 async def queue_explicit(l, action):
     for m in l:
         machine_queue.put_nowait((m, action))
@@ -83,8 +89,6 @@ async def run():
     elif 'stop' in args.actions:
         await queue_all('stop')
 
-    queue_workers.append(loop.create_task(queue_worker()))
-    queue_workers.append(loop.create_task(queue_worker()))
 
     async def run_console():
         console.locals['ainjector'] = ainjector
@@ -98,12 +102,16 @@ async def run():
         await loop.run_in_executor(None, console.interact)
 
     if args.console:
+        queue_workers.append(loop.create_task(queue_worker()))
+        queue_workers.append(loop.create_task(queue_worker()))
         try:
             await run_console()
         except Exception:
             logger.exception('console failed:')
     else:
-        await asyncio.sleep(2**31)
+        while not machine_queue.empty():
+            await queue_worker_one(ainjector)
+            
             
     global machines
     futures = []
