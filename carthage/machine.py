@@ -295,7 +295,7 @@ class ResolvableModel(Injectable):
 #: If this key is provided in the injector context of a :class:`NetworkedModel`, then that model assumes it is in the namespace of the :class:`NetworkedModel` or :class:`Machine` providing this key.  Rather than resolving the network config, the *network_links* property of the object providing this key is reused.
 network_namespace_key = InjectionKey('carthage.machine.network_namespace', _ready=False)
 
-class NetworkedModel(ResolvableModel):
+class NetworkedMixin:
 
     '''Represents something like a :class:`AbstractMachineModel` or a :class:`carthage.podman.PodmanPod` that generates a set of network_links from a :class:`~NetworkConfig`.
 
@@ -336,9 +336,14 @@ class NetworkedModel(ResolvableModel):
 
     async def resolve_model(self, force:bool=False):
         await self.resolve_networking(force=force)
-        return await super().resolve_model(force=force)
+        if isinstance(self,ResolvableModel):
+            return await super().resolve_model(force=force)
 
+class NetworkedModel(NetworkedMixin, ResolvableModel):
 
+    '''A NetworkedMixin that should be available at modeling time.  Generally not a :class:`~carthage.deployment.Deployable` unless *no_generate_at_ready* is True.
+    '''
+    
 class AbstractMachineModel(NetworkedModel):
 
     '''
@@ -374,7 +379,7 @@ class AbstractMachineModel(NetworkedModel):
 
 
 @inject_autokwargs(config_layout=ConfigLayout)
-class Machine(AsyncInjectable, SshMixin):
+class Machine(NetworkedMixin, AsyncInjectable, SshMixin):
 
     '''
     Represents a machine that can be interacted with.
@@ -394,7 +399,6 @@ class Machine(AsyncInjectable, SshMixin):
 
     model: typing.Optional[AbstractMachineModel]
     name: str
-    network_links: typing.Mapping[str, carthage.network.NetworkLink]
     #: A class of :class:`~carthage.network.TechnologySpecificNetwork` that will be instantiated for the links on this NetworkedModel.
     network_implementation_class: type[carthage.network.TechnologySpecificNetwork] = None
 
@@ -415,7 +419,10 @@ class Machine(AsyncInjectable, SshMixin):
         self.injector.add_provider(InjectionKey(Machine), self)
         if not hasattr(self, 'model'):
             self.model = None
+        else:
+            self.injector.add_provider(network_namespace_key, injector_xref(None, InjectionKey(AbstractMachineModel, _ready=False)))
         self.running = None
+        self.network_links = {}
 
     def machine_running(self, **kwargs):
         '''Returns a asynchronous context manager; within the context manager, the machine is expected to be running unless :meth:`stop_machine` is explicitly called.
@@ -425,12 +432,6 @@ class Machine(AsyncInjectable, SshMixin):
     @property
     def full_name(self):
         return self.config_layout.container_prefix + self.name
-
-    @memoproperty
-    def network_links(self):
-        if self.model:
-            return self.model.network_links
-        return {}
 
     #: If true, use self.filesystem_access for rsync, otherwise use ssh.
     rsync_uses_filesystem_access:bool = False
@@ -581,24 +582,6 @@ class Machine(AsyncInjectable, SshMixin):
             pass
         res += ">"
         return res
-
-    async def resolve_networking(self, force: bool = False):
-        '''
-        Adds all :class:`carthage.network.NetworkLink` objects specified in the :class:`carthage.network.NetworkConfig`  to the network_links property.
-
-        :param force: if True, resolve the network config even if it has already been resolved once.
-
-        '''
-        from carthage.network import NetworkConfig
-        if not force and self.network_links:
-            return
-        try:
-            network_config = await self.ainjector.get_instance_async(NetworkConfig)
-        except KeyError:
-            return
-        if network_config is None:
-            return
-        result = await self.ainjector(network_config.resolve, self.model or self)
 
     async def apply_customization(self, cust_class, method='apply', **kwargs):
         '''
@@ -1004,7 +987,7 @@ __all__ = ['AbstractMachineModel',
            'ssh_origin',
            'ssh_jump_host',
            'Machine', 'MachineRunning', 'BareMetalMachine',
-           'ResolvableModel', 'NetworkedModel',
+           'ResolvableModel', 'NetworkedMixin', 'NetworkedModel',
            'SshMixin', 'BaseCustomization', 'ContainerCustomization',
            'FilesystemCustomization',
            'MachineCustomization']
