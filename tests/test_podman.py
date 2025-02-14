@@ -165,11 +165,13 @@ class podman_layout(CarthageLayout):
             def set_variable(self):
                 self.host.model.task_called = True
 
+    @provides("true_image")
     class TrueImage(ContainerfileImageModel):
 
         oci_image_tag = 'localhost/true:latest'
         container_context = 'resources/true_container'
 
+    @provides("dynamic_image")
     class DynamicContainerFileImage(ContainerfileImage):
         oci_image_tag = 'localhost/dynamic:latest'
         container_context = 'resources/dynamic_container'
@@ -183,12 +185,12 @@ exit 0
 
 
     class true_machine(MachineModel):
-        add_provider(oci_container_image, injector_access(TrueImage))
+        add_provider(oci_container_image, injector_access("true_image"))
 
         name = 'true-machine'
 
     class dynamic_machine(MachineModel):
-        add_provider(oci_container_image, injector_access(DynamicContainerFileImage))
+        add_provider(oci_container_image, injector_access("dynamic_image"))
 
         name = 'dynamic-machine'
 
