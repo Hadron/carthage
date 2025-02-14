@@ -29,7 +29,12 @@ from .container_host import instantiate_container_host
 
 logger = logging.getLogger('carthage.podman')
 
-
+def process_inspect_result(target:OciManaged, result:dict):
+    match result:
+        case {'Config':{'Labels': dict() as labels}} | \
+             {'Labels': dict() as labels}:
+            target.oci_labels.update(labels)
+            
 def podman_port_option(p: OciExposedPort):
     res = f'-p{p.host_ip}:{p.host_port}:{p.container_port}'
     if p.proto != 'tcp':
@@ -107,6 +112,10 @@ class PodmanNetwork(HasContainerHostMixin, TechnologySpecificNetwork, OciManaged
 
     async def do_create(self):
         options = ['-d', 'bridge']
+        from ..modeling import CarthageLayout
+        layout = await self.ainjector.get_instance_async(InjectionKey(CarthageLayout, _optional=True))
+        if layout_name := layout and layout.layout_name:
+            options.extend(['--label', 'carthage.layout='+layout_name])
         v4_config = getattr(self.network, 'v4_config', None)
         if v4_config:
             if v4_config.network:
@@ -243,6 +252,10 @@ class PodmanPod(HasContainerHostMixin, PodmanNetworkMixin, carthage.machine.Netw
         for p in self.exposed_ports:
             options.append(podman_port_option(p))
         options.extend(self.podman_pod_options)
+        from ..modeling import CarthageLayout
+        layout = await self.ainjector.get_instance_async(InjectionKey(CarthageLayout, _optional=True))
+        if layout_name := layout and layout.layout_name:
+            options.extend(['--label', 'carthage.layout='+layout_name])
         await self.podman(
             'pod', 'create',
             *options,
@@ -341,6 +354,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         except sh.ErrorReturnCode:
             return False
         containers = json.loads(str(result))
+        process_inspect_result(self, containers[0])
         self.container_info = containers[0]
         ports = self.container_info['NetworkSettings']['Ports']
         if not hasattr(self, 'ssh_port') and '22/tcp' in ports:
@@ -376,6 +390,10 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     async def _podman_create_options(self):
         options = []
+        from ..modeling import CarthageLayout
+        layout = await self.ainjector.get_instance_async(InjectionKey(CarthageLayout, _optional=True))
+        if layout_name := layout and layout.layout_name:
+            options.extend(['--label', 'carthage.layout='+layout_name])
         options.append('--restart=' + self.podman_restart)
         if self.oci_interactive:
             options.append('-i')
@@ -594,6 +612,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
             return False
         info = json.loads(str(result))[0]
         self.id = info['Id']
+        process_inspect_result(self, info)
         self.image_info = info
         return dateutil.parser.isoparse(info['Created']).timestamp()
 
@@ -657,6 +676,10 @@ class PodmanImage(OciImage, SetupTaskMixin):
 
     async def commit_container(self, container, commit_message):
         options = self._commit_options()
+        from ..modeling import CarthageLayout
+        layout = await self.ainjector.get_instance_async(InjectionKey(CarthageLayout, _optional=True))
+        if layout_name := layout and layout.layout_name:
+            options.extend(['--change', 'LABEL carthage.layout='+layout_name])
         if self.oci_image_author:
             options.append('--author=' + self.oci_image_author)
         if commit_message:
@@ -867,6 +890,7 @@ class ContainerfileImage(OciImage):
         except sh.ErrorReturnCode: return False
         inspect_json = json.loads(str(inspect_result.stdout, 'utf-8'))
         created = dateutil.parser.isoparse(inspect_json[0]['Created']).timestamp()
+        process_inspect_result(self, inspect_json[0])
         hadron_mtime_str = inspect_json[0]['Annotations'].get('com.hadronindustries.carthage.image_mtime')
         if hadron_mtime_str:
             hadron_mtime = dateutil.parser.isoparse(hadron_mtime_str).timestamp()
@@ -889,6 +913,10 @@ class ContainerfileImage(OciImage):
 
     async def _build_options(self):
         options = []
+        from ..modeling import CarthageLayout
+        layout = await self.ainjector.get_instance_async(InjectionKey(CarthageLayout, _optional=True))
+        if layout_name := layout and layout.layout_name:
+            options.extend(['--label', 'carthage.layout='+layout_name])
         # Instantiate a container simply so we can ask it for volume, mount, and environment options.
         with instantiation_not_ready():
             container = await self.ainjector(PodmanContainer, name='image_options')
@@ -927,6 +955,7 @@ class PodmanVolume(HasContainerHostMixin, OciManaged):
         except sh.ErrorReturnCode:
             return False
         info = json.loads(str(result))[0]
+        process_inspect_result(self, info)
         try:
             return dateutil.parser.isoparse(info['CreatedAt']).timestamp()
         except (KeyError, ValueError):
@@ -934,9 +963,14 @@ class PodmanVolume(HasContainerHostMixin, OciManaged):
             raise NotImplementedError('Podman too old')
 
     async def do_create(self):
+        options = []
+        from ..modeling import CarthageLayout
+        layout = await self.ainjector.get_instance_async(InjectionKey(CarthageLayout, _optional=True))
+        if layout_name := layout and layout.layout_name:
+            options.extend(['--label', 'carthage.layout='+layout_name])
         return await self.podman(
             'volume', 'create',
-            self.name)
+            *options, self.name)
 
     async def delete(self):
         await self.podman(

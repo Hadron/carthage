@@ -1,4 +1,4 @@
-# Copyright (C)  2022, 2023, 2024, Hadron Industries, Inc.
+# Copyright (C)  2022, 2023, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -27,13 +27,17 @@ class PodmanDeployableFinder(carthage.DeployableFinder):
 
     async def find(self, ainjector):
         '''
-        Find all PodmanPods. PodmanContainers are found by the machine deployable finder.
+        Find all PodmanPods, PodmanVolumes, and PodmanImages. PodmanContainers are found by the machine deployable finder.
         '''
         result = []
+        for c in (PodmanPod, PodmanVolume):
+            filter_result = await ainjector.filter_instantiate_async(
+            c, ['name'],
+                ready=False,
+                stop_at=ainjector)
+            result += [x[1] for x in filter_result]
         filter_result = await ainjector.filter_instantiate_async(
-            PodmanPod, ['name'],
-            ready=False,
-            stop_at=ainjector)
+            PodmanImage, ['oci_image_tag'], ready=False)
         result += [x[1] for x in filter_result]
         return result
     

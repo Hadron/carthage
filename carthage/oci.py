@@ -1,4 +1,4 @@
-# Copyright (C)  2022, 2024, Hadron Industries, Inc.
+# Copyright (C)  2022, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -34,6 +34,12 @@ __all__ += ['oci_container_network_config']
 
 class OciManaged(SetupTaskMixin, AsyncInjectable):
 
+    oci_labels: dict[str,str]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.oci_labels = {}
+        
     @property
     def deployable_names(self):
         '''Uses each of self.deployable_name_prefixes as a name_type for self.name and self.id.
