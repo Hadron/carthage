@@ -90,7 +90,7 @@ class BtrfsVolume(ContainerVolumeImplementation):
                                str(self.path),
                                _bg=True, _bg_exc=False)
             else:
-                await clone_from.async_become_ready()
+                await self.clone_from.async_become_ready()
                 await sh.btrfs('subvolume', 'snapshot', str(self.clone_from.path), str(self.path),
                                _bg=True, _bg_exc=False)
             return await super().async_ready()
@@ -106,7 +106,7 @@ class ReflinkVolume(ContainerVolumeImplementation):
             return await super().async_ready()
         os.makedirs(self.path.parent, exist_ok=True)
         if self.clone_from:
-            await clone_from.async_become_ready()
+            await self.clone_from.async_become_ready()
             await sh.cp(
                 "-a", "--reflink=auto",
                 str(self.clone_from.path),
