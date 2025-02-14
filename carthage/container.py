@@ -33,7 +33,6 @@ container_volume = InjectionKey('container-volume')
 
 @inject(image=InjectionKey(container_image, _ready=False),
         loop=asyncio.AbstractEventLoop,
-        config_layout=ConfigLayout,
         network_config=InjectionKey(carthage.network.NetworkConfig, optional=True),
         injector=Injector)
 class Container(Machine, SetupTaskMixin):
@@ -60,7 +59,6 @@ class Container(Machine, SetupTaskMixin):
             vol = await self.ainjector.get_instance_async(container_volume)
             self.close_volume = False
         except KeyError:
-            await self.image.async_become_ready()
             vol = await self.ainjector(ContainerVolume,
                                        clone_from=self.image,
                                        name="containers/" + self.name)
