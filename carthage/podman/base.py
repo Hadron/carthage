@@ -25,6 +25,7 @@ from ..network import TechnologySpecificNetwork, Network, V4Config, this_network
 from ..oci import *
 from ..setup_tasks import setup_task, SetupTaskMixin, TaskWrapperBase, SkipSetupTask
 from .container_host import instantiate_container_host
+import carthage.modeling
 
 
 logger = logging.getLogger('carthage.podman')
@@ -82,7 +83,8 @@ class HasContainerHostMixin(OciManaged):
 class PodmanNetwork(HasContainerHostMixin, TechnologySpecificNetwork, OciManaged):
 
     container_host: PodmanContainerHost = None
-
+    deployable_name_prefixes = ['podman_network:']
+    
     @property
     def podman(self):
         return self.container_host.podman
@@ -219,6 +221,8 @@ class PodmanPod(HasContainerHostMixin, PodmanNetworkMixin, carthage.machine.Netw
     #: A list of extra options to pass to pod create
     podman_pod_options = []
 
+    deployable_name_prefixes = ['podman_pod', 'pod']
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.injector.add_provider(InjectionKey(PodmanPod), dependency_quote(self))
@@ -330,6 +334,8 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             ansible_host=self.full_name,
         )
 
+    deployable_name_prefixes = ['container', 'podman', 'machine']
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._operation_lock = asyncio.Lock()
@@ -339,7 +345,6 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
     def podman(self):
         return self.container_host.podman
 
-    deployable_name_prefixes = ['PodmanContainer', 'OciContainer', 'Machine']
 
     async def find(self):
         if not self.container_host:
@@ -734,6 +739,18 @@ class PodmanImage(OciImage, SetupTaskMixin):
     def stamp_subdir(self):
         return 'podman_image/'+self.oci_image_tag
 
+    @classmethod
+    def supplementary_injection_keys(cls, k):
+        yield InjectionKey(PodmanImage, oci_image_tag=cls.oci_image_tag)
+        yield from super().supplementary_injection_keys(k)
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if tag := getattr(cls, 'oci_image_tag', None):
+            carthage.modeling.propagate_key(
+                InjectionKey(PodmanImage, oci_image_tag=tag, _globally_unique=True),
+                cls)
+            
 
 __all__ += ['PodmanImage']
 podman_image_volume_key = InjectionKey('carthage.podman/image_volume')

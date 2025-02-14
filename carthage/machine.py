@@ -447,7 +447,7 @@ class Machine(NetworkedMixin, AsyncInjectable, SshMixin):
         if hasattr(super(), 'deployment_names'):
             extra = super().deployment_names
         else: extra = []
-        return ['Machine:'+self.name, *extra]
+        return ['machine:'+self.name, *extra]
         
     async def dynamic_dependencies(self):
         '''See :func:`carthage.deployment.Deployable.dynamic_dependencies` for documentation.

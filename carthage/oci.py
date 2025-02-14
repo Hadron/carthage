@@ -45,7 +45,7 @@ class OciManaged(SetupTaskMixin, AsyncInjectable):
         '''Uses each of self.deployable_name_prefixes as a name_type for self.name and self.id.
         '''
         res = []
-        if self.name:
+        if getattr(self, 'name', None):
             for name_type in self.deployable_name_prefixes:
                 res.append(f'{name_type}:{self.name}')
         if self.id:
@@ -56,7 +56,12 @@ class OciManaged(SetupTaskMixin, AsyncInjectable):
     @property
     def deployable_name_prefixes(self):
         return [self.__class__.__name__]
-    
+
+    def __str__(self):
+        try:
+            return f'{self.deployable_name_prefixes[0]}:{self.name}'
+        except Exception: return super().__str__()
+        
     async def find(self):
         '''Returns falsy if the object does not exist.  Ideally returns the creation time in unix time, otherwise returns True if the creation time cannot be determined.
         '''
@@ -181,6 +186,24 @@ class OciImage(OciManaged):
     oci_image_entry_point = None
     id = None
 
+    @property
+    def deployable_names(self):
+        return ['image:'+self.oci_image_tag]
+
+    def __init_subclass__(cls, **kwargs):
+        from .modeling.decorators import propagate_key
+        super().__init_subclass__(**kwargs)
+        if getattr(cls, 'oci_image_tag', None):
+            propagate_key(InjectionKey(OciImage, oci_image_tag=cls.oci_image_tag, _globally_unique=True), cls)
+
+    @classmethod
+    def default_class_injection_key(cls):
+        return InjectionKey(OciImage, oci_image_tag=cls.oci_image_tag)
+
+    @classmethod
+    def supplementary_injection_keys(cls, k):
+        yield InjectionKey(OciImage, oci_image_tag=cls.oci_image_tag)
+        
 
 __all__ += ['OciImage']
 
