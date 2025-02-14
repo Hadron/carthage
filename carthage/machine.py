@@ -420,7 +420,9 @@ class Machine(NetworkedMixin, AsyncInjectable, SshMixin):
         if not hasattr(self, 'model'):
             self.model = None
         else:
-            self.injector.add_provider(network_namespace_key, injector_xref(None, InjectionKey(AbstractMachineModel, _ready=False)))
+            try: self.injector._get_parent(network_namespace_key)
+            except KeyError:
+                self.injector.add_provider(network_namespace_key, injector_xref(None, InjectionKey(AbstractMachineModel, _ready=False)))
         self.running = None
         self.network_links = {}
 

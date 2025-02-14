@@ -413,6 +413,7 @@ async def test_podman_pod_network(layout_fixture):
                 pytest.xfail('Podman is too old')
             raise
         async with layout.net_pod.container.machine.machine_running():
+            await layout.net_pod.container.machine.resolve_networking() # so it picks up the network namespace key
             await layout.net_pod.container.machine.container_exec('apt', 'update')
             machine = layout.net_pod.container.machine
             await machine.container_exec('apt', '-y', 'install', 'iproute2')
@@ -420,6 +421,7 @@ async def test_podman_pod_network(layout_fixture):
             address =machine.network_links['eth0'].merged_v4_config.address
             assert address
             assert str(address) in str(result.stdout, 'utf-8')
+            assert layout.net_pod.network_links is layout.net_pod.container.machine.network_links
     finally:
         try: await layout.net_pod.pod.delete(force=True)
         except Exception: pass
