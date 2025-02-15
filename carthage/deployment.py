@@ -1,4 +1,4 @@
-# Copyright (C) 2023, 2024, Hadron Industries, Inc.
+# Copyright (C) 2023, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -733,7 +733,7 @@ async def run_deployment(
     '''
     async def callback(d):
         future = None
-        if not await filter_deployable(d, filter):
+        if d in to_ignore:
             logger.debug('Not deploying %s: excluded by filter', d)
             result.ignored.append(d)
             return
@@ -762,10 +762,8 @@ async def run_deployment(
             deployables_list = deployables.successes
             if delete_orphans:
                 orphans = deployables.orphans
-            if not dry_run: clear_dry_run_marker(deployables_list)
         case list():
             deployables_list = deployables
-            if not dry_run: clear_dry_run_marker(deployables_list)
         case _:
             deployables_list = await ainjector(
                 find_deployables,
@@ -774,13 +772,17 @@ async def run_deployment(
             )
     if delete_orphans and orphans is None:
         orphans = await ainjector(find_orphan_deployables, deployables=deployables_list)
+    to_ignore = await find_to_ignore(deployables_list, filter, dry_run=dry_run)
     result = DeploymentResult('deploy')
     futures = []
     with DeploymentIntrospection(ainjector.injector, result):
-        for d in deployables_list:
-            futures.append(asyncio.ensure_future(callback(d)))
-        if futures:
-            await asyncio.wait(futures) # We should already have captured in result
+        try:
+            for d in deployables_list:
+                futures.append(asyncio.ensure_future(callback(d)))
+            if futures:
+                await asyncio.wait(futures) # We should already have captured in result
+        finally:
+            if dry_run: clear_dry_run_marker(deployables_list)
     if delete_orphans and len(orphans) > 0:
         orphan_result = await ainjector(
             run_deployment_destroy,
@@ -852,6 +854,36 @@ async def filter_deployable(
 
 __all__ += ['filter_deployable']
 
+async def find_to_ignore(deployables, filter, *, dry_run):
+    '''
+    Filter a set of deployables and return the set to ignore.
+    readonly=DryRun will be cleared on any deployable that is not ignored.
+    '''
+    def gen_callback(d):
+        def cb(future):
+            try:
+                if future.result() is False:
+                    to_ignore.add(d)
+                else:
+                    if not dry_run and d.readonly is DryRun:
+                        d.readonly = False
+            except Exception:
+                logger.exception('Error filtering %s', d)
+                to_ignore.add(d)
+        return cb
+    futures = []
+    to_ignore = set()
+    for d in deployables:
+        if d.readonly not in (None, False, DryRun):
+            to_ignore.add(d)
+            continue
+        future = asyncio.ensure_future(filter_deployable(d, filter))
+        future.add_done_callback(gen_callback(d))
+        future.set_name(f'Filter {d}')
+        futures.append(future)
+    await asyncio.wait(futures)
+    return to_ignore
+
 GLOB_TO_RE_RE = re.compile(
     r'(?P<escape>(?:[^\\\*\?]|\\$)+)' \
     r'|(?P<backslash>\\.)' \
@@ -920,8 +952,7 @@ async def run_deployment_destroy(
         filter=lambda d:None,
         _policy_key: InjectionKey=destroy_policy,
         ainjector):
-    '''
-    Run a deployment destroy operation, calling :meth:`delete` on Deployables.
+    '''Run a deployment destroy operation, calling :meth:`delete` on Deployables.
 
     #. Find the objects using :func:`find_deployables_reverse_dependencies`
 
@@ -936,19 +967,35 @@ async def run_deployment_destroy(
 
     :param filter: If specified, a function that returns whether to operate on a given Deployable.
 
-    :param deployables: If specified, then operate on the given deployables (after applying *filter*) rather than calling :func:`find_deployables`. If *deployables* is a :class:`DeploymentResult`, then operate on the successes of that result. When *deployables* is specified and *dry_run* is not true, any :class:`Deployable` with *readonly* set to *DryRun* will have readonly cleared.  Typical use is to run a deployment with *dry_run* set to True and then after confirming that the deployment is desired, to pass in the :class:`DeploymentResult` from the dry run into a new call to :func:`run_deployment_destroy`.  When :func:`run_deployment` is used to delete orphans, it does the following internally:  For deleting orphans, call :func:`find_orphan_deployables` and pass in the orphans as *deployables* while setting *_policy_key* to *orphan_policy*. 
+    :param deployables: If specified, then operate on the given
+    deployables (after applying *filter*) rather than calling
+    :func:`find_deployables`. If *deployables* is a
+    :class:`DeploymentResult`, then operate on the successes of that
+    result. When *deployables* is specified and *dry_run* is not true,
+    any :class:`Deployable` with *readonly* set to *DryRun* will have
+    readonly cleared.  Typical use is to run a deployment with
+    *dry_run* set to True and then after confirming that the
+    deployment is desired, to pass in the :class:`DeploymentResult`
+    from the dry run into a new call to
+    :func:`run_deployment_destroy`.  When :func:`run_deployment` is
+    used to delete orphans, it does the following internally: For
+    deleting orphans, call :func:`find_orphan_deployables` and pass in
+    the orphans as *deployables* while setting *_policy_key* to
+    *orphan_policy*.
 
     :param _policy_key:  An internal parameter that allows :func:`run_deployment` to adjust which deletion policy is used when deleting orphans.
-    
+
     '''
     find_readonly = dry_run
+    if find_readonly:
+        readonly_set = set()
+    else:
+        readonly_set = None
     match deployables:
         case DeploymentResult():
             deployables_list = deployables.successes
-            if not dry_run: clear_dry_run_marker(deployables_list)
         case list():
             deployables_list = deployables
-            if not dry_run: clear_dry_run_marker(deployables_list)
         case _:
             deployables_list = await ainjector(
                 find_deployables,
@@ -969,7 +1016,7 @@ async def run_deployment_destroy(
                 good_to_go.add(d)
                 more_work()
                 return False
-            if d.readonly not in (DryRun, False, None) or not await filter_deployable(d, filter):
+            if d in to_ignore:
                 logger.debug('Ignoring %s and its reverse dependencies', d)
                 raise IgnoreDeployable
             policy = d.injector.get_instance(InjectionKey(_policy_key, _optional=True))
@@ -1005,10 +1052,13 @@ async def run_deployment_destroy(
             rdeps = reverse_dependencies[p]
             if failing_rdeps := (rdeps & failures):
                 submitted.add(p)
-                result.dependency_failures.append(
-                    DeploymentFailure(deployable=p,
-                                      exception=None,
-                                      depended_deployables=list(failing_rdeps)))
+                if p in to_ignore:
+                    result.ignored.append(p)
+                else:
+                    result.dependency_failures.append(
+                        DeploymentFailure(deployable=p,
+                                          exception=None,
+                                          depended_deployables=list(failing_rdeps)))
                 continue
             elif  rdeps - good_to_go:
                 continue
@@ -1028,13 +1078,17 @@ async def run_deployment_destroy(
     good_to_go = set()
     result = DeploymentResult('destroy')
     with DeploymentIntrospection(ainjector.injector, result):
-        more_work()
-        while futures:
-            futures_last_round = futures
-            futures = []
-            done, pending_futures = await asyncio.wait(futures_last_round)
-            assert not pending_futures
-            assert len(pending) == len([f for f in futures if not f.done()])
+        try:
+            to_ignore = await find_to_ignore(deployables_list,  filter, dry_run=dry_run)
+            more_work()
+            while futures:
+                futures_last_round = futures
+                futures = []
+                done, pending_futures = await asyncio.wait(futures_last_round)
+                assert not pending_futures
+                assert len(pending) == len([f for f in futures if not f.done()])
+        finally:
+            if not dry_run: clear_dry_run_marker(deployables_list)
     return result
 
 __all__ += ['run_deployment_destroy']
