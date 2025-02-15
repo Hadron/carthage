@@ -626,6 +626,16 @@ class PodmanImage(OciImage, SetupTaskMixin):
         '''
         return False
 
+    async def delete(self):
+        '''Try deleting an image.  If we get an error (probably
+        because it is in use by a container), untag instead.
+
+        '''
+        try:
+            await self.podman('image', 'rm', self.oci_image_tag)
+        except sh.ErrorReturnCode:
+            await self.podman('image', 'untag', self.oci_image_tag)
+            
     @contextlib.asynccontextmanager
     async def image_layer_context(self, commit_message=""):
         '''
