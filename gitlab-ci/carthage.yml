@@ -1,0 +1,169 @@
+spec:
+  inputs:
+    deploy_stage:
+      default: deploy
+      description: stage at which to run actual deployments.
+    dry_run_stage:
+      default: test
+      description: Stage in which dry run jobs are run.
+    CARTHAGE_CACHE_ACCESS:
+      description: Access for the artifact copy of the cache directory. May be useful for debugging, but access can be restricted for security
+      default: developer
+      options: ['all', 'developer', 'none']
+    carthage_url:
+      default: 'https://github.com/hadron/carthage'
+    cache_key:
+      default: $CI_COMMIT_REF_SLUG
+      description: Cache Key for Carthage to use
+    carthage_config:
+      default: ''
+      description: If specified, a config that will be loaded in all carthage runs
+---
+
+stages:
+- build
+- test
+- deploy
+
+variables:
+  CARTHAGE_CACHE_DIR:
+    description: "Where to store Carthage's cache; the default of carthage_cache will arrange for the runner to cache items and for the cache_dir to be copied as an artifact so it is available between prepare and deploy jobs even on different runners."
+    value: carthage_cache
+  CARTHAGE_INSTALL_DIR:
+    value: $CI_PROJECT_DIR/carthage_checkout/carthage
+    description: For the .carthage_install_from_git scriptlet, where is carthage installed to?
+  CARTHAGE_CHECKOUT_DIR: carthage_checkout
+  CARTHAGE_RUN_DEPLOY:
+    description: Should Carthage run deploy?
+    value: dry_run
+    options: ['no', 'yes', 'dry_run']
+  CARTHAGE_RUN_destroy:
+    description: Should Carthage run destroy before running deploy?
+    value: 'no'
+    options: ['no', 'yes', 'dry_run']
+  CARTHAGE_DEPLOY_MANUAL:
+    description: Should the final deploy job be manual?
+    value: no
+    options: ['no', 'yes']
+  CARTHAGE_DEPLOY_TAGS:
+    description: Runner tags for jobs that perform deployment or destroy operations.
+    value: ''
+  CARTHAGE_DEPLOY_INCLUDE:
+    description: Deployable names to include in a deployment run. If blank there is no include filter (default deployment according to the layout)
+    value: ''
+  CARTHAGE_DEPLOY_EXCLUDE:
+    description: Deployable names to exclude.
+    value: ''
+  CARTHAGE_DESTROY_INCLUDE: $CARTHAGE_DEPLOY_INCLUDE
+  CARTHAGE_DESTROY_EXCLUDE: $CARTHAGE_DEPLOY_EXCLUDE
+  
+.carthage_cache_setup:
+  cache:
+    key: '$[[ inputs.cache_key ]]'
+    paths: ['carthage_cache', 'carthage_checkout']
+
+.carthage_initial_script: &initial_script
+  - if [ -d /carthage ] ; then PATH=/carthage/bin:$PATH; fi
+  - |
+    cat >.carthage_ci_config.yml <<eof
+    checkout_dir: ${CARTHAGE_CHECKOUT_DIR}
+    cache_dir: ${CARTHAGE_CACHE_DIR}
+    plugins: ['.']
+    eof
+  - carthage_args="--config .carthage_ci_config.yml"
+  - if [ -n "$[[ inputs.carthage_config ]]" ]; then carthage_args="--config $[[ inputs.carthage_config ]] $carthage_args"; fi
+  - echo $carthage_args
+  - carthage $carthage_args install_dependencies
+
+prepare:
+  artifacts:
+    name: cache_dir
+    access: '$[[ inputs.CARTHAGE_CACHE_ACCESS ]]'
+    expose_as: cache_dir
+    paths: ['carthage_cache']
+  stage: build
+  extends:
+    - .carthage_cache_setup
+  script:
+    - *initial_script
+    - carthage-runner $carthage_args --generate --no-console
+
+.carthage_install_from_git:
+  before_script:
+  - |
+    if  [ -d $CARTHAGE_INSTALL_DIR ]; then
+    (cd $CARTHAGE_INSTALL_DIR && git pull --rebase --autostash )
+    else
+    git clone $[[ inputs.carthage_url ]] $CARTHAGE_INSTALL_DIR
+    fi
+    PATH=$CARTHAGE_INSTALL_DIR/bin:$PATH
+
+. setup_deployment_filter: &setup_deployment_filter
+  - |
+    deploy_args=""
+    if test "$CARTHAGE_RUN_DEPLOY" = "dry_run" ; then
+    deploy_args="--dry-run $deploy_args"
+    fi
+    if test "$CARTHAGE_RUN_DESTROY" = "dry_run" ; then
+    destroy_args="--dry-run $destroy_args"
+    fi
+    destroy_args=""
+    if test -n "$CARTHAGE_DESTROY_INCLUDE" ; then
+    destroy_args="$destroy_args --include $CARTHAGE_DESTROY_INCLUDE"
+    fi
+    if test -n "$CARTHAGE_DESTROY_EXCLUDE" ; then
+    destroy_args="$destroy_args --exclude $CARTHAGE_DESTROY_EXCLUDE"
+    fi
+    if test -n "$CARTHAGE_DELPOY_INCLUDE" ; then
+    deploy_args="$deploy_args --include $CARTHAGE_DEPLOY_INCLUDE"
+    fi
+    if test -n "$CARTHAGE_DEPLOY_EXCLUDE"; then
+    deploy_args="$deploy_args --exclude $CARTHAGE_DEPLOY_EXCLUDE";
+    fi
+    
+
+.carthage_deploy_dryrun:
+  stage: $[[ inputs.dry_run_stage ]]
+  rules:
+    - if: $CARTHAGE_RUN_DEPLOY == 'yes' || $CARTHAGE_RUN_DESTROY == 'yes'
+  extends:
+    - .carthage_cache_setup
+  tags:
+    - $CARTHAGE_DEPLOY_TAGS
+  script:
+    - *initial_script
+    - *setup_deployment_filter
+    - |
+      if test "$CARTHAGE_RUN_DESTROY" = "yes" ;then
+      carthage-runner $carthage_args destroy --dry-run  $destroy_args
+      fi
+    - |
+      if test "$CARTHAGE_RUN_DEPLOY" = "yes" ; then
+      carthage-runner $carthage_args deploy --dry-run $deploy_args
+      fi
+      
+.carthage_deploy:
+  stage: $[[ inputs.deploy_stage ]]
+  rules:
+    - if: $CARTHAGe_RUN_DEPLOY == 'no' && $CARTHAGE_RUN_DESTROY == 'no'
+      when: never
+    - if: '$CARTHAGE_DEPLOY_MANUAL == "yes"'
+      when: manual
+    - when: on_success
+  extends:
+    - .carthage_cache_setup
+  tags:
+    - $CARTHAGE_DEPLOY_TAGS
+  script:
+    - *initial_script
+    - *setup_deployment_filter
+    # setup_deployment_filter adds --dry-run if the final deployment is a dry run
+    - |
+      if test "$CARTHAGE_RUN_DESTROY" = "yes" ;then
+      carthage-runner $carthage_args destroy --force-confirm $destroy_args
+      fi
+    - |
+      if test "$CARTHAGE_RUN_DEPLOY" = "yes" ; then
+      carthage-runner $carthage_args deploy --force-confirm $deploy_args
+      fi
+      
