@@ -43,7 +43,7 @@ variables:
     options: ['no', 'yes', 'dry_run']
   CARTHAGE_DEPLOY_MANUAL:
     description: Should the final deploy job be manual?
-    value: no
+    value: 'no'
     options: ['no', 'yes']
   CARTHAGE_DEPLOY_TAGS:
     description: Runner tags for jobs that perform deployment or destroy operations.
