@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2023, 2024, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2023, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -14,7 +14,6 @@ from ..dependency_injection import inject, Injectable, InjectionKey, Injector, p
 import carthage
 
 from .schema import config_key, ConfigAccessor, ConfigSchema
-
 
 @inject(injector=Injector)
 class ConfigLayout(ConfigAccessor, Injectable):
@@ -84,6 +83,7 @@ class ConfigLayout(ConfigAccessor, Injectable):
         '''
         :param ignore_import_errors: If true, then loading a plugin will not fail simply because the plugin's python code  raises an error.  This is intended to allow introspection of plugin metadata to determine plugin dependencies; actually trying to use a plugin that has raised an error on load is unlikely to work.
         '''
+        from . import types as config_types
         if injector is None:
             injector = self._injector
         if path:
@@ -111,6 +111,9 @@ class ConfigLayout(ConfigAccessor, Injectable):
             plugin_mappings = injector.get_instance(carthage.plugins.PluginMappings)
             assert isinstance(d['plugin_mappings'], list), "plugin_mappings is a list of mappings"
             for mapping in d.pop('plugin_mappings'):
+                for k in ('to', 'map'):
+                    if k not in mapping: continue
+                    mapping[k] = injector(config_types.ConfigPath, mapping[k])
                 plugin_mappings.add_mapping(mapping)
         if 'plugins' in d:
             for p in d['plugins']:
