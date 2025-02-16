@@ -276,14 +276,21 @@ async def run_playbook(hosts,
                        origin=None,
                        ):
 
-    '''
-    Run an ansible playbook against a set of hosts.
+    '''Run an ansible playbook against a set of hosts.
     A new ansible configuration is created for each run of ansible.
     if *log* is ``None`` then ansible output is parsed and an :class:`AnsibleResult` is returned.  Otherwise ``True`` is returned on a successful ansible run.
 
     :param playbook: Path to the playbook local to *origin*.  The current directory when ansible is run will be the directory containing the playbook.
 
-    :param hosts: A list of hosts to run the play against.  Hosts can be strings, or :class:`Machine` objects.  For machine objects, *ansible_inventory_name* will be tried before :meth:`Machine.name`.  If a machine is not running and has :meth:`ansible_not_running_context`, then that asyncronous context manager will be entered.  The return from that context manager will be used as inventory variables for the machine.  For example :class:`~carthage.container.Container` uses this to arrange to run ansible plays without booting a container.
+    :param hosts: A list of hosts to run the play against.  Hosts can
+    be strings, or :class:`Machine` objects.  For machine objects,
+    *ansible_inventory_name* will be tried before
+    :meth:`Machine.name`.  If a machine is not running and has
+    :meth:`ansible_not_running_context`, then that asyncronous context
+    manager will be entered.  The return from that context manager
+    will be used as inventory variables for the machine.  For example
+    :class:`~carthage.container.Container` uses this to arrange to run
+    ansible plays without booting a container.
 
 :param log: A local path where a log of output and errors should be created or ``None`` to parse the ansible result programatically after ansible completes.  It is not possible to produce human readable output and a result that can be parsed at the same time without writing a custom ansible callback plugin.
 
