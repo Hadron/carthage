@@ -28,7 +28,7 @@ stages:
 variables:
   CARTHAGE_CACHE_DIR:
     description: "Where to store Carthage's cache; the default of carthage_cache will arrange for the runner to cache items and for the cache_dir to be copied as an artifact so it is available between prepare and deploy jobs even on different runners."
-    value: carthage_cache
+    value: $CI_PROJECT_DIR/carthage_cache
   CARTHAGE_INSTALL_DIR:
     value: $CI_PROJECT_DIR/carthage_checkout/carthage
     description: For the .carthage_install_from_git scriptlet, where is carthage installed to?
