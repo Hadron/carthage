@@ -82,7 +82,7 @@ prepare:
     expose_as: cache_dir
     paths: ['carthage_cache']
   stage: build
-  interruptable: true
+  interruptible: true
   extends:
     - .carthage_cache_setup
   script:
@@ -124,7 +124,7 @@ prepare:
     
 
 .carthage_deploy_dryrun:
-  interruptable: true
+  interruptible: true
   stage: $[[ inputs.dry_run_stage ]]
   rules:
     - if: $CARTHAGE_RUN_DEPLOY == 'yes' || $CARTHAGE_RUN_DESTROY == 'yes'
