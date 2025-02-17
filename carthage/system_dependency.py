@@ -12,6 +12,9 @@ from .dependency_injection import *
 from .machine import Machine
 from .utils import memoproperty
 from . import sh
+import logging
+
+logger = logging.getLogger("carthage")
 
 __all__ = []
 
