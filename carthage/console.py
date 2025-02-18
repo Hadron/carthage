@@ -243,7 +243,7 @@ class CarthageConsole(code.InteractiveConsole):
                     return
                 future = asyncio.run_coroutine_threadsafe(self.ainjector(subcommand.run, args), loop=self.loop)
                 try: future.result()  #concurrent not asyncio future
-                except Exception as e:
+                except BaseException as e:
                     traceback.print_exception(e)
                 return
         return super().runsource(source, filename, **kwargs)

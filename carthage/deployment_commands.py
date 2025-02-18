@@ -1,4 +1,4 @@
-# Copyright (C) 2023, 2024, Hadron Industries, Inc.
+# Copyright (C) 2023, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -19,6 +19,7 @@ class DeploymentCommand(CarthageRunnerCommand):
     force_readonly:bool = False # Typically destroy finds  deployables readonly
     method: str #: Which function in carthage.deployment to run for
                 #the actual deploy
+
     def setup_subparser(self, subparser):
         '''Set up arguments common to all of the deployment commands'''
         subparser.add_argument('--dry-run', '-n',
@@ -52,14 +53,13 @@ class DeploymentCommand(CarthageRunnerCommand):
                                type=argparse.FileType('wt'),
                                help='Where to write output report for the final deployment report')
         
-        
-
     async def run(self, args):
         '''Execute deployment with optional dry run step
         '''
         filter = deployable_name_filter(include=args.include, exclude=args.exclude)
         if args.force_confirm and args.dry_run:
-            raise RuntimeError('Cannot force confirm and run in dry run only mode')
+            # We interpret this simply as dry_run
+            args.force_confirm = False
         ainjector = self.ainjector
         deployables = await ainjector(find_deployables, readonly=self.force_readonly or args.dry_run,
                                       recurse=(self.method == 'run_deployment_destroy'))
@@ -73,7 +73,7 @@ class DeploymentCommand(CarthageRunnerCommand):
                 confirmation = input("Run this deployment(y/n)?")
                 if confirmation != 'y':
                     print("Deployment aborted.")
-                    raise SystemExit(2)
+                    return 2
         # Again, on dry run only, we do not run the actual deployment
         # By this point either the deployment has been confirmed by
         # the user or by args.force_confirmation
@@ -83,6 +83,7 @@ class DeploymentCommand(CarthageRunnerCommand):
             if args.report_out:
                 # summary to stdout if main report to file
                 print(result.summary)
+            return 0 if result.is_successful() else 1
 
 class DeployCommand(DeploymentCommand):
 

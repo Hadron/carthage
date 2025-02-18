@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -244,21 +244,25 @@ console.process_arguments(args)
 loop.run_until_complete(
     console.enable_console_commands(ainjector))
 
-
-
-
+exit_code = 0
 try:
     queue_workers = []
     if args.cmd is None:
         loop.run_until_complete(run())
     else:
+        base_injector.add_provider(carthage.config.config_key('persist_local_networking'), True)
         selected_subcommand = subcommands[args.cmd]
         if selected_subcommand.generate_required:
             loop.run_until_complete(layout.generate())
-        loop.run_until_complete(ainjector( selected_subcommand.run, args))
-        
+        result = loop.run_until_complete(ainjector( selected_subcommand.run, args))
+        if isinstance(result, int):
+            exit_code = result
+
     for q in queue_workers:
         q.cancel()
+except SystemExit as e:
+    exit_code = e.code
 finally:
     loop.run_until_complete(shutdown_injector(base_injector))
     gc.collect()
+sys.exit(exit_code)
