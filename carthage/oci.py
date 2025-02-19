@@ -36,7 +36,9 @@ class OciManaged(SetupTaskMixin, AsyncInjectable):
 
     oci_labels: dict[str,str]
 
-    def __init__(self, **kwargs):
+    def __init__(self, *, readonly=None, **kwargs):
+        if readonly is not None:
+            self.readonly = readonly
         super().__init__(**kwargs)
         self.oci_labels = {}
         

@@ -580,6 +580,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
     '''
 
     last_layer = None
+    base_image = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -594,7 +595,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
             await self.base_image.async_become_ready()
             base_image = self.base_image.id
         else:
-            image = await self.ainjector(PodmanImage, oci_image_tag=self.base_image)
+            image = await self.ainjector(PodmanImage, oci_image_tag=self.base_image, readonly=True)
             await image.async_become_ready()
             if not image.id:
                 raise LookupError(f'Failed to find {self.base_image}')
