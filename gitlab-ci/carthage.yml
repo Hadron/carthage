@@ -41,8 +41,6 @@ variables:
     description: Should Carthage run destroy before running deploy?
     value: 'no'
     options: ['no', 'yes', 'dry_run']
-  CARTHAGE_DEPLOY_ENVIRONMENT:
-    description: The name of the environment to deploy to.
   CARTHAGE_DEPLOY_MANUAL:
     description: Should the final deploy job be manual?
     value: 'no'
@@ -50,8 +48,6 @@ variables:
   CARTHAGE_DEPLOY_TAGS:
     description: Runner tags for jobs that perform deployment or destroy operations.
     value: ''
-  CARTHAGE_DEPLOY_URL:
-    description: The URL of the environment.
   CARTHAGE_DEPLOY_INCLUDE:
     description: Deployable names to include in a deployment run. If blank there is no include filter (default deployment according to the layout)
     value: ''
@@ -160,9 +156,6 @@ prepare:
     - .carthage_cache_setup
   tags:
     - $CARTHAGE_DEPLOY_TAGS
-  environment:
-    name: $CARTHAGE_DEPLOY_ENVIRONMENT
-    url: $CARTHAGE_DEPLOY_URL
   script:
     - *initial_script
     - *setup_deployment_filter
