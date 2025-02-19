@@ -30,8 +30,7 @@ jobs:
 
       - name: Build image
         run: |
-          sudo PYTHONPATH=$(pwd) python3 ./bin/carthage-runner ./oci_images build
-          sudo -E podman push carthage ghcr.io/hadron/carthage:latest
+          sudo PYTHONPATH=$(pwd) python3 ./bin/carthage-runner ./oci_images deploy --force-confirm
 
       - name: upload ansible log
         if: always()

@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2022, 2023, Hadron Industries, Inc.
+# Copyright (C) 2022, 2023, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -44,10 +44,12 @@ class layout(CarthageLayout):
 
     class CarthageImage(PodmanImageModel, carthage_base.CarthageServerRole):
         base_image = injector_access('OurBaseImage')
-        oci_image_tag = 'localhost/carthage:latest'
+        oci_image_tag = 'ghcr.io/hadron/carthage:latest'
         oci_image_command = ['/bin/systemd']
 
+        add_provider(podman_push_images, True)
         add_provider(OciEnviron('PYTHONPATH=/carthage'))
+        add_provider(OciEnviron('PATH=/carthage/bin:/usr/bin:/usr/sbin:/usr/local/bin'))
 
         class customize_for_oci(FilesystemCustomization):
 
@@ -64,11 +66,3 @@ class layout(CarthageLayout):
                 await self.run_command("/bin/systemctl", "mask", "console-getty", )
                 await  self.run_command("/bin/systemctl", "enable", "console")
 
-    class Build(carthage.console.CarthageRunnerCommand):
-        name = 'build'
-
-        def setup_subparser(self, parser): pass
-
-        async def run(self, args):
-            layout = await self.ainjector.get_instance_async(CarthageLayout)
-            await layout.CarthageImage.build_image()
