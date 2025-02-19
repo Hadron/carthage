@@ -5,11 +5,14 @@
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
+import carthage.config
+
 __all__ = []
 
 import carthage.deployment
 from .base import *
 __all__ += ['PodmanPod', 'PodmanContainer', 'PodmanImage',
+            'podman_push_images',
             'PodmanFromScratchImage', 'podman_image_volume_key',
             'image_layer_task', 'ContainerfileImage', 'PodmanVolume']
 
@@ -21,6 +24,11 @@ from .container_host import LocalPodmanContainerHost, RemotePodmanHost, podman_c
 
 __all__ += ['LocalPodmanContainerHost', 'RemotePodmanHost', 'podman_container_host']
 
+class PodmanConfig(carthage.config.ConfigSchema, prefix='podman'):
+
+    #: Set to never or missing to reduce network traffic
+    pull_policy:str = 'newer'
+    
 class PodmanDeployableFinder(carthage.DeployableFinder):
 
     name = 'podman'

@@ -551,6 +551,22 @@ class PodmanImageBuilderContainer(PodmanContainer):
         self.injector.add_provider(InjectionKey(NetworkConfig), dependency_quote(None))
         self.injector.replace_provider(carthage.machine.network_namespace_key, dependency_quote(None))
 
+#:If True, push nonlocal images to their registry.  Typically set on
+#specific images or in a group of images that the current layout is
+#responsible for.
+podman_push_images = InjectionKey('carthage.podman.push_images', _optional=True)
+
+__all__ += ['podman_push_images']
+
+def image_is_local(tag:str|None):
+    '''None is local because it typically means image by id not tag.
+    Otherwise images starting with localhost are local.
+    '''
+    if tag is None: return True
+    if tag.startswith('localhost/'):
+        return True
+    return False
+
 @inject_autokwargs(
     base_image=InjectionKey(oci_container_image, _optional=NotPresent),
 )
@@ -576,13 +592,13 @@ class PodmanImage(OciImage, SetupTaskMixin):
             await self.ainjector(instantiate_container_host, self)
         if isinstance(self.base_image, OciImage):
             await self.base_image.async_become_ready()
-            base_image = self.base_image.oci_image_tag
+            base_image = self.base_image.id
         else:
-            base_image = self.base_image
-        if not base_image.startswith('localhost/'):
-            await self.podman(
-                'pull', base_image,
-            )
+            image = await self.ainjector(PodmanImage, oci_image_tag=self.base_image)
+            await image.async_become_ready()
+            if not image.id:
+                raise LookupError(f'Failed to find {self.base_image}')
+            base_image = image.id
         inspect_result = await self.podman(
             'image', 'inspect',
             base_image, _log=False)
@@ -598,6 +614,55 @@ class PodmanImage(OciImage, SetupTaskMixin):
         self.base_image_info = image_info
         self.last_layer = self.base_image_info['Id']
 
+    async def build_or_pull(self):
+        pull_policy = self.config_layout.podman.pull_policy
+        will_build = False
+        if image_is_local(self.oci_image_tag):
+            will_build = True
+            pull_policy = 'never'
+        else:
+            # For now we only are willing to build non-local images if we would push them.
+            will_build = await self.ainjector.get_instance_async(podman_push_images)
+        if self.readonly:
+                will_build = False
+        can_build = bool(self.setup_tasks)
+        if not can_build:
+            will_build = False
+        exists = self.id or bool(await self.find())
+        if will_build and exists:
+            should_build =  await self.should_build()
+            if should_build:
+                return 'build'
+            else:
+                return '' #Use the existing image.
+        elif will_build:
+            return 'build'
+        elif exists:
+            if pull_policy == 'missing':
+                return ''
+            else:
+                return 'pull'
+        raise AssertionError('Logic error: should be unreachable')
+
+    async def pull_image(self):
+        pull_policy = self.config_layout.podman.pull_policy
+        if pull_policy == 'never':
+            return
+        try:
+            self.id = None
+            await self.podman('pull', self.oci_image_tag)
+            await self.find()
+        except sh.ErrorReturnCode:
+            if pull_policy == 'newer' and await self.find():
+                return
+            raise
+
+    async def push_image(self):
+        assert self.id
+        assert not image_is_local(self.oci_image_tag)
+        logger.info('Pushing %s', self)
+        await self.podman('push', self.oci_image_tag)
+        
     async def find(self):
         if not self.container_host:
             await self.ainjector(instantiate_container_host, self)
@@ -713,17 +778,25 @@ class PodmanImage(OciImage, SetupTaskMixin):
         await self.podman(
             'image', 'tag',
             self.last_layer, self.oci_image_tag)
+        self.id = self.last_layer
+        await self.find()
 
     async def find_or_create(self):
         '''See if image exists otherwise rebuild the image.
         Note that this is not a :func:`setup_task` even though it is in the parent.  This is always run from :meth:`async_ready`
         '''
-        if await self.find():
-            if not await self.should_build():
-                return
-        return await self.build_image()
-
+        await self.find()
+        match await self.build_or_pull():
+            case 'build':
+                await self.build_image()
+            case 'pull':
+                await self.pull_image()
+        # There is fallthrough if we should neither build nor pull (keep existing)
+        if not self.id:
+            raise LookupError('Unable to find or create image')
+        
     async def build_image(self):
+        assert not self.readonly, 'Cannot build a readonly image'
         await self.pull_base_image()
         # You might think that context for run_setup_tasks should be
         # self.image_layer_context().  If it worked that way, then
@@ -740,6 +813,17 @@ class PodmanImage(OciImage, SetupTaskMixin):
         await self.find_or_create()
         return await AsyncInjectable.async_ready(self)
 
+    async def deploy(self):
+        '''Bring image to ready, and if nonlocal and pushable, push.
+        '''
+        await self.async_become_ready()
+        push = await self.ainjector.get_instance_async(podman_push_images)
+        if push and not image_is_local(self.oci_image_tag):
+            if self.readonly:
+                logger.info('Not pushing readonly image %s', self)
+                return
+            await self.push_image()
+            
     @memoproperty
     def podman(self):
         return self.container_host.podman
