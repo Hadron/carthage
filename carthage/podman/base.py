@@ -625,9 +625,6 @@ class PodmanImage(OciImage, SetupTaskMixin):
             will_build = await self.ainjector.get_instance_async(podman_push_images)
         if self.readonly:
                 will_build = False
-        can_build = bool(self.setup_tasks)
-        if not can_build:
-            will_build = False
         exists = self.id or bool(await self.find())
         if will_build and exists:
             should_build =  await self.should_build()
