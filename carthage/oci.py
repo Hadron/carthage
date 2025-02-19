@@ -177,6 +177,7 @@ class OciImage(OciManaged):
             self.oci_image_tag = oci_image_tag
         if id:
             self.id = id
+            self.readonly = True
         if not hasattr(self, 'oci_image_tag') and not hasattr(self, 'id'):
             raise TypeError('Either oci_image_tag or id is required')
         super().__init__(**kwargs)

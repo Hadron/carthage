@@ -672,7 +672,6 @@ class PodmanImage(OciImage, SetupTaskMixin):
             return False
         if self.id:
             to_find = self.id
-            self.readonly = True
         else:
             to_find = self.oci_image_tag
         try:
@@ -688,9 +687,15 @@ class PodmanImage(OciImage, SetupTaskMixin):
         return dateutil.parser.isoparse(info['Created']).timestamp()
 
     async def should_build(self):
-        '''If the image exists, this is called.  If it returns True, then the image will be rebuilt even though it exists.  If a caller wants to force a rebuild, it is better to call :meth:`build_image` than to patch this method.
+        '''If the image exists, this is called.  If it returns True, then the image will be rebuilt even though it exists.  If a caller wants to force a rebuild, :meth:`build_image` can also be called.
+
+        Local images that exist are not rebuilt by default.  Remote
+        images are rebuilt under the assumption that if building is
+        enabled at all, the goal is to build and push a new image.
+
+        Images may overide if they have a good way to tell if an image is out of date.
         '''
-        return False
+        return not image_is_local(self.oci_image_tag)
 
     async def delete(self):
         '''Try deleting an image.  If we get an error (probably
