@@ -642,6 +642,10 @@ class PodmanImage(OciImage, SetupTaskMixin):
                 return ''
             else:
                 return 'pull'
+        else: #not buildable, not exists
+            if image_is_local(self.oci_image_tag):
+                raise RuntimeError(f'{self} is a local image that cannot be built.')
+            return 'pull'
         raise AssertionError('Logic error: should be unreachable')
 
     async def pull_image(self):
