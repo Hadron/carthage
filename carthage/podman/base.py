@@ -618,7 +618,6 @@ class PodmanImage(OciImage, SetupTaskMixin):
     async def build_or_pull(self):
         pull_policy = self.config_layout.podman.pull_policy
         will_build = False
-        breakpoint()
         if image_is_local(self.oci_image_tag):
             will_build = True
             pull_policy = 'never'
