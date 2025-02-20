@@ -568,7 +568,7 @@ def image_is_local(tag:str|None):
     return False
 
 @inject_autokwargs(
-    base_image=InjectionKey(oci_container_image, _optional=NotPresent),
+    base_image=InjectionKey(oci_container_image, _optional=NotPresent, _ready=False),
 )
 class PodmanImage(OciImage, SetupTaskMixin):
 
@@ -595,7 +595,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
             await self.base_image.async_become_ready()
             base_image = self.base_image.id
         else:
-            image = await self.ainjector(PodmanImage, oci_image_tag=self.base_image, readonly=True)
+            image = await self.ainjector(PodmanImage, oci_image_tag=self.base_image, base_image=None, readonly=True)
             await image.async_become_ready()
             if not image.id:
                 raise LookupError(f'Failed to find {self.base_image}')
@@ -618,6 +618,7 @@ class PodmanImage(OciImage, SetupTaskMixin):
     async def build_or_pull(self):
         pull_policy = self.config_layout.podman.pull_policy
         will_build = False
+        breakpoint()
         if image_is_local(self.oci_image_tag):
             will_build = True
             pull_policy = 'never'
