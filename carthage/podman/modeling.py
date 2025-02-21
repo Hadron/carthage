@@ -184,8 +184,8 @@ class ContainerfileImageModel(ContainerfileImage, InjectableModel):
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        if cls.oci_image_tag:
-            provides(InjectionKey(OciImage, tag=cls.oci_image_tag))(cls)
+        if tag := getattr(cls, 'oci_image_tag', None):
+            provides(InjectionKey(OciImage, tag=tag))(cls)
                      
 
 __all__ += ['ContainerfileImageModel']
