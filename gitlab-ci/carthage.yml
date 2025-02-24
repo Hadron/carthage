@@ -102,13 +102,13 @@ prepare:
 . setup_deployment_filter: &setup_deployment_filter
   - |
     deploy_args=""
+    destroy_args=""
     if test "$CARTHAGE_RUN_DEPLOY" = "dry_run" ; then
     deploy_args="--dry-run $deploy_args"
     fi
     if test "$CARTHAGE_RUN_DESTROY" = "dry_run" ; then
     destroy_args="--dry-run $destroy_args"
     fi
-    destroy_args=""
     if test -n "$CARTHAGE_DESTROY_INCLUDE" ; then
     destroy_args="$destroy_args --include $CARTHAGE_DESTROY_INCLUDE"
     fi
@@ -161,11 +161,11 @@ prepare:
     - *setup_deployment_filter
     # setup_deployment_filter adds --dry-run if the final deployment is a dry run
     - |
-      if test "$CARTHAGE_RUN_DESTROY" = "yes" ;then
+      if test "$CARTHAGE_RUN_DESTROY" = "yes" -o "$CARTHAGE_RUN_DESTROY" = "dry_run" ;then
       carthage-runner $carthage_args destroy --force-confirm $destroy_args
       fi
     - |
-      if test "$CARTHAGE_RUN_DEPLOY" = "yes" ; then
+      if test "$CARTHAGE_RUN_DEPLOY" = "yes" -o "$CARTHAGE_RUN_DEPLOY" = "dry_run" ; then
       carthage-runner $carthage_args deploy --force-confirm $deploy_args
       fi
       
