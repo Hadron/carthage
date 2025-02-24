@@ -193,7 +193,9 @@ class OciImage(OciManaged):
     def deployable_names(self):
         return ['image:'+self.oci_image_tag]
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, no_auto_inject:bool=False, **kwargs):
+        if no_auto_inject:
+            oci_image_no_auto_inject.add(cls)
         from .modeling.decorators import propagate_key
         super().__init_subclass__(**kwargs)
         if getattr(cls, 'oci_image_tag', None):
@@ -206,10 +208,15 @@ class OciImage(OciManaged):
     @classmethod
     def supplementary_injection_keys(cls, k):
         yield InjectionKey(OciImage, oci_image_tag=cls.oci_image_tag)
-        
+        for k_new in super().supplementary_injection_keys(k):
+            if (not issubclass(k_new.target, OciImage))  or k_new.target in oci_image_no_auto_inject:
+                continue
+            yield k_new
 
 __all__ += ['OciImage']
 
+#: A set of types that should not automatically be registered to provide images as supplementary injection keys
+oci_image_no_auto_inject: set[type] = {OciImage}
 
 @dataclasses.dataclass
 class OciMount(Injectable):

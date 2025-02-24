@@ -570,7 +570,7 @@ def image_is_local(tag:str|None):
 @inject_autokwargs(
     base_image=InjectionKey(oci_container_image, _optional=NotPresent, _ready=False),
 )
-class PodmanImage(OciImage, SetupTaskMixin):
+class PodmanImage(OciImage, SetupTaskMixin, no_auto_inject=True):
 
     '''
     Represents an OCI container image and provides facilities for building the image.
@@ -919,7 +919,7 @@ class ImageLayerTask(TaskWrapperBase):
     config_layout=ConfigLayout,
     podman_options=InjectionKey('podman_options', _optional=NotPresent),
     )
-class ContainerfileImage(OciImage):
+class ContainerfileImage(OciImage, no_auto_inject=True):
 
     '''
     Build an image using ``podman build`` from a context directory with a ``Containerfile``.

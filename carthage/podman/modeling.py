@@ -129,7 +129,7 @@ class PodmanPodModel( carthage.machine.NetworkedModel, ModelContainer, AsyncInje
 __all__ += ['PodmanPodModel']
 
 
-class PodmanImageModel(ImageRole, PodmanImage):
+class PodmanImageModel(ImageRole, PodmanImage, no_auto_inject=True):
 
     '''
     Like a :class:`PodmanImage` excetp:
@@ -180,7 +180,7 @@ class PodmanImageModel(ImageRole, PodmanImage):
 
 __all__ += ['PodmanImageModel']
 
-class ContainerfileImageModel(ContainerfileImage, InjectableModel):
+class ContainerfileImageModel(ContainerfileImage, InjectableModel, no_auto_inject=True):
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
