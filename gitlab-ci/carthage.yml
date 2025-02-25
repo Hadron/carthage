@@ -69,6 +69,7 @@ variables:
   - |
     if test -n "$SSH_KEY" -a -r "$SSH_KEY" ; then
     eval `ssh-agent`
+    chmod 600 $SSH_KEY
     ssh-add $SSH_KEY
     fi
   - |
