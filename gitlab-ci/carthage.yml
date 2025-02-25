@@ -26,6 +26,8 @@ stages:
 - deploy
 
 variables:
+  SSH_KEY:
+    description: If set, a path to an ssh key that will be made available. Can be set as a file variable or to a key that will be available on the runner.
   CARTHAGE_CACHE_DIR:
     description: "Where to store Carthage's cache; the default of carthage_cache will arrange for the runner to cache items and for the cache_dir to be copied as an artifact so it is available between prepare and deploy jobs even on different runners."
     value: $CI_PROJECT_DIR/carthage_cache
@@ -65,9 +67,15 @@ variables:
 .carthage_initial_script: &initial_script
   - if [ -d /carthage ] ; then PATH=/carthage/bin:$PATH; fi
   - |
+    if test -n "$SSH_KEY" -a -r "$SSH_KEY" ; then
+    eval `ssh-agent`
+    ssh-add $SSH_KEY
+    fi
+  - |
     cat >.carthage_ci_config.yml <<eof
     checkout_dir: ${CARTHAGE_CHECKOUT_DIR}
     cache_dir: ${CARTHAGE_CACHE_DIR}
+    production_ssh_agent: true
     plugins: ['.']
     eof
   - carthage_args="--config .carthage_ci_config.yml"
