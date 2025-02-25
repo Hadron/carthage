@@ -143,10 +143,12 @@ prepare:
   script:
     - *initial_script
     - *setup_deployment_filter
+    - echo $destroy_args
     - |
       if test "$CARTHAGE_RUN_DESTROY" = "yes" ;then
       carthage-runner $carthage_args destroy --dry-run  $destroy_args
       fi
+    - echo $deploy_args
     - |
       if test "$CARTHAGE_RUN_DEPLOY" = "yes" ; then
       carthage-runner $carthage_args deploy --dry-run $deploy_args
@@ -168,10 +170,12 @@ prepare:
     - *initial_script
     - *setup_deployment_filter
     # setup_deployment_filter adds --dry-run if the final deployment is a dry run
+    - echo $destroy_args
     - |
       if test "$CARTHAGE_RUN_DESTROY" = "yes" -o "$CARTHAGE_RUN_DESTROY" = "dry_run" ;then
       carthage-runner $carthage_args destroy --force-confirm $destroy_args
       fi
+    - echo $deploy_args
     - |
       if test "$CARTHAGE_RUN_DEPLOY" = "yes" -o "$CARTHAGE_RUN_DEPLOY" = "dry_run" ; then
       carthage-runner $carthage_args deploy --force-confirm $deploy_args
