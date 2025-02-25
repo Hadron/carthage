@@ -123,7 +123,7 @@ prepare:
     if test -n "$CARTHAGE_DESTROY_EXCLUDE" ; then
     destroy_args="$destroy_args --exclude $CARTHAGE_DESTROY_EXCLUDE"
     fi
-    if test -n "$CARTHAGE_DELPOY_INCLUDE" ; then
+    if test -n "$CARTHAGE_DEPLOY_INCLUDE" ; then
     deploy_args="$deploy_args --include $CARTHAGE_DEPLOY_INCLUDE"
     fi
     if test -n "$CARTHAGE_DEPLOY_EXCLUDE"; then
