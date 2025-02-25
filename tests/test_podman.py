@@ -170,6 +170,10 @@ class podman_layout(CarthageLayout):
 
         oci_image_tag = 'localhost/true:latest'
         container_context = 'resources/true_container'
+        build_args = {
+            'contents': 'This is a string written into a file'
+            }
+        
 
     @provides("dynamic_image")
     class DynamicContainerFileImage(ContainerfileImage):

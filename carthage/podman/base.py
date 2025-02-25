@@ -916,22 +916,30 @@ class ImageLayerTask(TaskWrapperBase):
 
 
 @inject_autokwargs(
-    config_layout=ConfigLayout,
     podman_options=InjectionKey('podman_options', _optional=NotPresent),
     )
 class ContainerfileImage(OciImage, no_auto_inject=True):
 
-    '''
-    Build an image using ``podman build`` from a context directory with a ``Containerfile``.
+    '''Build an image using ``podman build`` from a context directory with a ``Containerfile``.
 
     :param container_context: A directory with a Containerfile and potentially other files used by the Containerfile.  This can be specified either in a call to the constructor or in a subclass definition.  In the constructor, this is resolved relative to the current directory.  In a subclass, this is resolved relative to the package (or module) in which the class is defined.
 
-    This class does respect :class:`OciMount` and :class:`OciEnviron` in the injector hierarchy.
+    :param build_args: A dictionary; keys will be the name of ARGs and
+    the value will be the value passed in with ``--build-arg``.  The
+    dictionary will be run through resolve_deferred.  As a special
+    case, if one of the values is an :class:`OciImage`, then value of
+    the build_arg will be the image tag of that image.  This can be
+    used for handling base images.
+
+    This class does respect :class:`OciMount` and :class:`OciEnviron`
+    in the injector hierarchy.
 
     '''
 
     #: Options to pass to podman
     podman_options = tuple()
+
+    build_args: dict = {}
 
     def __init__(self, container_context=None, **kwargs):
         if container_context: self.container_context = container_context
@@ -957,9 +965,6 @@ class ContainerfileImage(OciImage, no_auto_inject=True):
             self.container_context = self.stamp_path
         self.injector.add_provider(InjectionKey("podman_log"), self.log_path/'podman.log')
 
-
-
-
     @memoproperty
     def output_path(self):
         return self.stamp_path
@@ -984,9 +989,19 @@ class ContainerfileImage(OciImage, no_auto_inject=True):
         if source_mtime > last_run: return False
         return True
 
+    async def _handle_build_args(self):
+        resolved_build_args = await resolve_deferred(self.ainjector, item=self.build_args, args={})
+        result:list[str] = []
+        for k,v in resolved_build_args.items():
+            if isinstance(v,OciImage):
+                await v.async_become_ready()
+                v = v.oci_image_tag
+            result.extend(['--build-arg', f'{k}={v}'])
+        return result
 
     async def do_create(self):
         options = await self._build_options()
+        options.extend(await self._handle_build_args())
         return await self.container_host.podman(
             'build',
             '--annotation', 'com.hadronindustries.carthage.image_mtime='+ \
