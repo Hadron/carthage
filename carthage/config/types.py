@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 import os.path
-from ..dependency_injection import inject, InjectionKey, Injectable, Injector
+from ..dependency_injection import inject, inject_autokwargs, InjectionKey, Injectable, Injector
 from .layout import ConfigLayout
 
 
@@ -147,5 +147,25 @@ class ConfigLookupPlugin (Injectable):
     def __call__(self, selector):
         '''
         return the value looked up using the given selector.
-Must be overridden; this is abstract.
-'''
+        Must be overridden; this is abstract.
+        '''
+
+@inject_autokwargs(injector=Injector)
+class ResourcePlugin(ConfigLookupPlugin):
+
+    '''Used to look up a resource in a
+    :class:`~carthage.plugins.CarthagePlugin`.  Example usage like
+    ``{resource:carthage-hadron:trust-roots/hadron_vault_root.crt}``.
+    Looks up the path of the ``hadron_vault_root.crt`` in a plugin
+    whose name is ``carthage-root``. Returns a string path name.
+
+    '''
+
+    def __call__(self, selector):
+        plugin, sep, filename = selector.partition(':')
+        if sep != ':':
+            raise LookupError('Usage: {resource:plugin:path_within_plugin}')
+        from ..plugins import CarthagePlugin
+        plugin_obj = self.injector.get_instance(InjectionKey(CarthagePlugin, name=plugin))
+        return str(plugin_obj.resource_dir.joinpath(filename))
+    

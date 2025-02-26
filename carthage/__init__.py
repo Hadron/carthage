@@ -11,6 +11,7 @@ import atexit
 import sys
 
 import carthage.config
+import carthage.config.types
 import carthage.dependency_injection
 
 __all__ = []
@@ -104,6 +105,7 @@ __all__ += ['CarthagePlugin']
 base_injector = carthage.dependency_injection.Injector()
 base_injector.claim("base injector")
 carthage.config.inject_config(base_injector)
+carthage.config.types.ResourcePlugin.register(base_injector, 'resource')
 base_injector.add_provider(plugins.PluginMappings)
 base_injector.add_provider(deployment.MachineDeployableFinder)
 base_injector.add_provider(carthage.vm.LibvirtDeployableFinder, allow_multiple=True)
