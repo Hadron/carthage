@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -21,7 +21,7 @@ from .dependency_injection import *
 from .config import ConfigLayout
 from .ssh import SshKey, SshAgent, RsyncPath, ssh_user_addr, ssh_handle_jump_host
 from .utils import memoproperty
-from . import sh
+from . import sh, deployment
 import carthage.ssh
 from .setup_tasks import SetupTaskMixin, setup_task, TaskWrapperBase, TaskInspector
 import logging
@@ -936,8 +936,11 @@ class BareMetalMachine(Machine, SetupTaskMixin, AsyncInjectable):
     '''
 
     running = False
-    readonly = True #: Cannot be deleted or created.
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if deployment.destroy_policy not in self.injector:
+            self.injector.add_provider(deployment.destroy_policy, deployment.DeletionPolicy.retain)
 
     async def start_machine(self):
         if self.running:
@@ -963,6 +966,13 @@ class BareMetalMachine(Machine, SetupTaskMixin, AsyncInjectable):
         See if the machine exists. Override if it is desirable to do a dns check or similar.
         '''
         return True
+
+
+    async def find_or_create(self):
+        await self.find()
+
+    async def delete(self):
+        raise NotImplementedError
 
     @memoproperty
     def stamp_subdir(self):
