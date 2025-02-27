@@ -350,6 +350,8 @@ contains either the LE staging roots or the LE production roots.
         i = 0
         for cert in split_pem(truststore.read_text()):
             yield 'letsencrypt-staging-'+str(i), cert
+            i += 1
+            
 
 __all__ += ['LetsencryptTrustStore']
 
