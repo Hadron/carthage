@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -1141,6 +1141,13 @@ def match_link(links: dict[str,NetworkLink],
 
 __all__ += ['match_link']
 
+def shared_network_links(m1, m2):
+    for l1 in m1.values():
+        for l2 in m2.values():
+            if l1.net == l2.net:
+                yield l1, l2
+
+__all__ += ['shared_network_links']
 
 from . import links as network_links
 
