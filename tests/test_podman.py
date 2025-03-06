@@ -399,7 +399,10 @@ async def test_podman_container_network(layout_fixture):
     "Test networking on a single container"
     layout = layout_fixture
     try:
+        machine = layout.networked_container.machine
+        model = layout.networked_container
         await layout.networked_container.machine.async_become_ready()
+        assert machine.network_links is model.network_links
     except InjectionFailed as e:
         if isinstance(e.__cause__,NotImplementedError):
             pytest.xfail("Podman too old")

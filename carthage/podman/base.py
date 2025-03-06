@@ -352,6 +352,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         if not await self.container_host.find():
             logger.debug('%s does not exist because its container host does not exist', self)
             return False
+        await self.resolve_networking()
         try:
             result = await self.podman(
                 'container', 'inspect', self.full_name,
