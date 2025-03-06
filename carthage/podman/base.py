@@ -183,13 +183,14 @@ class PodmanNetworkMixin:
         try:
             network_namespace = await self.ainjector.get_instance_async(carthage.machine.network_namespace_key)
         except KeyError: network_namespace = False
-        if self.pod and self.network_links and network_namespace is False:
+        if self.pod and self.network_links is not self.pod.network_links:
             logger.error(f"{self.name} will not join network of {self.pod}; if this is intended then add_provider(network_namespace_key, dependency_quote(None) in {self.name}'s model.  If it is not, then set network_namespace_key to {self.pod}")
         if network_namespace:
             if isinstance(network_namespace, PodmanContainer):
                 await network_namespace.find_or_create()
                 return ['--network', 'container:'+network_namespace.id]
-            return []           # Joining a pod
+            elif self.pod:
+                return []           # Joining a pod
         return await self._network_options() # Creating our own namespace
 
     async def resolve_networking(self, force:bool = False):
