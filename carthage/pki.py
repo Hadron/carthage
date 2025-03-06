@@ -133,7 +133,7 @@ class EntanglementPkiManager(PkiManager):
             raise RuntimeError(f'{hostname} credentials already retrieved with {tag}')
         current_tags.add(tag)
         self._certify(hostname)
-        self.tags_by_hostname[hostname] = tag
+        self.tags_by_hostname[hostname] = current_tags
         key_path = self.pki_dir/f'{hostname}.key'
         cert_path = self.pki_dir/f'{hostname}.pem'
         cert = cert_path.read_text()
