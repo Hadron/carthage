@@ -1,4 +1,4 @@
-# Copyright (C)  2022, 2023, 2024, Hadron Industries, Inc.
+# Copyright (C)  2022, 2023, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -74,8 +74,8 @@ class PodmanContainerHost(AsyncInjectable):
         '''
         return True
     
-    async def start_container_host(self):
-        pass
+    async def start_container_host(self, start_machine:bool = True):
+        return True
 
     @property
     def extra_args(self):
@@ -162,14 +162,20 @@ class RemotePodmanHost(PodmanContainerHost):
         '''
         return await deployment.find_deployable(self.machine)
     
-    async def start_container_host(self):
+    async def start_container_host(self, start_machine:bool = True):
         machine = self.machine
         if self.local_socket:
-            return
+            return True
         async with self._operation_lock:
+            # socket may have been set up while we waited for the lock
+            if self.local_socket:
+                return self.local_socket
             await machine.async_become_ready()
-            await machine.start_machine()
-            await machine.ssh_online()
+            if start_machine:
+                await machine.start_machine()
+            else: return await machine.is_machine_running()
+            if machine._ssh_online_required:
+                await machine.ssh_online()
             become_privileged_command = []
             if hasattr(machine, 'become_privileged_command'):
                 become_privileged_command = machine.become_privileged_command(self.user)
@@ -255,6 +261,7 @@ class RemotePodmanHost(PodmanContainerHost):
                 raise TimeoutError('container host failed to become ready')
             
             self.local_socket = local_socket
+            return True
 
 
     async def stop_container_host(self):

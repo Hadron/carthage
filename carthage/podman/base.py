@@ -433,6 +433,12 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             _bg=True, _bg_exc=False)
 
     async def is_machine_running(self):
+        if self.container_host is None:
+            await self.ainjector(instantiate_container_host, self)
+        if not await self.container_host.start_container_host(False):
+            # When the container host is not running, the container is not running
+            self.running = False
+            return False
         if not await self.find():
             return False # Containers that do not exist are not running
         self.running = self.container_info['State']['Running']
@@ -457,11 +463,18 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             if not self.running:
                 return
             logger.info(f'Stopping {self.full_name}')
-            await self.podman(
-                'container', 'stop',
-                f'-t{self.stop_timeout}',
-                self.full_name,
-                _bg=True, _bg_exc=False)
+            try:
+                await self.podman(
+                    'container', 'stop',
+                    f'-t{self.stop_timeout}',
+                    self.full_name,
+                    _bg=True, _bg_exc=False)
+            except sh.ErrorReturnCode_125 as e:
+                if b'rootless netns' in e.stderr and b'kill network process' in e.stderr:
+                    # https://bugs.debian.org/1100135
+                    pass
+                else:
+                    raise
             self.running = False
             await super().stop_machine()
 
