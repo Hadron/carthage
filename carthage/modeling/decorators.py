@@ -70,7 +70,7 @@ class injector_access(ModelingDecoratorWrapper):
             else:
                 key = InjectionKey(key, _ready=False)
         if key.ready is None:
-            key = InjectionKey(key, _ready=False)
+            key = InjectionKey(key, _ready=False, _optional=key.optional)
         #: The injection key to be accessed.
         self.key = key
         self.target = target
