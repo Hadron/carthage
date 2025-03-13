@@ -8,6 +8,7 @@
 # LICENSE for details.
 
 
+import ast
 import asyncio
 import argparse
 import code
@@ -23,6 +24,8 @@ import readline
 import rlcompleter
 import sys
 import traceback
+from _pyrepl.console import InteractiveColoredConsole
+
 import carthage
 import carthage.utils
 from carthage import base_injector, ConfigLayout
@@ -126,6 +129,8 @@ class CarthageConsole(code.InteractiveConsole):
             except FileNotFoundError:
                 pass
         self.history_file = history_file
+        self.compile.compiler.flags |= ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
+                
 
     def interact(self, *args, **kwargs):
         kwargs  = dict(kwargs)
@@ -225,6 +230,12 @@ class CarthageConsole(code.InteractiveConsole):
             subcommands[v.name] = v
         return subcommands
 
+    def runcode(self, code):
+        if code.co_flags & 128:
+            future = asyncio.run_coroutine_threadsafe(eval(code, locals=self.locals), loop=self.loop)
+            return future.result()
+        return super().runcode(code)
+    
     def runsource(self, source, filename, **kwargs):
         if self.subcommands:
             match = subcommands_re.match(source)
