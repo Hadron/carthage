@@ -8,10 +8,13 @@
 from __future__ import annotations
 import asyncio
 import contextlib
+import collections
 import datetime
+import dataclasses
 import json
 import logging
 import os
+import os.path
 from pathlib import Path
 import tempfile
 import shutil
@@ -48,14 +51,26 @@ class PodmanContainerHost(AsyncInjectable):
         the commit results from podman 4.6.
         '''
         return self.podman(*args, **kwargs)
-    
-    async def filesystem_access(self, *args):
 
+    async def filesystem_access(self, *args):
         '''Gain filesystem access to a podman resource.  Arguments are
         passed to podman; for things to work needs to be a container
         or volume mount.
+        If both filesystem_access_container and filesystem_access_volume are defined (and do not call this method), subclasses need not implement this method.
+
         '''
         raise NotImplementedError
+
+    def filesystem_access_container(self, container_name):
+        '''an asynchronous context for accessing the filesystem of a container.
+        '''
+        return self.filesystem_access('container', 'mount', container_name)
+
+    def filesystem_access_volume(self, volume_name):
+        '''
+        An asynchronous context manager for accessing the filesystem of a volume
+        '''
+        return self.filesystem_access('volume', 'mount', volume_name)
 
     async def tar_volume_context(self, volume):
 
@@ -73,7 +88,7 @@ class PodmanContainerHost(AsyncInjectable):
         '''Return true if find_deployable is true  for the underlying container host.
         '''
         return True
-    
+
     async def start_container_host(self, start_machine:bool = True):
         return True
 
@@ -130,6 +145,66 @@ class LocalPodmanContainerHost(PodmanContainerHost):
 
 __all__ += ['LocalPodmanContainerHost']
 
+@dataclasses.dataclass
+class SshfsContext:
+    path_dir: str
+    path_prefix: str
+    sshfs_process: sh.RunningCommand = None
+    sshfs_path: str = None
+    sshfs_count: int = 0
+    sshfs_lock: asyncio.Lock = dataclasses.field(default_factory=lambda: asyncio.Lock(), repr=False)
+
+@contextlib.asynccontextmanager
+async def filesystem_access_core(context,  remote_path, sshfs_process_factory):
+    # Copied and modified from Machine.filesystem_access.
+    # Refactoring so there is more shared code did not work out on my first try.
+    context.sshfs_count += 1
+    try:
+        # Argument for correctness of locking.  The goal of
+        # sshfs_lock is to make sure that two callers are not both
+        # trying to spin up sshfs at the same time.  The lock is
+        # never held when sshfs_count is < 1, so it will not block
+        # when the coroutine that actually starts sshfs acquires
+        # the lock.  Therefore the startup can actually proceed.
+        # It would be equally correct to grab the lock before
+        # incrementing sshfs_count, but more difficult to
+        # implement because the lock must be released by time of
+        # yield so other callers can concurrently access the filesystem.
+        async with context.sshfs_lock:
+            if context.sshfs_count == 1:
+                context.sshfs_path = tempfile.mkdtemp(
+                    dir=context.path_dir, prefix=context.path_prefix, )
+                context.sshfs_process = await sshfs_process_factory(context.sshfs_path)
+                for t in [0.5, 1, 1.5, 2, 2, 2, 2, 2, 4, 8]:
+                    alive, *rest = context.sshfs_process.process.is_alive()
+                    if not alive:
+                        await context.sshfs_process
+                        raise RuntimeError  # I'd expect that to have happened from an sh exit error already
+                    path = os.path.join(context.sshfs_path, remote_path)
+                    if os.path.exists(path):
+                        break
+                    else:
+                        logger.info(f'waiting for: {path}')
+                    await asyncio.sleep(t)
+                else:
+                    raise TimeoutError("sshfs failed to mount")
+        yield Path(path)
+    finally:
+        context.sshfs_count -= 1
+        if context.sshfs_count <= 0:
+            context.sshfs_count = 0
+            try:
+                context.sshfs_process.process.terminate()
+            except BaseException:
+                pass
+            dir = context.sshfs_path
+            context.sshfs_path = None
+            context.sshfs_process = None
+            await asyncio.sleep(0.2)
+            with contextlib.suppress(OSError):
+                if dir:
+                    os.rmdir(dir)
+
 class RemotePodmanHost(PodmanContainerHost):
 
     machine: Machine = None
@@ -144,11 +219,9 @@ class RemotePodmanHost(PodmanContainerHost):
         self._operation_lock = asyncio.Lock()
         self.process = None
         self.local_socket = None
-        self.sshfs_count = 0
-        self.sshfs_path = None
-        self.sshfs_process = None
-        self.sshfs_lock = asyncio.Lock()
-
+        self.sshfs_context = SshfsContext(
+            self.machine.config_layout.state_dir,
+            f'sshfs_{self.machine.name}_{self.user}_')
 
     def __repr__(self):
         try:
@@ -161,7 +234,7 @@ class RemotePodmanHost(PodmanContainerHost):
         Return True if self.machine is found as a deployable.
         '''
         return await deployment.find_deployable(self.machine)
-    
+
     async def start_container_host(self, start_machine:bool = True):
         machine = self.machine
         if self.local_socket:
@@ -259,7 +332,7 @@ class RemotePodmanHost(PodmanContainerHost):
                     await asyncio.sleep(0.5)
             else:
                 raise TimeoutError('container host failed to become ready')
-            
+
             self.local_socket = local_socket
             return True
 
@@ -270,6 +343,16 @@ class RemotePodmanHost(PodmanContainerHost):
                 self.process.terminate()
                 self.local_socket = None
                 self.process = None
+
+    def sshfs_process_factory(self, prefix):
+        async def wrap(sshfs_path):
+            return await become_privileged.sshfs_sftp_finder(
+                machine=self.machine,
+                prefix=shlex.join(prefix),
+                sshfs_path=sshfs_path,
+                become_privileged_command=self.become_privileged_command
+            )
+        return wrap
 
     def out_cb(self, data):
         logger.debug('%r: %s', self, data)
@@ -308,7 +391,7 @@ class RemotePodmanHost(PodmanContainerHost):
             **options,
             **kwargs)
         return await result
-    
+
     @contextlib.asynccontextmanager
     async def filesystem_access(self, *args):
         prefix = []
@@ -320,59 +403,13 @@ class RemotePodmanHost(PodmanContainerHost):
             *args)
         remote_path_str = str(res.stdout, 'utf-8').strip()
         remote_path_str = os.path.relpath(remote_path_str,'/')
-        # Copied and modified from Machine.filesystem_access.
-        # Refactoring so there is more shared code did not work out on my first try.
-        self.sshfs_count += 1
-        try:
-            # Argument for correctness of locking.  The goal of
-            # sshfs_lock is to make sure that two callers are not both
-            # trying to spin up sshfs at the same time.  The lock is
-            # never held when sshfs_count is < 1, so it will not block
-            # when the coroutine that actually starts sshfs acquires
-            # the lock.  Therefore the startup can actually proceed.
-            # It would be equally correct to grab the lock before
-            # incrementing sshfs_count, but more difficult to
-            # implement because the lock must be released by time of
-            # yield so other callers can concurrently access the filesystem.
-            async with self.sshfs_lock:
-                if self.sshfs_count == 1:
-                    self.sshfs_path = tempfile.mkdtemp(
-                        dir=self.machine.config_layout.state_dir, prefix=self.machine.name, suffix="sshfs_"+self.user)
-                    self.sshfs_process = await become_privileged.sshfs_sftp_finder(
-                        machine=self.machine,
-                        prefix=shlex.join(prefix),
-                        sshfs_path=self.sshfs_path,
-                        become_privileged_command=self.become_privileged_command
-                    )
-                    for t in [0.5, 1, 1.5, 2, 2, 2, 2, 2, 4, 8]:
-                        alive, *rest = self.sshfs_process.process.is_alive()
-                        if not alive:
-                            await self.sshfs_process
-                            raise RuntimeError  # I'd expect that to have happened from an sh exit error already
-                        path = os.path.join(self.sshfs_path, remote_path_str)
-                        if os.path.exists(path):
-                            break
-                        else:
-                            logger.info(f'waiting for: {path}')
-                        await asyncio.sleep(t)
-                    else:
-                        raise TimeoutError("sshfs failed to mount")
-            yield Path(self.sshfs_path)/remote_path_str
-        finally:
-            self.sshfs_count -= 1
-            if self.sshfs_count <= 0:
-                self.sshfs_count = 0
-                try:
-                    self.sshfs_process.process.terminate()
-                except BaseException:
-                    pass
-                dir = self.sshfs_path
-                self.sshfs_path = None
-                self.sshfs_process = None
-                await asyncio.sleep(0.2)
-                with contextlib.suppress(OSError):
-                    if dir:
-                        os.rmdir(dir)
+        async with filesystem_access_core(
+                self.sshfs_context,
+                path_dir=str(self.machine.state_path),
+                path_prefix=f'sshfs_{self.user}_{self.machine.name}',
+                sshfs_process_factory=self.sshfs_process_factory(prefix)
+        ) as path:
+            yield path
 
     @property
     def become_privileged_command(self):
@@ -389,6 +426,87 @@ class RemotePodmanHost(PodmanContainerHost):
 
     tar_volume_context = LocalPodmanContainerHost.tar_volume_context
 __all__ += ['RemotePodmanHost']
+
+class LocalPodmanSocket(PodmanContainerHost):
+
+    '''
+    Use the podman socket in /run/podman.sock or $XDG_RUNTIME_DIR.
+    Requires that containers have a sftp server installed, but avoids the need for podman unshare.
+    '''
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.config_layout = self.injector(ConfigLayout)
+        self.sshfs_contexts = collections.defaultdict(lambda: SshfsContext(
+            self.config_layout.state_dir,
+            'sshfs_local_podman_'))
+
+    async def podman(self, *args,
+               _bg=True, _bg_exc=False, _log=True, _fg=False):
+        options = {}
+        if _log and self.podman_log:
+            options['_out']=str(self.podman_log)
+            options['_err_to_out'] = True
+        result = sh.podman(
+            '--remote',
+            *args,
+            _fg=_fg,
+            **options)
+        if not _fg:
+            return await result
+        return result
+
+    @contextlib.asynccontextmanager
+    async def filesystem_access_container(self, container_name):
+        sshfs_context = self.sshfs_contexts[('container', container_name)]
+        def process_factory(sshfs_path):
+            return become_privileged.sshfs_to_sftp_server(
+                sshfs_path,
+                ['podman', '--remote',
+                 'exec', '-i', container_name, 'sh', '-c'])
+        async with filesystem_access_core(sshfs_context, '.', process_factory) as path:
+            yield path
+
+    @contextlib.asynccontextmanager
+    async def filesystem_access_volume(self, volume_name):
+        sshfs_context = self.sshfs_contexts[('volume', volume_name)]
+        local_sftp_server_path = local_sftp_server()
+        def process_factory(sshfs_path):
+            return become_privileged.sshfs_to_sftp_server(
+                sshfs_path, [
+                    'podman', '--remote',
+                    'run', '--rm', '-i',
+                    f'--mount=type=volume,source={volume_name},destination=/volume',
+                    f'-v{local_sftp_server_path}:/usr/lib/carthage-sftp-server:ro',
+                    self.config_layout.podman.volume_access_image,
+                    'sh', '-c'])
+        async with filesystem_access_core(sshfs_context, 'volume', process_factory) as path:
+            yield path
+
+__all__ += ['LocalPodmanSocket']
+
+def local_sftp_server()->str:
+    '''
+    Return the path of a local sftp server.
+    '''
+    for location in become_privileged.sftp_server_locations:
+        if os.path.exists(location):
+            return location
+    raise FileNotFoundError('Could not find an sftp server')
+
+#:Add this to an injector to mount some local sftp server into the
+#container in a location where Carthage can find it. Note that if the
+#local system has a newer libc than the container, this may not
+#work. The Carthage sftp server location should be a location of last
+#resort.
+podman_sftp_server_mount = OciMount(
+    destination='/usr/lib/carthage-sftp-server',
+    mount_type='bind',
+    source=local_sftp_server,
+    options='ro')
+
+__all__ += ['podman_sftp_server_mount']
+
 
 #:InjectionKey to look up a container host.  Can either be a
 #:class:`PodmanContainerHost` or a :class:`Machine`.

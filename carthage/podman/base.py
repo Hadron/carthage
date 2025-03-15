@@ -515,7 +515,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     def filesystem_access(self, user='root'):
         assert self.container_host, 'call self.find first'
-        return self.container_host.filesystem_access('mount', self.full_name)
+        return self.container_host.filesystem_access_container(self.full_name)
 
     def __repr__(self):
         try:
@@ -1072,8 +1072,9 @@ class ContainerfileImage(OciImage, no_auto_inject=True):
                 OciEnviron, lambda k: 'name' in k.constraints and k.constraints.get('scope', 'all') in ('all','image')):
             options.append('--env')
             options.append(v.assignment)
-        for m in container.mounts:
-            options.append(podman_mount_option(self.injector, m))
+        # podman build doesn't recognize --mount; we could remap some options to -v which is recognized.
+        #for m in container.mounts:
+            #options.append(await podman_mount_option(self.ainjector, m))
         options.extend(self.podman_options)
         return options
 
@@ -1145,8 +1146,7 @@ class PodmanVolume(HasContainerHostMixin, OciManaged):
         '''
         if not self.container_host:
             await self.find()
-        async with self.container_host.filesystem_access(
-'volume', 'mount',
+        async with self.container_host.filesystem_access_volume(
                 self.name) as path:
             yield path
 
