@@ -24,7 +24,6 @@ import readline
 import rlcompleter
 import sys
 import traceback
-from _pyrepl.console import InteractiveColoredConsole
 
 import carthage
 import carthage.utils
