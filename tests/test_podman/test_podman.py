@@ -34,18 +34,17 @@ def enable_podman():
     base_injector(carthage.plugins.load_plugin, 'carthage.podman')
 
 @pytest.fixture(scope='module')
-def ainjector(enable_podman, pytestconfig, loop):
+def ainjector(enable_podman, container_host_fixture, loop):
     ainjector = base_injector.claim('test_podman.py')(AsyncInjector)
     config = ainjector.injector(carthage.ConfigLayout)
     config.state_dir = state_dir
     state_dir.mkdir(parents=True, exist_ok=True)
-    if pytestconfig.getoption('remote_container_host'):
-        from podman_remote_host import container_host
+    ainjector.add_provider(podman_container_host, container_host_fixture)
+    if isinstance(container_host_fixture, Machine):
         ainjector.add_provider(ssh_jump_host, injector_access(podman_container_host))
-    else:
-        container_host = LocalPodmanContainerHost
-    ainjector.add_provider(podman_container_host, container_host)
-    container_host_instance = loop.run_until_complete(ainjector.get_instance_async(InjectionKey(container_host, _ready=False)))
+    elif container_host_fixture is LocalPodmanSocket:
+        ainjector.add_provider(podman_sftp_server_mount)
+    container_host_instance = loop.run_until_complete(ainjector.get_instance_async(InjectionKey(podman_container_host, _ready=False)))
     try:
         host_machine = loop.run_until_complete(container_host_instance.ainjector.get_instance_async(InjectionKey(Machine, _ready=False)))
     except KeyError:
@@ -143,7 +142,7 @@ class podman_layout(CarthageLayout):
 
         add_provider(trust_roots_key, when_needed(
             PemBundleTrustStore, 'root_certs',
-            Path(__file__).parent.joinpath('resources/cacerts.pem')))
+            Path(__file__).parent.parent.joinpath('resources/cacerts.pem')))
 
         class cust(FilesystemCustomization):
 
@@ -153,7 +152,7 @@ class podman_layout(CarthageLayout):
                 await self.run_command('apt', '-y', 'install', 'ansible')
 
             pki_cust = PkiCustomizations
-            do_roles = ansible_role_task(os.path.dirname(__file__) + "/resources/test_ansible_role")
+            do_roles = ansible_role_task(os.path.dirname(__file__) + "../resources/test_ansible_role")
 
     class stamps_discarded(MachineModel):
 
@@ -169,7 +168,7 @@ class podman_layout(CarthageLayout):
     class TrueImage(ContainerfileImageModel):
 
         oci_image_tag = 'localhost/true:latest'
-        container_context = 'resources/true_container'
+        container_context = '../resources/true_container'
         build_args = {
             'contents': 'This is a string written into a file'
             }
@@ -178,7 +177,7 @@ class podman_layout(CarthageLayout):
     @provides("dynamic_image")
     class DynamicContainerFileImage(ContainerfileImage):
         oci_image_tag = 'localhost/dynamic:latest'
-        container_context = 'resources/dynamic_container'
+        container_context = '../resources/dynamic_container'
 
         @setup_task('Create dynamic script')
         def create_dynamic_script(self):
