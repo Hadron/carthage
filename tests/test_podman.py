@@ -1,4 +1,4 @@
-# Copyright (C)  2022, 2023, 2024, Hadron Industries, Inc.
+# Copyright (C)  2022, 2023, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -52,7 +52,7 @@ def ainjector(enable_podman, pytestconfig, loop):
         host_machine = None
     try:
         if host_machine:
-            loop.run_until_complete(host_machine.async_become_ready())
+            loop.run_until_complete(host_machine.deploy())
     except Exception as e:
         logger.exception('Error bringing container_host to ready:')
         try:
@@ -88,7 +88,7 @@ class podman_layout(CarthageLayout):
     layout_name = 'podman'
 
     add_provider(machine_implementation_key, dependency_quote(PodmanContainer))
-    add_provider(oci_container_image, 'debian:latest')
+    add_provider(oci_container_image, 'debian:trixie')
     #add_provider(ansible_log, "/tmp/ansible.log")
 
     oci_interactive = True
