@@ -35,7 +35,7 @@ def process_inspect_result(target:OciManaged, result:dict):
         case {'Config':{'Labels': dict() as labels}} | \
              {'Labels': dict() as labels}:
             target.oci_labels.update(labels)
-            
+
 def podman_port_option(p: OciExposedPort):
     res = f'-p{p.host_ip}:{p.host_port}:{p.container_port}'
     if p.proto != 'tcp':
@@ -77,14 +77,14 @@ class HasContainerHostMixin(OciManaged):
             result += [self.container_host.machine]
         except AttributeError: pass
         return result
-    
-        
+
+
 @inject_autokwargs(network=this_network)
 class PodmanNetwork(HasContainerHostMixin, TechnologySpecificNetwork, OciManaged):
 
     container_host: PodmanContainerHost = None
     deployable_name_prefixes = ['podman_network:']
-    
+
     @property
     def podman(self):
         return self.container_host.podman
@@ -93,7 +93,7 @@ class PodmanNetwork(HasContainerHostMixin, TechnologySpecificNetwork, OciManaged
         super().__init__(**kwargs)
         self.name = self.network.name
         self.container_host = None
-    
+
     async def find(self):
         if not self.container_host:
             await self.ainjector(instantiate_container_host, self)
@@ -223,7 +223,7 @@ class PodmanPod(HasContainerHostMixin, PodmanNetworkMixin, carthage.machine.Netw
     podman_pod_options = []
 
     deployable_name_prefixes = ['podman_pod', 'pod']
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.injector.add_provider(InjectionKey(PodmanPod), dependency_quote(self))
@@ -336,7 +336,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         )
 
     deployable_name_prefixes = ['container', 'podman', 'machine']
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._operation_lock = asyncio.Lock()
@@ -679,7 +679,7 @@ class PodmanImage(OciImage, SetupTaskMixin, no_auto_inject=True):
         assert not image_is_local(self.oci_image_tag)
         logger.info('Pushing %s', self)
         await self.podman('push', self.oci_image_tag)
-        
+
     async def find(self):
         if not self.container_host:
             await self.ainjector(instantiate_container_host, self)
@@ -722,7 +722,7 @@ class PodmanImage(OciImage, SetupTaskMixin, no_auto_inject=True):
             await self.podman('image', 'rm', self.oci_image_tag)
         except sh.ErrorReturnCode:
             await self.podman('image', 'untag', self.oci_image_tag)
-            
+
     @contextlib.asynccontextmanager
     async def image_layer_context(self, commit_message=""):
         '''
@@ -816,7 +816,7 @@ class PodmanImage(OciImage, SetupTaskMixin, no_auto_inject=True):
         # There is fallthrough if we should neither build nor pull (keep existing)
         if not self.id:
             raise LookupError('Unable to find or create image')
-        
+
     async def build_image(self):
         assert not self.readonly, 'Cannot build a readonly image'
         await self.pull_base_image()
@@ -845,7 +845,7 @@ class PodmanImage(OciImage, SetupTaskMixin, no_auto_inject=True):
                 logger.info('Not pushing readonly image %s', self)
                 return
             await self.push_image()
-            
+
     @memoproperty
     def podman(self):
         return self.container_host.podman
@@ -866,7 +866,7 @@ class PodmanImage(OciImage, SetupTaskMixin, no_auto_inject=True):
             carthage.modeling.propagate_key(
                 InjectionKey(PodmanImage, oci_image_tag=tag, _globally_unique=True),
                 cls)
-            
+
 
 __all__ += ['PodmanImage']
 podman_image_volume_key = InjectionKey('carthage.podman/image_volume')
