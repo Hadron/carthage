@@ -20,14 +20,26 @@ from .modeling import PodmanPodModel, PodmanImageModel, ContainerfileImageModel
 
 __all__ += ['PodmanPodModel', 'PodmanImageModel', 'ContainerfileImageModel']
 
-from .container_host import LocalPodmanContainerHost, RemotePodmanHost, podman_container_host
+from .container_host import(
+    LocalPodmanContainerHost,
+    RemotePodmanHost,
+    podman_container_host,
+    LocalPodmanSocket,
+    podman_sftp_server_mount,
+    )
 
-__all__ += ['LocalPodmanContainerHost', 'RemotePodmanHost', 'podman_container_host']
+
+__all__ += ['LocalPodmanContainerHost', 'RemotePodmanHost', 'podman_container_host',
+            'LocalPodmanSocket', 'podman_sftp_server_mount',
+            ]
 
 class PodmanConfig(carthage.config.ConfigSchema, prefix='podman'):
 
     #: Set to never or missing to reduce network traffic
     pull_policy:str = 'newer'
+    #: An image used to gain access to volumes. Must have /bin/sh.
+    volume_access_image: str = 'debian:unstable'
+    
     
 class PodmanDeployableFinder(carthage.DeployableFinder):
 

@@ -6,6 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import asyncio
 import os
 import shlex
 import typing
@@ -20,7 +21,11 @@ __all__ = []
 sftp_server_locations = (
     '/usr/lib/sftp-server',
     '/usr/libexec/openssh/sftp-server',
+    '/usr/lib/carthage-sftp-server', #See podman_sftp_server_mount
     )
+
+def SFTP_SERVER_COMMAND(prefix):
+    return f"cd /; for sftp in {' '.join(sftp_server_locations)} ; do test -x $sftp && exec {prefix} $sftp; done"
 
 class BecomePrivilegedMixin(machine.Machine):
 
@@ -77,7 +82,7 @@ async def sshfs_sftp_finder(
         prefix:str = ""):
     '''Like :class:`Machine`.  Does not use the sftp subsystem,
     but instead tries to find an sftp server.  Also, mostly for
-    podman's convenienc in running an sftp server with unshare,
+    podman's convenience in running an sftp server with unshare,
     supports a prefix argument.
 
     :param prefix: Command inserted between the become_privileged_command and sftp invocation.  Can be used to enter the right namespace.
@@ -86,8 +91,8 @@ async def sshfs_sftp_finder(
     agent = await machine.ainjector.get_instance_async(SshAgent)
     sftp_command_list = become_privileged_command + [
         '/bin/sh', '-c',
-        f"'cd /; for sftp in {' '.join(sftp_server_locations)} ; do test -x $sftp && exec {prefix} $sftp; done'"]
-    sftp_command = " ".join(sftp_command_list)
+        SFTP_SERVER_COMMAND(prefix)]
+    sftp_command =shlexjoin(sftp_command_list)
     return sh.sshfs(
         '-o' 'ssh_command=' + " ".join(
                 str(machine.ssh).split()[:-1]),
@@ -97,3 +102,30 @@ async def sshfs_sftp_finder(
         '-f',
         _env=agent.agent_environ)
 
+async def sshfs_to_sftp_server(sshfs_path:str, prefix:list[str], ):
+    '''
+    Run sshfs -opassive connected over stdin and stdout to an sftp server. Useful for getting filesystem access in different privilege contexts.
+
+    :param prefix: A set of command to prefix to a shell fragment that finds the sftp-server.  Often the last components of prefix are ``'sh', '-c'``.
+
+    '''
+    sftp_stdin, sshfs_stdout  = os.pipe()
+    sshfs_stdin, sftp_stdout = os.pipe()
+    try:
+        sshfs = sh.sshfs(
+            '-opassive',
+            'machine:/', sshfs_path,
+            _bg=True, _async=True,
+            _in=sshfs_stdin,
+            _out=sshfs_stdout)
+        sftp_command = sh.Command(prefix[0])
+        sftp = sftp_command(
+            *prefix[1:], SFTP_SERVER_COMMAND(''),
+            _bg=True, _bg_exc=True, _async=False,
+            _in=sftp_stdin,
+            _out=sftp_stdout)
+        return sshfs
+    finally:
+        for fd in sshfs_stdin, sshfs_stdout, sftp_stdin, sftp_stdout:
+            os.close(fd)
+            
