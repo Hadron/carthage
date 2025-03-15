@@ -92,7 +92,7 @@ async def sshfs_sftp_finder(
     sftp_command_list = become_privileged_command + [
         '/bin/sh', '-c',
         SFTP_SERVER_COMMAND(prefix)]
-    sftp_command =shlexjoin(sftp_command_list)
+    sftp_command =shlex.join(sftp_command_list)
     return sh.sshfs(
         '-o' 'ssh_command=' + " ".join(
                 str(machine.ssh).split()[:-1]),
