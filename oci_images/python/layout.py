@@ -30,9 +30,21 @@ class layout(CarthageLayout):
     add_provider(ConfigLayout)
 
     @inject(base_image=None)
+    class VolumeAccess(PodmanImageModel)
+    '''
+    The Debian distribution we are using with an sftp server installed. Used by the podman plugin to gain sftp access to volumes.
+    '''
+    
+    oci_image_tag = 'ghcr.io/hadron/carthage_volume_access:latest'
+    base_image = 'debian:trixie'
+    
+    class InstallSftpServer(ContainerCustomization):
+        install_sftp = install_stage1_packages_task(['openssh-sftp-server'])
+        
+    @inject(base_image=None)
     class OurBaseImage(PodmanImageModel):
         name = 'base-carthage'
-        base_image ='debian:trixie'
+        base_image =injector_access('VolumeAccess')
         oci_image_tag = 'localhost/carthage_debian_base:latest'
 
         class install(ContainerCustomization):
