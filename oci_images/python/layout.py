@@ -37,7 +37,8 @@ class layout(CarthageLayout):
     
         oci_image_tag = 'ghcr.io/hadron/carthage_volume_access:latest'
         base_image = 'debian:trixie'
-    
+        add_provider(podman_push_images, True)
+
     class InstallSftpServer(ContainerCustomization):
         install_sftp = install_stage1_packages_task(['openssh-sftp-server'])
         
