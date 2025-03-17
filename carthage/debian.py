@@ -1,4 +1,4 @@
-# Copyright (C) 2021, Hadron Industries, Inc.
+# Copyright (C) 2021, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -181,7 +181,10 @@ async def use_stage1_mirror(machine):
 __all__ += ['use_stage1_mirror']
 
 
-def install_stage1_packages_task(packages):
+def install_stage1_packages_task(packages, install_recommends:bool = True):
+    options = []
+    if not install_recommends:
+        options.append('--no-install-recommends')
     @setup_task(f'Install {packages} using stage 1 mirror')
     async def install_task(self):
         async with use_stage1_mirror(self):
@@ -189,7 +192,7 @@ def install_stage1_packages_task(packages):
             await self.container_command(
                 *bind_args_for_mirror(mirror),
                 'apt', '-y',
-                'install', *packages)
+                'install', *options, *packages)
     return install_task
 
 
