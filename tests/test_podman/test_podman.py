@@ -82,12 +82,16 @@ def layout_fixture(ainjector):
             layout.podman_net.instantiated.delete(force=True))
     except Exception: pass
 
+    
+@inject(config=ConfigLayout)
+def volume_access_image(config):
+    return config.podman.volume_access_image
 
 class podman_layout(CarthageLayout):
     layout_name = 'podman'
 
     add_provider(machine_implementation_key, dependency_quote(PodmanContainer))
-    add_provider(oci_container_image, 'debian:trixie')
+    add_provider(oci_container_image, volume_access_image)
     #add_provider(ansible_log, "/tmp/ansible.log")
 
     oci_interactive = True
@@ -152,7 +156,7 @@ class podman_layout(CarthageLayout):
                 await self.run_command('apt', '-y', 'install', 'ansible')
 
             pki_cust = PkiCustomizations
-            do_roles = ansible_role_task(os.path.dirname(__file__) + "../resources/test_ansible_role")
+            do_roles = ansible_role_task(os.path.dirname(__file__) + "/../resources/test_ansible_role")
 
     class stamps_discarded(MachineModel):
 
