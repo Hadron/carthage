@@ -29,6 +29,8 @@ class layout(CarthageLayout):
     add_provider(config_key('debian.distribution'), 'trixie')
     add_provider(ConfigLayout)
 
+    add_provider(OciMount(destination='/var/lib/apt/lists'))
+    
     @inject(base_image=None)
     class VolumeAccess(PodmanImageModel):
         '''
@@ -39,8 +41,8 @@ class layout(CarthageLayout):
         base_image = 'debian:trixie'
         add_provider(podman_push_images, True)
 
-    class InstallSftpServer(ContainerCustomization):
-        install_sftp = install_stage1_packages_task(['openssh-sftp-server'])
+        class InstallSftpServer(ContainerCustomization):
+            install_sftp = install_stage1_packages_task(['openssh-sftp-server'], install_recommends=False)
         
     @inject(base_image=None)
     class OurBaseImage(PodmanImageModel):
