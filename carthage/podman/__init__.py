@@ -38,7 +38,7 @@ class PodmanConfig(carthage.config.ConfigSchema, prefix='podman'):
     #: Set to never or missing to reduce network traffic
     pull_policy:str = 'newer'
     #: An image used to gain access to volumes. Must have /bin/sh.
-    volume_access_image: str = 'debian:unstable'
+    volume_access_image: str = 'ghcr.io/hadron/carthage_volume_access:latest'
     
     
 class PodmanDeployableFinder(carthage.DeployableFinder):
