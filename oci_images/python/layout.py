@@ -68,11 +68,6 @@ class layout(CarthageLayout):
 
         class customize_for_oci(FilesystemCustomization):
 
-            @setup_task("Remove Software")
-            async def remove_software(self):
-                await self.run_command("apt", "-y", "purge",
-                                       "exim4-base",
-                                       )
 
             @setup_task("Install service")
             async def install_service(self):
