@@ -232,7 +232,7 @@ class OciMount(Injectable):
     '''
     
     destination: str
-    source: str
+    source: str = None
     options: str = ""
     mount_type: str = 'volume'
 
@@ -244,6 +244,7 @@ class OciMount(Injectable):
         return InjectionKey(OciMount, destination=self.destination)
 
     async def source_resolve(self, ainjector):
+        if self.source is None: return None
         if isinstance(self.source, str):
             return ainjector.injector(ConfigPath, self.source)
         elif isinstance(self.source, InjectionKey):
