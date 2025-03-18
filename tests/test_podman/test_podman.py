@@ -38,6 +38,7 @@ def ainjector(enable_podman, container_host_fixture, loop):
     ainjector = base_injector.claim('test_podman.py')(AsyncInjector)
     config = ainjector.injector(carthage.ConfigLayout)
     config.state_dir = state_dir
+    config.cache_dir = str(state_dir/'cache')
     state_dir.mkdir(parents=True, exist_ok=True)
     ainjector.add_provider(podman_container_host, container_host_fixture)
     if isinstance(container_host_fixture, Machine):
