@@ -32,7 +32,7 @@ class BecomePrivilegedMixin(machine.Machine):
     '''
     Add ``sudo`` support to a :class:`~carthage.machine.Machine`.  For :meth:`run_command`, :meth:`filesystem_access`, and :func:`carthage.ssh.rsync`, use ``sudo`` to be come :attr:``runas_user` if :attr:`runas_user` differs from :attr:`ssh_login_user`.
     The run_command implementation in this class is only useful for classes that depend on ssh. If there is another mechanism to run commands that does not directly support selecting a user, it is necessary to adjust the MRO so that this class comes before that implementation, and add some sort of _cwd support to run_command (and use it in this implementation).
-    
+
     '''
 
 
@@ -41,7 +41,7 @@ class BecomePrivilegedMixin(machine.Machine):
         Returns True if we need to use sudo to run as the given user.
         '''
         return user != self.ssh_login_user
-    
+
 
     def become_privileged_command(self, user):
         '''
@@ -51,7 +51,7 @@ class BecomePrivilegedMixin(machine.Machine):
             return []
         else:
             return ['sudo', '-u', user]
-        
+
     async def run_command(self, *args, _bg=True, _bg_exc=False, _user=None,
                           **kwargs):
         if _user is None:
@@ -62,7 +62,7 @@ class BecomePrivilegedMixin(machine.Machine):
             'cd / &&',
             *self.become_privileged_command(_user),
             shlex.join([str(a) for a in args]), **kwargs)
-        
+
     async def sshfs_process_factory(self, user):
         become_privileged_command = self.become_privileged_command(user)
         if not become_privileged_command:
@@ -72,7 +72,7 @@ class BecomePrivilegedMixin(machine.Machine):
             become_privileged_command=become_privileged_command,
             sshfs_path=self.sshfs_path,
             prefix="")
-    
+
 __all__ += ['BecomePrivilegedMixin']
 
 async def sshfs_sftp_finder(
@@ -121,11 +121,10 @@ async def sshfs_to_sftp_server(sshfs_path:str, prefix:list[str], ):
         sftp_command = sh.Command(prefix[0])
         sftp = sftp_command(
             *prefix[1:], SFTP_SERVER_COMMAND(''),
-            _bg=True, _bg_exc=True, _async=False,
+            _bg=True, _bg_exc=True,
             _in=sftp_stdin,
             _out=sftp_stdout)
         return sshfs
     finally:
         for fd in sshfs_stdin, sshfs_stdout, sftp_stdin, sftp_stdout:
             os.close(fd)
-            
