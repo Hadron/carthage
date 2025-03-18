@@ -1,4 +1,4 @@
-# Copyright (C) 2023, Hadron Industries, Inc.
+# Copyright (C) 2023, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -8,7 +8,8 @@
 
 
 from pathlib import Path
-import pkg_resources
+import importlib.resources
+import packaging.requirements
 import typing
 from .dependency_injection import inject, Injector, AsyncInjector
 from .plugins import CarthagePlugin
@@ -46,21 +47,18 @@ def collect_dependencies(
         if 'package' in plugin.metadata:
             if not ( descend_plugins is True or plugin.name in descend_plugins):
                 try:
-                    pkg_resources.get_distribution(plugin.metadata['package'])
+                    importlib.metadata.distribution(plugin.metadata['package'])
                     skip_pypi_package = True
-                except pkg_resources.ResolutionError: pass
+                except importlib.metadata.PackageNotFoundError: pass
 
         for dependency in plugin.metadata['dependencies']:
             assert isinstance(dependency, dict)
             skip_os_package = minimize_os_packages and 'pypi' in dependency # set to False below; decided per dependency
             if minimize_os_packages and 'pypi' in dependency:
-                for requirement in pkg_resources.parse_requirements(dependency['pypi']):
-                    # We only expect one requirement but the interface returns an iterator
-                    # This code would be better if it checked the installed version satisfied the requirement
-                    try: pkg_resources.get_distribution(requirement.name)
-                    except pkg_resources.ResolutionError:
-                        skip_os_package = False
-                        break
+                requirement = packaging.requirements.Requirement(dependency['pypi'])
+                try: importlib.metadata.distribution(requirement.name)
+                except importlib.metadata.PackageNotFoundError:
+                    skip_os_package = False
             for dependency_type in valid_dependency_types:
                 # we return the first dependency that is valid,
                 # unless we choose to skip that dependency.  If we
