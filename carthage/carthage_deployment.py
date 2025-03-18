@@ -95,6 +95,7 @@ async def install_deb(*, injector, **kwargs):
             # valid_dependency_types if they wanted deb more
             # preferred.
     if packages:
+        stem.apt('update', _fg=foreground)
         stem.apt(
             '-y', '--no-install-recommends',
             'install', *packages, _fg=foreground)
