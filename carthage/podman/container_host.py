@@ -405,8 +405,7 @@ class RemotePodmanHost(PodmanContainerHost):
         remote_path_str = os.path.relpath(remote_path_str,'/')
         async with filesystem_access_core(
                 self.sshfs_context,
-                path_dir=str(self.machine.state_path),
-                path_prefix=f'sshfs_{self.user}_{self.machine.name}',
+                remote_path_str,
                 sshfs_process_factory=self.sshfs_process_factory(prefix)
         ) as path:
             yield path
