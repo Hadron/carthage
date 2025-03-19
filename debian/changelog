@@ -1,3 +1,9 @@
+hadron-carthage (0.37) unstable; urgency=medium
+
+  * Release version 0.37
+
+ -- Sam Hartman <hartmans@debian.org>  Wed, 19 Mar 2025 15:52:47 -0600
+
 hadron-carthage (0.20) unstable; urgency=medium
 
   * New version
