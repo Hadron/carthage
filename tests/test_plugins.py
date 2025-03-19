@@ -22,8 +22,8 @@ def injector(ainjector):
     return ainjector.injector
 
 
-def test_load_vmware(injector):
-    injector(load_plugin, "carthage.vmware")
+def test_load_podman(injector):
+    injector(load_plugin, "carthage.podman")
 
 
 def test_dir_plugin(injector):
