@@ -30,7 +30,7 @@ def container_host_fixture(request):
 def pytest_generate_tests(metafunc):
     if 'container_host_fixture' in metafunc.fixturenames:
         if metafunc.config.getoption('remote_container_host'):
-            metafunc.parametrize('container_host_fixture', 'remote', indirect=True)
+            metafunc.parametrize('container_host_fixture', ['remote'], indirect=True)
         else:
             metafunc.parametrize('container_host_fixture', ['local', 'local_socket'], indirect=True)
             
