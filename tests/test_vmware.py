@@ -11,9 +11,16 @@ import os.path
 import pytest
 from carthage.dependency_injection import *
 from carthage.pytest import *
-from carthage.vmware import *
+try:
+    from carthage.vmware import *
+    from pyVmomi import vim
+    vmware_available = True
+except (ImportError, AttributeError):
+    # Debian shipped a python3-pyvmomi incompatible with the ssl
+    # module it shipped. Ubuntu picked this up.  In that case you get
+    # AttributeError.
+    vmware_available = False
 from carthage import ConfigLayout
-from pyVmomi import vim
 from carthage.network import NetworkConfig, external_network_key
 
 
@@ -21,6 +28,8 @@ from carthage.network import NetworkConfig, external_network_key
 @async_test
 @inject(config=ConfigLayout)
 async def config(config):
+    if not vmware_available:
+        pytest.skip('vmware is not available')
     vmc = config.vmware
     for k in ('hostname', 'password', 'username', 'folder', 'cluster'):
         if getattr(vmc, k, None) is None:
