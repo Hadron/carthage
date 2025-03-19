@@ -33,6 +33,8 @@ if [ $FAI_ACTION != "install" ]; then
     exit $error
 fi
 
+# For some reason ubuntu fai ends up without /dev mounted.
+test -d ${FAI_ROOT}${BOOT_DEVICE} || mount --bind /dev $FAI_ROOT/dev
 GROOT=$($ROOTCMD grub-probe -tdrive -d $BOOT_DEVICE)
 
 # handle /boot in lvm-on-md
