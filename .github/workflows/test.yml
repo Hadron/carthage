@@ -13,10 +13,16 @@ jobs:
       - name: install dependencies
         run: |
           sudo apt -q update
-          sudo apt -y install systemd-container socat qemu-utils fai-setup-storage fai-server python3-mako python3-sh python3-pyvmomi python3-yaml python3-pytest python3-pip python3-lmdb ansible genisoimage runc crun- sshfs
+          sudo apt -y install systemd-container socat qemu-utils fai-setup-storage fai-server python3-mako python3-sh python3-yaml python3-pytest python3-pip python3-lmdb ansible genisoimage runc crun- sshfs xorriso
           sudo pip install python-dateutil 
 
       - name: run tests
         run: |
           sudo PYTHONPATH=$(pwd) pytest-3 -v --carthage-config=.github/test_config.yml --log-cli-level=debug
-          
+
+      - name: upload_artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Fai Logs
+          path: /var/log/fai/*
