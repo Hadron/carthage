@@ -41,7 +41,7 @@ def ainjector(enable_podman, container_host_fixture, loop):
     config.cache_dir = str(state_dir/'cache')
     state_dir.mkdir(parents=True, exist_ok=True)
     ainjector.add_provider(podman_container_host, container_host_fixture)
-    if isinstance(container_host_fixture, MachineModel):
+    if issubclass(container_host_fixture, MachineModel):
         ainjector.add_provider(ssh_jump_host, injector_access(podman_container_host))
     elif container_host_fixture is LocalPodmanSocket:
         ainjector.add_provider(podman_sftp_server_mount)
