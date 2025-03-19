@@ -115,7 +115,7 @@ async def sshfs_to_sftp_server(sshfs_path:str, prefix:list[str], ):
         sshfs = sh.sshfs(
             '-opassive',
             'machine:/', sshfs_path,
-            _bg=True, _async=True,
+            _bg=True,
             _in=sshfs_stdin,
             _out=sshfs_stdout)
         sftp_command = sh.Command(prefix[0])
