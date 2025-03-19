@@ -11,7 +11,7 @@ env:
   run_tests: --carthage-config=build_test/authorized.yml -k "not no_rootless and not test_pki and not requires_podman_pod"
 jobs:
   build_python_dist:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Checkout code
@@ -47,7 +47,7 @@ jobs:
         assert 'v'+result['project']['version'] == '${{github.ref_name}}'
 
   test_python_dist:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: build_python_dist
     container:
       image: ${{matrix.image}}
@@ -89,7 +89,7 @@ jobs:
         pytest-3 ${{env.run_tests}} tests
 
   test_remote_podman:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     concurrency: only_one_remote_podman
     needs: build_python_dist
     container:
@@ -129,7 +129,7 @@ jobs:
         pytest-3 -k 'not no_rootless' tests/test_podman --carthage-config=.github/aws.yml --remote-container-host -v -s --log-cli-level=info
 
   github_release:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     if: startsWith(github.ref, 'refs/tags/v')
@@ -154,7 +154,7 @@ jobs:
         generate_release_notes: true
 
   test_pypi_release:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       id-token: write
     environment: pypi_test
@@ -177,7 +177,7 @@ jobs:
         repository-url: https://test.pypi.org/legacy/
 
   pypi_release:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       id-token: write
     environment: pypi
