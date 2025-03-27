@@ -231,8 +231,11 @@ class CarthageConsole(code.InteractiveConsole):
 
     def runcode(self, code):
         if code.co_flags & 128:
-            future = asyncio.run_coroutine_threadsafe(eval(code, locals=self.locals), loop=self.loop)
-            return future.result()
+            try:
+                future = asyncio.run_coroutine_threadsafe(eval(code, locals=self.locals), loop=self.loop)
+                return future.result()
+            except:
+                return self.showtraceback()
         return super().runcode(code)
     
     def runsource(self, source, filename, **kwargs):
