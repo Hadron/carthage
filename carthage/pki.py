@@ -380,3 +380,23 @@ class PemBundleTrustStore(TrustStore):
             counter += 1
 
 __all__ += ['PemBundleTrustStore']
+
+class CombinedTrustStore(TrustStore):
+
+    '''
+    Combine multiple trust stores together to produce additional trust roots.
+
+    '''
+
+    trust_stores:list[TrustStore]
+
+    def __init__(self, name, *rust_stores, **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.trust_stores = trust_stores
+
+    async def trusted_certificates(self):
+        for trust_store in self.trust_stores:
+            async for name, cert in trust_store.trusted_certificates():
+                yield f'{self.name}_{name}', cert
+
+__all__ += ['CombinedTrustStore']
