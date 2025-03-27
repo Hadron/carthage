@@ -693,7 +693,7 @@ class NetworkLink:
         if 'merged_v4_config' in self.__dict__:
             raise ValueError('resolve called too late.')
         if self.v4_config is not None:
-            await self.v4_config.resolve(ainjector=ainjector, interface=interface)
+            await self.v4_config.resolve(ainjector=ainjector, interface=interface, link=self)
             
     def __init_subclass__(cls, **kwargs):
         if hasattr(cls, 'local_type') and cls.local_type:
@@ -1149,5 +1149,21 @@ def shared_network_links(m1, m2):
 
 __all__ += ['shared_network_links']
 
-from . import links as network_links
+def address_within_network(addr):
+    '''
+    usage within a NetorkConfig::
 
+        config.add('eth0', mac=mac_addr,
+            v4_config = V4Config(address=address_within_network(2)))
+
+    Then ``eth0`` will have address 2 within the network. Requires that network be set in the v4_config of the link or network.
+    This can only be used on a v4_config of a link, not of a network.
+    '''
+    def inner(link, v4_config):
+        network_range = v4_config.network or link.net.v4_config.network
+        return network_range[addr]
+    return inner
+
+__all__ += ['address_within_network']
+
+from . import links as network_links

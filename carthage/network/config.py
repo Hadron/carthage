@@ -31,8 +31,9 @@ class L3ConfigMixin:
     dns_servers: list = None
     domains: str = None
 
-    async def resolve(self, ainjector, interface):
-        args = dict(interface=interface)
+    async def resolve(self, ainjector, interface, **kwargs):
+        args = dict(interface=interface, v4_config=self,
+                    **kwargs)
         for a in self._attributes:
             if getattr(self,a, None) is not None:
                 setattr(self, a,
@@ -45,7 +46,8 @@ class L3ConfigMixin:
             if self.network and address not in self.network:
                 raise ValueError(f"address {address} for field '{field}' is not contained in network {self.network}")
 
-        for field in ('address', 'gateway', 'public_address'):
+        # We do not validate public_address because it is often an external nat address.
+        for field in ('address', 'gateway'):
             if getattr(self, field):
                 validate_network(field, getattr(self, field))
 

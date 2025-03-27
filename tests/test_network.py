@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2023, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2023, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -12,7 +12,7 @@ import posix
 from ipaddress import *
 from carthage import base_injector
 import carthage.network.config
-from carthage.network import Network, BridgeNetwork, V4Config
+from carthage.network import Network, BridgeNetwork, V4Config, address_within_network
 from carthage.dependency_injection import *
 from carthage.modeling import *
 
@@ -97,4 +97,19 @@ async def test_gre_networking(ainjector):
     ainjector.add_provider(layout)
     l = await ainjector.get_instance_async(layout)
     assert l.net_1 in l.machine.network_links['gre0'].routes
+    
+@async_test
+async def test_address_within(ainjector):
+    class layout(CarthageLayout):
+
+        class                     net(NetworkModel):
+            v4_config = V4Config(network='10.0.0.0/8')
+
+        class machine(MachineModel):
+            class net_config(NetworkConfigModel):
+                add('eth0', mac=None, net=InjectionKey('net'),
+                    v4_config=V4Config(address=address_within_network(1)))
+
+    l = await ainjector(layout)
+    assert str(l.machine.network_links['eth0'].merged_v4_config.address) == '10.0.0.1'
     
