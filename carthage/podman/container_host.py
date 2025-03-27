@@ -188,6 +188,7 @@ async def filesystem_access_core(context,  remote_path, sshfs_process_factory):
                     await asyncio.sleep(t)
                 else:
                     raise TimeoutError("sshfs failed to mount")
+        path = os.path.join(context.sshfs_path, remote_path)
         yield Path(path)
     finally:
         context.sshfs_count -= 1
