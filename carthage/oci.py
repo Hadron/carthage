@@ -50,7 +50,7 @@ class OciManaged(SetupTaskMixin, AsyncInjectable):
         if getattr(self, 'name', None):
             for name_type in self.deployable_name_prefixes:
                 res.append(f'{name_type}:{self.name}')
-        if self.id:
+        if getattr(self, 'id', None):
             for name_type in self.deployable_name_prefixes:
                 res.append(f'{name_type}Id:{self.id}')
         return res
