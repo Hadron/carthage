@@ -1121,11 +1121,38 @@ class PodmanVolume(HasContainerHostMixin, OciManaged):
             'volume', 'create',
             *options, self.name)
 
+    async def find_or_create(self):
+        '''
+        Not a setup_task so that setup_tasks can be run with volume mounted.
+        '''
+        if self.readonly:
+            return await self.find()
+        return await super().find_or_create()
+    
     async def delete(self):
         await self.podman(
             'volume', 'rm',
             self.name)
 
+    async def async_ready(self):
+        '''
+        Run setup_tasks with self mounted.
+        '''
+        logger.info('Finding PodmanVolume %s', self.name)
+        await self.find_or_create()
+        result = await self.run_setup_tasks(context=self._setup_task_context())
+        # bypass SetupTaskMixin
+        await AsyncInjectable.async_ready(self)
+        return result
+
+    @contextlib.asynccontextmanager
+    async def _setup_task_context(self):
+        try:
+            async with self.filesystem_access() as path:
+                self.path = path
+                yield
+        finally:
+            self.path = None
     @memoproperty
     def stamp_subdir(self):
         return 'podman_volume/'+self.name
