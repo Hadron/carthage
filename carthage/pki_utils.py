@@ -80,7 +80,7 @@ def certificate_is_expired(pem_str:str,/, days_left=None, fraction_left=None):
     cert = cryptography.x509.load_pem_x509_certificate(pem_str.encode('utf-8'), default_backend())
     total_delta = cert.not_valid_after_utc-cert.not_valid_before_utc
     now = datetime.datetime.now(tz=datetime.timezone.utc)
-    until_expire = now-cert.not_valid_after_utc
+    until_expire = cert.not_valid_after_utc-now
     if until_expire.seconds <= 0:
         return True
     if days_left is not None and until_expire.days < days_left:
