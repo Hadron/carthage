@@ -644,6 +644,9 @@ class SetupTaskMixin(PathMixin, AsyncInjectable):
         for t in self.setup_tasks:
             with SetupTaskContext(self, t) as introspection_context:
                 try:
+                    if t.dependencies_always and (not context_entered) and context is not None:
+                        await context.__aenter__()
+                        context_entered = True
                     should_run, dependency_last_run = await t.should_run_task(self, dependency_last_run, ainjector=ainjector, introspection_context=introspection_context)
                 except:
                     introspection_context.done()
