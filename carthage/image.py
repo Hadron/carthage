@@ -16,6 +16,7 @@ import shutil
 import sys
 import tempfile
 import time
+import typing
 from subprocess import check_call, check_output, call
 from tempfile import TemporaryDirectory
 from .dependency_injection import *
@@ -24,7 +25,7 @@ from . import sh
 from .utils import possibly_async, memoproperty
 from .setup_tasks import setup_task, SkipSetupTask, SetupTaskMixin, TaskWrapper
 import carthage
-from .machine import ContainerCustomization, FilesystemCustomization, customization_task
+from .machine import ContainerCustomization, FilesystemCustomization, customization_task, AbstractMachineModel
 
 
 @inject_autokwargs(config_layout=ConfigLayout)
@@ -192,6 +193,9 @@ class ContainerVolume( SetupTaskMixin):
 
 class ContainerImage(ContainerVolume):
 
+    # We need to have some of the attributes from AbstractMachineModel so that start_machine can work
+    override_dependencies: typing.Union[bool, Injector, Injectable, InjectionKey] = False
+
     async def apply_customization(self, cust_class, method='apply', **kwargs):
         from .container import container_image, container_volume, Container
         injector = self.injector(Injector)
@@ -200,7 +204,10 @@ class ContainerImage(ContainerVolume):
             injector.add_provider(container_image, dependency_quote(self), close=False)
             injector.add_provider(container_volume, dependency_quote(self), close=False)
             container = await ainjector(Container, name=os.path.basename(self.name), skip_ssh_keygen=True, network_config=None)
-            customization = await ainjector(cust_class, apply_to=container, **kwargs)
+            container.injector.add_provider(InjectionKey(AbstractMachineModel), dependency_quote(self))
+            container.stamp_subdir = self.stamp_subdir
+            del container.stamp_path
+            customization = await container.ainjector(cust_class, apply_to=container, **kwargs)
             if hasattr(customization, 'container_args'):
                 container.container_args = customization.container_args
             meth = getattr(customization, method)
