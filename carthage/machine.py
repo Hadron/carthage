@@ -23,7 +23,7 @@ from .ssh import SshKey, SshAgent, RsyncPath, ssh_user_addr, ssh_handle_jump_hos
 from .utils import memoproperty
 from . import sh, deployment
 import carthage.ssh
-from .setup_tasks import SetupTaskMixin, setup_task, TaskWrapperBase, TaskInspector
+from .setup_tasks import SetupTaskMixin, setup_task, TaskWrapperBase, TaskInspector, PathMixin
 import logging
 logger = logging.getLogger("carthage")
 
@@ -738,7 +738,7 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
     @property
     def stamp_subdir(self):
-        return self.host.stamp_path
+        return self.host.stamp_subdir
 
     def create_stamp(self, stamp, contents):
         stamp = f'{self.stamp_stem}-{stamp}'
@@ -845,7 +845,7 @@ class FilesystemCustomization(BaseCustomization):
             return
 
 
-class CustomizationInspectorProxy:
+class CustomizationInspectorProxy(PathMixin):
 
     def __init__(self, obj, stamp):
         self.obj = obj
@@ -861,8 +861,8 @@ class CustomizationInspectorProxy:
         return self.obj.logger_for
 
     @property
-    def stamp_path(self):
-        return self.obj.stamp_path
+    def stamp_subdir(self):
+        return self.obj.stamp_subdir
 
     def __repr__(self):
         return f'CustomizationInspectorProxy({repr(self.obj)})'
