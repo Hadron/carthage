@@ -549,7 +549,7 @@ Return the first injector in our parent chain containing *k* or None if there is
                 if placement:
                     placement(res)
                 return res
-            raise KeyError("No dependency for {}".format(k)) from None
+            raise KeyError(f'No dependency for {k} requested from {self}') from None
         mark_instantiation_done = True
         if k.defer and defer_dependencies:
             res = DeferredInjection(injector=self, key=k)
