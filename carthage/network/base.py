@@ -877,11 +877,12 @@ class NetworkConfigInstance(Injectable):
 external_network_key = InjectionKey(Network, role="external")
 
 
-@inject(config_layout=ConfigLayout,
+@inject(
         injector=Injector)
 class ExternalNetwork(Network):
 
-    def __init__(self, config_layout, injector):
+    def __init__(self, injector):
+        config_layout = injector(ConfigLayout)
         vlan_id = config_layout.external_vlan_id
         external_bridge_name = config_layout.external_bridge_name
         kwargs = {}
