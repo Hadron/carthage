@@ -445,6 +445,9 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         return self.running
 
     async def start_machine(self):
+        if self.readonly:
+            self.logger_for().info('Not starting %s which is readonly', self)
+            return
         async with self._operation_lock:
             await self.is_machine_running()
             if self.running:
