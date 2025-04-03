@@ -89,6 +89,7 @@ class PathMixin(Injectable):
     def clear_stamps_and_cache(self):
         cache_dir = Path(self.config_layout.cache_dir)
         if str(self.stamp_path).startswith(str(cache_dir)):
+            logger.info('Clearing stamps and cache for %s', self)
             shutil.rmtree(self.stamp_path, ignore_errors=True)
             try:
                 del self.stamp_path # so it gets recreated
