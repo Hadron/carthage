@@ -7,6 +7,7 @@
 # LICENSE for details.
 
 from __future__ import annotations
+import sys
 import asyncio
 import contextlib
 import datetime
@@ -960,21 +961,51 @@ class ContainerfileImage(OciImage, no_auto_inject=True):
     build_args: dict = {}
 
     def __init__(self, container_context=None, **kwargs):
-        if container_context: self.container_context = container_context
+
+        if container_context:
+            self.container_context = container_context
+
         else:
+
             if not hasattr(self, 'container_context'):
                 raise TypeError('container_context must be set on the class or in the constructor')
+
+            # We look for the container_context directory relative to
+            # the class providing the container_context attribute.
+            # This is so if we derive from the class, as in:
+            #
+            #   class myimage(BaseImage):
+            #       configvar = 'value'
+            #
+            # we get the container_context provided by BaseImage.  It
+            # might be nice to allow container_contexts to overlay,
+            # but we don't attempt that.
+
+            container_context_class = None
+            for k in type(self).__mro__:
+                if 'container_context' in k.__dict__:
+                    container_context_class = k
+                    break
+            if container_context_class is None:
+                container_context_class = self.__class__
+
+            module = None
             try:
-                import sys
-                module = sys.modules[self.__class__.__module__]
+                module = sys.modules[container_context_class.__module__]
             except Exception as e:
-                module = None
                 warnings.warn(f'Unable to find module for {self.__class__.__qualname__}: {e}')
+
+            # Why would we be unable to find the module?  But if we
+            # don't, self.container_context needs to already be the full
+            # path.
+
             if module:
                 try: path = Path(module.__path__[0])
                 except Exception:
                     path = Path(module.__file__).parent
                 self.source_container_context = self.container_context = path/self.container_context
+
+        # By this point, self.container_context has the full path
         super().__init__(**kwargs)
         self.container_host = None
         if len(self.setup_tasks) > 2:
