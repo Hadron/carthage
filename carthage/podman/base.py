@@ -113,11 +113,13 @@ class PodmanNetwork(HasContainerHostMixin, TechnologySpecificNetwork, OciManaged
 
 
     async def do_create(self):
+
         options = ['-d', 'bridge']
         from ..modeling import CarthageLayout
         layout = await self.ainjector.get_instance_async(InjectionKey(CarthageLayout, _optional=True))
         if layout_name := layout and layout.layout_name:
             options.extend(['--label', 'carthage.layout='+layout_name])
+        options.extend([f'-o=com.docker.network.bridge.name={self.network.name}'])
         v4_config = getattr(self.network, 'v4_config', None)
         if v4_config:
             if v4_config.network:
