@@ -95,6 +95,16 @@ class PodmanNetwork(HasContainerHostMixin, TechnologySpecificNetwork, OciManaged
         self.name = self.network.name
         self.container_host = None
 
+    def _gfi(self, key, default="error"):
+        '''
+        get_from_injector.  Used to look up some configuration in the model or its enclosing injectors.
+        '''
+        k = InjectionKey(key, _optional=default != "error")
+        res = self.injector.get_instance(k)
+        if res is None and default != "error":
+            res = default
+        return res
+
     async def find(self):
         if not self.container_host:
             await self.ainjector(instantiate_container_host, self)
@@ -115,6 +125,13 @@ class PodmanNetwork(HasContainerHostMixin, TechnologySpecificNetwork, OciManaged
 
     async def do_create(self):
         options = ['-d', 'bridge']
+        if bridge_name := self._gfi('podman_bridge_name', default=None):
+            options.extend(['-ocom.docker.network.bridge.name='+bridge_name])
+        podman_container_dns = self._gfi('podman_container_dns', default=True)
+        if not podman_container_dns:
+            options.extend(['--disable-dns'])
+        podman_unmanaged = self._gfi('podman_unmanaged', default=None)
+        #We handle unmanaged below because we must force unmanaged to True for dhcp
         from ..modeling import CarthageLayout
         layout = await self.ainjector.get_instance_async(InjectionKey(CarthageLayout, _optional=True))
         if layout_name := layout and layout.layout_name:
@@ -131,6 +148,9 @@ class PodmanNetwork(HasContainerHostMixin, TechnologySpecificNetwork, OciManaged
                     '--gateway', str(v4_config.gateway)])
             if v4_config.dhcp:
                 options.extend(['--ipam-driver=dhcp'])
+                podman_unmanaged = True
+        if podman_unmanaged:
+            options.append('-omode=unmanaged')
         await self.podman(
             'network',
             'create', self.network.name,
