@@ -140,6 +140,9 @@ class Network(AsyncInjectable):
         VmwareNetwork
             for `carthage.vmware.Vm`
 
+    PodmanNetwork
+        for :class:`carthage.podman.PodmanContainer`
+    
     '''
 
     network_links: weakref.WeakSet
