@@ -30,19 +30,25 @@ KeepConfiguration = dhcp
 Domains=${v4_config.domains}
 %endif
 %if v4_config.dns_servers:
-DNS=${" ".join(v4_config.dns_servers)}
+%for s in v4_config.dns_servers:
+DNS=${s}
+%endfor
 %endif
 %if v4_config.masquerade:
 IPMasquerade=yes
 %endif
 %if v4_config.gateway and not v4_config.dhcp:
+[Route]
 Gateway=${v4_config.gateway}
+%if v4_config.metric:
+Metric=${v4_config.metric}
+%endif
 %endif
 <%if not nontrivial:
     raise NotNeeded
 %>
-[DHCPv4]
 %if v4_config.dhcp and (v4_config.gateway is False):
+[DHCPv4]
 UseGateway=no
 %endif
 </%block>

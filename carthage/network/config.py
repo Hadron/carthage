@@ -25,6 +25,7 @@ class L3ConfigMixin:
         'gateway',
         'secondary_addresses',
         "dns_servers", "domains",
+        "metric",
     })
 
     #: Set of DNS servers that should be made available to this link/network
@@ -143,6 +144,7 @@ class V4Config(L3ConfigMixin):
     #: Takes a lower bound and a upper bound, both specified as V4 addresses.  If specified and address is None, will assign the address between the lower and upper bound.  This allows addresses to be dynamically managed at modeling time rather than by DHCP at run time.  DHCP can still be used, but at least for models whose config includes *pool*, addresses will be statically configured in the dhcp server.
     pool: tuple = dataclasses.field(default=None, repr=False)
     public_address: IPv4Address = dataclasses.field(default=None, repr=False)
+    metric: int = None
     
     _attributes = L3ConfigMixin._attributes | {'masquerade', 'pool'}
 

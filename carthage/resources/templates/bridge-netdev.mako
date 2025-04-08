@@ -1,11 +1,5 @@
-[NetDev]
-Name=${link.interface}
-Kind=bridge
-%if link.mac:
-MACAddress=${link.mac}
-%endif
-%if link.mtu:
-MTUBytes=${link.mtu}
-% endif
+<%inherit file="netdev-base.mako"/>
+<%block name="local_type">
 [Bridge]
 VLANFiltering=${link.vlan_filter}
+</%block>
