@@ -327,7 +327,7 @@ class NetworkedMixin:
                 await network_namespace.resolve_networking(force=force)
                 self.network_links = network_namespace.network_links
                 return
-            network_config = await ainjector.get_instance_async(NetworkConfig)
+            network_config = await ainjector.get_instance_async(InjectionKey(NetworkConfig, _ready=True))
         except KeyError:
             return
         if network_config is None:
