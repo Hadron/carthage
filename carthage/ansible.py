@@ -739,7 +739,7 @@ def ansible_log_for_model(model):
 
     Sets up a per-model ansible log in *stamp_path*/ansible.log.
     '''
-    return f'{model.stamp_path}/ansible.log'
+    return f'{model.log_path}/ansible.log'
 
 __all__ += ['ansible_log_for_model']
 
