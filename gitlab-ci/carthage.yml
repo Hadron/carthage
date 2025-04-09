@@ -58,6 +58,14 @@ variables:
     value: ''
   CARTHAGE_DESTROY_INCLUDE: $CARTHAGE_DEPLOY_INCLUDE
   CARTHAGE_DESTROY_EXCLUDE: $CARTHAGE_DEPLOY_EXCLUDE
+  CARTHAGE_INSTALL_DEPENDENCIES:
+    description: Install carthage dependancies? Must skip if running as non-sudo or if OEL
+    value: 'yes'
+    options: ['no', 'yes']
+  CARTHAGE_RUNNER:
+    description: Run as root or rootless?
+    value: 'root'
+    options: ['rootless', 'root']
   
 .carthage_cache_setup:
   cache:
@@ -83,7 +91,10 @@ variables:
   - pytest_carthage_args="-p carthage.pytest_plugin --carthage-config=.carthage_ci_config.yml"
   - if [ -n "$[[ inputs.carthage_config ]]" ]; then carthage_args="--config $[[ inputs.carthage_config ]] $carthage_args"; pytest_carthage_args="$pytest_carthage_args --carthage-config=$[[ inputs.carthage_config ]]"; fi
   - echo $carthage_args
-  - carthage $carthage_args install_dependencies
+  - |
+    if test "$CARTHAGE_INSTALL_DEPENDENCIES" = "yes" ; then
+    carthage $carthage_args install_dependencies
+    fi
 
 prepare:
   artifacts:
@@ -180,6 +191,10 @@ prepare:
     - echo $deploy_args
     - |
       if test "$CARTHAGE_RUN_DEPLOY" = "yes" -o "$CARTHAGE_RUN_DEPLOY" = "dry_run" ; then
-      carthage-runner $carthage_args deploy --force-confirm $deploy_args
+        if test "$CARTHAGE_RUNNER" = "root" ; then
+        carthage-runner $carthage_args deploy --force-confirm $deploy_args
+        elif test "$CARTHAGE_RUNNER" = "rootless" ; then
+        podman unshare carthage-runner $carthage_args deploy --force-confirm $deploy_args
+        fi
       fi
-      
+
