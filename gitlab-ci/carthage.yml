@@ -58,6 +58,13 @@ variables:
     value: ''
   CARTHAGE_DESTROY_INCLUDE: $CARTHAGE_DEPLOY_INCLUDE
   CARTHAGE_DESTROY_EXCLUDE: $CARTHAGE_DEPLOY_EXCLUDE
+  CARTHAGE_INSTALL_DEPENDENCIES:
+    description: Install carthage dependancies? Must skip if runner cannot become root or on non-apt-based systems.
+    value: 'yes'
+    options: ['no', 'yes']
+  CARTHAGE_RUNNER:
+    description: Command to invoke carthage-runner.
+    value: carthage-runner
   
 .carthage_cache_setup:
   cache:
@@ -83,9 +90,17 @@ variables:
   - pytest_carthage_args="-p carthage.pytest_plugin --carthage-config=.carthage_ci_config.yml"
   - if [ -n "$[[ inputs.carthage_config ]]" ]; then carthage_args="--config $[[ inputs.carthage_config ]] $carthage_args"; pytest_carthage_args="$pytest_carthage_args --carthage-config=$[[ inputs.carthage_config ]]"; fi
   - echo $carthage_args
-  - carthage $carthage_args install_dependencies
+  - |
+    if test "$CARTHAGE_INSTALL_DEPENDENCIES" = "yes" ; then
+    carthage $carthage_args install_dependencies
+    fi
 
 prepare:
+  variables:
+    # Default back to plain carthage-runner. Even if the layout wants
+    #the runner to be podman unshare, we probably do not need that for
+    # prepare. If we do, override in .gitlab-ci.yml within this job. 
+    CARTHAGE_RUNNER: carthage-runner
   artifacts:
     name: cache_dir
     access: '$[[ inputs.CARTHAGE_CACHE_ACCESS ]]'
@@ -97,7 +112,7 @@ prepare:
     - .carthage_cache_setup
   script:
     - *initial_script
-    - carthage-runner $carthage_args --generate --no-console
+    - $CARTHAGE_RUNNER $carthage_args --generate --no-console
 
 .carthage_install_from_git:
   before_script:
@@ -148,12 +163,12 @@ prepare:
     - echo $destroy_args
     - |
       if test "$CARTHAGE_RUN_DESTROY" = "yes" ;then
-      carthage-runner $carthage_args destroy --dry-run  $destroy_args
+      $CARTHAGE_RUNNER $carthage_args destroy --dry-run  $destroy_args
       fi
     - echo $deploy_args
     - |
       if test "$CARTHAGE_RUN_DEPLOY" = "yes" ; then
-      carthage-runner $carthage_args deploy --dry-run $deploy_args
+      $CARTHAGE_RUNNER $carthage_args deploy --dry-run $deploy_args
       fi
       
 .carthage_deploy:
@@ -175,11 +190,11 @@ prepare:
     - echo $destroy_args
     - |
       if test "$CARTHAGE_RUN_DESTROY" = "yes" -o "$CARTHAGE_RUN_DESTROY" = "dry_run" ;then
-      carthage-runner $carthage_args destroy --force-confirm $destroy_args
+      $CARTHAGE_RUNNER $carthage_args destroy --force-confirm $destroy_args
       fi
     - echo $deploy_args
     - |
       if test "$CARTHAGE_RUN_DEPLOY" = "yes" -o "$CARTHAGE_RUN_DEPLOY" = "dry_run" ; then
-      carthage-runner $carthage_args deploy --force-confirm $deploy_args
+      $CARTHAGE_RUNNER $carthage_args deploy --force-confirm $deploy_args
       fi
       
