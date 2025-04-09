@@ -1155,7 +1155,7 @@ __all__ += ['shared_network_links']
 
 def address_within_network(addr):
     '''
-    usage within a NetorkConfig::
+    usage within a NetworkConfig::
 
         config.add('eth0', mac=mac_addr,
             v4_config = V4Config(address=address_within_network(2)))
