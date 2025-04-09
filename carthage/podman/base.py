@@ -132,11 +132,19 @@ class PodmanNetwork(HasContainerHostMixin, TechnologySpecificNetwork, OciManaged
             options.extend(['--disable-dns'])
         podman_unmanaged = self._gfi('podman_unmanaged', default=None)
         #We handle unmanaged below because we must force unmanaged to True for dhcp
+        podman_v4_config = self._gfi('podman_v4_config', default=None)
+        # We handle merging with the network below
         from ..modeling import CarthageLayout
         layout = await self.ainjector.get_instance_async(InjectionKey(CarthageLayout, _optional=True))
         if layout_name := layout and layout.layout_name:
             options.extend(['--label', 'carthage.layout='+layout_name])
         v4_config = getattr(self.network, 'v4_config', None)
+        if podman_v4_config and not v4_config:
+            v4_config = podman_v4_config
+            await v4_config.resolve(interface='podman', ainjector=ainjector)
+        elif v4_config and podman_v4_config:
+            v4_config = podman_v4_config.merge(v4_config)
+            await v4_config.resolve(ainjector=ainjector, interface='podman')
         if v4_config:
             if v4_config.network:
                 options.extend([
@@ -149,6 +157,9 @@ class PodmanNetwork(HasContainerHostMixin, TechnologySpecificNetwork, OciManaged
             if v4_config.dhcp:
                 options.extend(['--ipam-driver=dhcp'])
                 podman_unmanaged = True
+            # It is not clear how this interacts with container dns, but it seems better to specify dns servers on the podman-create line
+#            for server in v4_config.dns_servers:
+#                options.extend(['--dns', str(server)])
         if podman_unmanaged:
             options.append('-omode=unmanaged')
         await self.podman(
