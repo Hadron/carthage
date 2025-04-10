@@ -322,3 +322,30 @@ __all__ += ['host_mount']
 container_host_model_key = InjectionKey(carthage.machine.AbstractMachineModel, role='container_host')
 
 __all__ += ['container_host_model_key']
+
+class OciCredentials(Injectable):
+
+    registry: str= None
+    username: str = None
+    password: str = None
+
+    def __init__(self, *, registry=None, username=None, password=None, **kwargs):
+        super().__init__(**kwargs)
+        if registry:
+            self.registry = registry
+        if username:
+            self.username = username
+        if password:
+            self.password = password
+
+    @classmethod
+    def default_class_injection_key(cls):
+        if cls.registry:
+            return InjectionKey(OciCredentials, registry=cls.registry)
+        else:
+            return super().default_class_injection_key(cls)
+
+    def default_instance_injection_key(self):
+        return InjectionKey(OciCredentials, registry=self.registry)
+
+__all__ += ['OciCredentials']

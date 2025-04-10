@@ -64,6 +64,34 @@ async def podman_mount_option(ainjector: AsyncInjector, m: OciMount):
 
 __all__ = []
 
+@inject(
+    ainjector=AsyncInjector)
+async def login_to_registry(tag:str, *, podman, ainjector):
+    '''    Splits an image name on the first slash to find the name of the registry.
+    Checks for ``InjectionKey(OciCredentials, registry=registry)`` in the supplied injector. If present that key can either be a :class:`OciCredentials` or a string in one of the following formats:
+
+    * Password.  The username defaults to registry.  Note that gitlab registries do not appear to care what username you ese for a personal access token.
+
+    * username:password
+
+    '''
+    registry, *rest = tag.partition('/')
+    try:
+        credentials = await ainjector.get_instance_async(InjectionKey(OciCredentials, registry=registry))
+        match credentials:
+            case OciCredentials(username=username, password=password):
+                pass
+            case str() as s if ':' in s:
+                username, _, password = s.partition(':')
+            case str() as s:
+                username = 'registry'
+                password = s
+            case _:
+                raise ValueError(f'Do not know how to interpret {credentials}')
+        await podman('login', '-u', username, '-p', password, registry)
+    except KeyError:
+        pass
+    
 class HasContainerHostMixin(OciManaged):
 
     '''
@@ -700,6 +728,8 @@ class PodmanImage(OciImage, SetupTaskMixin, no_auto_inject=True):
         pull_policy = self.config_layout.podman.pull_policy
         if pull_policy == 'never':
             return
+        if not image_is_local(self.oci_image_tag):
+            await self.ainjector(login_to_registry, self.oci_image_tag, podman=self.podman)
         try:
             self.id = None
             await self.podman('pull', self.oci_image_tag)
