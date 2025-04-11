@@ -65,7 +65,7 @@ variables:
   CARTHAGE_RUNNER:
     description: Command to invoke carthage-runner.
     value: carthage-runner
-  
+
 .carthage_cache_setup:
   cache:
     key: '$[[ inputs.cache_key ]]'
@@ -99,7 +99,7 @@ prepare:
   variables:
     # Default back to plain carthage-runner. Even if the layout wants
     #the runner to be podman unshare, we probably do not need that for
-    # prepare. If we do, override in .gitlab-ci.yml within this job. 
+    # prepare. If we do, override in .gitlab-ci.yml within this job.
     CARTHAGE_RUNNER: carthage-runner
   artifacts:
     name: cache_dir
@@ -124,7 +124,7 @@ prepare:
     fi
     PATH=$CARTHAGE_INSTALL_DIR/bin:$PATH
 
-. setup_deployment_filter: &setup_deployment_filter
+.setup_deployment_filter: &setup_deployment_filter
   - |
     deploy_args=""
     destroy_args=""
@@ -146,7 +146,7 @@ prepare:
     if test -n "$CARTHAGE_DEPLOY_EXCLUDE"; then
     deploy_args="$deploy_args --exclude $CARTHAGE_DEPLOY_EXCLUDE";
     fi
-    
+
 
 .carthage_deploy_dryrun:
   interruptible: true
@@ -170,11 +170,11 @@ prepare:
       if test "$CARTHAGE_RUN_DEPLOY" = "yes" ; then
       $CARTHAGE_RUNNER $carthage_args deploy --dry-run $deploy_args
       fi
-      
+
 .carthage_deploy:
   stage: $[[ inputs.deploy_stage ]]
   rules:
-    - if: $CARTHAGe_RUN_DEPLOY == 'no' && $CARTHAGE_RUN_DESTROY == 'no'
+    - if: $CARTHAGE_RUN_DEPLOY == 'no' && $CARTHAGE_RUN_DESTROY == 'no'
       when: never
     - if: '$CARTHAGE_DEPLOY_MANUAL == "yes"'
       when: manual
@@ -197,4 +197,3 @@ prepare:
       if test "$CARTHAGE_RUN_DEPLOY" = "yes" -o "$CARTHAGE_RUN_DEPLOY" = "dry_run" ; then
       $CARTHAGE_RUNNER $carthage_args deploy --force-confirm $deploy_args
       fi
-      
