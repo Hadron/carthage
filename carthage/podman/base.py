@@ -169,7 +169,7 @@ class PodmanNetwork(HasContainerHostMixin, TechnologySpecificNetwork, OciManaged
         v4_config = getattr(self.network, 'v4_config', None)
         if podman_v4_config and not v4_config:
             v4_config = podman_v4_config
-            await v4_config.resolve(interface='podman', ainjector=ainjector)
+            await v4_config.resolve(interface='podman', ainjector=self.ainjector)
         elif v4_config and podman_v4_config:
             v4_config = podman_v4_config.merge(v4_config)
             await v4_config.resolve(ainjector=ainjector, interface='podman')
