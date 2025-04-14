@@ -27,7 +27,8 @@ When testing whether a :class:`Machine` is local, test for ``isinstance(machine,
     '''
 
     ip_address = "127.0.0.1"
-
+    _ssh_online_required = False
+    rsync_uses_filesystem_access = True
     @contextlib.asynccontextmanager
     async def filesystem_access(self, user=None):
         if user is None:
@@ -42,6 +43,16 @@ When testing whether a :class:`Machine` is local, test for ``isinstance(machine,
     async def stop_machine(self):
         raise NotImplementedError("Stopping localhost may be more dramatic than desired")
 
+    async def run_command(self, *args, _user=None, **kwargs):
+        if _user is None:
+            _user = self.runas_user
+        if _user != self.ssh_login_user:
+            # perhaps os.environ['USER'] would be better?
+            raise ValueError(f'{self.__class__.__qualname__} Does not support runas_user different than ssh_login_user; consider BecomePrivilegedMixin or another privilege management solution.')
+        args = [str(a) if isinstance(a,Path) else a for a in args]
+        command, *args = args
+        return await sh.Command(command)(*args, **kwargs)
+    
     @property
     def shell(self):
         # We don't actually need to enter a namespace, but this provides similar
