@@ -39,7 +39,7 @@ variables:
     description: Should Carthage run deploy?
     value: dry_run
     options: ['no', 'yes', 'dry_run']
-  CARTHAGE_RUN_destroy:
+  CARTHAGE_RUN_DESTROY:
     description: Should Carthage run destroy before running deploy?
     value: 'no'
     options: ['no', 'yes', 'dry_run']
