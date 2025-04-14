@@ -172,7 +172,7 @@ class PodmanNetwork(HasContainerHostMixin, TechnologySpecificNetwork, OciManaged
             await v4_config.resolve(interface='podman', ainjector=self.ainjector)
         elif v4_config and podman_v4_config:
             v4_config = podman_v4_config.merge(v4_config)
-            await v4_config.resolve(ainjector=ainjector, interface='podman')
+            await v4_config.resolve(ainjector=self.ainjector, interface='podman')
         if v4_config:
             if v4_config.network:
                 options.extend([
