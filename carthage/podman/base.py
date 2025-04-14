@@ -663,7 +663,7 @@ class PodmanImage(OciImage, SetupTaskMixin, no_auto_inject=True):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.layer_number = 1
-        self.injector.add_provider(InjectionKey('podman_log'), self.stamp_path/'podman.log')
+        self.injector.add_provider(InjectionKey('podman_log'), self.log_path/'podman.log')
         self.container_host = None
 
     async def pull_base_image(self):
