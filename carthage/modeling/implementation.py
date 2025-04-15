@@ -672,7 +672,7 @@ class ModelingContainer(InjectableModelType):
             our_key = self.our_key()
             if not isinstance(our_key, InjectionKey):
                 our_key = InjectionKey(our_key)
-                decorators.provides(our_key)(self)
+            decorators.provides(our_key)(self)
         except (AttributeError, NameError):
             pass
 
