@@ -1,4 +1,4 @@
-# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, Hadron Industries, Inc.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -401,4 +401,28 @@ async def test_depend_on(ainjector):
     called = 0
     await ainjector(d)
     assert called == 1
+    
+@async_test
+async def test_cross_dependency_run_if_needed(ainjector):
+    run_count = 0
+    class a(Stampable):
+        @setup_task("always runs")
+        def always_runs(self):
+            nonlocal run_count
+            run_count += 1
+
+        @always_runs.check_completed()
+        def always_runs(self):
+            return False
+
+    @inject_autokwargs(a=a)
+    class b(Stampable):
+        a_dependency = cross_object_dependency(a.always_runs, 'a', run_if_needed=True)
+
+    ainjector.add_provider(a)
+    ainjector.add_provider(b)
+    await ainjector.get_instance_async(a)
+    assert run_count==1
+    await ainjector.get_instance_async(b)
+    assert run_count==2
     

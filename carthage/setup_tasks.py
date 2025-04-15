@@ -43,7 +43,7 @@ class PathMixin(Injectable):
     Requires that subclasses fill in :attr:`stamp_subdir`.
 
     Also provides :attr:`config_layout`.
-    
+
 
     '''
 
@@ -51,7 +51,7 @@ class PathMixin(Injectable):
         super().__init__(**kwargs)
         if not hasattr(self, 'config_layout'):
             self.config_layout = self.injector(ConfigLayout)
-            
+
     @property
     def stamp_subdir(self):
         '''The part of :meth:`stamp_path` after *config.stamp_dir*.
@@ -96,7 +96,7 @@ class PathMixin(Injectable):
             except (AttributeError, TypeError): pass
         else:
             logger.warn('Failed to clear stamps for %s: stamps not under cache_dir', self)
-            
+
 _task_order = 0
 
 
@@ -112,7 +112,7 @@ class SetupTaskContext(BaseInstantiationContext):
     instance: 'SetupTaskMixin'
     task: 'TaskWrapperBase'
     dependencies_have_run: bool #: Have SystemDependencies marked with depend_on been run
-    
+
     def __init__(self, instance, task):
         super().__init__(instance.injector)
         self.instance = instance
@@ -147,7 +147,7 @@ class SetupTaskContext(BaseInstantiationContext):
         if self.dependencies_have_run: return
         await self.task.call_dependencies(self.instance)
         self.dependencies_have_run = True
-        
+
 @dataclasses.dataclass
 class TaskInspector:
 
@@ -176,7 +176,7 @@ class TaskInspector:
     @stamp.setter
     def stamp(self, val):
         self._stamp = val
-        
+
 
     @property
     def instance_id(self):
@@ -188,13 +188,13 @@ class TaskInspector:
     @instance_id.setter
     def instance_id(self, val):
         self._instance_id = val
-        
+
     def subtasks(self):
         from .machine import CustomizationWrapper
         if isinstance(self.task, CustomizationWrapper):
             return self.task.inspect(self.from_obj, instance_id=self.instance_id)
         return []
-    
+
     async def dependency_last_run(self, ainjector):
         try: return self._dependency_last_run
         except AttributeError: pass
@@ -230,8 +230,8 @@ class TaskInspector:
         from .machine import CustomizationInspectorProxy
         return isinstance(self.from_obj, (SetupTaskMixin, CustomizationInspectorProxy))
 
-                
-    
+
+
 
 @dataclasses.dataclass
 class TaskWrapperBase:
@@ -272,7 +272,7 @@ class TaskWrapperBase:
                 InjectionKey(SetupTaskMixin), "task_ran",
                 instance, task=self,
                 adl_keys=instance.setup_task_event_keys())
-            
+
         def fail(e):
             if not self.check_completed_func:
                 instance.logger_for().warning(
@@ -283,7 +283,7 @@ class TaskWrapperBase:
                 instance, task=self,
                 exception=e,
                 adl_keys=instance.setup_task_event_keys())
-    
+
 
         mark_context_done = True
         with contextlib.ExitStack() as stack:
@@ -396,7 +396,7 @@ class TaskWrapperBase:
             futures.append(future)
         if futures:
             await asyncio.gather(*futures)
-            
+
     def depend_on(self, dependency):
         '''
         Decorator to  mark a particular task as depending on some :class:`~carthage.SystemDependency`.  Example Usage::
@@ -414,7 +414,7 @@ class TaskWrapperBase:
         from .system_dependency import SystemDependency
         assert isinstance(dependency, SystemDependency)
         self.dependencies.append(dependency)
-        
+
     def invalidator(self, slow=False):
         '''Decorator to indicate  an invalidation function for a :func:`setup_task`
 
@@ -620,14 +620,18 @@ class SetupTaskMixin(PathMixin, AsyncInjectable):
         if readonly is NotPresent:
             return False
         return readonly
-    
-    async def run_setup_tasks(self, context=None):
-        '''Run the set of collected setup tasks.  If *context* is provided, it
+
+    async def run_setup_tasks(
+            self,
+            context=None,
+            stop_after:TaskWrapperbase=None):
+        '''Consider running  the set of collected setup tasks.  If *context* is provided, it
         is used as an asynchronous context manager that will be entered before the
-        first task and eventually exited.  The context is never
-        entered if no tasks are run.
+        first task and eventually exited.  The context is also entered if one of the considered tasks has dependencies_always set to True.
+
         This execution context is different from :class:`SetupTaskContext`. The *SetupTaskContext* is an introspection mechanism that tracks which setup task is running and why; the asynchronous context allows a set of tasks for example in a customization to have common resources available.
-        
+
+        :param stop_after: Stop after considering running the selected task.
         '''
         injector = getattr(self, 'injector', carthage.base_injector)
         ainjector = getattr(self, 'ainjector', None)
@@ -638,6 +642,8 @@ class SetupTaskMixin(PathMixin, AsyncInjectable):
             config = injector(ConfigLayout)
         context_entered = False
         dry_run = config.tasks.dry_run
+        if stop_after:
+            assert stop_after in self.setup_tasks
         dependency_last_run = 0.0
         if self.readonly:
             self.logger_for().info('Not running tasks for %s which is readonly', self)
@@ -688,6 +694,8 @@ class SetupTaskMixin(PathMixin, AsyncInjectable):
                         self, task=t,
                         adl_keys=self.setup_task_event_keys())
                     introspection_context.done()
+            if t is stop_after:
+                break
         if context_entered:
             await context.__aexit__(None, None, None)
 
@@ -696,8 +704,8 @@ class SetupTaskMixin(PathMixin, AsyncInjectable):
         '''
         yield self.default_class_injection_key()
         yield from self.supplementary_injection_keys(self.default_class_injection_key())
-        
-        
+
+
     @classmethod
     def class_setup_tasks(cls):
         '''
@@ -721,7 +729,7 @@ class SetupTaskMixin(PathMixin, AsyncInjectable):
 
         cls._class_setup_tasks_prop = tuple(results)
         return cls.__dict__['_class_setup_tasks_prop']
-    
+
     async def async_ready(self):
         '''
         This may need to be overridden, but is provided as a default
@@ -789,7 +797,7 @@ class SetupTaskMixin(PathMixin, AsyncInjectable):
         for t in cls.class_setup_tasks():
             prev=TaskInspector(task=t, from_obj=cls, previous=prev)
             yield prev
-            
+
 
 def _iso_time(t):
     return datetime.datetime.fromtimestamp(t).isoformat()
@@ -807,16 +815,23 @@ class cross_object_dependency(TaskWrapper):
 
     :param relationship: The string name of a relationship such that calling the *relationship* method on an instance containing this dependency will yield the instance containing *task* that we want to depend on.
 
+    :param ready: if True, bring the relationship to ready
+
+    :param run_if_needed: if True, Run setup tasks on *relationship* including up to the depended on task if the depended on task needs to rerun.
+    
+
     A cross object dependency will invalidate later tasks in this object if the depended on task has run more recently than these tasks.  That is in the example above, if the fileserver's *update_files* task has run more recently than this object's setup_tasks, then re-run this object's setup_tasks.
 
     Compare to :meth:`TaskWrapper.depend_on`, which guarantees that when a particular task is running, certain dependencies are available.
-    
+
     '''
 
     dependent_task: typing.Union[TaskWrapper, TaskMethod, str]
     relationship: str
+    ready: bool
+    run_if_needed: bool
 
-    def __init__(self, task, relationship, **kwargs):
+    def __init__(self, task, relationship, ready=False, run_if_needed=True, **kwargs):
         if isinstance(task,str):
             description = task
         else: description=task.description
@@ -825,20 +840,27 @@ class cross_object_dependency(TaskWrapper):
                          **kwargs)
         self.dependent_task = task
         self.relationship = relationship
-
+        self.ready= ready
+        self.run_if_needed = run_if_needed
+        
     def _handle_task(self, instance):
         if isinstance(self.dependent_task, str):
             relationship = getattr(instance, self.relationship)
             self.dependent_task = getattr(relationship, self.dependent_task)
             if isinstance(self.dependent_task, TaskMethod):
                 self.dependent_task = self.dependent_task.task
-                
+
     @inject(ainjector=AsyncInjector)
     async def check_completed_func(self, instance, ainjector):
         self._handle_task(instance)
         task = self.dependent_task
-        should_run, last_run = await task.should_run_task(getattr(instance, self.relationship), ainjector=ainjector)
-        # We don't care about whether the task would run again, only when it last run.
+        relationship = getattr(instance, self.relationship)
+        if self.ready:
+            await relationship.async_become_ready()
+        should_run, last_run = await task.should_run_task(relationship, ainjector=ainjector)
+        if should_run and self.run_if_needed:
+            await relationship.run_setup_tasks(stop_after=task)
+            return False
         if last_run > 0.0:
             return last_run
         # We have no last_run info so we don't know that we need to trigger a re-run
@@ -950,7 +972,7 @@ def install_mako_task(relationship, cross_dependency=True, *, relationship_ready
     :param cross_dependency: If true (the default), rerun the installation whenever any of the underlying mako_tasks change.
 
     :param relationship_ready:  Bring the relationship to *async_become_ready* state before  installing mako tasks or checking cross-object dependencies.  Bringing the relationship to ready state allows the hash block in the mako template to access parts of the instance that are set up as part of bringing the instante to ready.  It also guarantees that the mako templates will be generated at least once.  However, it can produce dependency loops that hang Carthage in some circumstances.
-    
+
     This task is generally associated on a machine to install mako templates rendered on the model.  Typical usage might look like::
 
         install_mako = install_mako_task('model')
@@ -959,7 +981,7 @@ def install_mako_task(relationship, cross_dependency=True, *, relationship_ready
     if relationship == 'self' and relationship_ready:
         # We could just set relationship_ready to false but if we do that in thde easy case of self, we will miss harder cases like host.
         raise RuntimeError('Set relationship_ready=False when using self as a relationship')
-    
+
     @setup_task("Install mako templates")
     async def install(self):
         async with self.filesystem_access() as fspath:
