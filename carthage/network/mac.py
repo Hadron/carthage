@@ -1,4 +1,4 @@
-# Copyright (C) 2021, 2022, 2023, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, 2023, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -90,18 +90,21 @@ from ..machine import AbstractMachineModel
 from ..local import LocalMachineMixin
 
 
-@inject(model=AbstractMachineModel,
+@inject(model=InjectionKey(AbstractMachineModel, _optional=True),
         store=MacStore)
 def persistent_random_mac_always(interface, model, store):
     '''Return a persistant random mac address, even for LocalMachine'''
+    if model is None: return None
     return store[(model.name, interface)]
 
 __all__ += ['persistent_random_mac_always']
 
-@inject(model=AbstractMachineModel,
+@inject(model=InjectionKey(AbstractMachineModel, _optional=True),
         store=MacStore)
 def persistent_random_mac(interface, model, store):
     '''Return a persistent random MAC address if one is already stored, or if the machine type is not a local machine.  In other words, unless the database is pre-seeded, return None for LocalMachine.'''
+    if model is None:
+        return None
     if (model.name, interface) in store: return store[(model.name, interface)]
     try:
         machine_type = model.machine_type
