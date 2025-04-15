@@ -56,8 +56,8 @@ variables:
   CARTHAGE_DEPLOY_EXCLUDE:
     description: Deployable names to exclude.
     value: ''
-  CARTHAGE_DESTROY_INCLUDE: $CARTHAGE_DEPLOY_INCLUDE
-  CARTHAGE_DESTROY_EXCLUDE: $CARTHAGE_DEPLOY_EXCLUDE
+  CARTHAGE_DESTROY_INCLUDE: '$CARTHAGE_DEPLOY_INCLUDE'
+  CARTHAGE_DESTROY_EXCLUDE: '$CARTHAGE_DEPLOY_EXCLUDE'
   CARTHAGE_INSTALL_DEPENDENCIES:
     description: Install carthage dependancies? Must skip if runner cannot become root or on non-apt-based systems.
     value: 'yes'
