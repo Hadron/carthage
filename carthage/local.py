@@ -1,4 +1,4 @@
-# Copyright (C) 2021, 2022, 2023, 2024, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, 2023, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -16,7 +16,7 @@ from . import sh
 from .utils import memoproperty, when_needed
 from .setup_tasks import SetupTaskMixin
 from .network import NetworkLink, BridgeNetwork, match_link
-
+from .deployment import DeletionPolicy, destroy_policy
 
 class LocalMachineMixin:
 
@@ -68,6 +68,7 @@ class LocalMachine(LocalMachineMixin, Machine, SetupTaskMixin, AsyncInjectable):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.running = True
+        self.injector.add_provider(destroy_policy, DeletionPolicy.retain)
 
     async def async_ready(self):
         await self.resolve_networking()
