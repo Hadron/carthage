@@ -103,7 +103,7 @@ class KvStore(Injectable):
         file.write_text(yaml.dump(result, default_flow_style=False))
 
     def load(self, file):
-        '''Load a dump file produced by :meth:`dump`.  Values aready in the :class:`KvStore` override values in the dump.
+        '''Load a dump file produced by :meth:`dump`.  Values already in the :class:`KvStore` override values in the dump.
 
         The intent is that a dump file can be checked into a layout repository as an initial set of assignments for things like IP addresses and MAC addresses.  An actual running state_dir for the layout may diverge from the initial hints contained in the dump.  Periodically the layout repository can be updated.
         '''
