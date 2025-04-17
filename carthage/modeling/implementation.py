@@ -480,7 +480,8 @@ class InjectableModelType(ModelingBase):
                      close=True,
                      allow_multiple=False, globally_unique=False,
                      propagate=False,
-                     transclusion_overrides=False,
+                     overridable_default:bool = False,
+                     transclusion_overrides=None,
                      force_multiple_instantiate=False):
         '''
 
@@ -488,7 +489,7 @@ class InjectableModelType(ModelingBase):
 
         :param propagate: If ``True``, then perform container propagation as this dependency moves up to ward the base injector.
 
-        :param transclude_overrides: If ``True``,  when this :class:`InjectableModel` is instantiated, only add *k* as a provided depedency if *k* is not already in the injector hierarchy.  In effect, allow an existing provider for *k* to mask *p* at instantiation time; see :func:`transclude_overrides`.
+        :param overridable_default: If ``True``,  when this :class:`InjectableModel` is instantiated, only add *k* as a provided depedency if *k* is not already in the injector hierarchy.  In effect, allow an existing provider for *k* to mask *p* at instantiation time; see :func:`transclude_overrides`.
 
         :param force_multiple_instantiate: Normally it is an error to call *add_provider* where the provider is itself a subclass of :class:`InjectableModel` that provides its own dependencies.  Were that to be allowed, multiple instances of the same model would be instantiated; wrapping the provider in :class:`injector_access` is almost certainly what is desired.  But if it actually is desirable to instantiate multiple instances of the same model, setting *force_multiple_instantiate* will suppress the error.
 
@@ -498,6 +499,11 @@ class InjectableModelType(ModelingBase):
         to_propagate = getattr(cls, '__container_propagations__', None)
         transclusions = cls.__transclusions__
         metaclass = getattr(cls, '__metaclass__', cls.__class__)
+        if transclusion_overrides is None:
+            # overridable_default is replacing transclusion_overrides
+            transclusion_overiddes = overridable_default
+        if overridable_default and not transclusion_overrides:
+            raise RuntimeError('overridable_default is replacing transclusion_overrides; only set one.')
         if not isinstance(k, InjectionKey) and v is None:
             v = k
             k = default_injection_key(k)
