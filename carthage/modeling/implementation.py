@@ -501,8 +501,8 @@ class InjectableModelType(ModelingBase):
         metaclass = getattr(cls, '__metaclass__', cls.__class__)
         if transclusion_overrides is None:
             # overridable_default is replacing transclusion_overrides
-            transclusion_overiddes = overridable_default
-        if overridable_default and not transclusion_overrides:
+            transclusion_overrides = overridable_default
+        if overridable_default and (not transclusion_overrides):
             raise RuntimeError('overridable_default is replacing transclusion_overrides; only set one.')
         if not isinstance(k, InjectionKey) and v is None:
             v = k
