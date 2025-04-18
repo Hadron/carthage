@@ -26,8 +26,10 @@ stages:
 - deploy
 
 variables:
-  SSH_KEY:
-    description: If set, a path to an ssh key that will be made available. Can be set as a file variable or to a key that will be available on the runner.
+# If this is set it blanks out SSH_KEY for manual pipelines.
+  # So do not include in the list of variables
+#  SSH_KEY:
+#    description: If set, a path to an ssh key that will be made available. Can be set as a file variable or to a key that will be available on the runner.
   CARTHAGE_CACHE_DIR:
     description: "Where to store Carthage's cache; the default of carthage_cache will arrange for the runner to cache items and for the cache_dir to be copied as an artifact so it is available between prepare and deploy jobs even on different runners."
     value: $CI_PROJECT_DIR/carthage_cache
