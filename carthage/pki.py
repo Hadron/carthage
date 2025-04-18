@@ -81,7 +81,7 @@ class PkiManager(SetupTaskMixin, AsyncInjectable):
     async def issue_credentials(self, hostname: str, tag: str) -> list[str, str]:
         '''Issue a set of credentials for a given host.
 
-        :param host: the hostname to use as the CN and in a DNS SAN.
+        :param hostname: the hostname to use as the CN and in a DNS SAN.
 
         :param tag: A tag that describes the context in which a given
         credential is requested. For example this could include the
@@ -93,6 +93,8 @@ class PkiManager(SetupTaskMixin, AsyncInjectable):
         situations when different tags are used across Carthage
         runs. (Return different keys all the time is even better.
 
+        :param ou: Some PkiManagers accept an *ou* parameter and set an organizational unit for the issued certificate.
+        
         :returns: key, certificate
 
         '''
@@ -110,10 +112,10 @@ class PkiManager(SetupTaskMixin, AsyncInjectable):
         '''
         raise NotImplementedError
 
-    async def issue_credentials_onefile(self, hostname, tag):
+    async def issue_credentials_onefile(self, hostname, tag, **kwargs):
         '''Like issue_credentials, but combine key and cert into one string.
         '''
-        key, cert = await self.issue_credentials(hostname, tag)
+        key, cert = await self.issue_credentials(hostname, tag, **kwargs)
         return key+'\n'+cert
     
 __all__ += ['PkiManager']
@@ -127,12 +129,12 @@ class EntanglementPkiManager(PkiManager):
     It is suitable for testing  but not typically for production deployments.
    '''
 
-    async def issue_credentials(self, hostname:str, tag:str) -> list[str, str]:
+    async def issue_credentials(self, hostname:str, tag:str, *, ou=None) -> list[str, str]:
         current_tags = self.tags_by_hostname.setdefault(hostname, set())
         if tag in current_tags:
             raise RuntimeError(f'{hostname} credentials already retrieved with {tag}')
         current_tags.add(tag)
-        self._certify(hostname)
+        self._certify(hostname, ou=ou)
         self.tags_by_hostname[hostname] = current_tags
         key_path = self.pki_dir/f'{hostname}.key'
         cert_path = self.pki_dir/f'{hostname}.pem'
@@ -150,9 +152,12 @@ class EntanglementPkiManager(PkiManager):
             'carthage_root',
             {'carthage_root': self.ca_cert})
         
-    def _certify(self, host):
+    def _certify(self, host, ou):
         self.ca_cert
-        sh.entanglement_pki('--force', host, d=str(self.pki_dir), _bg=False)
+        options = []
+        if ou:
+            options.append('--subj=/OU='+ou)
+        sh.entanglement_pki('--force', *options, host, d=str(self.pki_dir), _bg=False)
 
     @memoproperty
     def pki_dir(self):
