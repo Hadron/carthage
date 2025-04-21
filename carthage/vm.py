@@ -520,8 +520,6 @@ This class is almost always subclassed.  The following are expected to be overwr
         '''
         Prepare the vm and build the image; called from rebuild_image and unpack
         '''
-        if not self.path.exists():
-            self._do_create_volume()
         try:
             await self._prepare_vm()
             await self.vm.start_machine()
@@ -531,7 +529,6 @@ This class is almost always subclassed.  The following are expected to be overwr
                     await self.vm.apply_customization(c)
         except Exception:
             logger.info('Shutting down image creation for %s because of error', self.name)
-            await self.delete()
             raise
         finally:
             await self.vm.is_machine_running()
