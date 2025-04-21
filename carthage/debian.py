@@ -103,6 +103,9 @@ class DebianContainerImage(ContainerImage):
 
     @setup_task("unpack using debootstrap")
     async def unpack_container_image(self):
+        if self.path.joinpath('var/log/bootstrap.log').exists():
+            logger.info('At least partial debootstrap ran for %s, not rerunning', self)
+            return
         await sh.debootstrap('--include=openssh-server,ca-certificates',
                              *(self.debootstrap_options.split()),
                              self.distribution,
