@@ -194,11 +194,11 @@ def permute_identifier(id, maxlen):
     "Add to or replace the last character of the identifier; use as generator and stop consuming when a unique one is found"
     yield id
     if len(id) < maxlen:
-        for i in range(10):
+        for i in range(26):
             yield id + chr(97 + i)
     else:
         id = id[:-1]
-        for i in range(10):
+        for i in range(26):
             yield id + chr(97 + i)
     raise ValueError("No unique combination found")
 
