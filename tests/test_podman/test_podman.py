@@ -292,7 +292,11 @@ async def test_container_ssh(ainjector):
             await machine.container_exec(
                 'apt', '-y', '--no-install-recommends', 'install', 'openssh-server')
             await machine.apply_customization(SshAuthorizedKeyCustomizations)
-            await machine.container_exec('mkdir', '/run/sshd')
+            try:
+                await machine.container_exec('mkdir', '/run/sshd')
+            except carthage.sh.ErrorReturnCode:
+                # may already exist
+                pass
             await machine.container_exec('/usr/sbin/sshd')
             with TestTiming(400):
                 await machine.ssh_online()
