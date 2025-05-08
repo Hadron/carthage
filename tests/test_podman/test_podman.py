@@ -343,7 +343,8 @@ async def test_podman_ansible(ainjector):
     ainjector = l.ainjector
     machine = l.ansible_test.machine
     try:
-        await machine.async_become_ready()
+        with TestTiming(350):
+            await machine.async_become_ready()
     finally:
         await machine.delete()
 
