@@ -240,6 +240,9 @@ class PodmanNetworkMixin:
 
     async def _container_network_options(self):
         # Like network_options but handles network_namespace_key
+        # Resolve networking to chase down network_namespace so the
+        # pod membership test works.
+        await self.resolve_networking()
         try:
             network_namespace = await self.ainjector.get_instance_async(carthage.machine.network_namespace_key)
         except KeyError: network_namespace = False
