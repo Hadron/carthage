@@ -671,14 +671,16 @@ it works like :meth:`carthage.container.Container.container_command` and is used
                     if self.sshfs_count == 1:
                         self.sshfs_path = tempfile.mkdtemp(
                             dir=self.config_layout.state_dir, prefix=self.name, suffix="sshfs")
+                        st = os.stat(self.sshfs_path)
+                        unmounted_dev = st.st_dev
                         self.sshfs_process = await self.sshfs_process_factory(user=user)
                         for x in range(5):
                             alive, *rest = self.sshfs_process.process.is_alive()
                             if not alive:
                                 await self.sshfs_process
                                 raise RuntimeError  # I'd expect that to have happened from an sh exit error already
-                            if os.path.exists(os.path.join(
-                                    self.sshfs_path, "run")):
+                            st = os.stat(self.sshfs_path)
+                            if st.st_dev != unmounted_dev:
                                 break
                             await asyncio.sleep(0.4)
                         else:
