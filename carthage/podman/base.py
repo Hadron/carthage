@@ -622,8 +622,7 @@ class PodmanImageBuilderContainer(PodmanContainer):
 
     @memoproperty
     def model(self):
-        from .modeling import PodmanImageModel
-        res =  self.injector.get_instance(InjectionKey(PodmanImageModel, _ready=False, _optional=True))
+        res =  self.injector.get_instance(InjectionKey(AbstractMachineModel, _ready=False, _optional=True))
         if res is None: raise AttributeError
         return res
 
