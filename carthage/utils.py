@@ -303,7 +303,7 @@ def load_default_config(config):
             config.load_yaml(f)
             
 
-shell_safe_re = re.compile(r'^[a-zA-Z0-9_./ ]*$')
+shell_safe_re = re.compile(r'^[a-zA-Z0-9_./ ]*[-a-zA-z0-9 /.]*$')
 
 
 def validate_shell_safe(s):
