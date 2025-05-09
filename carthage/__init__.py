@@ -70,9 +70,9 @@ __all__ += ['ssh_jump_host', 'Machine', 'rsync_git_tree',
             'BareMetalMachine']
 
 from . import image
-from .image import ContainerVolume, wrap_container_customization
+from .image import ContainerVolume, wrap_container_customization, SshAuthorizedKeyCustomizations
 
-__all__ += ['ContainerVolume', 'wrap_container_customization']
+__all__ += ['ContainerVolume', 'wrap_container_customization', 'SshAuthorizedKeyCustomizations']
 
 
 from .system_dependency import MachineDependency, CommandDependency, SystemDependency, disable_system_dependency
