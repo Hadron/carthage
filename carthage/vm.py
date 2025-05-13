@@ -306,8 +306,12 @@ class Vm(Machine, SetupTaskMixin):
                     raise
                 await asyncio.sleep(5)
                 continue
-
-            js_res = json.loads(res.stdout)
+            try:
+                js_res = json.loads(res.stdout)
+            except json.JSONDecodeError:
+                # Occasionally the qemu agent returns empty or invalid JSON briefly after starting a VM
+                await asyncio.sleep(3)
+                continue
             for item in js_res['return']:
                 if item['name'] == 'lo':
                     continue
