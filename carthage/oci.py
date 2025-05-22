@@ -213,6 +213,10 @@ class OciImage(OciManaged):
                 continue
             yield k_new
 
+    async def filesystem_access(self):
+        raise NotImplementedError
+        yield ""
+
 __all__ += ['OciImage']
 
 #: A set of types that should not automatically be registered to provide images as supplementary injection keys

@@ -19,6 +19,7 @@ from .setup_tasks import *
 from .config import ConfigLayout
 from .image import ContainerImage, ContainerCustomization, ContainerVolume, ImageVolume
 from .machine import customization_task
+from .oci import OciImage
 from . import sh
 
 logger = logging.getLogger('carthage')
@@ -204,7 +205,7 @@ __all__ += ['install_stage1_packages_task']
 
 @inject(ainjector=AsyncInjector, config=ConfigLayout)
 async def debian_container_to_vm(
-        volume: ContainerVolume,
+        volume: ContainerVolume|OciImage,
         output: str,
         size: str,
         classes: str = None,
@@ -248,13 +249,18 @@ async def debian_container_to_vm(
         with tempfile.TemporaryDirectory(dir=output_path.parent,
                                          prefix="container-to-vm-") as tmp_d:
             tmp = Path(tmp_d).absolute()
-            await sh.tar(
-                "-C", str(volume.path),
-                "--xattrs",
-                "--xattrs-include=*.*",
-                "-czf",
-                str(tmp / "base.tar.gz"),
-                ".",
+            async with contextlib.AsyncExitStack() as stack:
+                if isinstance(volume, OciImage):
+                    path = await stack.enter_async_context(volume.filesystem_access())
+                else:
+                    path = volume.path
+                await sh.tar(
+                    "-C", str(path),
+                    "--xattrs",
+                    "--xattrs-include=*.*",
+                    "-czf",
+                    str(tmp / "base.tar.gz"),
+                    ".",
                 _bg=True,
                 _bg_exc=False)
             env = os.environ.copy()

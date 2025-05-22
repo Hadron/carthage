@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2024, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -12,7 +12,10 @@ import pytest
 from pathlib import Path
 from carthage.dependency_injection import *
 from carthage.dependency_injection import DependencyProvider
-from carthage import base_injector, network, rsync_git_tree, V4Config, vm, Machine, sh
+from carthage import *
+from carthage import sh, network, vm
+import carthage.debian
+import carthage.podman as podman
 from carthage.network import random_mac_addr
 from carthage.config import ConfigLayout
 from carthage.vm import VM, vm_image_key
@@ -129,3 +132,48 @@ async def test_gen_iso():
         tmpdir.joinpath('foo').touch()
     assert iso_builder.iso_path
     
+@async_test
+async def test_oci_vm_image(ainjector):
+    '''
+    Use a PodmanImage to build a vm image
+    '''
+    @inject(base_image=InjectionKey('base_image'),
+            ainjector=AsyncInjector)
+    async def vm_image(base_image, ainjector):
+        return await ainjector(
+            carthage.debian.debian_container_to_vm,
+            base_image, "vm_from_podman_base.raw",
+            "10G",
+            classes = "+SERIAL,CLOUD_INIT,GROW,OPENROOT")
+    await ainjector(
+        carthage.plugins.load_plugin, 'carthage.podman')
+    class layout(CarthageLayout):
+        @provides('base_image')
+        class base_image(podman.PodmanImageModel):
+            oci_image_tag = 'localhost/carthage_vm_image'
+            base_image = 'debian:latest'
+            class install_guest_agent(FilesystemCustomization):
+                @setup_task("Install openssh")
+                async def install_openssh(self):
+                    await self.run_command('apt', 'update')
+                    await self.run_command('apt', '-y', 'install', 'openssh-server', 'systemd-resolved', 'systemd-sysv', 'udev')
+
+                guest_agent = customization_task(vm.InstallQemuAgent)
+
+
+        add_provider(vm_image_key, vm_image)
+
+        class machine(MachineModel):
+            add_provider(machine_implementation_key, dependency_quote(VM))
+            cloud_init = True
+            class net_config(NetworkConfigModel):
+                add('eth0', mac=random_mac_addr, net=network.external_network_key, v4_config=network.V4Config(dhcp=True))
+
+    l = await ainjector(layout)
+    ainjector = l.ainjector
+    with TestTiming(400):
+        try:
+            await l.machine.machine.deploy()
+            await l.machine.machine.ssh_online()
+        finally:
+            await ainjector(run_deployment_destroy)

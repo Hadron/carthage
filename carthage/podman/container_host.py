@@ -72,6 +72,12 @@ class PodmanContainerHost(AsyncInjectable):
         '''
         return self.filesystem_access('volume', 'mount', volume_name)
 
+    def filesystem_access_image(self, image):
+        '''
+        Mount an image.
+        '''
+        return self.filesystem_access('image', 'mount', image)
+    
     async def tar_volume_context(self, volume):
 
         '''

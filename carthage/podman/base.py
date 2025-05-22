@@ -769,6 +769,12 @@ class PodmanImage(OciImage, SetupTaskMixin, no_auto_inject=True):
         self.image_info = info
         return dateutil.parser.isoparse(info['Created']).timestamp()
 
+    @contextlib.asynccontextmanager
+    async def filesystem_access(self):
+        await self.find()
+        async with self.container_host.filesystem_access_image(self.oci_image_tag) as path:
+            yield path
+
     async def should_build(self):
         '''If the image exists, this is called.  If it returns True, then the image will be rebuilt even though it exists.  If a caller wants to force a rebuild, :meth:`build_image` can also be called.
 
