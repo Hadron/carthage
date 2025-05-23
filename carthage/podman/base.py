@@ -548,6 +548,8 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         '''
 'Execute a command in a running container and return stdout.  This function intentionally has a differentname than :meth:`carthage.container.Container.container_command` because that method does not expect the container to be running.
 '''
+        if not self.running:
+            raise RuntimeError(f'{self.name} is not running')
         if _user is None:
             _user = self.runas_user
         if _user != 'root':
