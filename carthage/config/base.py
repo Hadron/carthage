@@ -47,6 +47,8 @@ class BaseSchema(ConfigSchema, prefix=""):
     #: Path to  a checkout of hadron_operations
     hadron_operations: ConfigPath
     delete_volumes: bool = False
+    #: If true, pull git plugins (update them) as part of loading
+    pull_plugins: bool = True
     persist_local_networking: bool = False
 
     external_vlan_id: int = 0

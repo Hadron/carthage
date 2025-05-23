@@ -223,6 +223,13 @@ def add_carthage_arguments(parser):
                         action='append',
                         help='Load a plugin into Carthage',
                         metavar='plugin')
+    parser.add_argument('--pull-plugins',
+                        default=None, action='store_true',
+                        help='Update plugins from git')
+    parser.add_argument('--no-pull-plugins',
+                        default=None, dest='pull_plugins',
+                        action='store_false',
+                        help='Do not pull plugins')
     parser.add_argument('--no-default-config',
                         dest='default_config',
                         action='store_false',
@@ -269,6 +276,8 @@ def carthage_main_setup(parser=None, unknown_ok=False, ignore_import_errors=Fals
         load_default_config(config)
     for f in args.config:
         config.load_yaml(f, ignore_import_errors=ignore_import_errors)
+    if args.pull_plugins is not None:
+        config.pull_plugins = args.pull_plugins
     for p in args.plugins:
         base_injector(load_plugin, p, ignore_import_errors=ignore_import_errors)
     if not args.command_verbose:

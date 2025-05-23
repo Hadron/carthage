@@ -11,6 +11,7 @@ import dataclasses
 import importlib
 import logging
 import re
+import sh #Not carthage sh
 import sys
 import types
 import typing
@@ -294,14 +295,27 @@ def handle_module_spec(injector, *, module_spec, metadata, ignore_import_errors)
 def handle_git_url(spec, injector):
     parsed = urlparse(spec['url'])
     config = injector(ConfigLayout)
+    branch = spec.get('branch', None)
     stem = Path(parsed.path).name
     if stem.endswith('.git'):
         stem = stem[:-4]
     dest = Path(config.checkout_dir) / stem
-    if dest.exists():
+    if dest.is_dir() and dest.joinpath('.git').exists():
+        if not config.pull_plugins:
+            return dest
+        if branch:
+            current_branch = str(sh.git('branch', '--show-current', _cwd=dest)).strip()
+            if branch != current_branch:
+                logger.info('Switching %s to %s', dest, branch)
+                sh.git('fetch', _cwd=dest)
+                sh.git('switch', branch, _cwd=dest)
+                
+        logger.info('Pulling %s', dest)
+        sh.git('pull', '-q', '--ff-only', _cwd=dest)
+        return dest
+    elif dest.exists():
         return dest
     logger.info(f'Checking out {parsed.geturl()}')
-    branch = spec.get('branch', None)
     injector(checkout_git_repo, parsed.geturl(), dest, branch=branch, foreground=True)
     return dest
 

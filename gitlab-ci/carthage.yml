@@ -115,7 +115,7 @@ prepare:
     - .carthage_cache_setup
   script:
     - *initial_script
-    - $CARTHAGE_RUNNER $carthage_args --generate --no-console
+    - $CARTHAGE_RUNNER --nu-pull-plugins $carthage_args --generate --no-console
 
 .carthage_install_from_git:
   before_script:
@@ -166,12 +166,12 @@ prepare:
     - echo $destroy_args
     - |
       if test "$CARTHAGE_RUN_DESTROY" = "yes" ;then
-      $CARTHAGE_RUNNER $carthage_args destroy --dry-run  $destroy_args
+      $CARTHAGE_RUNNER --no-pull-plugins $carthage_args destroy --dry-run  $destroy_args
       fi
     - echo $deploy_args
     - |
       if test "$CARTHAGE_RUN_DEPLOY" = "yes" ; then
-      $CARTHAGE_RUNNER $carthage_args deploy --dry-run $deploy_args
+      $CARTHAGE_RUNNER --no-pull-plugins $carthage_args deploy --dry-run $deploy_args
       fi
 
 .carthage_deploy:
@@ -193,10 +193,10 @@ prepare:
     - echo $destroy_args
     - |
       if test "$CARTHAGE_RUN_DESTROY" = "yes" -o "$CARTHAGE_RUN_DESTROY" = "dry_run" ;then
-      $CARTHAGE_RUNNER $carthage_args destroy --force-confirm $destroy_args
+      $CARTHAGE_RUNNER --no-pull-plugins $carthage_args destroy --force-confirm $destroy_args
       fi
     - echo $deploy_args
     - |
       if test "$CARTHAGE_RUN_DEPLOY" = "yes" -o "$CARTHAGE_RUN_DEPLOY" = "dry_run" ; then
-      $CARTHAGE_RUNNER $carthage_args deploy --force-confirm $deploy_args
+      $CARTHAGE_RUNNER --no-pull-plugins $carthage_args deploy --force-confirm $deploy_args
       fi
