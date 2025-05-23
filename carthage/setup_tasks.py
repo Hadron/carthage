@@ -27,7 +27,7 @@ import carthage
 from carthage.dependency_injection import AsyncInjector, AsyncInjectable, inject, BaseInstantiationContext, InjectionKey, NotPresent, inject_autokwargs, Injectable, Injector
 from carthage.dependency_injection.introspection import current_instantiation
 from carthage.config import ConfigLayout
-from carthage.utils import memoproperty, import_resources_files
+from carthage.utils import memoproperty, import_resources_files, file_last_modified, source_filename_for
 
 __all__ = ['logger', 'PathMixin', 'TaskWrapper', 'TaskMethod', 'setup_task', 'SkipSetupTask', 'SetupTaskMixin',
            'cross_object_dependency',
@@ -255,6 +255,26 @@ class TaskWrapperBase:
     def stamp(self):
         raise NotImplementedError
 
+    @property
+    def source_time(self):
+        '''
+        The time at which the source of this TaskWrapperBase was last modified.
+        '''
+        if hasattr(self, '_source_time'):
+            return self._source_time
+        filename = source_filename_for(self.func)
+        if filename:
+            try:
+                return file_last_modified[filename]
+            except KeyError:
+                return 0.0
+        return 0.0
+        
+    @source_time.setter
+    def source_time(self, val):
+        self._source_time = val
+        return val
+    
     def __set_name__(self, owner, name):
         self.stamp = name
 
@@ -328,6 +348,8 @@ class TaskWrapperBase:
 
         * Otherwise, if there is no stamp then this task should run
 
+        * If :meth:`source_time` is greater than the time this task last run, the task should run.
+
         * If there is a :meth:`invalidator`, then this task should run if the invalidator returns falsy.
 
         * This task should run if any dependencies have run more recently than the stamp
@@ -351,6 +373,7 @@ class TaskWrapperBase:
             return s
         if dependency_last_run is None:
             dependency_last_run = 0.0
+        source_time = self.source_time
         if self.check_completed_func:
             if not run_methods: return (None, dependency_last_run)
             if self.dependencies_always and introspection_context:
@@ -360,6 +383,9 @@ class TaskWrapperBase:
             if last_run is True:
                 obj.logger_for().debug(f"Task {self.description} for {obj} determined complete by check_completed_func(); no timestamp provided")
                 return (False, dependency_last_run)
+            if source_time > last_run:
+                obj.logger_for().debug(f'Task {self.description} source modified at {_iso_time(source_time)} more recently than last run of {_iso_time(last_run)}.')
+                return (True, last_run)
         else:
             last_run, hash_contents = obj.check_stamp(self.stamp)
         if last_run is False:
@@ -376,6 +402,10 @@ class TaskWrapperBase:
             if actual_hash_contents != hash_contents:
                 obj.logger_for().info(f'Task {self.description} invalidated by hash_func() change from `{_h(hash_contents)}` to `{_h(actual_hash_contents)}`; last run {_iso_time(last_run)}')
                 return (True, dependency_last_run)
+        if source_time > last_run:
+            obj.logger_for().debug(
+                f'Source of task {self.description} modified at {_iso_time(source_time)} more recently than last run at {_iso_time(last_run)}')
+            return (True, last_run)
         if self.invalidator_func and run_methods:
             if self.dependencies_always and introspection_context:
                 await introspection_context.call_dependencies_once()
@@ -511,7 +541,7 @@ class TaskWrapper(TaskWrapperBase):
     def __setattr__(self, a, v):
         if a in ('func',
                  'dependencies_always', 'stamp', 'order',
-                 'invalidator_func', 'check_completed_func', 'hash_func') or a in self.__class__.extra_attributes:
+                 'invalidator_func', 'check_completed_func', 'hash_func', '_source_time', 'source_time') or a in self.__class__.extra_attributes:
             return super().__setattr__(a, v)
         else:
             return setattr(self.func, a, v)
@@ -1018,3 +1048,4 @@ def install_mako_task(relationship, cross_dependency=True, *, relationship_ready
                     return False
             return True
     return install
+

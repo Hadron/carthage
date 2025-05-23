@@ -88,6 +88,11 @@ class SshKey(SetupTaskMixin):
                             _bg=True,
                             _bg_exc=False)
 
+    @generate_key.check_completed()
+    def generate_key(self):
+        # If this is changed to return an mtime, set source_time to 0
+        # so that updates to ssh.py do not try to replace keys.
+        return self.key_path.exists()
     def add_to_agent(self, agent):
         try:
             sh.ssh_add(self.key_path, _env=agent.agent_environ)

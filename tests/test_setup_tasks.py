@@ -12,6 +12,7 @@ import pytest
 import os.path
 import sys
 import shutil
+import time
 from carthage.dependency_injection import *
 from carthage.dependency_injection.introspection import *
 from carthage_test_utils import Trigger
@@ -425,4 +426,25 @@ async def test_cross_dependency_run_if_needed(ainjector):
     assert run_count==1
     await ainjector.get_instance_async(b)
     assert run_count==2
+    
+@async_test
+async def test_source_time_invalidates(ainjector):
+    run_count = 0
+    class a(Stampable):
+        @setup_task("Some task")
+        def task(self):
+            nonlocal run_count
+            run_count += 1
+    ainjector.add_provider(a)
+    a_obj = await ainjector.get_instance_async(a)
+    assert run_count == 1
+    await a_obj.run_setup_tasks()
+    assert run_count == 1
+    source_time = a.task.source_time
+    assert source_time < time.time()
+    a.task.source_time = time.time()
+    assert a.task.source_time > source_time
+    await a_obj.run_setup_tasks()
+    assert run_count == 2
+    
     

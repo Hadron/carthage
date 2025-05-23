@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2024, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2024, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -14,9 +14,11 @@ import functools
 import logging
 import os
 import posix
-import pathlib
+from pathlib import Path
 import re
+import sys
 import typing
+import types
 import weakref
 import importlib.resources
 import mako.lookup
@@ -297,7 +299,7 @@ def load_default_config(config):
         config_file = '/etc/carthage_system.conf'
     else:
         config_file = os.path.expanduser('~/.carthage.conf')
-    config_path = pathlib.Path(config_file)
+    config_path = Path(config_file)
     if config_path.exists():
         with config_path.open('rt') as f:
             config.load_yaml(f)
@@ -333,9 +335,9 @@ def import_resources_files(package):
         return importlib.resources.files(package)
     except AttributeError:
         if isinstance(package, str):
-            return pathlib.Path(importlib.import_module(package).__path__[0])
+            return Path(importlib.import_module(package).__path__[0])
         else:
-            return pathlib.Path(package.__path__[0])
+            return Path(package.__path__[0])
 
 
 mako_lookup = mako.lookup.TemplateLookup([import_resources_files(__package__) / "resources/templates"],
@@ -406,12 +408,37 @@ NotPresent = object.__new__(NotPresentType)
 
 
 def relative_path(p):
-    '''Returns a :class:`pathlib.Path` that is guaranteed to be relative.  Intended to be used to make sure that joining the return value to a filesystem root does not escape the filesystem.
+    '''Returns a :class:`Path` that is guaranteed to be relative.  Intended to be used to make sure that joining the return value to a filesystem root does not escape the filesystem.
     '''
-    p = pathlib.Path(p)
+    p = Path(p)
     if p.is_absolute():
         return p.relative_to('/')
     return p
+
+class FileModifiedDict(dict):
+
+    def __getitem__(self, filename):
+        if filename in self:
+            return super().__getitem__(filename)
+        path = Path(filename)
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            raise KeyError(f'{filename} not found') from None
+        self[filename] = stat.st_mtime
+        return stat.st_mtime
+file_last_modified = FileModifiedDict()
+
+def source_filename_for(obj):
+    match obj:
+        case types.FunctionType(__code__=types.CodeType(co_filename=filename)):
+            return filename
+        case type(__module__=module_name) | object(__class__=type(__module__=module_name)):
+            module = sys.modules[module_name]
+            return getattr(module, '__file__', '')
+        case _:
+            return ''
+    
 
 
 __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
@@ -423,5 +450,7 @@ __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty'
            'import_resources_files',
            'mako_lookup',
            'file_locked',
+           'file_last_modified',
+           'source_filename_for',
            'relative_path',
            ]
