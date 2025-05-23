@@ -261,8 +261,6 @@ class Vm(Machine, SetupTaskMixin):
     async def async_ready(self):
         await self.write_config()
         await self.is_machine_running()
-
-        await self.run_setup_tasks(context=self.machine_running(ssh_online=True))
         return await super().async_ready()
 
     async def is_machine_running(self, find_ip_address:bool=True):
