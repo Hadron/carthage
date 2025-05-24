@@ -115,7 +115,7 @@ prepare:
     - .carthage_cache_setup
   script:
     - *initial_script
-    - $CARTHAGE_RUNNER --nu-pull-plugins $carthage_args --generate --no-console
+    - $CARTHAGE_RUNNER --no-pull-plugins $carthage_args --generate --no-console
 
 .carthage_install_from_git:
   before_script:
