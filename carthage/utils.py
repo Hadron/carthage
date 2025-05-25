@@ -272,6 +272,11 @@ def carthage_main_setup(parser=None, unknown_ok=False, ignore_import_errors=Fals
     console_handler.addFilter(container_debug_filter)
 
     config = base_injector(ConfigLayout)
+    if not args.command_verbose:
+        logging.getLogger('sh').setLevel(logging.ERROR)
+        logging.getLogger('carthage.sh').propagate = False
+        logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
+        logging.getLogger('urllib3.connectionpool').propagate = False
     if args.default_config:
         load_default_config(config)
     for f in args.config:
@@ -280,11 +285,6 @@ def carthage_main_setup(parser=None, unknown_ok=False, ignore_import_errors=Fals
         config.pull_plugins = args.pull_plugins
     for p in args.plugins:
         base_injector(load_plugin, p, ignore_import_errors=ignore_import_errors)
-    if not args.command_verbose:
-        logging.getLogger('sh').setLevel(logging.ERROR)
-        logging.getLogger('carthage.sh').propagate = False
-        logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
-        logging.getLogger('urllib3.connectionpool').propagate = False
     if args.tasks_verbose:
         logging.getLogger('carthage.setup_tasks').setLevel(10)
 
