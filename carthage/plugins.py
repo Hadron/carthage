@@ -258,9 +258,9 @@ def handle_path_url(spec: dict, injector, ignore_import_errors):
         else:
             module_spec = None
     return handle_module_spec(injector, module_spec=module_spec, metadata=metadata,
-                              ignore_import_errors=ignore_import_errors)
+                              ignore_import_errors=ignore_import_errors, config_handled=True)
 
-def handle_module_spec(injector, *, module_spec, metadata, ignore_import_errors):
+def handle_module_spec(injector, *, module_spec, metadata, ignore_import_errors, config_handled=False):
     package = None
     import_error = None
     if module_spec:
@@ -290,7 +290,7 @@ def handle_module_spec(injector, *, module_spec, metadata, ignore_import_errors)
                     raise
     return injector(load_plugin_from_package, package, metadata,
                     ignore_import_errors=ignore_import_errors,
-                    import_error=import_error)
+                    import_error=import_error, config_handled=True)
 
 def handle_git_url(spec, injector):
     parsed = urlparse(spec['url'])
@@ -325,6 +325,7 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
                              metadata: dict = None,
                              *, ignore_import_errors=False,
                              import_error=None,
+                             config_handled:bool=False,
                              injector):
     if (not metadata) and (not package):
         raise RuntimeError('Either package or metadata must be supplied')
@@ -363,7 +364,8 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
         injector.get_instance(InjectionKey(CarthagePlugin, name=name))
         return # already loaded
     except KeyError: pass
-    _handle_plugin_config(injector=injector, metadata=metadata, path=metadata_path, ignore_import_errors=ignore_import_errors)
+    if not config_handled:
+        _handle_plugin_config(injector=injector, metadata=metadata, path=metadata_path, ignore_import_errors=ignore_import_errors)
     try:
         plugin_module = importlib.import_module(".carthage_plugin", package=package.__name__)
     except (ImportError, AttributeError):
