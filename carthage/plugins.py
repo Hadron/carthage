@@ -307,11 +307,11 @@ def handle_git_url(spec, injector):
             current_branch = str(sh.git('branch', '--show-current', _cwd=dest)).strip()
             if branch != current_branch:
                 logger.info('Switching %s to %s', dest, branch)
-                sh.git('fetch', _cwd=dest)
+                sh.git('fetch', parsed.geturl(), _cwd=dest)
                 sh.git('switch', branch, _cwd=dest)
                 
         logger.info('Pulling %s', dest)
-        sh.git('pull', '-q', '--ff-only', _cwd=dest)
+        sh.git('pull', '-q', '--ff-only', parsed.geturl(), _cwd=dest)
         return dest
     elif dest.exists():
         return dest
