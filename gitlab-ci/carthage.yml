@@ -91,7 +91,7 @@ variables:
     eof
   - carthage_args="--config .carthage_ci_config.yml"
   - pytest_carthage_args="-p carthage.pytest_plugin --carthage-config=.carthage_ci_config.yml"
-  - if [ -n "$[[ inputs.carthage_config ]]" ]; then carthage_args="--config $[[ inputs.carthage_config ]] $carthage_args"; pytest_carthage_args= --carthage-config=$[[ inputs.carthage_config ]] $pytest_carthage_args"; fi
+  - if [ -n "$[[ inputs.carthage_config ]]" ]; then carthage_args="--config $[[ inputs.carthage_config ]] $carthage_args"; pytest_carthage_args="--carthage-config=$[[ inputs.carthage_config ]] $pytest_carthage_args"; fi
   - echo $carthage_args
   - |
     if test "$CARTHAGE_INSTALL_DEPENDENCIES" = "yes" ; then
