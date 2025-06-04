@@ -5,6 +5,7 @@ Carthage Core Documentation
    :maxdepth: 3
 
    intro
+   tutorials/index
    modeling/index
    dependency_injection/index
    deployment/index
