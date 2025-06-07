@@ -48,7 +48,7 @@ class VaultPkiManager(carthage.pki.PkiManager):
     
     async def trust_store(self):
         def cb():
-            res = self.vault.client.read(f'{self.path}/ca/pem')
+            res = self.vault.client.read(f'{self.path}/ca_chain')
             return res.text
         ca_pem = await run_in_executor(cb)
         return await self.ainjector(
