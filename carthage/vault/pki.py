@@ -28,7 +28,7 @@ class VaultPkiManager(carthage.pki.PkiManager):
 
     def __init__(self, *, path=None, role=None, **kwargs):
         if path is not None:
-            self.path = Path
+            self.path = path
         if role is None and self.role is None:
             raise TypeError('role must be set in the constructor or subclass')
         if role:
