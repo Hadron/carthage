@@ -15,7 +15,7 @@ from .dependency_injection import *
 from . import sh
 from .utils import memoproperty, when_needed
 from .setup_tasks import SetupTaskMixin
-from .network import NetworkLink, BridgeNetwork, match_link
+from .network import NetworkLink, BridgeNetwork, match_links
 from .deployment import DeletionPolicy, destroy_policy
 
 class LocalMachineMixin:
@@ -93,14 +93,30 @@ class LocalMachine(LocalMachineMixin, Machine, SetupTaskMixin, AsyncInjectable):
 
 
 def process_local_network_config(model):
+    '''Carthage uses :class:`~BridgeNetwork` to connecgt VMs and
+    containers to networking on the local system.  When a network is
+    contained entirely within one hypervisor, things are easy.
+    However, if the network configuration interacts with the
+    :class:`~carthage.network.NetworkConfig` of the hypervisor, it's
+    important that networks in NetworkConfigs of VMs on containers
+    match up with networks in the hypervisor's network config.
+
+    One approach to accomplish this is to set the
+    :obj:`~carthage.modeling.NetworkMobdel.bridge_name` property in
+    the :class:`carthage.model.NetworkModel`.
+
+    However if Carthage is configuring the local networking on the
+    hypervisor, then the information is already encoded in the
+    :class:`~NetworkLink` for the hypervisor.  This function finds
+    bridge links in a NetworkConfig corresponding to the machine on
+    which Carthage is running and sets the bridge names that will be
+    used so that Carthage uses the right local bridges.
+
     '''
-    Carthage uses :class:`~BridgeNetwork` to connecgt VMs and containers to networking on the local system.  When a network is contained entirely within one hypervisor, things are easy.  However, if the network configuration interacts with the :class:`~carthage.network.NetworkConfig` of the hypervisor, it's important that networks in NetworkConfigs of VMs on containers match up with networks in the hypervisor's network config.
 
-    One approach to accomplish this is to set the :obj:`~carthage.modeling.NetworkMobdel.bridge_name` property in the :class:`carthage.model.NetworkModel`.
+    from carthage.network.links import BridgeLink
+    import socket
 
-However if Carthage is configuring the local networking on the hypervisor, then the information is already encoded in the :class:`~NetworkLink` for the hypervisor.  This function finds bridge links in a NetworkConfig corresponding to the machine on which Carthage is running and sets the bridge names that will be used so that Carthage uses the right local bridges.
-
-    '''
     def associate_bridge(net, bridge_name):
         if hasattr(net, 'bridge_name'):
             return
@@ -108,32 +124,68 @@ However if Carthage is configuring the local networking on the hypervisor, then 
         net.ainjector.add_provider(InjectionKey(BridgeNetwork),
                                    when_needed(BridgeNetwork, bridge_name=bridge_name, delete_bridge=False))
 
-    from carthage.network.links import BridgeLink
-    import netifaces
-    excluded_links = set()
-    gateways = netifaces.gateways()
-    try: v4_gateway_interface = gateways['default'][netifaces.AF_INET][1]
-    except (KeyError, IndexError): v4_gateway_interface = None
-    for interface in netifaces.interfaces():
-        addresses = netifaces.ifaddresses(interface)
-        try: mac = addresses[netifaces.AF_LINK][0]['addr']
-        except KeyError: mac = None
-        try: address = addresses[netifaces.AF_INET][0]['addr']
-        except KeyError: address = None
-        link = match_link(model.network_links, interface,
-                          mac=mac, address=address,
-                          excluded_links=excluded_links)
-        if link and address:
-            link.merged_v4_config.address = IPv4Address(address)
-            if interface == v4_gateway_interface:
-                link.merged_v4_config.gateway = IPv4Address(gateways['default'][netifaces.AF_INET][0])
-                if mac and link.mac is None: link.mac = mac
-            # we could also handle secondary addresses.
-            
-    for l in model.network_links.values():
-        if not isinstance(l, BridgeLink):
-            continue
-        associate_bridge(l.net, l.interface)
+    def associate_bridges(links):
+        for l in links.values():
+            if not isinstance(l, BridgeLink):
+                continue
+            associate_bridge(l.net, l.interface)
+
+    def update_gateways(links):
+
+        import netifaces
+        gateways = netifaces.gateways()
+        v4_default_gateway = IPv4Address(gateways['default'][netifaces.AF_INET][0])
+        try: v4_default_gateway_interface = gateways['default'][netifaces.AF_INET][1]
+        except (KeyError, IndexError): v4_default_gateway_interface = None
+
+        if v4_default_gateway_interface in links:
+            link = model.network_links[v4_default_gateway_interface]
+            link.merged_v4_config.gateway = v4_default_gateway
+
+    def fetch_local_interfaces():
+
+        import pyroute2
+
+        interfaces = {}
+        with pyroute2.NDB() as ndb:
+            for i in ndb.interfaces.values():
+                interfaces[i['ifname']] = ni = i.copy()
+                ni['addresses'] = []
+
+            byindex = { i['index']: i for i in interfaces.values() }
+
+            for a in ndb.addresses.values():
+                byindex[a['index']]['addresses'].append(a.copy())
+
+        return interfaces
+
+    def interface_ipv4addresses(i):
+        '''Return all addresses for the interface struct as ipaddr.IPv4Interface'''
+        from ipaddress import IPv4Address, IPv4Interface
+        def dict_interface(a):
+            return IPv4Interface(f'{a["address"]}/{a["prefixlen"]}')
+        return [ dict_interface(a) for a in i['addresses'] if a['family'] == socket.AF_INET ]
+
+    def update_links_with_mapping(links, mapping):
+
+        for n, interface in mapping.items():
+
+            link = model.network_links[n]
+            ipv4_interfaces = interface_ipv4addresses(interface)
+
+            if ipv4_interfaces:
+                # we could also handle secondary addresses.
+                link.merged_v4_config.address = ipv4_interfaces[0].ip
+                link.merged_v4_config.network = ipv4_interfaces[0].network
+
+            if link.mac is None:
+                link.mac = interface['address']
+
+    interfaces = fetch_local_interfaces()
+    mapping = match_links(model.network_links, interfaces)
+    update_links_with_mapping(model.network_links, mapping)
+    update_gateways(model.network_links)
+    associate_bridges(model.network_links)
 
 
 __all__ = ['LocalMachineMixin', 'LocalMachine', 'process_local_network_config']

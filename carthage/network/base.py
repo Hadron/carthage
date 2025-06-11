@@ -9,13 +9,14 @@
 from __future__ import annotations
 import asyncio
 import abc
+import socket
 import copy
 import dataclasses
 import logging
 import re
 import typing
 import weakref
-from ipaddress import IPv4Address
+from ipaddress import IPv4Address, IPv4Interface
 from .. import sh
 from ..dependency_injection import *
 from ..config import ConfigLayout
@@ -1085,65 +1086,150 @@ class V4Pool(carthage.kvstore.HashedRangeAssignments):
     
 __all__ += ['V4Pool']
 
-def match_link(links: dict[str,NetworkLink], 
-               interface, *,
-               mac=None, net:Network=None, address=None,
-               excluded_links=None):
-    '''Attempt to find the :class:`NetworkLink` corresponding to an interface on a VM.
-    Ideally, links can be matched by name.  However, not all :class:`~carthage.machine.Machine` implementations will preserve link names in all situations.
+def match_links(links: dict[str, NetworkLink],
+                interfaces: dict[str, dict]):
 
-    The following matches are tried in order:
+    ''':param links: A dictionary from names to NetworkLink objects.
 
-    #. A link with interface of *interface* and compatible *net* and *mac*.  
+    :param interfaces: A dictionary from names to the structures
+    returned by pyroute2.
 
-    #. A link with mac address of *mac* and compatible *net*.
+    :return: A mapping from interface names to the matching interface
+    structures.
 
-    #. A link with address of *address* and compatible *net* and *mac*.
+    Ideally, links can be matched by name.  However, not all
+    :class:`~carthage.machine.Machine` implementations will preserve
+    link names in all situations.
 
-    In the above, compatible means that either one property is None or the two properties are equal.
+    So the following matches are tried in order:
 
-    :return: A matching link from *links* or None.
+    #. name
 
-    :param excluded_links: A set of interface names that will not be
-    matched.  It is an error if *interface* is in *excluded_links*.
-    If a matching link is found and *excluded_links* is specified, it
-    will be added to *excluded_links*.  That way, when this function
-    is used in a a loop, links are matched at most once.
+    #. IPv4 address
+
+    #. hardware address
+
+    The function also validates the matched results:
+
+    #. ensures that no link matches more than one interface
+
+    #. ensures that no interface is matched more than once
+
+    #. ensures that links and matched interfaces have compatible IPv4 and hardware addresses when specified
+
     '''
-    def compatible(a,b):
-        if a is None or b is None: return True
-        return a == b
-    if address: address = IPv4Address(address)
-    if excluded_links is None: excluded_links = set()
-    assert interface not in excluded_links
-    match = None
-    # try explicit name match
-    try: match = links[interface]
-    except KeyError: pass
-    if match:
-        if not (compatible(match.mac, mac) and compatible(match.net, net)):
-            match = None
-    # if we did not find a match,  enumerate if we have a mac address
-    if mac is not None and match is None:
-        for match in links.values():
-            if match.interface in excluded_links: continue
-            if match.mac != mac: continue
-            if compatible(match.net, net): break
-        else: match = None
-    # Now try address matching
-    if match is None and address is not None:
-        for match in links.values():
-            if match.interface in excluded_links: continue
-            if match.merged_v4_config.address != address: continue
-            if compatible(mac, match.mac) and compatible(net, match.net): break
-        else: match = None
-    if match:
-        excluded_links.add(match.interface)
-    logger.debug("Matching link %s, mac %s, net %s, address %s: %s",
-                 interface, mac, net, address, match)
-    return match
 
-__all__ += ['match_link']
+    def link_ipv4address(link):
+        '''Return the ipaddr.IPv4Interface for the link if any'''
+        if not link.merged_v4_config.address:
+            return None
+        if not link.merged_v4_config.network:
+            breakpoint()
+        assert link.merged_v4_config.address in link.merged_v4_config.network
+        return IPv4Interface(f'{link.merged_v4_config.address}/{link.merged_v4_config.network.prefixlen}')
+
+    def interface_ipv4addresses(i):
+        '''Return all addresses for the interface struct as ipaddr.IPv4Interface'''
+        def dict_interface(a):
+            return IPv4Interface(f'{a["address"]}/{a["prefixlen"]}')
+        return [ dict_interface(a) for a in i['addresses'] if a['family'] == socket.AF_INET ]
+
+    # We build three indexes for the interface structs:
+    # 1) allinterfaces, which maps both the primary name and all of alt_ifname_list
+    # 2) bymac, which maps by hardware address
+    # 3) byipv4, which maps by all IPv4 addresses
+
+    # These indexes assume that interface names and altnames are
+    # unique, but that hardware addresses and ipv4 addresses might not
+    # be.
+
+    def add_entry(index, n, i):
+        if n in index:
+            raise ValueError(f'duplicate entries for key {n}: {index[n]}, {i}')
+        index[n] = i
+
+    def add_multientry(index, n, i):
+        if n not in index:
+            index[n] = []
+        index[n].append(i)
+
+    allinterfaces = {}
+    for interface in interfaces.values():
+        add_entry(allinterfaces, interface['ifname'], interface)
+        for altname in interface['alt_ifname_list']:
+            add_entry(allinterfaces, altname, interface)
+
+    bymac = {}
+    for interface in interfaces.values():
+        add_multientry(bymac, interface['address'], interface)
+
+    byipv4 = {}
+    for interface in interfaces.values():
+        for ipv4 in interface_ipv4addresses(interface):
+            add_multientry(byipv4, ipv4, interface)
+
+    def check_compatible(link, interface):
+
+        linkaddr = link_ipv4address(link)
+        intaddrs = interface_ipv4addresses(interface)
+        if linkaddr and intaddrs:
+            if linkaddr not in intaddrs:
+                return False
+        if link.mac and interface['address']:
+            if link.mac != interface['address']:
+                return False
+        return True
+
+    def select_interface(link):
+
+        # We maintain `options` as a list of (score, interface).  We
+        # use 100 for name match; 50 for hardware address; 20 for ipv4
+        # match.
+
+        options = []
+        def addifs(score, interfaces):
+            for interface in interfaces:
+                # Only add interface if it wasn't already found in a
+                # previous pass.
+                found = None
+                for option in options:
+                    if option[1] == interface:
+                        found = option
+                if not found:
+                    options.append((score, interface))
+
+        if link.interface in allinterfaces:
+            addifs(100, [allinterfaces[link.interface]])
+
+        addifs(50, bymac.get(link.mac, []))
+
+        interface = link_ipv4address(link)
+        addifs(20, byipv4.get(interface, []))
+
+        # If we have a name match, it takes priority.
+        if options[0][0] == 100:
+            return options[0][1]
+
+        # Otherwise require only one match or consider it ambiguous.
+        if len(options) == 1:
+            return options[0][1]
+        if len(options) == 0:
+            return None
+        raise ValueError(f'multiple options for {link}: {options}')
+
+    mapping = {}
+    for n, link in links.items():
+        interface = select_interface(link)
+        if not check_compatible(link, interface):
+            raise ValueError(f'link {n} matched interface {interface["ifname"]} but was not compatible')
+        for kk, vv in mapping.items():
+            if interface == vv:
+                pass # raise ValueError(f'interface {interface["ifname"]} matched multiple links: {n}, {kk}')
+        mapping[n] = interface
+
+    return mapping
+
+__all__ += ['match_links']
 
 def shared_network_links(m1, m2):
     for l1 in m1.values():
