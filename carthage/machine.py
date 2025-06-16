@@ -161,6 +161,8 @@ class SshMixin:
     @memoproperty
     def ssh(self):
         from .network import access_ssh_origin
+        key_options = tuple()
+        ssh_agent = None
         try:
             ssh_origin_container = self.injector.get_instance(InjectionKey(ssh_origin, _optional=True))
         except InjectionFailed:
@@ -168,14 +170,15 @@ class SshMixin:
             ssh_origin_container = self if isinstance(self, Container) else None
         ssh_key = self.injector.get_instance(InjectionKey(carthage.ssh.SshKey, _optional=True))
         if ssh_key:
-            ssh_agent = ssh_key.agent
+            ssh_agent = ssh_key.agent # May be None
             if ssh_key.key_path:
                 key_options = ("-i", ssh_key.key_path,)
             else:
                 key_options = ('',)
-        else:
+        if ssh_agent is None:
             ssh_agent = self.injector.get_instance(carthage.ssh.SshAgent)
-            key_options = tuple()
+            if ssh_key:
+                ssh_key.add_to_agent(ssh_agent)
         options = self.ssh_options + ('-F' +
                                       str(ssh_agent.ssh_config),)
         if ssh_origin_container is not None:

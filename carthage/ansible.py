@@ -510,7 +510,10 @@ def write_config(config_dir, inventory,
                  ansible_config):
     private_key = ""
     if ssh_key:
-        ssh_agent = ssh_key.agent
+        if ssh_key.agent:
+            ssh_agent = ssh_key.agent
+        else:
+            ssh_key.add_to_agent(ssh_agent)
         private_key = f"private_key_file = {ssh_key.key_path}"
     if not log:
         stdout_str = "stdout_callback = json"

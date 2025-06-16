@@ -63,13 +63,14 @@ class RsyncPath:
         return self.machine.injector.get_instance(InjectionKey(ssh_origin_vrf, optional=True))
 
 
-@inject(
-    ainjector=AsyncInjector)
 class SshKey(SetupTaskMixin):
 
-    def __init__(self, **kwargs):
+    def __init__(self, key_path=None, **kwargs):
         super().__init__(**kwargs)
         self.config_layout = self.injector(ConfigLayout)
+        self.agent = None
+        if key_path:
+            self.key_path = self.state_path/key_path
 
     @memoproperty
     def known_hosts(self):
@@ -77,7 +78,6 @@ class SshKey(SetupTaskMixin):
 
     async def async_ready(self):
         await super().async_ready()
-        self.agent = await self.ainjector(ssh_agent, key=dependency_quote(self))
 
     @setup_task('gen-key')
     async def generate_key(self):
@@ -94,6 +94,8 @@ class SshKey(SetupTaskMixin):
         # so that updates to ssh.py do not try to replace keys.
         return self.key_path.exists()
     def add_to_agent(self, agent):
+        if self.agent is None:
+            self.agent = agent
         try:
             sh.ssh_add(self.key_path, _env=agent.agent_environ)
         except sh.ErrorReturnCode:
@@ -139,10 +141,11 @@ async def rsync(*args, config_layout,
                 injector,
                 ssh_origin=None, key=None):
     from .network import access_ssh_origin
+    ssh_agent = None
     if key:
         ssh_agent = key.agent
-    else:
-        ssh_agent = injector.get_instance(SshAgent)
+        if ssh_agent is None:
+            ssh_agent = injector.get_instance(SshAgent)
     ssh_options = []
     rsync_command = ""
     runas_user = None
@@ -226,10 +229,10 @@ class AuthorizedKeysFile(Injectable):
 
 @inject(
     injector=Injector,
-    key=InjectionKey(SshKey, _optional=True, _ready=False))
+    )
 class SshAgent(Injectable):
 
-    def __init__(self, injector, key):
+    def __init__(self, injector):
         config_layout = injector(ConfigLayout)
         run = Path(config_layout.local_run_dir)
         auth_sock = os.path.join(run, "ssh_agent")
@@ -245,11 +248,6 @@ class SshAgent(Injectable):
             self.process = sh.ssh_agent('-a', auth_sock,
                                         '-D', _bg=True)
             self.auth_sock = auth_sock
-        if key and is_obj_ready(key):
-            self.handle_key(key)
-        elif key:  # not ready
-            future = asyncio.ensure_future(key.async_become_ready())
-            future.add_done_callback(lambda f: self.handle_key(f.result() or key))
         ssh_config = run.joinpath('ssh_config')
         ssh_config_text = f'''
 UserKnownHostsFile {config_layout.state_dir}/ssh_known_hosts
@@ -261,8 +259,6 @@ UserKnownHostsFile {config_layout.state_dir}/ssh_known_hosts
         ssh_config.write_text(ssh_config_text)
         self.ssh_config = ssh_config
         
-    def handle_key(self, key):
-        key.add_to_agent(self)
 
     def close(self):
         if self.process is not None:

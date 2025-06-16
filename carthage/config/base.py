@@ -43,7 +43,7 @@ class BaseSchema(ConfigSchema, prefix=""):
 
     #: If true, keep the ssh agent in the environment potentially
     # using production ssh keys rather than starting our own
-    production_ssh_agent: bool = False
+    production_ssh_agent: bool = True
     #: Path to  a checkout of hadron_operations
     hadron_operations: ConfigPath
     delete_volumes: bool = False
