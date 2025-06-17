@@ -546,7 +546,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
 
     def container_exec(self, *args, _user=None, _fg=False):
         '''
-'Execute a command in a running container and return stdout.  This function intentionally has a differentname than :meth:`carthage.container.Container.container_command` because that method does not expect the container to be running.
+Execute a command in a running container and return stdout.  This function intentionally has a differentname than :meth:`carthage.container.Container.container_command` because that method does not expect the container to be running.
 '''
         if not self.running:
             raise RuntimeError(f'{self.name} is not running')
