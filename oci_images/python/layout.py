@@ -60,7 +60,7 @@ class layout(CarthageLayout):
     class CarthageImage(PodmanImageModel, carthage_base.CarthageServerRole):
         base_image = injector_access('OurBaseImage')
         oci_image_tag = 'ghcr.io/hadron/carthage:latest'
-        oci_image_command = ['/bin/systemd']
+        oci_image_command = ['/sbin/init']
 
         add_provider(podman_push_images, True)
         add_provider(OciEnviron('PYTHONPATH=/carthage'))
