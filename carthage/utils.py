@@ -279,10 +279,10 @@ def carthage_main_setup(parser=None, unknown_ok=False, ignore_import_errors=Fals
         logging.getLogger('urllib3.connectionpool').propagate = False
     if args.default_config:
         load_default_config(config)
-    for f in args.config:
-        config.load_yaml(f, ignore_import_errors=ignore_import_errors)
     if args.pull_plugins is not None:
         config.pull_plugins = args.pull_plugins
+    for f in args.config:
+        config.load_yaml(f, ignore_import_errors=ignore_import_errors)
     for p in args.plugins:
         base_injector(load_plugin, p, ignore_import_errors=ignore_import_errors)
     if args.tasks_verbose:
