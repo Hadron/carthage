@@ -311,7 +311,7 @@ def handle_git_url(spec, injector):
                 sh.git('switch', branch, _cwd=dest)
                 
         logger.info('Pulling %s', dest)
-        sh.git('pull', '-q', '--ff-only', parsed.geturl(), _cwd=dest)
+        sh.git('pull', '-q', '--depth=1', '--ff-only', parsed.geturl(), _cwd=dest)
         return dest
     elif dest.exists():
         return dest
