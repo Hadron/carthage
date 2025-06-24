@@ -100,7 +100,7 @@ The resulting setup_task has an attribute *repo_path* which is a function return
 
 
 @inject(injector=Injector)
-def checkout_git_repo(url, repo, *, injector, foreground=False, branch=None):
+def checkout_git_repo(url, repo, *, injector, foreground=False, branch=None, shallow=False):
     '''
     Checkout a git repo.
     :param repo: where to put the repo; the path is not adjusted, so
@@ -122,10 +122,12 @@ def checkout_git_repo(url, repo, *, injector, foreground=False, branch=None):
                       _cwd=path,
                       **options)
     else:
-        branchargs = ['--branch', branch] if branch else []
+        args = ['--branch', branch] if branch else []
+        if shallow:
+            args.append('--depth=1')
         return sh.git("clone",
                       url, str(path),
-                      *branchargs,
+                      *args,
                       **options)
 
 
