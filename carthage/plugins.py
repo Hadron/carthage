@@ -307,16 +307,24 @@ def handle_git_url(spec, injector):
             current_branch = str(sh.git('branch', '--show-current', _cwd=dest)).strip()
             if branch != current_branch:
                 logger.info('Switching %s to %s', dest, branch)
-                sh.git('fetch', parsed.geturl(), _cwd=dest)
-                sh.git('switch', branch, _cwd=dest)
-                
+                try:
+                    sh.git('switch', branch, _cwd=dest)
+                except sh.ErrorReturnCode:
+                    logger.debug('creating branch %s', branch)
+                    sh.git('fetch', parsed.geturl(), branch, _cwd=dest)
+                    sh.git('switch', '-c', branch, 'FETCH_HEAD', _cwd=dest)
+                    return dest
         logger.info('Pulling %s', dest)
-        sh.git('pull', '-q', '--depth=1', '--ff-only', parsed.geturl(), _cwd=dest)
+        if branch:
+            branch_opt = (branch,)
+        else:
+            branch_opt = tuple()
+        sh.git('pull', '-q', '--ff-only', parsed.geturl(), *branch_opt, _cwd=dest)
         return dest
     elif dest.exists():
         return dest
     logger.info(f'Checking out {parsed.geturl()}')
-    injector(checkout_git_repo, parsed.geturl(), dest, branch=branch, foreground=True)
+    injector(checkout_git_repo, parsed.geturl(), dest, branch=branch, shallow=True, foreground=True)
     return dest
 
 
