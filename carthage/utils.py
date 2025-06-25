@@ -209,19 +209,20 @@ def add_carthage_arguments(parser):
     parser.add_argument('--config',
                         metavar="file",
                         default=[],
+                        help='Specify a user configuration file. If unspecified, Carthage searches for ${PWD}/carthage_config.yml at startup. If this file exists it is read to override other configurations.',
                         type=argparse.FileType('rt'),
                         action='append')
-    parser.add_argument('--command-verbose',
-                        help="Verbose command logging",
-                        action=argparse.BooleanOptionalAction)
-    parser.add_argument('--tasks-verbose',
-                        help="Verbose logging for tasks",
-                        action=argparse.BooleanOptionalAction)
+    parser.add_argument('--no-default-config',
+                        dest='default_config',
+                        action='store_false',
+                        default=True,
+                        help='Disable reading /etc/carthage_system.conf as root and ~/.carthage.conf for other users.'
+                        )
     parser.add_argument('--plugin',
                         dest='plugins',
                         default=[],
                         action='append',
-                        help='Load a plugin into Carthage',
+                        help='Load a plugin into Carthage. If unspecified, Carthage searches the current directory for carthage_plugin.yml and carthage_plugin.py. If these files are found, Carthage assumes the current directory is a Carthage plugin.',
                         metavar='plugin')
     parser.add_argument('--pull-plugins',
                         default=None, action='store_true',
@@ -230,12 +231,12 @@ def add_carthage_arguments(parser):
                         default=None, dest='pull_plugins',
                         action='store_false',
                         help='Do not pull plugins')
-    parser.add_argument('--no-default-config',
-                        dest='default_config',
-                        action='store_false',
-                        default=True,
-                        help='Disable reading /etc/carthage_system.conf as root and ~/.carthage.conf for other users.'
-                        )
+    parser.add_argument('--command-verbose',
+                        help="Verbose command logging",
+                        action=argparse.BooleanOptionalAction)
+    parser.add_argument('--tasks-verbose',
+                        help="Verbose logging for tasks",
+                        action=argparse.BooleanOptionalAction)
     
     return parser
 
@@ -279,10 +280,26 @@ def carthage_main_setup(parser=None, unknown_ok=False, ignore_import_errors=Fals
         logging.getLogger('urllib3.connectionpool').propagate = False
     if args.default_config:
         load_default_config(config)
-    if args.pull_plugins is not None:
-        config.pull_plugins = args.pull_plugins
+    cwd = Path(os.getcwd())
+    if args.config == []:
+        if (cwd/"carthage_config.yml").is_file():
+            root_logger.info("Found 'carthage_config.yml' in current directory. Continuing with implicit '--config carthage_config.yml'")
+            args.config.append((cwd/"carthage_config.yml").open("rt"))
     for f in args.config:
         config.load_yaml(f, ignore_import_errors=ignore_import_errors)
+    # we need to load our plugin (layout) first to determine if the layout plugin has set pull_plugins=False
+    if args.pull_plugins is not None:
+        config.pull_plugins = args.pull_plugins
+    if args.plugins == []:
+        if (
+            (cwd/"carthage_plugin.py").is_file()
+            and (cwd/"carthage_plugin.yml").is_file()
+        ):
+            root_logger.info("Found Carthage plugin in current directory. Continuing with implicit '--plugin .'")
+            args.plugins.append(".")
+        else:
+            root_logger.fatal(f"'--plugin' was not specified and current directory does not appear to contain a Carthage plugin. Abort.")
+            exit(1)
     for p in args.plugins:
         base_injector(load_plugin, p, ignore_import_errors=ignore_import_errors)
     if args.tasks_verbose:
