@@ -47,8 +47,9 @@ Metric=${v4_config.metric}
 <%if not nontrivial:
     raise NotNeeded
 %>
-%if v4_config.dhcp and (v4_config.gateway is False):
 [DHCPv4]
+ClientIdentifier=mac
+%if v4_config.dhcp and (v4_config.gateway is False):
 UseGateway=no
 %endif
 </%block>
