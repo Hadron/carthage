@@ -113,6 +113,7 @@ class Vm(Machine, SetupTaskMixin):
     async def find(self):
         await self.gen_volume()
         if self.domid():
+            await self.is_machine_running()
             return True
         if self.volume:
             return await self.volume.find()
