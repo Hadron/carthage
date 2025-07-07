@@ -443,6 +443,7 @@ class Machine(NetworkedMixin, AsyncInjectable, SshMixin):
 
     async def deploy(self):
         await self.async_become_ready()
+        self.already_running = True # In case we are running because of MachineRunning elsewhere
         await self.start_machine()
 
     @property
