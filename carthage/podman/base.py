@@ -25,7 +25,7 @@ from ..utils import memoproperty
 from ..network import TechnologySpecificNetwork, Network, V4Config, this_network, NetworkConfig
 from ..oci import *
 from ..setup_tasks import setup_task, SetupTaskMixin, TaskWrapperBase, SkipSetupTask
-from .container_host import instantiate_container_host
+from .container_host import instantiate_container_host,  construct_container_host, podman_container_host
 import carthage.modeling
 
 
@@ -1283,3 +1283,28 @@ class PodmanVolume(HasContainerHostMixin, OciManaged):
             yield path
 
 __all__ += ['PodmanVolume']
+
+@inject(ainjector=AsyncInjector,
+        container_host=podman_container_host,
+        )
+async def cache_podman_image(tag_func, factory, *, ainjector, container_host):
+    '''
+        Call *tag_func*. This function should return a dict containing at minimum *oci_image_tag*.
+        Checks to see if the image with that tag is already cached. If so, returns that.
+        If not, calls *factory* passing in the dict from *tag_func* and instantiates and caches the image.
+        '''
+    tag_kwargs  = await ainjector(tag_func)
+    oci_image_tag = tag_kwargs['oci_image_tag']
+    container_host = await construct_container_host(container_host=container_host, ainjector=ainjector)
+    image_key = InjectionKey(OciImage, oci_image_tag=oci_image_tag)
+    try:
+        image = await container_host.ainjector.get_instance_async(image_key)
+        return image
+    except KeyError:
+        pass
+    image = await ainjector(factory, **tag_kwargs)
+    container_host.injector.add_provider(image_key, image)
+    return await container_host.ainjector.get_instance_async(image_key)
+
+__all__ += ['cache_podman_image']
+

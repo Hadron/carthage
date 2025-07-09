@@ -14,7 +14,7 @@ from .base import *
 __all__ += ['PodmanPod', 'PodmanContainer', 'PodmanImage',
             'podman_push_images',
             'PodmanFromScratchImage', 'podman_image_volume_key',
-            'image_layer_task', 'ContainerfileImage', 'PodmanVolume']
+            'image_layer_task', 'ContainerfileImage', 'PodmanVolume', 'cache_podman_image']
 
 from .modeling import PodmanPodModel, PodmanImageModel, ContainerfileImageModel
 

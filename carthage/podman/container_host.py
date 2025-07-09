@@ -521,6 +521,30 @@ podman_container_host = InjectionKey('carthage.podman/container_host')
 
 __all__ += ['podman_container_host']
 
+async def construct_container_host(*, container_host, ainjector):
+    if container_host is None:
+        container_host = await ainjector.get_instance_async(LocalPodmanContainerHost)
+    if isinstance(container_host, PodmanContainerHost):
+        return container_host
+    if isinstance(container_host, AbstractMachineModel):
+        ainjector = container_host.injector.get_instance(AsyncInjector)
+        container_host = await ainjector.get_instance_async(InjectionKey(Machine, _ready=False))
+    assert isinstance(container_host, Machine), 'container_host must be a PodmanContainerHost or machine'
+    target = container_host
+    try:
+        container_host = target.injector.get_instance(
+            InjectionKey(PodmanContainerHost, host=container_host.name, user=container_host.runas_user))
+    except KeyError: # does not exist yet
+        from ..local import LocalMachineMixin
+        if isinstance(target, LocalMachineMixin):
+            container_host = await target.ainjector.get_instance_async(LocalPodmanContainerHost)
+        else:
+            container_host = await target.ainjector(RemotePodmanHost, machine=container_host)
+        target.injector.add_provider(
+            InjectionKey(PodmanContainerHost, host=target.name, user=target.runas_user),
+            container_host)
+    return container_host
+        
 @inject(container_host=InjectionKey(podman_container_host, _optional=True))
 async def instantiate_container_host(target, *, container_host):
     '''
@@ -528,28 +552,6 @@ async def instantiate_container_host(target, *, container_host):
     '''
     if target.container_host:
         return
-    if container_host is None:
-        class_name = target.__class__.__module__+'.'+target.__class__.__qualname__
-        logger.warning('%s instance %s does not declare a container host; using local podman', class_name, repr(target))
-        target.container_host = await target.ainjector(LocalPodmanContainerHost)
-        return
-    if isinstance(container_host, PodmanContainerHost):
-        target.container_host = container_host
-        return
-    if isinstance(container_host, AbstractMachineModel):
-        ainjector = container_host.injector.get_instance(AsyncInjector)
-        container_host = await ainjector.get_instance_async(InjectionKey(Machine, _ready=False))
-    assert isinstance(container_host, Machine), 'container_host must be a PodmanContainerHost or machine'
-    try:
-        target.container_host = container_host.injector.get_instance(
-            InjectionKey(PodmanContainerHost, host=container_host.name, user=container_host.runas_user))
-    except KeyError: # does not exist yet
-        from ..local import LocalMachineMixin
-        if isinstance(container_host, LocalMachineMixin):
-            target.container_host = await target.ainjector(LocalPodmanContainerHost)
-        else:
-            target.container_host = await container_host.ainjector(RemotePodmanHost, machine=container_host)
-        container_host.injector.add_provider(
-            InjectionKey(PodmanContainerHost, host=container_host.name, user=container_host.runas_user),
-            target.container_host)
+    ainjector = target.injector(AsyncInjector)
+    target.container_host = await construct_container_host(container_host=container_host, ainjector=ainjector)
     return
