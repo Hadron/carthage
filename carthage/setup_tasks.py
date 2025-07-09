@@ -240,7 +240,8 @@ class TaskWrapperBase:
     order: int = dataclasses.field(default_factory=_inc_task_order)
     invalidator_func = None
     check_completed_func = None
-    hash_func: typing.Callable = staticmethod(lambda self: "")
+    hash_func: typing.Callable = None
+    hash_functions: typing.List[typing.Callable] = None
     dependencies: list = dataclasses.field(default_factory=lambda: [])
 
     #: If True, then dependencies will be
@@ -250,6 +251,23 @@ class TaskWrapperBase:
     #should_run can be determined without calling invalidators or
     #check_completed functions, dependencies may not be called.
     dependencies_always: bool = False
+
+    def __post_init__(self):
+
+        assert self.hash_functions is None
+        self.hash_functions = []
+        self.hash_functions.append(self.func_code_hash)
+
+        if self.hash_func:
+            self.hash_functions.append(self.hash_func)
+        self.hash_func = self.compute_hashes
+
+    async def func_code_hash(self, obj):
+        return hashlib.sha256(self.func.__code__.co_code).hexdigest()
+
+    @inject(ainjector=AsyncInjector)
+    async def compute_hashes(task, obj, ainjector):
+        return str([ await ainjector(x, obj) for x in task.hash_functions ])
 
     @memoproperty
     def stamp(self):
@@ -497,7 +515,7 @@ class TaskWrapperBase:
         stamp.  If these two results differ, the task is rerun.
         '''
         def wrap(func):
-            self.hash_func = func
+            self.hash_functions.append(func)
             return self
         return wrap
 
@@ -541,7 +559,7 @@ class TaskWrapper(TaskWrapperBase):
     def __setattr__(self, a, v):
         if a in ('func',
                  'dependencies_always', 'stamp', 'order',
-                 'invalidator_func', 'check_completed_func', 'hash_func', '_source_time', 'source_time') or a in self.__class__.extra_attributes:
+                 'invalidator_func', 'check_completed_func', 'hash_func', 'hash_functions', '_source_time', 'source_time') or a in self.__class__.extra_attributes:
             return super().__setattr__(a, v)
         else:
             return setattr(self.func, a, v)
