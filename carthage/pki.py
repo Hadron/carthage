@@ -395,7 +395,7 @@ class CombinedTrustStore(TrustStore):
 
     trust_stores:list[TrustStore]
 
-    def __init__(self, name, *rust_stores, **kwargs):
+    def __init__(self, name, *trust_stores, **kwargs):
         super().__init__(name=name, **kwargs)
         self.trust_stores = trust_stores
 
