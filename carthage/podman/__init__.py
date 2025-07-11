@@ -65,5 +65,6 @@ class PodmanDeployableFinder(carthage.DeployableFinder):
 @carthage.inject(injector=carthage.Injector)
 def carthage_plugin(injector):
     injector.add_provider(PodmanNetwork, allow_multiple=True)
+    injector.add_provider(LocalPodmanContainerHost)
     injector.add_provider(PodmanDeployableFinder)
     
