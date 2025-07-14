@@ -1172,7 +1172,7 @@ class ContainerfileImage(OciImage, no_auto_inject=True):
             options.extend(['--label', 'carthage.layout='+layout_name])
         # Instantiate a container simply so we can ask it for volume, mount, and environment options.
         with instantiation_not_ready():
-            container = await self.ainjector(PodmanContainer, name='image_options')
+            container = await self.ainjector(PodmanContainer, name='image_options', oci_container_image=self)
         for k, v in self.injector.filter_instantiate(
                 OciEnviron, lambda k: 'name' in k.constraints and k.constraints.get('scope', 'all') in ('all','image')):
             options.append('--env')
