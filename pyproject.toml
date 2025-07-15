@@ -36,6 +36,7 @@ dependencies = [
     "pyVmomi",
     "pyyaml",
     "netifaces",
+    "pyroute2",
     "requests",
     "setuptools",
     "sh",

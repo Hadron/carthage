@@ -12,6 +12,8 @@ dependencies:
     pypi: lmdb
   - deb: python3-netifaces
     pypi: netifaces
+  - deb: python3-pyroute2
+    pypi: pyroute2
   - deb: git
   - deb: socat
   - deb: systemd-container
