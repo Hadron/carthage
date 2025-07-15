@@ -611,6 +611,7 @@ class PodmanImageBuilderContainer(PodmanContainer):
     oci_command = ['sleep', '3600']
     stop_timeout = 1
 
+    exposed_ports = [] #: Image builders should not generally expose ports.
     def _apply_to_container_customization(self, customization):
         @contextlib.asynccontextmanager
         async def customization_context():
