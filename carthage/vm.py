@@ -112,8 +112,8 @@ class Vm(Machine, SetupTaskMixin):
 
     async def find(self):
         await self.gen_volume()
-        if self.domid():
-            await self.is_machine_running()
+        if dom := self.domid():
+            self.running = bool(dom == '-')
             return True
         if self.volume:
             return await self.volume.find()
@@ -163,7 +163,7 @@ class Vm(Machine, SetupTaskMixin):
                 disk_config=disk_config,
                 virtiofs_mounts=self.virtiofs_mounts,
                 if_name=lambda n: carthage.network.base.if_name(
-                    "vn", self.config_layout.container_prefix, n.name, self.name),
+                    "vn", self.config_layout.container_prefix, n.name, self.name, unused=True),
                 uuid=self.uuid,
                 volume=self.volume))
             if self.console_needed:

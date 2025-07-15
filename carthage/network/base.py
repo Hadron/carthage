@@ -38,7 +38,7 @@ _cleanup_substitutions = [
 _allocated_interfaces = set()
 
 
-def if_name(type_prefix, layout, net, host=""):
+def if_name(type_prefix, layout, net, host="", *, unused=False):
     "Produce 14 character interface names for networks and hosts"
     global _allocated_interfaces
 
@@ -60,9 +60,15 @@ def if_name(type_prefix, layout, net, host=""):
         l=layout,
         n=net,
         h=host)
+    if unused:
+        from pyroute2 import NDB
     for i in permute_identifier(id, 14):
         if i not in _allocated_interfaces:
             _allocated_interfaces.add(i)
+            if unused:
+                with NDB() as ndb:
+                    if i in ndb.interfaces:
+                        continue
             return i
     assert False  # never should be reached
 
