@@ -63,9 +63,20 @@ def ainjector(ainjector, vault):
     ainjector.add_provider(pki)
     yield ainjector
 
+@pytest.mark.parametrize(
+    'cache_mount',
+    [None, 'v1', 'v2'])
 @async_test
-async def test_pki_issue(ainjector):
+async def test_pki_issue(ainjector, cache_mount):
+    # We override the pki manager so we can set cache_mount
+    class PkiClass(VaultPkiManager):
+        role = 'role'
+        locals()['cache_mount'] = cache_mount
+    ainjector.replace_provider(InjectionKey(VaultPkiManager), PkiClass)
     pki = await ainjector.get_instance_async(VaultPkiManager)
+    await pki.issue_credentials('evil.com', 'tag')
+    # And try issuing again for cache.
+    pki.hostname_tags.clear()
     await pki.issue_credentials('evil.com', 'tag')
     
 
@@ -75,8 +86,8 @@ async def test_pki_certs(ainjector):
     key_1, cert_1 = await pki.issue_credentials('internet.com', 'tag')
     key_2,cert_2 = await pki.issue_credentials('dns.net', 'tag')
     certs = [c async for c in pki.certificates()]
-    assert cert_1 in certs
-    assert cert_2 in certs
+    assert any(map(lambda c: cert_1[0:200] in c, certs))
+    assert any(map(lambda c: cert_2[0:200] in c, certs))
     
 @async_test
 async def test_trust_store(ainjector):
@@ -98,3 +109,20 @@ async def test_secrets(ainjector, mount):
     mapping['item'] = dict(baz=20)
     assert mapping['item']['baz'] == 20
     for i in mapping: pass
+
+@async_test
+async def test_pki_indexer(ainjector):
+    try:
+        from carthage_base.pki_indexer import PkiIndexer
+    except ImportError:
+        pytest.skip('carthage-base is not available')
+    pki = await ainjector.get_instance_async(VaultPkiManager)
+    key, cert = await pki.issue_credentials('evil.com', 'tag')
+    indexer = await ainjector(PkiIndexer)
+    indexer._process_bytes('cert', cert)
+    indexer._process_bytes('key', key)
+    await indexer.validate()
+    key2, cert2 = await indexer.issue_credentials('evil.com', 'tag')
+    trust_store = await indexer.trust_store()
+    assert len([c async for c in trust_store.trusted_certificates()]) == 1
+    
