@@ -54,6 +54,8 @@ def x509_annotate(pem_in:str|bytes, /):
         m = re.search(f'{bstr}[^-]+{estr}', s, re.MULTILINE)
         if not m:
             break
+        if ret != '':
+            ret += '\n'
         ret = ret + x509_annotate_str(m.group(0))
         s = s[m.end(0):]
 
