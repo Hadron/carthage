@@ -1,4 +1,4 @@
-# Copyright (C) 2020, Hadron Industries, Inc.
+# Copyright (C) 2020, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -6,6 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import collections.abc
 import os
 import os.path
 import hvac
@@ -165,7 +166,7 @@ def _apply_secrets(client, secrets):
                 client.sys.tune_mount_configuration(s, **info)
             else:
                 client.sys.enable_secrets_engine(backend_type=backend_type, path=s, description=desc,
-                                                 config=info)
+                                                 config=info,)
         except Exception as e:
             raise VaultError(f"Unable to enable secrets engine at path {s}")
 
@@ -291,6 +292,63 @@ class VaultSshKey(SshKey):
     @property
     def pubkey_contents(self):
         return self._pubs
+
+@inject_autokwargs(vault=Vault)
+class VaultKvMap(Injectable, collections.abc.MutableMapping):
+
+    path:str #: Path within the secrets engine
+    mount:str = 'secret'
+
+    def __init__(self, mount=None, path=None, **kwargs):
+        if mount is not None:
+            self.mount = mount
+        if path is not None:
+            self.path = path
+        super().__init__(**kwargs)
+        assert self.path is not None, "Path is mandatory"
+        if self.vault.client.read(self.mount+'/config'): 
+            self.kv = self.vault.client.secrets.kv.v2
+        else:
+            self.kv = self.vault.client.secrets.kv.v1
+        if not (self.path == '' or self.path.endswith('/')):
+            self.path += '/'
+            
+    def _path(self, p):
+        return self.path+p
+    
+    @property
+    def _kwargs(self):
+        '''
+        Arguments to be added to all calls
+        '''
+        if self.mount:
+            return dict(mount_point=self.mount)
+        else: return dict()
+
+    def __getitem__(self, item):
+        response = self.kv.read_secret(self._path(item), **self._kwargs)
+        match response:
+            case {'data': {'data': result}}:
+                return result
+            case {'data': result}:
+                return result
+
+    def __setitem__(self, item, val):
+        assert isinstance(val, collections.abc.Mapping)
+        self.kv.create_or_update_secret(path=self._path(item), secret=val, **self._kwargs)
+
+    def __len__(self):
+        return len(list(iter(self)))
+
+    def __iter__(self):
+        res = self.kv.list_secrets(path=self.path, **self._kwargs)
+        return res['data']['keys']
+        yield
+
+    def  __delitem__(self, item):
+        return
+    
+__all__ += ['VaultKvMap']
 
 
 from .pki import VaultPkiManager

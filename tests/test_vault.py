@@ -1,4 +1,4 @@
-# Copyright (C) 2024, Hadron Industries, Inc.
+# Copyright (C) 2024-2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -45,7 +45,11 @@ def ainjector(ainjector, vault):
     vault.apply_config(
         {
             'secrets':dict(
-                pki={'type':'pki'}),
+                pki={'type':'pki'},
+                v1={'type': 'kv',
+                    'version':1},
+                v2={'type': 'kv-v2',},
+            ),
             'pki/root/generate/internal': dict(
                 ttl='120h',
                 common_name='ROOT'),
@@ -81,3 +85,16 @@ async def test_trust_store(ainjector):
     certs = [c async for c in  trust_store.trusted_certificates()]
     await trust_store.ca_file()
     
+
+@pytest.mark.parametrize(
+    'mount',
+    ['v1',
+     'v2'])
+@async_test
+async def test_secrets(ainjector, mount):
+    path ='foo'
+    mapping = await ainjector(VaultKvMap,
+                              mount=mount, path=path)
+    mapping['item'] = dict(baz=20)
+    assert mapping['item']['baz'] == 20
+    for i in mapping: pass
