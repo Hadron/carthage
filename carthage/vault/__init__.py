@@ -10,6 +10,7 @@ import collections.abc
 import os
 import os.path
 import hvac
+import hvac.exceptions
 from carthage import sh
 from carthage.config import ConfigSchema, ConfigLayout
 from carthage.dependency_injection import *
@@ -326,7 +327,10 @@ class VaultKvMap(Injectable, collections.abc.MutableMapping):
         else: return dict()
 
     def __getitem__(self, item):
-        response = self.kv.read_secret(self._path(item), **self._kwargs)
+        try:
+            response = self.kv.read_secret(self._path(item), **self._kwargs)
+        except hvac.exceptions.InvalidPath:
+            raise KeyError(item) from None
         match response:
             case {'data': {'data': result}}:
                 return result
