@@ -1,4 +1,4 @@
-# Copyright (C) 2019, Hadron Industries, Inc.
+# Copyright (C) 2019, 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -10,6 +10,7 @@ import pytest
 import os.path
 import yaml
 from carthage.config import *
+from carthage.config import types as ct
 from carthage.dependency_injection import Injector, inject
 resource_dir = os.path.dirname(__file__)
 
@@ -51,3 +52,10 @@ def test_list_in_yaml(ainjector):
         l=[9, 10],
     )), path=".")
     assert tuple(cl.l) == (9, 10)
+
+def test_config_bool(ainjector):
+    injector = ainjector.injector
+    assert injector(ct.ConfigBool, 'true') is True
+    assert injector(ct.ConfigBool, '') is False
+    assert injector(ct.ConfigBool, 'false') is False
+    

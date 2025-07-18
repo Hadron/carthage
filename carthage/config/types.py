@@ -124,6 +124,14 @@ class ConfigBool:
     "A type that can be subtyped to be injectable used instead of bool"
 
     def __new__(cls, val):
+        if isinstance(val,str):
+            match val:
+                case 'true' | 'True' | 'yes':
+                    return True
+                case '' | 'False' | 'false' | 'no':
+                    return False
+                case _:
+                    raise ValueError(f'Unknown boolean string {val}')
         return bool(val)
 
 
