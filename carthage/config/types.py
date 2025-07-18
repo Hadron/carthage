@@ -119,19 +119,20 @@ class ConfigPath(ConfigString):
                                injector=injector)
 
 
+@inject(injector=Injector)
 class ConfigBool:
 
     "A type that can be subtyped to be injectable used instead of bool"
 
-    def __new__(cls, val):
+    def __new__(cls, val, *, injector):
         if isinstance(val,str):
-            match val:
+            match val_substituted := injector(ConfigString, val):
                 case 'true' | 'True' | 'yes':
                     return True
                 case '' | 'False' | 'false' | 'no':
                     return False
                 case _:
-                    raise ValueError(f'Unknown boolean string {val}')
+                    raise ValueError(f'Unknown boolean string {val_substituted}')
         return bool(val)
 
 
