@@ -123,8 +123,9 @@ class PodmanPodModel( carthage.machine.NetworkedModel, ModelContainer, AsyncInje
                 self.injector.add_provider(InjectionKey(NetworkConfig), dependency_quote(container_config))
             except ExistingProvider: pass
         await super().resolve_networking(force=force)
-        for net in set(map( lambda l:l.net, self.network_links.values())):
-            net.assign_addresses()
+        for l in self.network_links.values():
+            if l.local_type: continue
+            l.net.assign_addresses(l)
     
 __all__ += ['PodmanPodModel']
 

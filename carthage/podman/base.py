@@ -234,7 +234,7 @@ class PodmanNetworkMixin:
         options = []
         for l in self.network_links.values():
             if l.local_type: continue
-            l.net.assign_addresses()
+            l.net.assign_addresses(l)
             options.extend(['--network', l.net_instance.link_options(l)])
         return options
 
@@ -274,8 +274,9 @@ class PodmanNetworkMixin:
                 self.injector.add_provider(InjectionKey(NetworkConfig), dependency_quote(container_config))
             except ExistingProvider: pass
         await super().resolve_networking(force=force)
-        for net in set(map( lambda l:l.net, self.network_links.values())):
-            net.assign_addresses()
+        for l in self.network_links.values():
+            if l.local_type: continue
+            l.net.assign_addresses(l)
 
 @inject(
     podman_pod_options=InjectionKey('podman_pod_options', _optional=NotPresent),

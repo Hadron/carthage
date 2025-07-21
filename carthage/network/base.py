@@ -693,10 +693,12 @@ class NetworkLink:
         return self.net_instance
 
     async def resolve(self, ainjector, interface):
+        await asyncio.sleep(1)
         if 'merged_v4_config' in self.__dict__:
             raise ValueError('resolve called too late.')
         if self.v4_config is not None:
             await self.v4_config.resolve(ainjector=ainjector, interface=interface, link=self)
+            assert 'merged_v4_config' not in self.__dict__
             
     def __init_subclass__(cls, **kwargs):
         if hasattr(cls, 'local_type') and cls.local_type:
