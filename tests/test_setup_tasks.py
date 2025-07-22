@@ -116,6 +116,21 @@ async def test_check_completed(ainjector):
 
 
 @async_test
+async def test_misbehaved_check_completed_raises(ainjector):
+    class misbehaves(Stampable):
+        @setup_task("misbehaving_check_completed")
+        def misbehaving_check_completed(self):
+            return True
+
+        @misbehaving_check_completed.check_completed()
+        def misbehaving_check_completed(self):
+            return None
+
+    with pytest.raises(ValueError):
+        await ainjector(misbehaves)
+
+
+@async_test
 async def test_invalidator(ainjector):
     called = 0
 
