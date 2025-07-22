@@ -379,6 +379,9 @@ class TaskWrapperBase:
             if self.dependencies_always and introspection_context:
                 await introspection_context.call_dependencies_once()
             last_run = await ainjector(self.check_completed_func, obj)
+            if last_run is None and run_methods is True:
+                # Raise if implementations of check_completed_func misbehave
+                raise ValueError(f"Calling {self.check_completed_func} returned 'None', but self.run_methods is 'True'")
             hash_contents = ""
             if last_run is True:
                 obj.logger_for().debug(f"Task {self.description} for {obj} determined complete by check_completed_func(); no timestamp provided")
