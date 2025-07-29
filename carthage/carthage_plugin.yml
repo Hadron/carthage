@@ -27,5 +27,6 @@ dependencies:
   - deb: btrfs-progs
   - deb: debootstrap
   - deb: genisoimage
+  - deb: xorriso
   - deb: dosfstools
       
