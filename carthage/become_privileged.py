@@ -21,6 +21,7 @@ __all__ = []
 sftp_server_locations = (
     '/usr/lib/sftp-server',
     '/usr/libexec/openssh/sftp-server',
+    '/usr/libexec/gesftpserver',
     '/usr/lib/carthage-sftp-server', #See podman_sftp_server_mount
     )
 
