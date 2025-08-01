@@ -161,6 +161,7 @@ class PodmanImageModel(ImageRole, PodmanImage, no_auto_inject=True):
             if issubclass(customization, (
                     carthage.machine.ContainerCustomization,
                     carthage.machine.FilesystemCustomization,
+                    carthage.machine.MachineCustomization,
                     )):
                 self.add_setup_task(image_layer_task(customization))
             else:
