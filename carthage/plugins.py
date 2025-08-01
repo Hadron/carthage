@@ -300,7 +300,11 @@ def handle_git_url(spec, injector):
     if stem.endswith('.git'):
         stem = stem[:-4]
     dest = Path(config.checkout_dir) / stem
-    if dest.is_dir() and dest.joinpath('.git').exists():
+    # .git can be a symlink or can be a pointer file (for
+    # submodules). Especially in the submodule case, we do not want to
+    # pull; if someone goes to the trouble of setting up submodules,
+    # we respect that.
+    if dest.is_dir() and dest.joinpath('.git').is_dir():
         if not config.pull_plugins:
             return dest
         if branch:
