@@ -490,7 +490,7 @@ class LocalPodmanSocket(PodmanContainerHost):
             yield path
 
     # So ansible chooses the right podman.
-    extra_args = ['--remote']
+    extra_args = '--remote'
     
 __all__ += ['LocalPodmanSocket']
 
