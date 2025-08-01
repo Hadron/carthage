@@ -93,6 +93,7 @@ class SshKey(SetupTaskMixin):
         # If this is changed to return an mtime, set source_time to 0
         # so that updates to ssh.py do not try to replace keys.
         return self.key_path.exists()
+
     def add_to_agent(self, agent):
         if self.agent is None:
             self.agent = agent
@@ -116,7 +117,6 @@ class SshKey(SetupTaskMixin):
     def state_path(self):
         return Path(self.config_layout.state_dir)
     @memoproperty
-
     def ssh(self):
         return sh.ssh.bake(_env=self.agent.agent_environ)
 
@@ -144,8 +144,8 @@ async def rsync(*args, config_layout,
     ssh_agent = None
     if key:
         ssh_agent = key.agent
-        if ssh_agent is None:
-            ssh_agent = injector.get_instance(SshAgent)
+    if ssh_agent is None:
+        ssh_agent = injector.get_instance(SshAgent)
     ssh_options = []
     rsync_command = ""
     runas_user = None
