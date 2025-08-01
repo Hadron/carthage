@@ -183,6 +183,7 @@ class OciImage(OciManaged):
         if not hasattr(self, 'oci_image_tag') and not hasattr(self, 'id'):
             raise TypeError('Either oci_image_tag or id is required')
         super().__init__(**kwargs)
+        self.injector.add_provider(InjectionKey(OciImage), dependency_quote(self))
 
     oci_image_author = ""
     oci_image_command = None
