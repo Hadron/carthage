@@ -489,6 +489,9 @@ class LocalPodmanSocket(PodmanContainerHost):
         async with filesystem_access_core(sshfs_context, 'volume', process_factory) as path:
             yield path
 
+    # So ansible chooses the right podman.
+    extra_args = ['--remote']
+    
 __all__ += ['LocalPodmanSocket']
 
 def local_sftp_server()->str:
