@@ -265,7 +265,7 @@ def install_root_cert_customization(get_certificate_info):
                     "usr/share/ca-certificates/carthage")
             os.makedirs(carthage_cert_dir, exist_ok=True)
             for name, pem_cert in certificates_to_install.items():
-                name = Path(name).name
+                name = pathlib.Path(name).name
                 with open(os.path.join(
                         carthage_cert_dir, f"{name}.crt"),
                           "wt") as f:
