@@ -243,7 +243,7 @@ client_certificate_trust_store_key = InjectionKey(TrustStore, role='client_certi
 
 __all__ += ['client_certificate_trust_store_key']
 
-#: The organization's local trust roots (inherently optional)
+#: The organization's local trust roots (inherently optional) g
 trust_roots_key = InjectionKey(TrustStore, role='organization_trust_roots', _optional=True)
 
 __all__ += ['trust_roots_key']
@@ -265,6 +265,7 @@ def install_root_cert_customization(get_certificate_info):
                     "usr/share/ca-certificates/carthage")
             os.makedirs(carthage_cert_dir, exist_ok=True)
             for name, pem_cert in certificates_to_install.items():
+                name = Path(name).name
                 with open(os.path.join(
                         carthage_cert_dir, f"{name}.crt"),
                           "wt") as f:
