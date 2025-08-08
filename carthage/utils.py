@@ -222,7 +222,7 @@ def add_carthage_arguments(parser):
                         dest='plugins',
                         default=[],
                         action='append',
-                        help='Load a plugin into Carthage. If unspecified, Carthage searches the current directory for carthage_plugin.yml and carthage_plugin.py. If these files are found, Carthage assumes the current directory is a Carthage plugin.',
+                        help='Load a plugin into Carthage. Carthage always searches the current directory for carthage_plugin.yml and carthage_plugin.py. If these files are found, Carthage assumes the current directory is a Carthage plugin, and appends it to the plugin list.',
                         metavar='plugin')
     parser.add_argument('--pull-plugins',
                         default=None, action='store_true',
@@ -290,16 +290,15 @@ def carthage_main_setup(parser=None, unknown_ok=False, ignore_import_errors=Fals
     # we need to load our plugin (layout) first to determine if the layout plugin has set pull_plugins=False
     if args.pull_plugins is not None:
         config.pull_plugins = args.pull_plugins
+    if (
+        (cwd/"carthage_plugin.py").is_file()
+        and (cwd/"carthage_plugin.yml").is_file()
+    ):
+        root_logger.info("Found Carthage plugin in current directory. Continuing with implicit '--plugin .'")
+        args.plugins.append(".")
     if args.plugins == []:
-        if (
-            (cwd/"carthage_plugin.py").is_file()
-            and (cwd/"carthage_plugin.yml").is_file()
-        ):
-            root_logger.info("Found Carthage plugin in current directory. Continuing with implicit '--plugin .'")
-            args.plugins.append(".")
-        else:
-            root_logger.fatal(f"'--plugin' was not specified and current directory does not appear to contain a Carthage plugin. Abort.")
-            exit(1)
+        root_logger.fatal(f"'--plugin' was not specified and current directory does not appear to contain a Carthage plugin. Abort.")
+        exit(1)
     for p in args.plugins:
         base_injector(load_plugin, p, ignore_import_errors=ignore_import_errors)
     if args.tasks_verbose:
