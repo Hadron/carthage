@@ -63,6 +63,7 @@ def is_vnc():
     </hyperv>
     <vmport state='off'/>
     <smm state='on'/>
+    <ps2 state='off'/>
   </features>
   <clock offset='utc'>
     <timer name='rtc' tickpolicy='catchup'/>
@@ -128,10 +129,9 @@ def is_vnc():
     <console type='pty'>
       <target type='serial' port='0'/>
     </console>
+    <input type='keyboard' bus='usb'/>
     %if is_spice() or is_vnc():
     <input type='tablet' bus='usb'/>
-    <input type='mouse' bus='usb'/>
-    <input type='keyboard' bus='usb'/>
     <sound model='ich9'>
 
     </sound>
