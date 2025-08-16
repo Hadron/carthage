@@ -413,6 +413,7 @@ class InstallQemuAgent(ContainerCustomization):
 
     @setup_task("Install qemu guest agent")
     async def install_guest_agent(self):
+        await self.container_command("/usr/bin/apt", "update")
         await self.container_command("/usr/bin/apt", "-y", "install", "qemu-guest-agent")
 
 
