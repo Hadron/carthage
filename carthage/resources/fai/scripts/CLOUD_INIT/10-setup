@@ -7,4 +7,23 @@ fcopy -M /etc/cloud/cloud.cfg.d/20_use_netplan.cfg
 
 rm -f $target/etc/ssh/ssh_host* 2>/dev/null
 
+for F in $target/etc/machine-id $target/var/lib/dbus/machine-id; do
+    echo "Truncating $F"
+    echo -n > $F
+done
+
+if [ ! -d $target/etc/systemd/networkd.conf.d ]; then
+    echo "Creating /etc/systemd/networkd.conf.d"
+    mkdir -p $target/etc/systemd/networkd.conf.d
+fi
+
+cat <<EOF > $target/etc/systemd/networkd.conf.d/10-carthage-duid-link-layer.conf
+[DHCPv4]
+DUIDType=link-layer
+
+[DHCPv6]
+DUIDType=link-layer
+EOF
+echo "Wrote /etc/systemd/networkd.conf.d/10-carthage-duid-link-layer.conf"
+
 exit $error
