@@ -83,10 +83,9 @@ variables:
     ssh-add $SSH_KEY
     fi
   - |
-    if test -n "$B64_SSH_KEY" -a -r "$B64_SSH_KEY" ; then
+    if test -n "${B64_SSH_KEY:-}" ; then
     eval `ssh-agent`
     echo Found ssh key
-    chmod 600 $B64_SSH_KEY
     ssh-add <(echo $B64_SSH_KEY | base64 -d)
     fi
   - |
