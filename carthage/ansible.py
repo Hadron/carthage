@@ -27,7 +27,6 @@ from .ssh import SshKey, SshAgent
 from .utils import validate_shell_safe
 from types import SimpleNamespace
 from .network import access_ssh_origin
-from .modeling import CarthageLayout
 from . import setup_tasks
 from .plugins import CarthagePlugin
 import logging
@@ -734,34 +733,6 @@ def ansible_role_task(roles, vars=None,
 
 
 __all__ += ['ansible_role_task']
-
-@inject(
-    layout=InjectionKey(CarthageLayout, _optional=True),
-    model=InjectionKey(machine.AbstractMachineModel, _optional=True),
-)
-def ansible_log_for_layout(layout, model):
-    '''
-    used like::
-        add_provider(ansible_log, ansible_log_for_layout, allow_multiple=True)
-
-    Sets up a per-model or layout catch-all ansible log in *stamp_path*/ansible.log.
-    '''
-    if (
-        layout is None and
-        model is None
-    ):
-        raise ValueError("Neither model or layout was injected to 'ansible_log_for_layout'")
-    #: model should be first because we do not want to fall back to layout logger
-    # unless there is no model
-    if model:
-        return f'{model.log_path}/ansible.log'
-    if layout:
-        res = Path(self.config_layout.log_dir)/f"layout/{layout.layout_uuid}/ansible.log"
-        res.mkdir(parents=True, exist_ok=True)
-        return str(res)
-    raise AssertionError("'ansible_log_for_layout' reached a point we thought was impossible.")
-
-__all__ += ['ansible_log_for_layout']
 
 @inject(model=machine.AbstractMachineModel)
 def ansible_log_for_model(model):
