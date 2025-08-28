@@ -46,9 +46,11 @@ class ConfigSchemaMeta(type):
                 raise TypeError(
                     "A dict as a default for a configuration value is probably too confusing; discuss whether this is really what you want.")
             if k in schema:
-                raise TypeError(f'{prefix}{k} is already defined')
+                ns = schema[k].namespace
+                errstr = f'{prefix}{k} is already defined in {ns["__module__"]}.{ns["__qualname__"]} on line {ns["__firstlineno__"]}'
+                raise TypeError(errstr)
             schema[k] = cls.Item(prefix + k, type_=annotations[k],
-                                 default=default)
+                                 default=default, namespace=namespace)
         return cls
 
     def subsections(cls, prefix):
@@ -116,9 +118,9 @@ class ConfigSchema(metaclass=ConfigSchemaMeta, prefix=""):
         Represents an item in a configuration schema
 '''
 
-        __slots__ = ('name', 'type', 'default', 'key')
+        __slots__ = ('name', 'type', 'namespace', 'default', 'key')
 
-        def __init__(self, name, type_, default):
+        def __init__(self, name, type_, default, namespace=None):
             if isinstance(type_, types.GenericAlias):
                 type_ = type_.__origin__
             assert isinstance(type_, type), f'{name} config key must be declared with a type not {type_}'
@@ -131,10 +133,11 @@ class ConfigSchema(metaclass=ConfigSchemaMeta, prefix=""):
             self.name = name
             self.type = type_
             self.default = default
+            self.namespace = namespace
             self.key = config_key(name)
 
         def __repr__(self):
-            return f'ConfigSchema.Item("{self.name}", {self.type.__name__}, {repr(self.default)})'
+            return f'ConfigSchema.Item("{self.name}", {self.type.__name__}, {repr(self.default)}, {repr(self.namespace)})'
 
         def resolve(self, injector):
             "Return the value of this item resolved against the given injector"
