@@ -15,6 +15,7 @@ import os.path
 import tempfile
 import typing
 import yaml
+import pathlib
 import importlib.resources
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -734,15 +735,32 @@ def ansible_role_task(roles, vars=None,
 
 __all__ += ['ansible_role_task']
 
-@inject(model=machine.AbstractMachineModel)
-def ansible_log_for_model(model):
+@inject(injector=Injector)
+def ansible_log_for_model(injector):
     '''
     used like::
         add_provider(ansible_log, ansible_log_for_model, allow_multiple=True)
 
     Sets up a per-model ansible log in *stamp_path*/ansible.log.
     '''
-    return f'{model.log_path}/ansible.log'
+
+    # here to avoid circular import
+    from .modeling import CarthageLayout
+
+    def ensure_path(s):
+        p = pathlib.Path(s)
+        p.parent.mkdir(exist_ok=True, parents=True)
+        return p
+
+    model = injector.get_instance(InjectionKey(machine.AbstractMachineModel, _optional=True))
+    if model:
+        return ensure_path(f'{model.log_path}/ansible.log')
+
+    layout = injector.get_instance(InjectionKey(CarthageLayout, _optional=True))
+    if layout:
+        return ensure_path(f'{layout.config_layout.log_dir}/ansible-layout.log')
+
+    raise NotImplementedError
 
 __all__ += ['ansible_log_for_model']
 
