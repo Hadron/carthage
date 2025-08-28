@@ -6,7 +6,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
-
+import os
 from pathlib import Path
 import importlib.resources
 import packaging.requirements
@@ -77,15 +77,27 @@ def collect_dependencies(
 
 __all__ += ['collect_dependencies']
 
+def _try_privilege_elevation():
+    stem = sh
+    if os.geteuid() == 0:
+        return stem
+    known_cmds = ("sudo", "doas", "dzdo")
+    for cmd in known_cmds:
+        try:
+            stem = getattr(stem, cmd).bake()
+            return stem
+        except sh.CommandNotFound:
+            pass
+    raise RuntimeError(f"No common privilege elevation command was found, and this script is running unprivileged. Unable to install dependencies.\nTried {known_cmds}")
+
+
 @inject(injector=Injector)
 async def install_deb(*, injector, **kwargs):
     plugins = list(injector(plugin_iterator))
     # Foreground and stem probably become configurable if we want to
     # be able to turn off sudo or install remotely
     foreground = True
-    stem = sh
-    try: stem = stem.sudo.bake()
-    except sh.CommandNotFound: pass
+    stem = _try_privilege_elevation()
     packages:list[str] = []
     for dependency in collect_dependencies(plugins, **kwargs):
         if 'deb' in dependency:
@@ -107,8 +119,7 @@ async def install_pypi(*, sudo=True,
     stem = sh
     foreground = True
     if sudo:
-        try: stem = getattr(stem, 'sudo').bake()
-        except sh.CommandNotFound: pass
+        stem = _try_privilege_elevation()
     requirements = []
     for dependency in collect_dependencies(plugins, **kwargs):
         if 'pypi' in dependency: requirements.append(dependency['pypi'])
