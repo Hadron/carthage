@@ -9,6 +9,7 @@
 from __future__ import annotations
 import contextlib
 import dataclasses
+import datetime
 import json
 import os
 import os.path
@@ -27,6 +28,7 @@ from .ssh import SshKey, SshAgent
 from .utils import validate_shell_safe
 from types import SimpleNamespace
 from .network import access_ssh_origin
+from .config import ConfigLayout
 from . import setup_tasks
 from .plugins import CarthagePlugin
 import logging
@@ -307,6 +309,9 @@ async def run_playbook(hosts,
 
     '''
     injector = ainjector.injector
+
+    if callable(log):
+        log = injector(log, hosts=hosts, playbook=playbook)
 
     def to_inner(s):
         s = str(s)
@@ -734,15 +739,31 @@ def ansible_role_task(roles, vars=None,
 
 __all__ += ['ansible_role_task']
 
-@inject(model=machine.AbstractMachineModel)
-def ansible_log_for_model(model):
+@inject(injector=Injector)
+def ansible_log_for_model(injector, **kwargs):
     '''
     used like::
         add_provider(ansible_log, ansible_log_for_model, allow_multiple=True)
-
     Sets up a per-model ansible log in *stamp_path*/ansible.log.
+
+    when used like::
+        add_provider(ansible_log, dependency_quote(ansible_log_for_model))
+    Generates a unique name for logfile if no model is available.
+
     '''
-    return f'{model.log_path}/ansible.log'
+    model = injector.get_instance(InjectionKey(machine.AbstractMachineModel, _optional=True))
+    if model is not None:
+        return f'{model.log_path}/ansible.log'
+    config = injector.get_instance(ConfigLayout)
+    ts = datetime.datetime.now().timestamp()
+    if ('hosts' in kwargs and
+        'playbook' in kwargs):
+        res = Path(config.log_dir+'/'+kwargs['hosts']+'-'+kwargs['playbook'].replace('/', '_')[1:]+ts+'.log')
+    else:
+        res = Path(config.log_dir)/f'ansible-{ts}.log'
+    res.parent.mkdir(parents=True, exist_ok=True)
+    logger.info(f'Using layout ansible logfile for {injector}. Log is at {str(res)}')
+    return str(res)
 
 __all__ += ['ansible_log_for_model']
 
