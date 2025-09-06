@@ -744,25 +744,29 @@ def ansible_log_for_model(injector, **kwargs):
     '''
     used like::
         add_provider(ansible_log, ansible_log_for_model, allow_multiple=True)
-    Sets up a per-model ansible log in *stamp_path*/ansible.log.
+    Sets up a per-model ansible log in *stamp_path*/ansible-{timestamp}.log.
 
     when used like::
         add_provider(ansible_log, dependency_quote(ansible_log_for_model))
     Generates a unique name for logfile if no model is available.
-
     '''
+    ts = str(datetime.datetime.now().timestamp())
     model = injector.get_instance(InjectionKey(machine.AbstractMachineModel, _optional=True))
     if model is not None:
-        return f'{model.log_path}/ansible.log'
+        res = f'{model.log_path}/ansible-{ts}.log'
+        logger.debug(f'Using layout ansible logfile for {injector}. Log is at {str(res)}')
+        return res
     config = injector.get_instance(ConfigLayout)
-    ts = datetime.datetime.now().timestamp()
     if ('hosts' in kwargs and
         'playbook' in kwargs):
-        res = Path(config.log_dir+'/'+kwargs['hosts']+'-'+kwargs['playbook'].replace('/', '_')[1:]+ts+'.log')
+        hosts = kwargs['hosts']
+        if isinstance(hosts, list):
+            hosts = '_'.join(map(str, hosts))
+        res = Path(config.log_dir)/(f'{kwargs['playbook']}'.replace('/', '_')+'_'+ts+'.log')
     else:
         res = Path(config.log_dir)/f'ansible-{ts}.log'
     res.parent.mkdir(parents=True, exist_ok=True)
-    logger.info(f'Using layout ansible logfile for {injector}. Log is at {str(res)}')
+    logger.debug(f'Using layout ansible logfile for {injector}. Log is at {str(res)}')
     return str(res)
 
 __all__ += ['ansible_log_for_model']
