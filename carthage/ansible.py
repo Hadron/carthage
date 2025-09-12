@@ -762,7 +762,7 @@ def ansible_log_for_model(injector, **kwargs):
         hosts = kwargs['hosts']
         if isinstance(hosts, list):
             hosts = '_'.join(map(str, hosts))
-        res = Path(config.log_dir)/(f'{kwargs['playbook']}'.replace('/', '_')+'_'+ts+'.log')
+        res = Path(config.log_dir)/(f'{kwargs["playbook"]}'.replace('/', '_')+'_'+ts+'.log')
     else:
         res = Path(config.log_dir)/f'ansible-{ts}.log'
     res.parent.mkdir(parents=True, exist_ok=True)
