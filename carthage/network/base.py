@@ -693,7 +693,6 @@ class NetworkLink:
         return self.net_instance
 
     async def resolve(self, ainjector, interface):
-        await asyncio.sleep(1)
         if 'merged_v4_config' in self.__dict__:
             raise ValueError('resolve called too late.')
         if self.v4_config is not None:
