@@ -535,10 +535,15 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
         self.close()
 
     def qemu_config(self, disk_config):
+
+        if 'driver' in disk_config:
+            if disk_config['driver'] != self.qemu_format:
+                raise ValueError(f'image was expected to be {disk_config["driver"]} but was actually {self.qemu_format}')
+
         return dict(
             path=self.path,
-            source_type="file",
-            driver='raw',
+            source_type='file',
+            driver=self.qemu_format,
             qemu_source='file',
         )
 
