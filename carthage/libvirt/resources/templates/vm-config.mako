@@ -5,6 +5,8 @@ memory_mb = getattr(model, 'memory_mb', 8192)
 cpus = getattr(model, 'cpus', 1)
 nested_virt = getattr(model, 'nested_virt', False)
 firmware = getattr(model, 'firmware_type', 'efi')
+if firmware not in ('bios', 'efi', 'efi-insecure', 'efi-enrolled'):
+    raise ValueError(f'unexpected value "{firmware}" for firmware_type')
 disk_cache = getattr(model, 'disk_cache', 'writethrough')
 def is_spice():
     if console_needed is True or (isinstance(console_needed, str) and console_needed.startswith('spice')):
@@ -37,17 +39,22 @@ def is_vnc():
      %if nested_virt:
      <feature policy='require' name='vmx' />
      %endif
-</cpu>
-<os ${"firmware='efi'" if firmware.startswith('efi') else ""} >
+  </cpu>
+  <os ${"firmware='efi'" if firmware.startswith('efi') else ""} >
     <type arch='x86_64' machine='pc-q35-9.0'>hvm</type>
-    %if firmware.startswith('efi'):
     <firmware>
         %if firmware == 'efi-enrolled':
         <feature enabled='yes' name='enrolled-keys'/>
-        %endif
+        %elif firmware == 'efi-insecure':
+        %else:
         <feature enabled='yes' name='secure-boot'/>
+        %endif
     </firmware>
-    <loader readonly='yes' secure='yes' />
+    %if firmware == 'efi-insecure':
+    <loader type='pflash' readonly='yes'>/usr/share/OVMF/OVMF_CODE_4M.fd</loader>
+    <nvram template='/usr/share/OVMF/OVMF_VARS_4M.fd' />
+    %elif firmware.startswith('efi'):
+    <loader readonly='yes' secure='no' />
     %endif
     <bios useserial='yes'/>
 
