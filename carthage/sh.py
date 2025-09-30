@@ -16,7 +16,7 @@ Also, by default for commands retrieved through this module set _bg=True and _bg
 '''
 try:
     # Setting _async to true doesn't do much except it tends to override _bg, and too much of our code gets confused by that.
-    _sh_context = _sh.bake(_return_cmd=True, _bg=True, _bg_exc=False)
+    _sh_context = _sh.bake(_return_cmd=True, _bg=True, _bg_exc=False, _truncate_exc=False)
     async def test_return_cmd():
         import warnings
         c = await _sh_context.ls(_async=True, _return_cmd=True)
