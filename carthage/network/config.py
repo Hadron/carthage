@@ -174,3 +174,41 @@ def ipv4_gateway(g):
     if g is False:
         return False
     return IPv4Address(g)
+
+@dataclasses.dataclass()
+class V6Config(L3ConfigMixin):
+
+    network: IPv6Network = None
+    dhcp: bool = None
+    dhcp_ranges: list = None
+    secondary_addresses: list[IPv6Address] = dataclasses.field(default_factory=lambda: [])
+    address: IPv6Address = None
+    gateway: IPv6Address = None
+    masquerade: bool = False
+    #: Takes a lower bound and a upper bound, both specified as V6 addresses.  If specified and address is None, will assign the address between the lower and upper bound.  This allows addresses to be dynamically managed at modeling time rather than by DHCP at run time.  DHCP can still be used, but at least for models whose config includes *pool*, addresses will be statically configured in the dhcp server.
+    pool: tuple = dataclasses.field(default=None, repr=False)
+    public_address: IPv6Address = dataclasses.field(default=None, repr=False)
+    metric: int = None
+    
+    _attributes = L3ConfigMixin._attributes | {'masquerade', 'pool'}
+
+    def after_resolve(self):
+        # Support things like a VpcAddress being assigned to public_address
+        if hasattr(self.public_address, 'ip_address'):
+            self.public_address = self.public_address.ip_address
+        # The following depends on iteration happening in dictionary
+        # order such that network is processed before dhcp_ranges
+        for k, func in dict(
+                address=IPv6Address,
+                network=IPv6Network,
+                gateway=ipv4_gateway,
+                dhcp_ranges=self._handle_dhcp_ranges(IPv6Address),
+                secondary_addresses=self._handle_secondary_addresses(IPv6Address),
+                pool = self._handle_pool(IPv6Address),
+                public_address=ipv4_gateway,
+        ).items():
+            val = getattr(self, k)
+            if val is not None:
+                setattr(self, k, func(val))
+
+        super().after_resolve()

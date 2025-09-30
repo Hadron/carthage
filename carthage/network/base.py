@@ -22,7 +22,7 @@ from ..config import ConfigLayout
 from ..utils import permute_identifier, when_needed, memoproperty, is_optional_type, get_type_args
 import carthage.kvstore
 from ..machine import ssh_origin, ssh_origin_vrf, Machine, AbstractMachineModel
-from .config import V4Config
+from .config import V4Config, V6Config
 ssh_origin_vrf_key = ssh_origin_vrf
 
 logger = logging.getLogger('carthage.network')
@@ -228,12 +228,30 @@ class Network(AsyncInjectable):
         config.after_resolve()
         self._v4_config = config
 
+    @property
+    def v6_config(self):
+        '''
+        The :class:`V6Config` for this network.  When assigned to a *Network*, a *V6Config* cannot have any deferred elements.
+        '''
+        return self._v6_config
+
+    @v6_config.setter
+    def v6_config(self, config):
+        assert isinstance(config, V6Config)
+        config.after_resolve()
+        self._v6_config = config
+
     def __init_subclass__(cls, **kwargs):
         if 'v4_config' in cls.__dict__:
             config = cls.v4_config
             del cls.v4_config
             config.after_resolve()
             cls._v4_config = config
+        if 'v6_config' in cls.__dict__:
+            config = cls.v6_config
+            del cls.v6_config
+            config.after_resolve()
+            cls._v6_config = config
         super().__init_subclass__(**kwargs)
             
 
@@ -639,6 +657,7 @@ class NetworkLink:
     untagged_vlan: typing.Optional[int]
     allowed_vlans: typing.Optional[VlanList]
     v4_config: typing.Optional[V4Config] = dataclasses.field(default=None, repr=False)
+    v6_config: typing.Optional[V6Config] = dataclasses.field(default=None, repr=False)
     lldp: typing.Optional[bool] = dataclasses.field(default=True, repr=False)
     required: typing.Optional[bool] = dataclasses.field(default=True, repr=False)
     #: If true, this interface is essential and networkd should keep it up even if a dhcp lease expires or networkd is stopped
