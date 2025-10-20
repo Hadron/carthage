@@ -1,10 +1,11 @@
 name: carthage.libvirt
 dependencies:
   - deb: python3-libvirt
-    pypi: libvirt
-  - deb: virsh
+    pypi: libvirt-python
+  - deb: libvirt-clients
   - deb: libvirt-daemon-system
   - deb: swtpm
   - deb: swtpm-tools
-  - deb: xfs
+  - deb: qemu-system-x86
+  - deb: qemu-system-modules-spice
 
