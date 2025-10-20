@@ -193,15 +193,25 @@ def when_needed(wraps, *args, injector=None,
 
 
 def permute_identifier(id, maxlen):
-    "Add to or replace the last character of the identifier; use as generator and stop consuming when a unique one is found"
+    """
+    Use as a generator to yield a unique identifier.
+
+    First attempt to yield the provided identifier, then just add one character if maxlen allows,
+    otherwise walk backwards through chars in id replacing one at a time until a unique combination is found.
+
+    Raises ValueError if no unique combination can be found.
+    """
     yield id
     if len(id) < maxlen:
         for i in range(26):
             yield id + chr(97 + i)
     else:
-        id = id[:-1]
-        for i in range(26):
-            yield id + chr(97 + i)
+        for i in range(len(id) - 1, -1, -1):
+            original_char = id[i]
+            for t in range(26):
+                if original_char == chr(97+t):
+                    continue
+                yield id[:i] + chr(97+t) + id[i+1:]
     raise ValueError("No unique combination found")
 
 
