@@ -17,4 +17,4 @@ Please import carthage.libvirt in the future.\n\
 
 from carthage.libvirt import *
 # carthage.modeling.LibvirtImageModel needs LibvirtCreatedImage
-from carthage.libvirt.base import LibvirtCreatedImage
+from carthage.libvirt.base import vm_image_key, LibvirtCreatedImage

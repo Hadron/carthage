@@ -89,7 +89,7 @@ class Vm(Machine, SetupTaskMixin):
 
     @memoproperty
     def uuid(self):
-        from .modeling import CarthageLayout
+        from carthage.modeling import CarthageLayout
         layout = self.injector.get_instance(InjectionKey(CarthageLayout, _optional=True))
         if layout:
             layout_uuid = layout.layout_uuid
@@ -125,7 +125,7 @@ class Vm(Machine, SetupTaskMixin):
         await self.start_machine()
 
     async def write_config(self):
-        from .modeling import CarthageLayout
+        from carthage.modeling import CarthageLayout
         template = _templates.get_template("vm-config.mako")
         await self.resolve_networking()
         for i, link in self.network_links.items():
