@@ -19,15 +19,15 @@ import mako
 import mako.lookup
 import mako.template
 from pathlib import Path
-from .dependency_injection import *
-from . import deployment
-from .utils import when_needed, memoproperty
-from .setup_tasks import SetupTaskMixin, setup_task
-from .image import  ImageVolume
-from .machine import Machine, SshMixin, ContainerCustomization, disk_config_from_model, AbstractMachineModel
-from . import sh
-from .config import ConfigLayout
-from .ports import PortReservation
+from carthage.dependency_injection import *
+from carthage import deployment
+from carthage.utils import when_needed, memoproperty
+from carthage.setup_tasks import SetupTaskMixin, setup_task
+from carthage.image import  ImageVolume
+from carthage.machine import Machine, SshMixin, ContainerCustomization, disk_config_from_model, AbstractMachineModel
+from carthage import sh
+from carthage.config import ConfigLayout
+from carthage.ports import PortReservation
 import carthage.network
 
 logger = logging.getLogger('carthage.vm')
@@ -543,59 +543,6 @@ This class is almost always subclassed.  The following are expected to be overwr
         Called from the SetupTask to build the image.
         '''
         await self._build_image()
-
-class LibvirtDeployableFinder(carthage.deployment.DeployableFinder):
-
-    name = 'libvirt'
-
-    async def find(self, ainjector):
-        '''
-        MachineDeployableFinder already finds Vms.
-        '''
-        return []
-
-    async def find_orphans(self, deployables):
-        try:
-            import libvirt
-            import carthage.modeling
-        except ImportError:
-            logger.debug('Not looking for libvirt orphans because libvirt API is not available')
-            return []
-        con = libvirt.open('')
-        vm_names = [v.full_name for v in deployables if isinstance(v, Vm)]
-        try:
-            layout = await self.ainjector.get_instance_async(carthage.modeling.CarthageLayout)
-            layout_name = layout.layout_name
-        except KeyError:
-            layout_name = None
-        if layout_name is None:
-            logger.info('Unable to find libvirt orphans because layout name not set')
-            return []
-        results = []
-        for d in con.listAllDomains():
-            try:
-                metadata_str = d.metadata(libvirt.VIR_DOMAIN_METADATA_ELEMENT, 'https://github.com/hadron/carthage')
-            except libvirt.libvirtError: continue
-            metadata = xml.etree.ElementTree.fromstring(metadata_str)
-            if metadata.attrib['layout'] != layout_name: continue
-            if d.name() in vm_names:
-                continue
-            with instantiation_not_ready():
-                vm = await self.ainjector(
-                    Vm,
-                    name=d.name(),
-                    image=None,
-                    )
-                vm.injector.add_provider(deployment.orphan_policy, deployment.DeletionPolicy[metadata.attrib['orphan_policy']])
-            if await vm.find():
-                results.append(vm)
-        return results
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.injector.add_provider(ConfigLayout)
-        cl = self.injector.get_instance(ConfigLayout)
-        cl.container_prefix = ""
 
 def vm_as_image(key):
     '''
