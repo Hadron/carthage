@@ -113,5 +113,10 @@ class LibvirtDeployableFinder(deployment.DeployableFinder):
 
 @inject(injector=Injector)
 def carthage_plugin(injector):
-    injector.add_provider(LibvirtDeployableFinder)
+    # this is done in case carthage.vm is loaded first which already sets up our provider
+    from carthage.dependency_injection.base import ExistingProvider
+    try:
+        injector.add_provider(LibvirtDeployableFinder)
+    except ExistingProvider:
+        pass
 
