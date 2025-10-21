@@ -1,11 +1,9 @@
 name: carthage.libvirt
+plugins:
+  - https://github.com/hadron/carthage-base.git
 dependencies:
   - deb: python3-libvirt
     pypi: libvirt-python
-  - deb: libvirt-clients
-  - deb: libvirt-daemon-system
-  - deb: swtpm
-  - deb: swtpm-tools
-  - deb: qemu-system-x86
-  - deb: qemu-system-modules-spice
-
+  - deb: zstd
+  - deb: dosfstools
+  - deb: fai-server
