@@ -1,6 +1,4 @@
 name: carthage.libvirt
-plugins:
-  - https://github.com/hadron/carthage-base.git
 dependencies:
   - deb: python3-libvirt
     pypi: libvirt-python
