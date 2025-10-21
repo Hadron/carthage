@@ -16,5 +16,4 @@ Please import carthage.libvirt in the future.\n\
 ", category=DeprecationWarning)
 
 from carthage.libvirt import *
-# carthage.modeling.LibvirtImageModel needs LibvirtCreatedImage
 from carthage.libvirt.base import vm_image_key, LibvirtCreatedImage
