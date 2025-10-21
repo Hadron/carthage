@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2024, 2025, Hadron Industries, Inc.
+# Copyright (C) 2025, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -8,29 +8,25 @@
 
 import asyncio
 import json
-import logging
 import os
 import os.path
 import shutil
 import types
 import uuid
-import xml.etree.ElementTree
-import mako
 import mako.lookup
-import mako.template
-from pathlib import Path
-from carthage.dependency_injection import *
-from carthage import deployment
-from carthage.utils import when_needed, memoproperty
-from carthage.setup_tasks import SetupTaskMixin, setup_task
-from carthage.image import  ImageVolume
-from carthage.machine import Machine, SshMixin, ContainerCustomization, disk_config_from_model, AbstractMachineModel
-from carthage import sh
-from carthage.config import ConfigLayout
-from carthage.ports import PortReservation
+
 import carthage.network
 
-logger = logging.getLogger('carthage.vm')
+from carthage import deployment, sh
+from carthage.config import ConfigLayout
+from carthage.dependency_injection import *
+from carthage.image import  ImageVolume
+from carthage.machine import disk_config_from_model, Machine, SshMixin, ContainerCustomization, AbstractMachineModel
+from carthage.ports import PortReservation
+from carthage.setup_tasks import SetupTaskMixin, setup_task
+from carthage.utils import when_needed, memoproperty
+
+from .logger import logger
 
 _resources_path = os.path.join(os.path.dirname(__file__), "resources")
 _templates = mako.lookup.TemplateLookup([_resources_path + '/templates'])
