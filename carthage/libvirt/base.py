@@ -558,4 +558,4 @@ def vm_as_image(key):
         return vm.volume
     return image_volume
 
-__all__ = ('VM', 'Vm', 'vm_as_image', 'InstallQemuAgent', 'VirtiofsMount')
+__all__ = ('VM', 'Vm', 'vm_as_image', 'InstallQemuAgent', 'VirtiofsMount', 'vm_image_key')
