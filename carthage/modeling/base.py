@@ -21,7 +21,6 @@ from carthage import ConfigLayout, SetupTaskMixin, PathMixin
 import carthage.kvstore
 import carthage.network
 import carthage.machine
-import carthage.vm
 from .utils import *
 
 logger = logging.getLogger(__name__)
