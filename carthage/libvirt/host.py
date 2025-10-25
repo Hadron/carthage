@@ -28,7 +28,7 @@ class LibvirtHost(MachineModel, template=True):
 
     @classmethod
     def supplementary_injection_keys(cls, k):
-        yield InjectionKey(LibvirtHost, host=cls.name)
+        yield InjectionKey(libvirt_host_key, host=cls.name)
         yield from super().supplementary_injection_keys(k)
 
     async def virsh(self, *args, _bg=True, _bg_exc=True, **kwargs):

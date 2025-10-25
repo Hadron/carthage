@@ -34,6 +34,7 @@ _templates = mako.lookup.TemplateLookup([_resources_path + '/templates'])
 
 
 vm_image_key = InjectionKey('vm-image')
+libvirt_host_key = InjectionKey('libvirt-host')
 
 #dataclasses.dataclass
 class VirtiofsMount(Injectable):
@@ -57,6 +58,7 @@ class VirtiofsMount(Injectable):
 
 @inject_autokwargs(
     injector=Injector,
+    host=libvirt_host_key,
     image=InjectionKey(vm_image_key, _defer=True),
     network_config=carthage.network.NetworkConfig
 )
@@ -83,6 +85,7 @@ class Vm(Machine, SetupTaskMixin):
         self.volume = None
         self.vm_running = self.machine_running
         self._operation_lock = asyncio.Lock()
+        self.host = host
 
     @memoproperty
     def uuid(self):
