@@ -6,6 +6,9 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import logging
+logger = logging.getLogger("carthage.libvirt.roles")
+
 from carthage.dependency_injection import dependency_quote
 from carthage.machine import BareMetalMachine, MachineCustomization
 from carthage.modeling import *

@@ -6,6 +6,9 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import logging
+logger = logging.getLogger("carthage.libvirt")
+
 import asyncio
 import json
 import os
@@ -25,8 +28,6 @@ from carthage.machine import disk_config_from_model, Machine, SshMixin, Containe
 from carthage.ports import PortReservation
 from carthage.setup_tasks import SetupTaskMixin, setup_task
 from carthage.utils import when_needed, memoproperty
-
-from .logger import logger
 
 _resources_path = os.path.join(os.path.dirname(__file__), "resources")
 _templates = mako.lookup.TemplateLookup([_resources_path + '/templates'])
