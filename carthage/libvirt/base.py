@@ -85,7 +85,6 @@ class Vm(Machine, SetupTaskMixin):
         self.volume = None
         self.vm_running = self.machine_running
         self._operation_lock = asyncio.Lock()
-        self.host = host
         self.libvirt_config = self.config_layout.libvirt
         if not hasattr(self, 'should_define'):
             self.should_define = self.libvirt_config.should_define
