@@ -7,7 +7,7 @@
 # LICENSE for details.
 
 from carthage import deployment
-from carthage.config import ConfigSchema, ConfigLayout
+from carthage.config import ConfigSchema, ConfigLayout, ConfigPath
 from carthage.dependency_injection import inject, Injector
 
 from .base import *
@@ -36,7 +36,7 @@ class LibvirtSchema(ConfigSchema, prefix='libvirt'):
 
     #: Default image location
     # defaults to a place libvirt can access
-    image_dir: str = "/srv/carthage/libvirt"
+    image_dir: ConfigPath = "{base_dir}/libvirt"
 
     #: Whether we delete the volumes on close
     # defaults to False
