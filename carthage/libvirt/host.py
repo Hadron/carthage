@@ -49,13 +49,13 @@ class RemoteLibvirtHost(LibvirtHost, template=True):
 
     @classmethod
     def supplementary_injection_keys(cls, k):
-        yield InjectionKey(RemoteLibvirtHost, host=cls.name)
+        yield InjectionKey(RemoteLibvirtHost, host=cls.name, _globally_unique=True)
         yield from super().supplementary_injection_keys(k)
 
     @memoproperty
     def connection_string(self):
         # for now we only consider ssh, not sshfs sockets or tls
-        return f"{self.hypervisor_backend}+ssh://{self.model.ip_address}/system"
+        return f"{self.hypervisor_backend}+ssh://{self.ip_address}/system"
 
 __all__ += ["RemoteLibvirtHost"]
 
@@ -65,7 +65,7 @@ class LocalLibvirtHost(LibvirtHost, template=True):
 
     @classmethod
     def supplementary_injection_keys(cls, k):
-        yield InjectionKey(LocalLibvirtHost, host=cls.name)
+        yield InjectionKey(LocalLibvirtHost, host=cls.name, _globally_unique=True)
         yield from super().supplementary_injection_keys(k)
 
     @memoproperty
