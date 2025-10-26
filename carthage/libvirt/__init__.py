@@ -32,11 +32,15 @@ class LibvirtSchema(ConfigSchema, prefix='libvirt'):
     #: Default disk size in mebibytes
     # defaults to 10GiB
     # may be overridden on models
-    image_size_mib: int = 10485760
+    image_size_mb: int = 10485760
 
     #: Default image location
     # defaults to a place libvirt can access
     image_dir: str = "/srv/carthage/libvirt"
+
+    #: Whether we delete the volumes on close
+    # defaults to False
+    delete_volumes: bool = False
 
     #: Default vm memory in MB
     # defaults to 2G
