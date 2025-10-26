@@ -86,6 +86,9 @@ class Vm(Machine, SetupTaskMixin):
         self.vm_running = self.machine_running
         self._operation_lock = asyncio.Lock()
         self.host = host
+        self.libvirt_config = self.config_layout.libvirt
+        if not hasattr(self, 'should_define'):
+            self.should_define = self.libvirt_config.should_define
 
     @memoproperty
     def uuid(self):
@@ -172,11 +175,11 @@ class Vm(Machine, SetupTaskMixin):
 
     @memoproperty
     def config_path(self):
-        return os.path.join(self.config_layout.vm_image_dir, self.name + '.xml')
+        return os.path.join(self.libvirt_config.image_dir, self.name + '.xml')
 
     @memoproperty
     def console_json_path(self):
-        return os.path.join(self.config_layout.vm_image_dir, self.name + '.console')
+        return os.path.join(self.libvirt_config.image_dir, self.name + '.console')
 
     async def start_vm(self):
         async with self._operation_lock:
@@ -235,7 +238,7 @@ class Vm(Machine, SetupTaskMixin):
     def close(self, canceled_futures=None):
         if self.closed:
             return
-        if (not self.config_layout.persist_local_networking) or self.config_layout.delete_volumes:
+        if (not self.config_layout.persist_local_networking) or self.libvirt_config.delete_volumes:
             if self.running:
                 try:
                     sh.virsh("destroy", self.full_name, _bg=False)
@@ -246,7 +249,7 @@ class Vm(Machine, SetupTaskMixin):
                 os.unlink(self.config_path)
             except FileNotFoundError:
                 pass
-        if self.config_layout.delete_volumes:
+        if self.libvirt_config.delete_volumes:
             try:
                 shutil.rmtree(self.stamp_path)
             except FileNotFoundError:
@@ -436,7 +439,7 @@ async def qemu_disk_config(vm, ci_data, *, ainjector):
                 if 'volume' not in entry:
                     entry['volume'] = vm.volume
                 if 'size' not in entry:
-                    entry['size'] = vm.config_layout.vm_image_size
+                    entry['size'] = vm.libvirt_config.image_size
             if 'cache' not in entry:
                 try:
                     entry['cache'] = vm.model.disk_cache
