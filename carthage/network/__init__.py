@@ -18,5 +18,5 @@ __all__ += ['random_mac_addr', 'MacStore', 'persistent_random_mac', 'persistent_
 from .namespace import NetworkNamespace
 __all__ += ['NetworkNamespace']
 
-from .config import V4Config
-__all__ += ['V4Config']
+from .config import V4Config, V6Config
+__all__ += ['V4Config', 'V6Config']
