@@ -37,9 +37,17 @@ disk_config
 nested_virt
     Boolean indicating whether to allow nested virtualization
 
+firmware_type
+    Selects the firmware presented to the guest.  ``efi`` (default) enables UEFI with secure boot; ``efi-enrolled`` enables secure boot with enrolled keys; ``bios`` selects  to legacy BIOS without secure boot.
+
+disk_cache
+    Default cache mode used for QEMU disks when no per-disk cache is provided in :ref:`disk_config`.  Typical values are ``writeback`` or ``writethrough``.
+
+cloud_init
+    When true, a cloud-init configuration is provided to the Machine using the appropriate mechanism for the machine implementation.
     
 hardware_tpm
     Whether to provide a TPM in the virtual machine.
 
 console_needed
-    Whether a graphical console is needed.
+    Whether a graphical console is needed. True uses the default console type ``spice`` or ``vnc`` selects a specific console protocol if the backend supports that protocol.
