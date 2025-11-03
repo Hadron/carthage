@@ -6,9 +6,11 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import asyncio
 import os.path
 from tempfile import TemporaryDirectory
 from carthage import sh
+from carthage.machine import MachineRunning
 
 
 class Machine:
@@ -52,3 +54,47 @@ class Machine:
 
     @property
     def path(self): return self.dir.name
+
+
+class SlowStopMachine:
+
+    """
+    Minimal async-compatible machine that exposes a race with MachineRunning by providing a trigger for stop_machine to continue.
+    """
+
+    machine_running_ssh_online = False
+
+    def __init__(self):
+        self.with_running_count = 0
+        self.already_running = False
+        self.running = False
+        self._ssh_online_required = False
+        self._machine_running_lock = asyncio.Lock()
+        self.stop_started = asyncio.Event()
+        self.stop_continue = asyncio.Event()
+        self.stop_completed = asyncio.Event()
+
+    def machine_running(self, **kwargs):
+        return MachineRunning(self, **kwargs)
+
+    async def ssh_online(self):
+        return
+
+    async def is_machine_running(self):
+        return self.running
+
+    async def start_machine(self):
+        await asyncio.sleep(0)
+        self.running = True
+
+    async def stop_machine(self):
+        self.stop_started.set()
+        await self.stop_continue.wait()
+        self.running = False
+        self.stop_completed.set()
+
+    async def run_command(self, *args, **kwargs):
+        if not self.running:
+            raise RuntimeError("machine not running")
+        await asyncio.sleep(0)
+        return "ok"

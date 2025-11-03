@@ -18,6 +18,7 @@ from carthage.dependency_injection.introspection import *
 from carthage_test_utils import Trigger
 import carthage
 import carthage.ansible
+import machine_mock
 from carthage.pytest import *
 from carthage.setup_tasks import *
 from carthage.setup_tasks import SetupTaskContext, TaskWrapperBase
@@ -461,5 +462,35 @@ async def test_source_time_invalidates(ainjector):
     assert a.task.source_time > source_time
     await a_obj.run_setup_tasks()
     assert run_count == 2
+
+
+@async_test
+async def test_machine_running_stop_race(ainjector):
+    machine = machine_mock.SlowStopMachine()
+    first_inside = asyncio.Event()
+    exit_signal = asyncio.Event()
+    second_attempt = asyncio.Event()
+
+    async def first_user():
+        async with machine.machine_running():
+            first_inside.set()
+            await exit_signal.wait()
+
+    async def second_user():
+        second_attempt.set()
+        async with machine.machine_running():
+            assert machine.running
+            await machine.run_command("echo", "ok")
+
+    first_task = asyncio.create_task(first_user())
+    await first_inside.wait()
+    exit_signal.set()
+    await machine.stop_started.wait()
+    second_task = asyncio.create_task(second_user())
+    await second_attempt.wait()
+    machine.stop_continue.set()
+    await first_task
+    await machine.stop_completed.wait()
+    await second_task
     
     

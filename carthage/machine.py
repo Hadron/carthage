@@ -31,30 +31,32 @@ logger = logging.getLogger("carthage")
 class MachineRunning:
 
     async def __aenter__(self):
-        if self.machine.with_running_count <= 0:
-            if self.machine.running is None:
-                await self.machine.is_machine_running()
-            self.machine.already_running = self.machine.running
-        self.machine.with_running_count += 1
-        if self.machine.running:
-            if self.machine._ssh_online_required and self.ssh_online:
-                await self.machine.ssh_online()
-            return
-        try:
-            await self.machine.start_machine()
-            if self.ssh_online:
-                await self.machine.ssh_online()
-            return
+        async with self.machine._machine_running_lock:
+            if self.machine.with_running_count <= 0:
+                if self.machine.running is None:
+                    await self.machine.is_machine_running()
+                self.machine.already_running = self.machine.running
+            self.machine.with_running_count += 1
+            if self.machine.running:
+                if self.machine._ssh_online_required and self.ssh_online:
+                    await self.machine.ssh_online()
+                return
+            try:
+                await self.machine.start_machine()
+                if self.ssh_online:
+                    await self.machine.ssh_online()
+                return
 
-        except BaseException:
-            self.machine.with_running_count -= 1
-            raise
+            except BaseException:
+                self.machine.with_running_count -= 1
+                raise
 
     async def __aexit__(self, exc, val, tb):
-        self.machine.with_running_count -= 1
-        if self.machine.with_running_count <= 0 and not self.machine.already_running:
-            self.machine.with_running_count = 0
-            await self.machine.stop_machine()
+        async with self.machine._machine_running_lock:
+            self.machine.with_running_count -= 1
+            if self.machine.with_running_count <= 0 and not self.machine.already_running:
+                self.machine.with_running_count = 0
+                await self.machine.stop_machine()
 
     def __init__(self, machine, *,
                  ssh_online=None):
@@ -419,6 +421,7 @@ class Machine(NetworkedMixin, AsyncInjectable, SshMixin):
         self.already_running = False
         self.sshfs_count = 0
         self.sshfs_lock = asyncio.Lock()
+        self._machine_running_lock = asyncio.Lock()
         self.injector.add_provider(InjectionKey(Machine), self)
         if not hasattr(self, 'model'):
             self.model = None
