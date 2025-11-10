@@ -544,59 +544,6 @@ This class is almost always subclassed.  The following are expected to be overwr
         '''
         await self._build_image()
 
-class LibvirtDeployableFinder(carthage.deployment.DeployableFinder):
-
-    name = 'libvirt'
-
-    async def find(self, ainjector):
-        '''
-        MachineDeployableFinder already finds Vms.
-        '''
-        return []
-
-    async def find_orphans(self, deployables):
-        try:
-            import libvirt
-            import carthage.modeling
-        except ImportError:
-            logger.debug('Not looking for libvirt orphans because libvirt API is not available')
-            return []
-        con = libvirt.open('')
-        vm_names = [v.full_name for v in deployables if isinstance(v, Vm)]
-        try:
-            layout = await self.ainjector.get_instance_async(carthage.modeling.CarthageLayout)
-            layout_name = layout.layout_name
-        except KeyError:
-            layout_name = None
-        if layout_name is None:
-            logger.info('Unable to find libvirt orphans because layout name not set')
-            return []
-        results = []
-        for d in con.listAllDomains():
-            try:
-                metadata_str = d.metadata(libvirt.VIR_DOMAIN_METADATA_ELEMENT, 'https://github.com/hadron/carthage')
-            except libvirt.libvirtError: continue
-            metadata = xml.etree.ElementTree.fromstring(metadata_str)
-            if metadata.attrib['layout'] != layout_name: continue
-            if d.name() in vm_names:
-                continue
-            with instantiation_not_ready():
-                vm = await self.ainjector(
-                    Vm,
-                    name=d.name(),
-                    image=None,
-                    )
-                vm.injector.add_provider(deployment.orphan_policy, deployment.DeletionPolicy[metadata.attrib['orphan_policy']])
-            if await vm.find():
-                results.append(vm)
-        return results
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.injector.add_provider(ConfigLayout)
-        cl = self.injector.get_instance(ConfigLayout)
-        cl.container_prefix = ""
-
 def vm_as_image(key):
     '''
     Return the volume of a VM to be used for cloning.  Typical usage::
