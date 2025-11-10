@@ -21,7 +21,6 @@ from carthage import ConfigLayout, SetupTaskMixin, PathMixin
 import carthage.kvstore
 import carthage.network
 import carthage.machine
-import carthage.vm
 from .utils import *
 
 logger = logging.getLogger(__name__)
@@ -706,22 +705,3 @@ def add_dynamic_machine_model(cls, name:str, key: InjectionKey):
         transclusion_overrides=True)
 
 __all__ += ['add_dynamic_machine_model']
-    
-class LibvirtImageModel(carthage.vm.LibvirtCreatedImage, ImageRole):
-
-    '''
-    A :class:`carthage.vm.LibvirtCreatedImage`  that is a modeling class, so modeling language constructs work.  In addition, any customization in the class is included in the default *vm_customizations*.
-    '''
-
-    disk_cache = 'unsafe' #Volume is destroyed on failure
-    @classmethod
-    def our_key(cls):
-        return InjectionKey(carthage.vm.LibvirtCreatedImage, name=cls.name)
-
-    @memoproperty
-    def vm_customizations(self):
-        return [x[1] for x in self.injector.filter_instantiate(
-            carthage.machine.BaseCustomization,
-            ['description'], stop_at=self.injector)]
-
-__all__ += ['LibvirtImageModel']
