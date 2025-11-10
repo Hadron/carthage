@@ -76,16 +76,3 @@ class DebianConfig(ConfigSchema, prefix="debian"):
 
     #: Any debootstrap option to include
     debootstrap_options: str = ""
-
-class LibvirtSchema(ConfigSchema, prefix='libvirt'):
-
-    #: The preferred format for newly created disk images
-    preferred_format: str = 'raw'
-
-    #: When creating a format like qcow2 that can be represented as a
-    #delta on top of another file, should we use such a backing
-    #file. If true, then that file must remain unmodified. Generally
-    #it is better to use OS-level facilities like reflinks to obtain
-    #copy-on-write.
-    use_backing_file: bool = False
-    
