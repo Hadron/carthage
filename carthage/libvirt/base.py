@@ -6,31 +6,28 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import logging
+logger = logging.getLogger("carthage.libvirt")
+
 import asyncio
 import json
-import logging
 import os
 import os.path
 import shutil
 import types
 import uuid
-import xml.etree.ElementTree
-import mako
 import mako.lookup
-import mako.template
-from pathlib import Path
-from .dependency_injection import *
-from . import deployment
-from .utils import when_needed, memoproperty
-from .setup_tasks import SetupTaskMixin, setup_task
-from .image import  ImageVolume
-from .machine import Machine, SshMixin, ContainerCustomization, disk_config_from_model, AbstractMachineModel
-from . import sh
-from .config import ConfigLayout
-from .ports import PortReservation
+
 import carthage.network
 
-logger = logging.getLogger('carthage.vm')
+from carthage import deployment, sh
+from carthage.config import ConfigLayout
+from carthage.dependency_injection import *
+from carthage.image import  ImageVolume
+from carthage.machine import disk_config_from_model, Machine, SshMixin, ContainerCustomization, AbstractMachineModel
+from carthage.ports import PortReservation
+from carthage.setup_tasks import SetupTaskMixin, setup_task
+from carthage.utils import when_needed, memoproperty
 
 _resources_path = os.path.join(os.path.dirname(__file__), "resources")
 _templates = mako.lookup.TemplateLookup([_resources_path + '/templates'])
@@ -89,7 +86,7 @@ class Vm(Machine, SetupTaskMixin):
 
     @memoproperty
     def uuid(self):
-        from .modeling import CarthageLayout
+        from carthage.modeling import CarthageLayout
         layout = self.injector.get_instance(InjectionKey(CarthageLayout, _optional=True))
         if layout:
             layout_uuid = layout.layout_uuid
@@ -125,7 +122,7 @@ class Vm(Machine, SetupTaskMixin):
         await self.start_machine()
 
     async def write_config(self):
-        from .modeling import CarthageLayout
+        from carthage.modeling import CarthageLayout
         template = _templates.get_template("vm-config.mako")
         await self.resolve_networking()
         for i, link in self.network_links.items():
