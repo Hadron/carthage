@@ -120,7 +120,7 @@ class LocalPodmanContainerHost(PodmanContainerHost):
             pass  # Perhaps we should unmount, but we'd need a refcount to do that.
 
     async def podman(self, *args,
-               _bg=True, _bg_exc=False, _log=True, _fg=False):
+                     _bg=True, _bg_exc=False, _log=True, _fg=False, **kwargs):
         options = {}
         if _log and self.podman_log:
             options['_out']=str(self.podman_log)
@@ -128,7 +128,8 @@ class LocalPodmanContainerHost(PodmanContainerHost):
         result = sh.podman(
             *args,
             _fg=_fg,
-            **options)
+            **options,
+            **kwargs)
         if not _fg:
             return await result
         return result
