@@ -41,7 +41,7 @@ class PodmanContainerHost(AsyncInjectable):
         return self.injector.get_instance(InjectionKey("podman_log", _optional=True))
 
     def podman(self, *args,
-               _bg=True, _bg_exc=True):
+               _bg=True, _bg_exc=True, **kwargs):
         raise NotImplementedError
 
     def podman_nosocket(self, *args, **kwargs):
@@ -371,7 +371,7 @@ class RemotePodmanHost(PodmanContainerHost):
         self.local_socket = None
 
     async def podman(self, *args, _log=True,
-                     _bg=True, _bg_exc=False, _fg=False):
+                     _bg=True, _bg_exc=False, _fg=False, **kwargs):
         await self.start_container_host()
         options = {}
         if _log and self.podman_log:
@@ -381,7 +381,8 @@ class RemotePodmanHost(PodmanContainerHost):
             self.extra_args,
                 *args,
                 _fg=_fg,
-            **options)
+            **options,
+            **kwargs)
         if not _fg:
             return await result
         return result
@@ -449,7 +450,7 @@ class LocalPodmanSocket(PodmanContainerHost):
             'sshfs_local_podman_'))
 
     async def podman(self, *args,
-               _bg=True, _bg_exc=False, _log=True, _fg=False):
+               _bg=True, _bg_exc=False, _log=True, _fg=False, **kwargs):
         options = {}
         if _log and self.podman_log:
             options['_out']=str(self.podman_log)
@@ -458,7 +459,8 @@ class LocalPodmanSocket(PodmanContainerHost):
             '--remote',
             *args,
             _fg=_fg,
-            **options)
+            **options,
+            **kwargs)
         if not _fg:
             return await result
         return result
