@@ -1,0 +1,7 @@
+name: carthage.libvirt
+dependencies:
+  - deb: python3-libvirt
+    pypi: libvirt-python
+  - deb: zstd
+  - deb: dosfstools
+  - deb: fai-server
