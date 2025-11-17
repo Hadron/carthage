@@ -277,6 +277,19 @@ async def test_container_exec(ainjector):
     finally:
         await machine.delete()
 
+@async_test
+async def test_container_exec_stdin(ainjector):
+    l = await ainjector(podman_layout)
+    ainjector = l.ainjector
+    machine = l.foo.machine
+    try:
+        await machine.async_become_ready()
+        machine.stop_timeout = 1
+        async with machine.machine_running(ssh_online=False):
+            r = await machine.container_exec('base64', _in='test', _bg=True)
+            assert r.stdout == b'dGVzdA==\n'
+    finally:
+        await machine.delete()
 
 @async_test
 async def test_container_ssh(ainjector):
