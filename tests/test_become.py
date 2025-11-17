@@ -47,7 +47,7 @@ class Layout(modeling.CarthageLayout):
     @inject(base_image=None)
     class image(podman.PodmanImageModel):
         base_image = 'debian:latest'
-        oci_image_command = ['/bin/systemd']
+        oci_image_command = ['/sbin/init']
         oci_image_tag = 'localhost/debian:with_ssh'
         oci_interactive = True
 
@@ -63,7 +63,7 @@ class Layout(modeling.CarthageLayout):
                     'python3',
                     'sudo',
                     'rsync',
-                    'systemd')
+                    'systemd-sysv')
 
                 
     class machine(modeling.MachineModel):
