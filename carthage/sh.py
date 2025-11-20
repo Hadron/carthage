@@ -21,8 +21,8 @@ try:
         import warnings
         c = await _sh_context.ls(_async=True, _return_cmd=True)
         if not isinstance(c, _sh.RunningCommand):
-            verstr = _sh.get('__version__', 'unknown')
-            warnings.warn(f'This sh is too old to properly handle _async _return_cmd=True.  Declared sh.__version__ is {verstr}')
+            verstr = getattr(_sh, '__version__', 'unknown')
+            warnings.warn(f'This sh is too old to properly handle (_async=True, _return_cmd=True).  Declared sh.__version__ is {verstr}; recommend 2.2.1 or later, or at least 2.0.6')
             return True
         try:
             await _sh_context.false(_return_cmd=True, _async=True)
