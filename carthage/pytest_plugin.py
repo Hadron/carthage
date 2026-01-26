@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2025, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2025, 2026, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -13,7 +13,7 @@ import logging
 import pytest
 import yaml
 from dataclasses import replace, is_dataclass
-from. import base_injector, ConfigLayout
+from. import base_injector, ConfigLayout, InjectionKey
 from .dependency_injection import AsyncInjector
 
 
@@ -35,7 +35,10 @@ def test_parameters(pytestconfig):
 def pytest_collection_modifyitems(items):
     # This hook modifies items wrapped by @async_test to add fixtures used by the wrapped function
     # See the comment in that code for details
-
+    # It also guarantees there is a loop.
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    base_injector.add_provider(InjectionKey(asyncio.AbstractEventLoop), loop)
     for i in items:
         if isinstance(i, pytest.Function):
             if hasattr(i.function, '__signature__'):
