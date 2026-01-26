@@ -1,4 +1,4 @@
-# Copyright (C) 2020, 2021, Hadron Industries, Inc.
+# Copyright (C) 2020, 2021, 2026, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -9,8 +9,11 @@
 from __future__ import annotations
 import asyncio
 import contextlib
+import inspect
+import logging
 import weakref
-from .utils import possibly_async
+
+logger = logging.getLogger(__name__)
 
 
 class EventScope:
@@ -122,16 +125,16 @@ class EventScope:
                 # ignore the result
                 try:
                     future.result()
-                except BaseException:
+                except Exception:
                     pass
                 futures.remove(future)
             return callback
         if not isinstance(adl_keys, set):
             adl_keys = set(adl_keys)
         target_keys = {k} | adl_keys
-        result_futures = []
+        results = []
         if self.parent:
-            result_futures.append(self.parent.emit(
+            results.extend(self.parent.emit(
                 loop, k, event, target, adl_keys=adl_keys,
                 **kwargs))
         for ck in target_keys:
@@ -141,22 +144,34 @@ class EventScope:
                 continue
             for callback, (events, futures) in d.items():
                 if event in events:
-                    future = loop.create_task(
-                        possibly_async(callback(
+                    try:
+                        result = callback(
                             key=ck, event=event, target=target, *args,
-                            target_key=k, **kwargs)))
-                    result_futures.append(future)
-                    futures.add(future)
-                    future.add_done_callback(gen_callback(futures))
+                            target_key=k, **kwargs)
+                    except Exception:
+                        logger.exception(
+                            "Event callback failed: key=%r event=%r target=%r callback=%r",
+                            ck, event, target, callback)
+                        continue
+                    if inspect.isawaitable(result):
+                        if loop is None:
+                            # TODO: allow deferring async callbacks when no loop is available.
+                            logger.warning(
+                                "Skipping async event callback with no loop: key=%r event=%r target=%r callback=%r",
+                                ck, event, target, callback)
+                            if inspect.iscoroutine(result):
+                                result.close()
+                            continue
+                        future = loop.create_task(result)
+                        results.append(future)
+                        futures.add(future)
+                        future.add_done_callback(gen_callback(futures))
+                    else:
+                        results.append(result)
         del args
         del kwargs
 
-        if result_futures:
-            return asyncio.gather(*result_futures)
-        else:
-            future = loop.create_future()
-            future.set_result([])
-            return future
+        return results
 
 
 class EventListener:
@@ -211,16 +226,59 @@ class EventListener:
                    adl_keys=set(),
                    loop=None,
                    **kwargs):
+        '''
+        Dispatch *event* to listeners registered for *key* and any *adl_keys*.
+
+        :param loop: The event loop used to schedule async callbacks. If ``None``, async callbacks
+            are skipped. Sync callbacks are always invoked.
+        :return: ``None``. Results are not available from this method.
+
+        If *loop* is ``None``, this method falls back to ``self.loop`` when present. For
+        :class:`~carthage.dependency_injection.Injector` instances, ``self.loop`` resolves an
+        :class:`asyncio.AbstractEventLoop` from the injector hierarchy.
+        '''
         if loop is None:
             try:
                 loop = self.loop
             except AttributeError:
                 loop = None
-        return self._event_scope.emit(loop, key, event, target,
-                                      *args,
-                                      **kwargs,
-                                      adl_keys=adl_keys,
-                                      scope=self)
+        self._event_scope.emit(loop, key, event, target,
+                               *args,
+                               **kwargs,
+                               adl_keys=adl_keys,
+                               scope=self)
+        return None
+
+    async def emit_event_async(self, key, event, target,
+                               *args,
+                               adl_keys=set(),
+                               **kwargs):
+        '''
+        Dispatch *event* to listeners registered for *key* and any *adl_keys*, and
+        return their results.
+
+        This method always uses the running event loop and awaits any async callbacks.
+        Sync callback results are included directly, preserving listener order across
+        scopes. The returned list includes resolved async results in their original
+        positions.
+        '''
+        loop = asyncio.get_running_loop()
+        results = self._event_scope.emit(loop, key, event, target,
+                                         *args,
+                                         **kwargs,
+                                         adl_keys=adl_keys,
+                                         scope=self)
+        futures = []
+        future_indices = []
+        for idx, item in enumerate(results):
+            if asyncio.isfuture(item):
+                futures.append(item)
+                future_indices.append(idx)
+        if futures:
+            future_results = await asyncio.gather(*futures)
+            for idx, value in zip(future_indices, future_results):
+                results[idx] = value
+        return results
 
     @contextlib.contextmanager
     def event_listener_context(self, key, events, callback):
