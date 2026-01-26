@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2024, 2025, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2024, 2025, 2026, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -302,10 +302,12 @@ def carthage_main_setup(parser=None, unknown_ok=False, ignore_import_errors=Fals
 
 
 def carthage_main_run(func, *args, **kwargs):
-    loop = asyncio.get_event_loop()
-    from . import base_injector, AsyncInjector, shutdown_injector
+    from . import base_injector, AsyncInjector, shutdown_injector, InjectionKey
     from .config import inject_config
     inject_config(base_injector)
+    if not base_injector.loop:
+        base_injector.add_provider(InjectionKey(asyncio.AbstractEventLoop), asyncio.new_event_loop(), close=False)
+    loop = base_injector.loop
     ainjector = base_injector(AsyncInjector)
     try:
         return loop.run_until_complete(ainjector(func, *args, **kwargs))
