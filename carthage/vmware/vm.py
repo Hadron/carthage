@@ -208,7 +208,7 @@ class Vm(VmwareSpecifiedObject, Machine):
         return res
 
     async def start_machine(self):
-        loop = self.injector.get_instance(asyncio.AbstractEventLoop)
+        loop = self.ainjector.loop
         async with self._operation_lock:
             if not self.running:
                 logger.debug(f'Starting dependencies for {self.name}')
@@ -284,8 +284,8 @@ class VmTemplate(Vm):
         self.network_config = None
 
     @setup_task("create_clone_snapshot")
-    @inject(loop=asyncio.AbstractEventLoop)
-    async def create_clone_snapshot(self, loop):
+    async def create_clone_snapshot(self):
+        loop = self.ainjector.loop
         if self.clone_from_snapshot is None:
             raise SkipSetupTask
         t = self.mob.CreateSnapshot("template_snapshot", "Snapshot for template clones", False, True)

@@ -32,7 +32,6 @@ container_volume = InjectionKey('container-volume')
 
 
 @inject(image=InjectionKey(container_image, _ready=False),
-        loop=asyncio.AbstractEventLoop,
         network_config=InjectionKey(carthage.network.NetworkConfig, optional=True),
         injector=Injector)
 class Container(Machine, SetupTaskMixin):

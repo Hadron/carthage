@@ -92,7 +92,6 @@ class CarthageConsole(code.InteractiveConsole):
             'injector': base_injector,
             'instantiation_roots': instantiation_roots,
             'ainjector': base_injector(AsyncInjector),
-            'loop': asyncio.get_event_loop(),
             'attach_monitor': attach_event_monitor_to_console,
             'config': base_injector(ConfigLayout)
         }
@@ -332,7 +331,7 @@ def main():
     CarthageConsole.add_arguments(parser)
     args = carthage.utils.carthage_main_setup(parser)
     console.process_arguments(args)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.set_event_loop(asyncio.new_event_loop())
 
     async def run():
         await loop.run_in_executor(None, console.interact)

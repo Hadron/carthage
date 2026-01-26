@@ -165,7 +165,7 @@ def when_needed(wraps, *args, injector=None,
                 return self.resolved_obj
             if self.resolving:
                 return await asyncio.shield(self.resolving)
-            loop = self.ainjector.get_instance(asyncio.AbstractEventLoop)
+            loop = self.ainjector.loop
             self.__class__.resolving = loop.create_future()
             del loop
             kws = kwargs.copy()

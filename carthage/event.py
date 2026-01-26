@@ -214,8 +214,8 @@ class EventListener:
         if loop is None:
             try:
                 loop = self.loop
-            except BaseException:
-                loop = asyncio.get_event_loop()
+            except AttributeError:
+                loop = None
         return self._event_scope.emit(loop, key, event, target,
                                       *args,
                                       **kwargs,

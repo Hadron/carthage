@@ -112,7 +112,6 @@ base_injector.add_provider(carthage.vm.LibvirtDeployableFinder, allow_multiple=T
 
 base_injector.add_provider(ssh.SshKey)
 base_injector.add_provider(ssh.AuthorizedKeysFile)
-base_injector.add_provider(asyncio.get_event_loop(), close=False)
 base_injector.add_provider(KvStore)
 base_injector.add_provider(MacStore)
 base_injector.add_provider(ansible.AnsibleConfig)

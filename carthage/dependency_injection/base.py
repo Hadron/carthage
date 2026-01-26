@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2026, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -350,6 +350,14 @@ class Injector(Injectable, event.EventListener):
     def replace_provider(self, *args, **kwargs):
         return self.add_provider(*args, **kwargs, replace=True)
 
+    @property
+    def loop(self)-> asyncio.AbstractEventLoop | None:
+        '''
+        Returns the asyncio event loop that this hierarchy is using or None if not established yet.
+        Ideally, the calling application will run ``base_injector.replace_provider(InjectionKey(AbstractEventLoop), loop)`` for the loop in use.
+        '''
+        return self.get_instance(InjectionKey(asyncio.AbstractEventLoop, _optional=True))
+    
     def _get(self, k):
         return self._providers[k]
 
@@ -1326,7 +1334,7 @@ class AsyncInjectable(Injectable):
                 return
 
 
-@inject(loop=asyncio.AbstractEventLoop, injector=Injector)
+@inject( injector=Injector)
 class AsyncInjector(Injectable):
 
     '''An asynchronous injector.  AsyncInjector is not a subclass of
@@ -1338,10 +1346,9 @@ class AsyncInjector(Injectable):
 
 '''
 
-    def __init__(self, injector, loop):
+    def __init__(self, injector):
         self.injector = injector
         self.injector.replace_provider(self)
-        self.loop = loop
         # For methods that injector has but we do not, then call the method on our
         # injector.  This is a lot like inheritance but does not make us a
         # subclass.
@@ -1356,10 +1363,14 @@ class AsyncInjector(Injectable):
     def claim(self, claimed_by=True):
         if self.injector.is_claimed:
             return type(self)(injector=self.injector.claim(claimed_by),
-                              loop=self.loop)
+                              )
         else:
             assert self.injector.claim(claimed_by) is self.injector
             return self
+
+    @property
+    def loop(self):
+        return self.injector.loop
 
     def __repr__(self):
         return f'<Async Injector Injector: {repr(self.injector)}>'
@@ -1376,8 +1387,6 @@ class AsyncInjector(Injectable):
         keyword arguments do specify a dependency, they must satisfy the
         InjectionKey involved.
 '''
-        if not hasattr(self, 'loop'):
-            self.loop = self.get_instance(asyncio.AbstractEventLoop)
         try:
             res = self._instantiate(
                 cls, *args, **kwargs,
