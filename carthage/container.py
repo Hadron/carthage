@@ -195,10 +195,10 @@ class Container(Machine, SetupTaskMixin):
             except KeyError:
                 pass
         self.running = False
-        self.loop.call_soon_threadsafe(callback)
+        self.injector.loop.call_soon_threadsafe(callback)
 
     def done_future(self):
-        future = self.loop.create_future()
+        future = self.injector.loop.create_future()
         self._done_waiters.append(future)
         return future
 
@@ -214,7 +214,7 @@ class Container(Machine, SetupTaskMixin):
             m = r.search(data)
             if m:
                 try:
-                    self.loop.call_soon_threadsafe(cb, m, data)
+                    self.injector.loop.call_soon_threadsafe(cb, m, data)
                 except Exception:
                     logger.exception("Container {}: Error calling {}".format(
                         self.name, cb))
@@ -232,7 +232,7 @@ class Container(Machine, SetupTaskMixin):
             started_future.set_result(True)
         if self.running:
             return
-        started_future = self.loop.create_future()
+        started_future = self.injector.loop.create_future()
         self.find_output(r'\].*Reached target.*Basic System', started_callback, True)
         # run_container calls start_dependencies
         await super().start_machine()
