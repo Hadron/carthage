@@ -6,6 +6,8 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+import asyncio
+import logging
 import pytest
 from carthage.event import EventListener
 from carthage.pytest import *
@@ -23,7 +25,7 @@ async def test_event_register(loop):
         callback_called = 1
     listener.add_event_listener("foo", "event_1", callback)
     listener.loop = loop
-    await listener.emit_event("foo", "event_1", listener)
+    listener.emit_event("foo", "event_1", listener)
     assert callback_called == 1
 
 
@@ -37,8 +39,8 @@ async def test_event_adl_keys(loop):
         callback_called = 1
     listener.add_event_listener("foo", "event_1", callback)
     listener.loop = loop
-    await listener.emit_event("bar", "event_1", listener,
-                              adl_keys={'foo'})
+    listener.emit_event("bar", "event_1", listener,
+                        adl_keys={'foo'})
     assert callback_called == 1
 
 
@@ -54,11 +56,11 @@ async def test_event_scoping(loop):
         nonlocal callback_called
         callback_called = 1
     injector.add_event_listener(key, "foo", callback)
-    await injector2.emit_event(key, "foo", injector2)
+    injector2.emit_event(key, "foo", injector2)
     assert callback_called == 1
     callback_called = 0
     injector2.add_event_listener(key, "bar", callback)
-    await injector2.emit_event(key, "foo", injector2)
+    injector2.emit_event(key, "foo", injector2)
     assert callback_called == 1
 
 
@@ -70,3 +72,83 @@ def test_multiple_scope_breaks(loop):
     key = InjectionKey("event")
     injector3.add_event_listener(key, "foo", callback)
     injector2.add_event_listener(key, "foo", callback)
+
+
+@async_test
+async def test_emit_event_async_results_order(loop):
+    listener = EventListener()
+
+    def cb1(**kwargs):
+        return "sync1"
+
+    async def cb2(**kwargs):
+        await asyncio.sleep(0)
+        return "async2"
+
+    def cb3(**kwargs):
+        return "sync3"
+
+    listener.add_event_listener("foo", "event_1", cb1)
+    listener.add_event_listener("foo", "event_1", cb2)
+    listener.add_event_listener("foo", "event_1", cb3)
+
+    results = await listener.emit_event_async("foo", "event_1", listener)
+    assert results == ["sync1", "async2", "sync3"]
+
+
+@async_test
+async def test_emit_event_fallback_running_loop(loop):
+    listener = EventListener()
+    callback_called = 0
+
+    async def callback(**kwargs):
+        nonlocal callback_called
+        await asyncio.sleep(0)
+        callback_called += 1
+
+    listener.add_event_listener("foo", "event_1", callback)
+    listener.emit_event("foo", "event_1", listener)
+    futures = listener.remove_event_listener("foo", callback)
+    assert futures
+    await asyncio.gather(*futures)
+    assert callback_called == 1
+
+
+def test_emit_event_sync_no_loop():
+    listener = EventListener()
+    callback_called = 0
+
+    def callback(**kwargs):
+        nonlocal callback_called
+        callback_called += 1
+
+    listener.add_event_listener("foo", "event_1", callback)
+    listener.emit_event("foo", "event_1", listener, loop=None)
+    assert callback_called == 1
+
+
+def test_emit_event_skips_async_without_loop(caplog):
+    listener = EventListener()
+    callback_called = 0
+
+    async def callback(**kwargs):
+        nonlocal callback_called
+        callback_called += 1
+
+    listener.add_event_listener("foo", "event_1", callback)
+    with caplog.at_level(logging.WARNING, logger="carthage.event"):
+        listener.emit_event("foo", "event_1", listener, loop=None)
+    assert callback_called == 0
+    assert any("Skipping async event callback" in record.message for record in caplog.records)
+
+
+def test_emit_event_logs_callback_exception(caplog):
+    listener = EventListener()
+
+    def callback(**kwargs):
+        raise ValueError("boom")
+
+    listener.add_event_listener("foo", "event_1", callback)
+    with caplog.at_level(logging.ERROR, logger="carthage.event"):
+        listener.emit_event("foo", "event_1", listener)
+    assert any("Event callback failed" in record.message for record in caplog.records)

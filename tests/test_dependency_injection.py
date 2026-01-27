@@ -25,8 +25,10 @@ def injector():
 
 
 @pytest.fixture()
-def a_injector(injector, loop):
-    a_injector = injector(dependency_injection.AsyncInjector, loop=loop)
+def a_injector(injector):
+    injector = injector.claim()
+    # The second claim forces a copy.
+    a_injector = injector.claim()(dependency_injection.AsyncInjector, )
     yield a_injector
     a_injector.close()
 

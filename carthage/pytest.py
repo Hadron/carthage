@@ -99,14 +99,6 @@ def async_test(t):
     Pytest style injectors.
 
     '''
-    # This is messy because Pytest's introspection logic does not
-    # respect inspect.Signature.  So we don't actually include the
-    # _wrapped_ item and explicitly mark tests with pytest.usefixture
-    # to indicate which fixtures are required.  However, we need to
-    # depend on a pytest_collect_modifyitems hook in
-    # carthage.pytest_plugin to make the fixtures available to the
-    # function.
-
     sig = inspect.signature(t)
     orig_loop = True
     orig_ainjector = True
@@ -142,7 +134,7 @@ def async_test(t):
             params.append(inspect.Parameter(name="ainjector", kind=inspect._KEYWORD_ONLY))
     sig = sig.replace(parameters=params)
     wrapper.__signature__ = sig
-    pytest.mark.usefixtures(*sig.parameters.keys())(wrapper)
+    # Avoid pytestmark on fixtures; rely on __signature__ for fixture discovery.
     del wrapper.__dict__['__wrapped__']
     wrapper.place_as = t
     return wrapper

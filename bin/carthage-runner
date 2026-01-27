@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2025, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2025, 2026, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -140,7 +140,7 @@ def warn_on_dns():
     
 ainjector = base_injector(AsyncInjector)
 
-loop = asyncio.get_event_loop()
+
 machine_queue = asyncio.Queue()
 
 parser = carthage.utils.carthage_main_argparser(add_help=False)
@@ -200,6 +200,8 @@ if 'TMUX' not in os.environ and  args.tmux:
     
 
 layout = None
+loop = asyncio.new_event_loop()
+base_injector.add_provider(loop, close=False)
 loop.run_until_complete(setup_layout())
 
 if layout is None and not args.plugins:

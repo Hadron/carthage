@@ -92,7 +92,6 @@ class CarthageConsole(code.InteractiveConsole):
             'injector': base_injector,
             'instantiation_roots': instantiation_roots,
             'ainjector': base_injector(AsyncInjector),
-            'loop': asyncio.get_event_loop(),
             'attach_monitor': attach_event_monitor_to_console,
             'config': base_injector(ConfigLayout)
         }
@@ -102,7 +101,8 @@ class CarthageConsole(code.InteractiveConsole):
         exec(compile(res_str, resource, mode="exec"), self.locals)
 
     def __init__(self, locals=None, extra_locals=None,
-                 history_file="~/.carthage_history"):
+                 history_file="~/.carthage_history",
+                 injector=base_injector):
         if locals is None:
             locals = self.default_locals()
         if extra_locals is not None:
@@ -114,7 +114,7 @@ class CarthageConsole(code.InteractiveConsole):
         self.completed_keys = []
         self.history = {}
         self.history_num = 0
-        self.loop = asyncio.get_event_loop()
+        self.injector = injector
         if 'h' in self.locals and self.locals['h'] is not self.history:
             raise NotImplementedError(
                 "When replacing `h', it is unclear whether you want to link to the async history object or disable it.")
@@ -130,7 +130,10 @@ class CarthageConsole(code.InteractiveConsole):
         self.history_file = history_file
         self.compile.compiler.flags |= ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
                 
-
+    @property
+    def loop(self):
+        return self.injector.loop
+    
     def interact(self, *args, **kwargs):
         kwargs  = dict(kwargs)
         if self.subcommands and 'banner' not in kwargs:
@@ -332,7 +335,7 @@ def main():
     CarthageConsole.add_arguments(parser)
     args = carthage.utils.carthage_main_setup(parser)
     console.process_arguments(args)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.set_event_loop(asyncio.new_event_loop())
 
     async def run():
         await loop.run_in_executor(None, console.interact)
