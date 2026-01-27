@@ -96,6 +96,24 @@ async def test_emit_event_async_results_order(loop):
     assert results == ["sync1", "async2", "sync3"]
 
 
+@async_test
+async def test_emit_event_fallback_running_loop(loop):
+    listener = EventListener()
+    callback_called = 0
+
+    async def callback(**kwargs):
+        nonlocal callback_called
+        await asyncio.sleep(0)
+        callback_called += 1
+
+    listener.add_event_listener("foo", "event_1", callback)
+    listener.emit_event("foo", "event_1", listener)
+    futures = listener.remove_event_listener("foo", callback)
+    assert futures
+    await asyncio.gather(*futures)
+    assert callback_called == 1
+
+
 def test_emit_event_sync_no_loop():
     listener = EventListener()
     callback_called = 0
