@@ -1149,6 +1149,8 @@ class ContainerfileImage(OciImage, no_auto_inject=True):
         inspect_json = json.loads(str(inspect_result.stdout, 'utf-8'))
         created = dateutil.parser.isoparse(inspect_json[0]['Created']).timestamp()
         process_inspect_result(self, inspect_json[0])
+        info = self.image_info = inspect_json[0]
+        self.id = info['Id']
         hadron_mtime_str = inspect_json[0]['Annotations'].get('com.hadronindustries.carthage.image_mtime')
         if hadron_mtime_str:
             hadron_mtime = dateutil.parser.isoparse(hadron_mtime_str).timestamp()
