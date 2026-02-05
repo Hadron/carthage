@@ -53,7 +53,7 @@ class Layout(modeling.CarthageLayout):
         oci_image_tag = 'localhost/debian:with_ssh'
         oci_interactive = True
 
-        class cust(FilesystemCustomization):
+        class cust(MachineCustomization):
             description = 'install software'
 
             @setup_task('install systemd and ssh')
