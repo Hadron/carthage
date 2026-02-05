@@ -57,12 +57,12 @@ These steps prefer OS packages so `bin/carthage install_dependencies` can run su
 
 ## Running tests in Codex CLI
 
-When running in Codex CLI, use privileged mode (escape the sandbox) to avoid PTY exhaustion. Use a command that skips tests that require `sudo` or host-level container/VM capabilities (this is the set verified in Codex Cloud):
+When running in Codex CLI, use privileged mode (escape the sandbox) to avoid PTY exhaustion. Use a command that skips tests that require `sudo` or host-level container/VM capabilities. Locally, we also include podman `local_socket` tests:
 
 ```sh
 PYTHONPATH=$(pwd) pytest -v \
   --carthage-config=build_test/authorized.yml \
-  -k "not no_rootless and not test_pki and not requires_podman_pod and not podman and not container and not vm and not image_unpack and not become" \
+  -k "not test_pki and not requires_podman_pod and (not test_podman or local_socket) and not container and not vm and not image_unpack" \
   tests
 ```
 
@@ -85,4 +85,3 @@ As more tests become green in the cloud environment, remove `-k` filters to expa
 - When making code changes in Codex Cloud, run tests (at least one of the commands above) and report results.
 - Document any test failures in the PR summary with the exact command used.
 - For local changes running tests is also desired unless instructions imply quick turn around.
-
