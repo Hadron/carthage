@@ -41,6 +41,8 @@ def ainjector(loop, ainjector, enable_podman):
 class Layout(modeling.CarthageLayout):
 
     add_provider(modeling.machine_implementation_key, dependency_quote(podman.PodmanContainer))
+    add_provider(podman.podman_container_host, podman.LocalPodmanSocket)
+    
     #add_provider(ansible.ansible_log, '/tmp/ansible.log')
 
     @modeling.provides(oci.oci_container_image)
