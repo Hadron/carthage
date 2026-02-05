@@ -71,6 +71,7 @@ include = ["carthage*"]
     "resources/fai/**",
     "resources/templates/**",
     "extra_packages/resources/*",
+    "libvirt/resources/**",
 ]
 
 "carthage.podman" = ["carthage_plugin.yml"]
