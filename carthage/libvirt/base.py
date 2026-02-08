@@ -32,7 +32,6 @@ from carthage.utils import when_needed, memoproperty
 _resources_path = os.path.join(os.path.dirname(__file__), "resources")
 _templates = mako.lookup.TemplateLookup([_resources_path + '/templates'])
 
-
 vm_image_key = InjectionKey('vm-image')
 
 #dataclasses.dataclass
@@ -559,4 +558,4 @@ def vm_as_image(key):
         return vm.volume
     return image_volume
 
-__all__ = ('VM', 'Vm', 'vm_as_image', 'InstallQemuAgent', 'VirtiofsMount')
+__all__ = ('VM', 'Vm', 'vm_as_image', 'InstallQemuAgent', 'VirtiofsMount', 'vm_image_key')

@@ -487,8 +487,7 @@ class VmInventory(Injectable):
 # we want to look up with a role for finding in the injector
 inject(template=InjectionKey(Vm, role='template', _optional=True, _ready=False))(Vm)
 
-from carthage.vm import vm_image_key
-
+from carthage.libvirt import vm_image_key
 
 @inject(image=vm_image_key)
 class vm_template_from_image(AsyncInjectable):
