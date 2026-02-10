@@ -18,37 +18,9 @@ Keep this file focused on:
 To set up a fresh checkout of Carthage, follow these steps. Setting up a fresh setup is expensive; only do this if explicitly instructed.
 These steps prefer OS packages so `bin/carthage install_dependencies` can run successfully.
 
-1. Install system packages (Ubuntu/Debian example):
+1. Install system packages (Ubuntu/Debian) and run `carthage install_dependencies` both accomplished using `bootstrap.sh`
    ```sh
-   sudo apt update
-   sudo apt install -y \
-     ansible \
-     btrfs-progs \
-     fai-server \
-     fai-setup-storage \
-     git \
-     genisoimage \
-     kpartx \
-     python3-dev \
-     python3-dateutil \
-     python3-lmdb \
-     python3-mako \
-     python3-netifaces \
-     python3-pip \
-     python3-pytest \
-     python3-sh \
-     python3-yaml \
-     podman \
-     qemu-system-x86 \
-     qemu-utils \
-     socat \
-     sshfs \
-     systemd-container \
-     xorriso
-   ```
-2. Install Carthage dependencies via OS packages/plugins:
-   ```sh
-   sudo PYTHONPATH=$(pwd) ./bin/carthage install_dependencies
+   ./bootstrap.sh
    ```
 
 ## Running tests
