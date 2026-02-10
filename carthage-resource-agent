@@ -28,11 +28,11 @@ import ocf
 from carthage import *
 from carthage.modeling import *
 from carthage.utils import file_locked
-import carthage, carthage.container, carthage.vm
+import carthage, carthage.container, carthage.libvirt
 
 carthage.sh.logger = ocf.logger
 carthage.container.logger = ocf.logger
-carthage.vm.logger = ocf.logger
+carthage.libvirt.logger = ocf.logger
 carthage.network.logger = ocf.logger
 carthage.setup_tasks.logger = ocf.logger
 

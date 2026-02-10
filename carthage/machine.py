@@ -393,7 +393,7 @@ class Machine(NetworkedMixin, AsyncInjectable, SshMixin):
 
     * :class:`Locally run containers <carthage.container.Container>`
 
-    * :class:`Local VMs <carthage.vm.Vm>` using KVM
+    * :class:`Local VMs <carthage.libvirt.Vm>` using KVM
 
     * Vmware :class:`~carthage.vmware.vm.Vm`
     * Containers or VMs run on other infrastructure.
