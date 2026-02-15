@@ -371,7 +371,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
     #:Extra options (as a list) to be passed into podman create
     @memoproperty
     def podman_options(self):
-        '''Extra options to be passed into podman create as a list
+        '''Extra options to be passed into podman create as Ra list
         '''
         try:
             return self.model.podman_options
@@ -545,7 +545,7 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             self.running = False
             await super().stop_machine()
 
-    def container_exec(self, *args, _user=None, _fg=False, **kwargs):
+    def container_exec(self, *args, _user=None, _cwd=None, _fg=False, **kwargs):
         '''
 Execute a command in a running container and return stdout.  This function intentionally has a differentname than :meth:`carthage.container.Container.container_command` because that method does not expect the container to be running.
 '''
@@ -561,9 +561,13 @@ Execute a command in a running container and return stdout.  This function inten
             interactive = ['-i']
         else:
             interactive = []
+        workdir = []
+        if _cwd is not None:
+            workdir = ['--workdir', str(_cwd)]
         result = self.podman(
             'container', 'exec',
             *interactive,
+            *workdir,
             self.full_name,
             *args,
             _log=False, _fg=_fg,
@@ -1312,4 +1316,3 @@ async def cache_podman_image(tag_func, factory, *, ainjector, container_host):
     return await container_host.ainjector.get_instance_async(image_key)
 
 __all__ += ['cache_podman_image']
-

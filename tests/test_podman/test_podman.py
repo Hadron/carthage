@@ -278,6 +278,20 @@ async def test_container_exec(ainjector):
         await machine.delete()
 
 @async_test
+async def test_run_command_cwd(ainjector):
+    l = await ainjector(podman_layout)
+    ainjector = l.ainjector
+    machine = l.foo.machine
+    try:
+        await machine.async_become_ready()
+        machine.stop_timeout = 1
+        async with machine.machine_running(ssh_online=False):
+            result = await machine.run_command('pwd', _cwd='/tmp')
+            assert str(result.stdout, 'utf-8').strip() == '/tmp'
+    finally:
+        await machine.delete()
+
+@async_test
 async def test_container_exec_stdin(ainjector):
     l = await ainjector(podman_layout)
     ainjector = l.ainjector
