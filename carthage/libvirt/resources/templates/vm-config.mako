@@ -150,9 +150,28 @@ def is_vnc():
     </graphics>
 % endif
 %if is_vnc():
-    <graphics type='vnc' >
-      <listen type='socket'  />
-      <audio id='1' />
+<%
+import re
+m = re.match(r"vnc:(ws:\/\/)?((\d{1,3}\.){3}\d{1,3})?:(\d+)$", console_needed)
+proto = None
+addr = None
+port = None
+if m is not None:
+    proto, addr, _, port = m.groups()
+%>
+    % if proto == "ws://":
+    <graphics type='vnc' websocket='${port}'>
+    % elif port:
+    <graphics type='vnc' port='${port}'>
+    % else:
+    <graphics type='vnc'>
+    % endif
+    % if port:
+      <listen type='address' address='${address if address else '127.0.0.1'}'/>
+    % else:
+      <listen type='socket'/>
+    % endif
+      <audio id='1'/>
     </graphics>
 <channel type="qemu-vdagent">
   <source>
