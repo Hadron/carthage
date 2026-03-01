@@ -167,7 +167,7 @@ if m is not None:
     <graphics type='vnc'>
     % endif
     % if port:
-      <listen type='address' address='${address if address else '127.0.0.1'}'/>
+      <listen type='address' address='${addr if addr else '127.0.0.1'}'/>
     % else:
       <listen type='socket'/>
     % endif
