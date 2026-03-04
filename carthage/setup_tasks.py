@@ -238,6 +238,7 @@ class TaskWrapperBase:
 
     description: str
     order: int = dataclasses.field(default_factory=_inc_task_order)
+    check_source_time: bool = dataclasses.field(default=True)
     invalidator_func = None
     check_completed_func = None
     hash_func: typing.Callable = staticmethod(lambda self: "")
@@ -405,10 +406,15 @@ class TaskWrapperBase:
             if actual_hash_contents != hash_contents:
                 obj.logger_for().info(f'Task {self.description} invalidated by hash_func() change from `{_h(hash_contents)}` to `{_h(actual_hash_contents)}`; last run {_iso_time(last_run)}')
                 return (True, dependency_last_run)
-        if source_time > last_run:
-            obj.logger_for().debug(
-                f'Source of task {self.description} modified at {_iso_time(source_time)} more recently than last run at {_iso_time(last_run)}')
-            return (True, last_run)
+
+        if self.check_source_time is False:
+            obj.logger_for().debug(f'Skip source_time check for task \'{self.description}\' because check_source_time=False')
+        else:
+            if source_time > last_run:
+                obj.logger_for().debug(f'Source of task \'{self.description}\' '
+                                       f'modified at {_iso_time(source_time)} more recently than last run at {_iso_time(last_run)}')
+                return (True, last_run)
+
         if self.invalidator_func and run_methods:
             if self.dependencies_always and introspection_context:
                 await introspection_context.call_dependencies_once()
@@ -544,7 +550,7 @@ class TaskWrapper(TaskWrapperBase):
     def __setattr__(self, a, v):
         if a in ('func',
                  'dependencies_always', 'stamp', 'order',
-                 'invalidator_func', 'check_completed_func', 'hash_func', '_source_time', 'source_time') or a in self.__class__.extra_attributes:
+                 'invalidator_func', 'check_completed_func', 'hash_func', '_source_time', 'source_time', 'check_source_time') or a in self.__class__.extra_attributes:
             return super().__setattr__(a, v)
         else:
             return setattr(self.func, a, v)
@@ -572,7 +578,8 @@ class TaskMethod:
 
 def setup_task(description, *,
                order=None,
-               before=None):
+               before=None,
+               check_source_time=None):
     '''Mark a method as a setup task.  Describe the task for logging.  Must be in a class that is a subclass of
     SetupTaskMixin.  Usage::
 
@@ -582,6 +589,12 @@ def setup_task(description, *,
     :param order: Overrides the order in which tasks are run; an integer; lower numbered tasks are run first, higher numbered tasks are run later.  It is recommended that task ordering be a total ordering, but this is not a requirement.  It is an error if both *order* and *before* are set.
 
     :param before: Run this task before the task referenced in *before*.
+
+    :param check_source_time: Can be used to disable source time check as follows::
+
+        @setup_task("ignore source updates", check_source_time=False)
+        async def ignore_source_updates(self):
+            ...
 
     '''
     global _task_order
@@ -597,6 +610,8 @@ def setup_task(description, *,
         kws = {}
         if order:
             kws['order'] = order
+        if check_source_time is not None:
+            kws['check_source_time'] = check_source_time
         t = TaskWrapper(func=fn, description=description, **kws)
         return t
     return wrap
