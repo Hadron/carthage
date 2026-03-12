@@ -216,6 +216,9 @@ def permute_identifier(id, maxlen):
 
 
 def add_carthage_arguments(parser):
+    parser.add_argument('--debug',
+                        help='Enable debug logging',
+                        action='store_true')
     parser.add_argument('--config',
                         metavar="file",
                         default=[],
@@ -270,7 +273,7 @@ def carthage_main_setup(parser=None, unknown_ok=False, ignore_import_errors=Fals
     root_logger = logging.getLogger()
     console_handler = logging.StreamHandler()
     root_logger.addHandler(console_handler)
-    root_logger.setLevel('INFO')
+    root_logger.setLevel('DEBUG' if args.debug else 'INFO')
     container_logger = logging.getLogger('carthage.container')
     container_logger.addHandler(logging.FileHandler('container.log', delay=True))
     container_logger.setLevel(10)
