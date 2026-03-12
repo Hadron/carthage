@@ -14,6 +14,7 @@ import argparse
 import code
 import collections.abc
 import concurrent.futures
+import logging
 import functools
 import shlex
 import re
@@ -29,6 +30,8 @@ import carthage
 import carthage.utils
 from carthage import base_injector, ConfigLayout
 from carthage.dependency_injection import *
+
+logger = logging.getLogger("carthage.console")
 
 __all__ = []
 
@@ -55,6 +58,47 @@ class EventMonitor:
 
 def attach_event_monitor_to_console(injector):
     return EventMonitor(injector)
+
+
+class HandleAsyncCompleter(rlcompleter.Completer):
+    """Handle completions where AsyncRequired is raised
+    """
+    def acomplete(self, text, state):
+        logger.debug(f"'acomplete' called with text:'{text}' state:{state}")
+        if state == 0:
+            attrs = text.split('.')
+            f = attrs.pop(0)
+            l = attrs.pop(-1)
+            noprefix = '_'
+            match l:
+                case '_':
+                    noprefix = '__'
+                case '__':
+                    noprefix = None
+
+            # get the object we're completing
+            # remember 'l' could be ''
+            o = functools.reduce(getattr, [self.namespace[f]] + attrs)
+            self.matches = list(
+                # this is ok because we want the trailing '.' in the return if l==''
+                map(lambda x: ".".join([f, *attrs, x]),
+                filter(lambda x: x.startswith(l) if len(l) > 0 else True,
+                filter(lambda x: not x.startswith(noprefix) if noprefix is not None else True, dir(o)))))
+
+        try:
+            return self.matches[state]
+        except IndexError:
+            return None
+
+    def complete(self, text, state):
+        try:
+            return super().complete(text, state)
+        except carthage.dependency_injection.base.AsyncRequired as e:
+            logger.debug(f"'completer.complete' raised AsyncRequired for text:'{text}' state:{state}.")
+            try:
+                return self.acomplete(text, state)
+            except Exception as e:
+                logger.error(f"Exception from 'acomplete' {str(e)}")
 
 
 class CarthageConsole(code.InteractiveConsole):
@@ -146,7 +190,7 @@ class CarthageConsole(code.InteractiveConsole):
         self.orig_displayhook = sys.displayhook
 
         sys.displayhook = self.displayhook
-        completer = rlcompleter.Completer(self.locals)
+        completer = HandleAsyncCompleter(self.locals)
         readline.set_completer(completer.complete)
         readline.parse_and_bind('tab: complete')
 
