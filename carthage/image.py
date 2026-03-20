@@ -451,6 +451,8 @@ class ImageVolume(SetupTaskMixin, AsyncInjectable):
             else: # No base image
                 if not self.size:
                     raise RuntimeError('Cannot create unless size is set')
+                if not isinstance(self.size, int):
+                    raise ValueError(f"{self} expected integer for size but found: '{self.size}'")
                 btrfs_touch(self.path)
                 await sh.qemu_img(
                     'create',
