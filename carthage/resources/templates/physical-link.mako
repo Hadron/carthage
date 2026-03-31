@@ -5,6 +5,7 @@
 <%
 if not link.mac: raise NotNeeded
 %>\
+Type=ether
 MACAddress=${link.mac}
 [Link]
 Name=${link.interface}
