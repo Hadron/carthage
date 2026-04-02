@@ -7,5 +7,5 @@ dependencies:
   - deb: fai-server
   - deb: libguestfs-tools
   - deb: python3-guestfs
-  pypi: guestfs
+    pypi: guestfs
   
