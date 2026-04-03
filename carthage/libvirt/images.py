@@ -1,4 +1,4 @@
-# Copyright (C) 2025, Hadron Industries, Inc.
+# Copyright (C) 2026, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -137,7 +137,13 @@ class CloudInitCustomization(FilesystemCustomization):
             "install",
             "cloud-init",
             "cloud-initramfs-growroot",
+            "netplan.io",
         )
+        await self.run_command(
+            'systemctl',
+            'enable',
+            'systemd-networkd',)
+        
 
     @setup_task("Install cloud-init config files")
     def install_cloud_init_files(self):
