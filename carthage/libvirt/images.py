@@ -120,6 +120,19 @@ def _truncate_if_exists(path: Path) -> bool:
     return True
 
 
+def _require_guestfs_appliance_path() -> None:
+    if (
+        os.environ.get("_CONTAINERS_USERNS_CONFIGURED")
+        and os.geteuid() == 0
+        and not os.environ.get("LIBGUESTFS_PATH")
+    ):
+        raise RuntimeError(
+            "libguestfs is running as namespaced root without LIBGUESTFS_PATH; "
+            "build a fixed guestfs appliance and set LIBGUESTFS_PATH before "
+            "running image conversion"
+        )
+
+
 class NoRootCustomization(FilesystemCustomization):
 
     description = "Disable root password and permit su via pam"
@@ -262,6 +275,7 @@ def create_efi_disk(path: str, size_mib: int):
     space allocated to a Linux native filesystem (btrfs).
     """
 
+    _require_guestfs_appliance_path()
     import guestfs
 
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -298,6 +312,7 @@ def create_efi_disk(path: str, size_mib: int):
 
 
 def _guestfs_handle(image_path: str | Path):
+    _require_guestfs_appliance_path()
     import guestfs
 
     g = guestfs.GuestFS(python_return_dict=True)
