@@ -71,6 +71,29 @@ def ainsl(path: str | Path, pattern: str, line: str | None = None) -> bool:
     return True
 
 
+def _set_shell_assignment(path: Path, key: str, value: str) -> bool:
+    path = Path(path)
+    _ensure_parent(path)
+    assignment = f'{key}="{value}"'
+    if path.exists():
+        lines = path.read_text().splitlines()
+    else:
+        lines = []
+    changed = False
+    for index, current in enumerate(lines):
+        if current.startswith(f"{key}="):
+            if current != assignment:
+                lines[index] = assignment
+                changed = True
+            break
+    else:
+        lines.append(assignment)
+        changed = True
+    if changed:
+        path.write_text("\n".join(lines) + "\n")
+    return changed
+
+
 def _clear_shadow_password(path: Path, username: str) -> bool:
     if not path.exists():
         return False
@@ -117,8 +140,13 @@ class SerialCustomization(FilesystemCustomization):
 
     description = "Enable grub serial console defaults"
 
-    @setup_task("Set GRUB_TERMINAL=console")
-    def set_grub_terminal(self):
+    @setup_task("Set grub serial console")
+    async def set_grub_terminal(self):
+        _set_shell_assignment(
+            self.path / "etc/default/grub",
+            "GRUB_CMDLINE_LINUX",
+            "ro console=tty1 console=ttyS0,115200n81",
+        )
         ainsl(self.path / "etc/default/grub", r"^GRUB_TERMINAL=console")
 
 
