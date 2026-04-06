@@ -178,6 +178,7 @@ class CloudInitCustomization(FilesystemCustomization):
             "install",
             "cloud-init",
             "cloud-initramfs-growroot",
+            "btrfs-progs",
             "netplan.io",
         )
         await self.run_command(
