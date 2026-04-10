@@ -5,6 +5,15 @@ memory_mb = getattr(model, 'memory_mb', 8192)
 cpus = getattr(model, 'cpus', 1)
 nested_virt = getattr(model, 'nested_virt', False)
 firmware = getattr(model, 'firmware_type', 'efi')
+arch = getattr(model, 'architecture', 'x86_64')
+emulator_type = 'kvm'
+# We ought to detect if we are running on arm for real cross-platform but that is not implemented yet.
+match arch:
+    case 'x86_64':
+        machine = 'pc-q35-9.0'
+    case 'aarch64':
+        machine = 'virt-9.2'
+        emulator_type = 'qemu'
 disk_cache = getattr(model, 'disk_cache', 'writethrough')
 def is_spice():
     if console_needed is True or (isinstance(console_needed, str) and console_needed.startswith('spice')):
@@ -17,7 +26,7 @@ def is_vnc():
     return False
 
 %>
-<domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
+<domain type='${emulator_type}' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
   <name>${name}</name>
   <uuid>${uuid}</uuid>
   <metadata>
@@ -32,15 +41,21 @@ def is_vnc():
 %endif
 
   <vcpu placement='static' >${cpus}</vcpu>
-  <cpu mode='host-model'>
+%if emulator_type == 'kvm':
+<cpu mode='host-model'>
   <topology sockets='1' cores='${cpus}' threads='1' />
      %if nested_virt:
      <feature policy='require' name='vmx' />
      %endif
 </cpu>
+%elif arch == 'aarch64':
+<cpu mode="custom" match="exact" check="none">
+    <model fallback="allow">cortex-a57</model>
+  </cpu>
+%endif
 <os ${"firmware='efi'" if firmware.startswith('efi') else ""} >
-    <type arch='x86_64' machine='pc-q35-9.0'>hvm</type>
-    %if firmware.startswith('efi'):
+    <type arch='${arch}' machine='${machine}'>hvm</type>
+    %if firmware.startswith('efi') and arch == 'x86_64':
     <firmware>
         %if firmware == 'efi-enrolled':
         <feature enabled='yes' name='enrolled-keys'/>
@@ -49,11 +64,13 @@ def is_vnc():
     </firmware>
     <loader readonly='yes' secure='yes' />
     %endif
+%if arch == 'x86_64':
     <bios useserial='yes'/>
-
+%endif
     <bootmenu enable='yes'/>
   </os>
-  <features>
+%if arch=='x86_64':
+<features>
     <acpi/>
     <apic/>
     <hyperv mode='custom'>
@@ -65,21 +82,25 @@ def is_vnc():
     <smm state='on'/>
     <ps2 state='off'/>
   </features>
-  <clock offset='utc'>
+%endif
+<clock offset='utc'>
     <timer name='rtc' tickpolicy='catchup'/>
     <timer name='pit' tickpolicy='delay'/>
-    <timer name='hpet' present='no'/>
+%if arch == 'x86_64':
+<timer name='hpet' present='no'/>
     <timer name='hypervclock' present='yes'/>
-  </clock>
+%endif
+</clock>
   <on_poweroff>destroy</on_poweroff>
   <on_reboot>restart</on_reboot>
+  %if arch == 'x86_64':
   <pm>
     <suspend-to-mem enabled='no'/>
     <suspend-to-disk enabled='no'/>
   </pm>
+%endif
   <devices>
-    <emulator>/usr/bin/kvm</emulator>
-%for disk_num, disk in enumerate(disk_config):
+    %for disk_num, disk in enumerate(disk_config):
     <disk type='${disk.source_type}' device='${disk.target_type}'>
       <driver name='qemu' type='${disk.driver}' cache='${disk.cache}' discard='unmap'/>
 %if hasattr(disk, 'path'):
@@ -97,7 +118,7 @@ def is_vnc():
 %endfor
 <controller type='scsi' model='virtio-scsi' />
     <controller type='sata' index='0' />
-%if getattr(model, 'hardware_tpm', True):
+%if getattr(model, 'hardware_tpm', (arch == 'x86_64')):
     <tpm model='tpm-crb'>
       <backend type='emulator' version='2.0'/>
     </tpm>
@@ -129,7 +150,9 @@ def is_vnc():
     <console type='pty'>
       <target type='serial' port='0'/>
     </console>
+    %if arch == "x86_64":
     <input type='keyboard' bus='usb'/>
+    %endif
     %if is_spice() or is_vnc():
     <input type='tablet' bus='usb'/>
     <sound model='ich9'>
