@@ -187,6 +187,8 @@ class ContainerfileImageModel(ContainerfileImage, InjectableModel, no_auto_injec
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         if tag := getattr(cls, 'oci_image_tag', None):
+            if tag == 'localhost/nginx':
+                pass # breakpoint()
             provides(InjectionKey(OciImage, tag=tag))(cls)
                      
 

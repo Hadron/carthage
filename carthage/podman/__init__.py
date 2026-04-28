@@ -11,7 +11,7 @@ __all__ = []
 
 import carthage.deployment
 from .base import *
-__all__ += ['PodmanPod', 'PodmanContainer', 'PodmanImage',
+__all__ += ['PodmanPod', 'PodmanContainer', 'PodmanImage', 'PodmanSecret',
             'podman_push_images',
             'PodmanFromScratchImage', 'podman_image_volume_key',
             'image_layer_task', 'ContainerfileImage', 'PodmanVolume', 'cache_podman_image']
