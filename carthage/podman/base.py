@@ -7,6 +7,8 @@
 # LICENSE for details.
 
 from __future__ import annotations
+from enum import Enum
+import dataclasses
 import sys
 import asyncio
 import contextlib
@@ -43,6 +45,14 @@ def podman_port_option(p: OciExposedPort):
         res += f'/{p.proto}'
     return res
 
+async def podman_secret_option(ainjector: AsyncInjector, s: PodmanSecret):
+    res = f'--secret={s.name}'
+    for k in ['type', 'target', 'uid', 'gid', 'mode']:
+        if (v := getattr(s, k, None)) is not None:
+            if hasattr(v, 'value'):
+                v = v.value
+            res = res + f',{k}={v}'
+    return res
 
 async def podman_mount_option(ainjector: AsyncInjector, m: OciMount):
     res = f'--mount=type={m.mount_type}'
@@ -438,12 +448,27 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
         except Exception as e:
             raise ValueError(f'Invalid ISO string: {self.container_info["Created"]}')
 
+    async def _validate_mounts(self, image):
+        inspect_result = await self.podman('image', 'inspect', image, _log=False)
+        (info,) = json.loads(str(inspect_result))
+        volumes = info['Config'].get('Volumes', {})
+        volumepaths = { p for p in volumes.keys() }
+        mountpaths = { m.destination for m in self.mounts }
+        for k, v in volumes.items():
+            if v:
+                logger.warning(f'unexpected volume data: {k}: {v}')
+            if k not in mountpaths:
+                logger.warning(f'mount not provided for volume at {k}')
+        for m in self.mounts:
+            if m.destination not in volumepaths:
+                logger.warning(f'mount provided for {m.destination} was not requested by container')
 
     async def do_create(self):
         image = self.oci_container_image
         if isinstance(image, OciImage):
             await image.async_become_ready()
             image = image.oci_image_tag
+        await self._validate_mounts(image)
         if self.pod:
             await self.pod.async_become_ready()
         command_options = []
@@ -480,6 +505,8 @@ An OCI container implemented using ``podman``.  While it is possible to set up a
             options.append('--pod=' + self.pod.name)
         for m in self.mounts:
             options.append(await podman_mount_option(self.ainjector, m))
+        for secret in self.injector.filter_instantiate(PodmanSecret, ['type', 'target']):
+            options.append(await podman_secret_option(self.ainjector, secret[1]))
         options.extend(self.podman_options)
         return options
 
@@ -1193,6 +1220,40 @@ class ContainerfileImage(OciImage, no_auto_inject=True):
         return options
 
 __all__ += ['ContainerfileImage']
+
+class PodmanSecretType(Enum):
+    mount = 'mount'
+    env = 'env'
+
+@dataclasses.dataclass
+class PodmanSecret(Injectable):
+
+    name: str
+    type: PodmanSecretType = PodmanSecretType.mount
+    target: str = None
+    uid: str = '0'
+    gid: str = '0'
+    mode: str = '0'
+
+    def default_instance_injection_key(self):
+        return InjectionKey(PodmanSecret, type=self.type, target=self.target)
+
+    @classmethod
+    def default_class_injection_key(self):
+        return InjectionKey(PodmanSecret, type=self.type, target=self.target)
+
+    async def source_resolve(self, ainjector):
+        if self.source is None: return None
+        if isinstance(self.source, str):
+            return self.source
+        elif isinstance(self.source, InjectionKey):
+            return await ainjector.get_instance_async(self.source)
+        elif callable(self.source):
+            return await ainjector(self.source)
+        else:
+            return self.source
+
+__all__ += ['PodmanSecret']
 
 class PodmanVolume(HasContainerHostMixin, OciManaged):
 
