@@ -1,4 +1,4 @@
-# Copyright (C) 2023, Hadron Industries, Inc.
+# Copyright (C) 2023, 2026, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -6,17 +6,27 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
 
+def _patch_sh():
 
-import asyncio as _asyncio
-import sh as _sh
+    '''
+    Monkey patch the sh module to include __await__.
+    Also, by default for commands retrieved through this module set _bg=True and _bg_exc=False
+    '''
 
-'''
-Monkey patch the sh module to include __await__.
-Also, by default for commands retrieved through this module set _bg=True and _bg_exc=False
-'''
-try:
-    # Setting _async to true doesn't do much except it tends to override _bg, and too much of our code gets confused by that.
-    _sh_context = _sh.bake(_return_cmd=True, _bg=True, _bg_exc=False, _truncate_exc=False)
+    import asyncio as _asyncio
+    import sh as _sh
+    import packaging.version
+
+    def __getattr__(name):
+        val = getattr(_sh_context, name)
+        globals()[name] = val
+        return val
+
+    curversion = packaging.version.Version(_sh.__version__)
+    if curversion > packaging.version.Version('2.2.0'):
+        _sh_context = _sh.bake(_return_cmd=True, _bg=True, _bg_exc=False, _truncate_exc=False)
+        return __getattr__
+
     async def test_return_cmd():
         import warnings
         c = await _sh_context.ls(_async=True, _return_cmd=True)
@@ -30,24 +40,29 @@ try:
             return True
         except _sh.ErrorReturnCode:
             return False
-        
+
         return False
-    force_override_await = _asyncio.run(test_return_cmd())
-except AttributeError:
-    _sh_context = _sh(_bg=True, _bg_exc=False)
-    force_override_await = False
 
-def __getattr__(name):
-    val = getattr(_sh_context, name)
-    globals()[name] = val
-    return val
+    try:
+        # Setting _async to true doesn't do much except it tends to override _bg, and too much of our code gets confused by that.
+        _sh_context = _sh.bake(_return_cmd=True, _bg=True, _bg_exc=False, _truncate_exc=False)
+        force_override_await = _asyncio.run(test_return_cmd())
+    except AttributeError:
+        _sh_context = _sh(_bg=True, _bg_exc=False)
+        force_override_await = False
 
-def running_command_await(self):
-    loop = _asyncio.get_event_loop()
-    res =  yield from loop.run_in_executor(None, self.wait)
-    return res
+    def running_command_await(self):
+        loop = _asyncio.get_event_loop()
+        res =  yield from loop.run_in_executor(None, self.wait)
+        return res
 
-if not hasattr(_sh.RunningCommand, '__await__') or force_override_await:
-    _sh.RunningCommand.__await__ = running_command_await
-del running_command_await
-del force_override_await
+    if not hasattr(_sh.RunningCommand, '__await__') or force_override_await:
+        _sh.RunningCommand.__await__ = running_command_await
+
+    del running_command_await
+    del force_override_await
+
+    return __getattr__
+
+__getattr__ = _patch_sh()
+del _patch_sh
