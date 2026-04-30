@@ -81,6 +81,7 @@ def ainjector(ainjector):
     os.makedirs(state_dir, exist_ok=True)
     ainjector.add_provider(KvStore)
     yield ainjector
+    ainjector.close()
     shutil.rmtree(state_dir, ignore_errors=True)
 
 @async_test

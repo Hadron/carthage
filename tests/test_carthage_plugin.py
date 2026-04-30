@@ -19,12 +19,12 @@ resource_dir = os.path.dirname(__file__)
 
 
 def test_test_parameters(test_parameters):
-    return True
+    return
 
 
 @async_test
 async def test_async_test():
-    return True
+    return
 
 
 @async_test
