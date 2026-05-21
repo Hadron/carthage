@@ -82,7 +82,7 @@ class layout(CarthageLayout):
         oci_image_command = ['/sbin/init']
         add_provider(podman_push_images, True)
 
-        class customize_for_oci_container(DebianContainerCustomizations):
+        class customize_for_oci_container(FilesystemCustomization):
 
             @setup_task("Configure qemu user and group")
             async def configure_qemu_user(self):
