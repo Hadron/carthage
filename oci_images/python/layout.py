@@ -80,6 +80,7 @@ class layout(CarthageLayout):
         base_image = injector_access('CarthageImage')
         oci_image_tag = 'ghcr.io/hadron/carthage-libvirt:latest'
         oci_image_command = ['/sbin/init']
+        add_provider(podman_push_images, True)
 
         class customize_for_oci_container(DebianContainerCustomizations):
 
