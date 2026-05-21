@@ -1,0 +1,19 @@
+
+PLAY [carthage-image-build-140514405497024-l1] *********************************
+
+TASK [libvirt-server : hostname] ***********************************************
+[WARNING]: Host 'carthage-image-build-140514405497024-l1' is using the discovered Python interpreter at '/usr/bin/python3.13', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.19/reference_appendices/interpreter_discovery.html for more information.
+changed: [carthage-image-build-140514405497024-l1]
+
+TASK [libvirt-server : install software] ***************************************
+changed: [carthage-image-build-140514405497024-l1]
+
+TASK [libvirt-server : install fai-server] *************************************
+changed: [carthage-image-build-140514405497024-l1]
+
+TASK [libvirt-server : enable nested virtualization] ***************************
+changed: [carthage-image-build-140514405497024-l1]
+
+PLAY RECAP *********************************************************************
+carthage-image-build-140514405497024-l1 : ok=4    changed=4    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+

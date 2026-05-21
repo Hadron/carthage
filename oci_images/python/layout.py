@@ -13,6 +13,7 @@ import tempfile
 import shutil
 
 from carthage import *
+from carthage import sh
 from carthage.modeling import *
 from carthage.podman import *
 from carthage.oci import *
@@ -86,7 +87,8 @@ class layout(CarthageLayout):
 
             @setup_task("Configure qemu user and group")
             async def configure_qemu_user(self):
-                await self.run_command("/usr/bin/sed", "-i", """$a'user = "root"\ngroup = "root"\nremember_owner = 0\n'""", self.path/"etc/libvirt/qemu.conf")
+                with (self.path/"etc/libvirt/qemu.conf").open("a") as f:
+                    f.write("""user = "root"\ngroup = "root"\nremember_owner = 0\n""") 
 
             @setup_task("Configure qemu to allow access to default network")
             async def configure_qemu_default_network(self):
@@ -95,29 +97,25 @@ class layout(CarthageLayout):
                 shutil.copyfile(_dir/"bridge.conf", qemu_path/"bridge.conf")
 
 
-            @setup_task("Install virt-manager")
-            async def install_virt_manager(self):
-                bind_args = bind_args_for_mirror(self.config_layout.debian.stage1_mirror)
-                async with use_stage1_mirror(self):
-                    await self.container_command(*bind_args,
-                                                "apt", "update")
-                    await self.container_command(*bind_args,
-                                                "apt-get", "-y", "install", "virt-manager")
-
-                # Enable default network to avoid conflict with pasta
-                await self.container_command("/usr/bin/virsh", "net-autostart", "default")
-                await self.container_command("/usr/bin/virsh", "net-start", "default")
-
 
         class customize_for_oci_fs(FilesystemCustomization):
 
             @setup_task("Compile setgroups LD_PRELOAD library")
             async def compile_segroups_ld_preload(self):
-                shutil.copyfile(_dir/"disable_setgroups.c", self.path/"usr/local/src")
-                await self.run_command("/usr/bin/gcc", "-c", "-o", self.path/"usr/local/lib", self.path/"usr/local/src/disable_setgroups.c")
+                await sh.gcc( "-shared", "-o", self.path/"usr/local/lib/disable_setgroups.so", _dir/"disable_setgroups.c")
 
             @setup_task("Override libvirtd systemd service with setgroups disabled")
             async def install_config(self):
                 libvirtd_override_path = self.path/"etc/systemd/system/libvirtd.service.d"
                 libvirtd_override_path.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(_dir/"libvirtd.conf", libvirtd_override_path/"override.conf")
+
+            @setup_task("Disable systemd-networkd-wait-online")
+            async def disable_networkd_wait_online(self):
+                '''
+                For some reason systemd-networkd-wait-online does not consiter the pasta interface online.
+                '''
+                await self.run_command(
+                    'systemctl', 'mask',
+                    'systemd-networkd-wait-online')
+                
