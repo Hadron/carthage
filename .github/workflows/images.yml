@@ -17,11 +17,12 @@ jobs:
       matrix:
         include:
           - runs_on: ubuntu-24.04
+            image_suffix: ""
           - runs_on: ubuntu-24.04-arm
-            image_suffix: aarch64
+            image_suffix: "-aarch64"
     runs-on: ${{ matrix.runs_on }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v5
       - name: install dependencies
         run: |
           sudo apt -q update
@@ -35,16 +36,16 @@ jobs:
           
 
       - name: Build image
-        if: ${{ !matrix.image_suffix }}
+        if: ${{ matrix.image_suffix == '' }}
         run: |
           sudo PYTHONPATH=$(pwd) python3 ./bin/carthage-runner ./oci_images deploy --force-confirm
 
       - name: Build image (arm)
-        if: ${{ matrix.image_suffix }}
+        if: ${{ matrix.image_suffix == '-aarch64' }}
         env:
-          CARTHAGE_IMAGE_SUFFIX: aarch64
+          CARTHAGE_IMAGE_SUFFIX: ${{ matrix.image_suffix }}
         run: |
-          sudo PYTHONPATH=$(pwd) python3 ./bin/carthage-runner ./oci_images deploy --force-confirm
+          sudo CARTHAGE_IMAGE_SUFFIX="${CARTHAGE_IMAGE_SUFFIX}" PYTHONPATH=$(pwd) python3 ./bin/carthage-runner ./oci_images deploy --force-confirm
 
       - name: upload ansible log
         if: always()
