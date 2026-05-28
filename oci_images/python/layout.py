@@ -8,6 +8,7 @@
 # LICENSE for details.
 
 from pathlib import Path
+import os
 import sys
 import tempfile
 import shutil
@@ -25,6 +26,13 @@ import carthage.console
 import carthage_base
 _dir = Path(__file__).parent.parent
 
+
+def image_tag_with_suffix(tag):
+    suffix = os.environ.get("CARTHAGE_IMAGE_SUFFIX")
+    if not suffix:
+        return tag
+    return f"{tag}{suffix}"
+
 class layout(CarthageLayout):
     add_provider(carthage.ansible.ansible_log, str(_dir/"ansible.log"))
     add_provider(config_key('debian.distribution'), 'trixie')
@@ -38,7 +46,7 @@ class layout(CarthageLayout):
         The Debian distribution we are using with an sftp server installed. Used by the podman plugin to gain sftp access to volumes.
         '''
 
-        oci_image_tag = 'ghcr.io/hadron/carthage_volume_access:latest'
+        oci_image_tag = image_tag_with_suffix('ghcr.io/hadron/carthage_volume_access:latest')
         base_image = 'debian:trixie'
         add_provider(podman_push_images, True)
 
@@ -49,7 +57,7 @@ class layout(CarthageLayout):
     class OurBaseImage(PodmanImageModel):
         name = 'base-carthage'
         base_image =injector_access('VolumeAccess')
-        oci_image_tag = 'localhost/carthage_debian_base:latest'
+        oci_image_tag = image_tag_with_suffix('localhost/carthage_debian_base:latest')
 
         class install(ContainerCustomization):
             install_software = install_stage1_packages_task(['ansible', 'systemd'])
@@ -60,7 +68,7 @@ class layout(CarthageLayout):
 
     class CarthageImage(PodmanImageModel, carthage_base.CarthageServerRole):
         base_image = injector_access('OurBaseImage')
-        oci_image_tag = 'ghcr.io/hadron/carthage:latest'
+        oci_image_tag = image_tag_with_suffix('ghcr.io/hadron/carthage:latest')
         oci_image_command = ['/sbin/init']
 
         add_provider(podman_push_images, True)
@@ -79,7 +87,7 @@ class layout(CarthageLayout):
 
     class CarthageLibvirtImage(PodmanImageModel):
         base_image = injector_access('CarthageImage')
-        oci_image_tag = 'ghcr.io/hadron/carthage-libvirt:latest'
+        oci_image_tag = image_tag_with_suffix('ghcr.io/hadron/carthage-libvirt:latest')
         oci_image_command = ['/sbin/init']
         add_provider(podman_push_images, True)
 
