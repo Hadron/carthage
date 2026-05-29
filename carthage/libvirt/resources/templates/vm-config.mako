@@ -1,4 +1,5 @@
 <%
+import platform
 model = model_in or object()
 boot_order = 1
 memory_mb = getattr(model, 'memory_mb', 8192)
@@ -6,14 +7,13 @@ cpus = getattr(model, 'cpus', 1)
 nested_virt = getattr(model, 'nested_virt', False)
 firmware = getattr(model, 'firmware_type', 'efi')
 arch = getattr(model, 'architecture', 'x86_64')
-emulator_type = 'kvm'
-# We ought to detect if we are running on arm for real cross-platform but that is not implemented yet.
+native_arch = platform.machine()
+emulator_type = 'kvm' if native_arch == arch else 'qemu'
 match arch:
     case 'x86_64':
         machine = 'pc-q35-9.0'
     case 'aarch64':
         machine = 'virt-9.2'
-        emulator_type = 'qemu'
 disk_cache = getattr(model, 'disk_cache', 'writethrough')
 def is_spice():
     if console_needed is True or (isinstance(console_needed, str) and console_needed.startswith('spice')):
