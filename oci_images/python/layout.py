@@ -26,12 +26,22 @@ import carthage.console
 import carthage_base
 _dir = Path(__file__).parent.parent
 
+IMAGE_LABELS = {
+    "org.opencontainers.image.title": "Carthage",
+    "org.opencontainers.image.description": "Carthage is an Infrastructure as Code (IAC) framework.",
+    "org.opencontainers.image.source": "https://github.com/hadron/carthage",
+    "org.opencontainers.image.url": "https://github.com/hadron/carthage",
+    "org.opencontainers.image.vendor": "Hadron Industries, Inc.",
+    "org.opencontainers.image.authors": "Hadron Industries, Inc.",
+    "org.opencontainers.image.licenses": "LGPL-3.0-only",
+}
+
 
 def image_tag_with_suffix(tag):
     suffix = os.environ.get("CARTHAGE_IMAGE_SUFFIX")
     if not suffix:
         return tag
-    return f"{tag}{suffix}"
+    return f"{tag}-{suffix}"
 
 class layout(CarthageLayout):
     add_provider(carthage.ansible.ansible_log, str(_dir/"ansible.log"))
@@ -47,6 +57,8 @@ class layout(CarthageLayout):
         '''
 
         oci_image_tag = image_tag_with_suffix('ghcr.io/hadron/carthage_volume_access:latest')
+        oci_image_author = 'Hadron Industries, Inc.'
+        oci_labels = IMAGE_LABELS
         base_image = 'debian:trixie'
         add_provider(podman_push_images, True)
 
@@ -69,6 +81,8 @@ class layout(CarthageLayout):
     class CarthageImage(PodmanImageModel, carthage_base.CarthageServerRole):
         base_image = injector_access('OurBaseImage')
         oci_image_tag = image_tag_with_suffix('ghcr.io/hadron/carthage:latest')
+        oci_image_author = 'Hadron Industries, Inc.'
+        oci_labels = IMAGE_LABELS
         oci_image_command = ['/sbin/init']
 
         add_provider(podman_push_images, True)
@@ -88,6 +102,8 @@ class layout(CarthageLayout):
     class CarthageLibvirtImage(PodmanImageModel):
         base_image = injector_access('CarthageImage')
         oci_image_tag = image_tag_with_suffix('ghcr.io/hadron/carthage-libvirt:latest')
+        oci_image_author = 'Hadron Industries, Inc.'
+        oci_labels = IMAGE_LABELS
         oci_image_command = ['/sbin/init']
         add_provider(podman_push_images, True)
 
