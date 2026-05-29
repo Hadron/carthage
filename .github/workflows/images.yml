@@ -69,9 +69,6 @@ jobs:
             podman manifest create "${manifest}"
             podman manifest add "${manifest}" "docker://${target}-amd64"
             podman manifest add "${manifest}" "docker://${target}-aarch64"
-            podman manifest annotate --index "${manifest}" \
-              --annotation org.opencontainers.image.source=https://github.com/hadron/carthage \
-              --annotation "org.opencontainers.image.description=Carthage is an Infrastructure as Code (IAC) framework."
             podman manifest push --all "${manifest}" "docker://${target}"
             podman manifest rm "${manifest}"
           done
