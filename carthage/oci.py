@@ -34,13 +34,13 @@ __all__ += ['oci_container_network_config']
 
 class OciManaged(SetupTaskMixin, AsyncInjectable):
 
-    oci_labels: dict[str,str]
+    oci_labels: dict[str, str] = {}
 
     def __init__(self, *, readonly=None, **kwargs):
         if readonly is not None:
             self.readonly = readonly
         super().__init__(**kwargs)
-        self.oci_labels = {}
+        self.oci_labels = dict(getattr(type(self), 'oci_labels', {}))
         
     @property
     def deployable_names(self):

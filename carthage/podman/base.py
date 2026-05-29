@@ -855,6 +855,8 @@ class PodmanImage(OciImage, SetupTaskMixin, no_auto_inject=True):
             options.append('--change=CMD ' + cmd)
         if entrypoint:
             options.append('--change=ENTRYPOINT ' + entrypoint)
+        for key, value in self.oci_labels.items():
+            options.append(f'--change=LABEL {key}={value}')
         for k, v in self.injector.filter_instantiate(
                 OciEnviron, lambda k: 'name' in k.constraints and k.constraints.get('scope', 'all') in ('all','image')):
             options.append('--change=ENV '+v.assignment)
@@ -1181,6 +1183,8 @@ class ContainerfileImage(OciImage, no_auto_inject=True):
         layout = await self.ainjector.get_instance_async(InjectionKey(CarthageLayout, _optional=True))
         if layout_name := layout and layout.layout_name:
             options.extend(['--label', 'carthage.layout='+layout_name])
+        for key, value in self.oci_labels.items():
+            options.extend(['--label', f'{key}={value}'])
         # Instantiate a container simply so we can ask it for volume, mount, and environment options.
         with instantiation_not_ready():
             container = await self.ainjector(PodmanContainer, name='image_options', oci_container_image=self)
