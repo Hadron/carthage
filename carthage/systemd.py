@@ -40,6 +40,10 @@ local_type_map = dict(
     vlan=dict(
         netdev="vlan-netdev.mako",
         member_network="vlan-network.mako"),
+    macvlan=dict(
+        netdev="macvlan-netdev.mako",
+        member_network="macvlan-network.mako",
+    ),
     none=dict(network=None)
 )
 
