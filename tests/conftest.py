@@ -9,7 +9,7 @@
 import asyncio
 import pytest
 from carthage.image import ImageVolume, SshAuthorizedKeyCustomizations
-from carthage.vm import InstallQemuAgent
+from carthage.libvirt import InstallQemuAgent
 from carthage import base_injector, ConfigLayout, ssh, shutdown_injector
 from carthage.dependency_injection import AsyncInjector, DependencyProvider, InjectionKey
 from carthage.debian import DebianContainerImage, debian_container_to_vm

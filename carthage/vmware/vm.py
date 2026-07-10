@@ -489,6 +489,7 @@ inject(template=InjectionKey(Vm, role='template', _optional=True, _ready=False))
 
 from carthage.libvirt import vm_image_key
 
+
 @inject(image=vm_image_key)
 class vm_template_from_image(AsyncInjectable):
 

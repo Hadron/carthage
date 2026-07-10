@@ -12,7 +12,7 @@ __________
 VMs
 ___
 
-.. autoclass:: carthage.vm.VM
+.. autoclass:: carthage.libvirt.VM
 	       
 Hardware Configuration
 ______________________
