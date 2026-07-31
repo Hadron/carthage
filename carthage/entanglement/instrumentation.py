@@ -101,7 +101,8 @@ class CarthageRegistry(SyncStoreRegistry):
             asyncio.ensure_future(self.handle_tasks(value))
 
     async def handle_task(self, inspector, running=False, should_run=None, exception=None):
-        task_info = self.get_or_create(TaskInfo, inspector.instance_id, inspector.stamp)
+        task_info = self.get_or_create(
+            TaskInfo, inspector.instance_injector_id, inspector.stamp)
         task_info.running = running
         if should_run is None:
             try: should_run = await inspector.should_run(ainjector=None)
@@ -243,7 +244,7 @@ class InjectorInfo(StoreInSyncStoreMixin):
 @dataclasses.dataclass
 class TaskInfo(StoreInSyncStoreMixin):
 
-    instance_id: id = sync_property(constructor=True)
+    instance_injector_id: id = sync_property(constructor=True)
     stamp: str = sync_property(constructor=True)
     description: str = sync_property("")
     running: bool = sync_property(False)
@@ -252,7 +253,7 @@ class TaskInfo(StoreInSyncStoreMixin):
     last_failure: str = sync_property(None)
     
 
-    sync_primary_keys = ('instance_id', 'stamp')
+    sync_primary_keys = ('instance_injector_id', 'stamp')
     sync_registry = carthage_registry
     
 __all__ += ['TaskInfo']

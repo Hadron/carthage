@@ -763,7 +763,8 @@ class BaseCustomization(SetupTaskMixin, AsyncInjectable):
 
     def inspect_setup_tasks(self):
         return super().inspect_setup_tasks(
-            stamp_stem=self.stamp_stem+'-', instance_id=id(self.host))
+            stamp_stem=self.stamp_stem+'-',
+            instance_injector_id=id(self.host.injector))
 
     async def last_run(self):
         '''
@@ -911,14 +912,15 @@ class CustomizationWrapper(TaskWrapperBase):
             dependency_last_run = res
         return False, dependency_last_run
 
-    def inspect(self, obj, instance_id=None):
-        if instance_id is None: instance_id = id(obj)
+    def inspect(self, obj, instance_injector_id=None):
+        if instance_injector_id is None:
+            instance_injector_id = id(obj.injector)
         proxy = CustomizationInspectorProxy(obj, self.stamp)
         prev_inspector = None
         for t in self.customization.class_setup_tasks():
             prev_inspector = TaskInspector(task=t, from_obj=proxy, previous=prev_inspector)
             prev_inspector.stamp = self.stamp+'-'+prev_inspector.stamp
-            prev_inspector.instance_id = instance_id
+            prev_inspector.instance_injector_id = instance_injector_id
             yield prev_inspector
 
 

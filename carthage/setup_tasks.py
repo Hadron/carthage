@@ -179,20 +179,22 @@ class TaskInspector:
 
 
     @property
-    def instance_id(self):
-        "The ID of the instance on which this task is run; for Customizations, the ultimate host's ID, **not** the id of the instantiated :class:`carthage.machine.BaseCustomization`"
-        try: return self._instance_id
+    def instance_injector_id(self):
+        "The ID of the injector for the instance on which this task is run; for Customizations, the ultimate host's injector ID, **not** the injector ID of the instantiated :class:`carthage.machine.BaseCustomization`"
+        try: return self._instance_injector_id
         except AttributeError:
-            return id(self.from_obj)
+            return id(self.from_obj.injector)
 
-    @instance_id.setter
-    def instance_id(self, val):
-        self._instance_id = val
+    @instance_injector_id.setter
+    def instance_injector_id(self, val):
+        self._instance_injector_id = val
 
     def subtasks(self):
         from .machine import CustomizationWrapper
         if isinstance(self.task, CustomizationWrapper):
-            return self.task.inspect(self.from_obj, instance_id=self.instance_id)
+            return self.task.inspect(
+                self.from_obj,
+                instance_injector_id=self.instance_injector_id)
         return []
 
     async def dependency_last_run(self, ainjector):
@@ -827,14 +829,15 @@ class SetupTaskMixin(PathMixin, AsyncInjectable):
         except AttributeError:
             return logger
 
-    def inspect_setup_tasks(self, *, stamp_stem="", instance_id=None):
+    def inspect_setup_tasks(self, *, stamp_stem="", instance_injector_id=None):
         '''Iterates over the setup tasks of a ninstance and provides an inspector that can determine if a task would run and what its description is.
         '''
         prev = None
         for t in self.setup_tasks:
             prev = TaskInspector(task=t, from_obj=self, previous=prev)
             if stamp_stem: prev.stamp = stamp_stem+prev.stamp
-            if instance_id: prev.instance_id = instance_id
+            if instance_injector_id is not None:
+                prev.instance_injector_id = instance_injector_id
             yield prev
 
     @classmethod
@@ -1066,4 +1069,3 @@ def install_mako_task(relationship, cross_dependency=True, *, relationship_ready
                     return False
             return True
     return install
-
