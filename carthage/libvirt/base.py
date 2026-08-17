@@ -124,8 +124,13 @@ class Vm(Machine, SetupTaskMixin):
         from carthage.modeling import CarthageLayout
         template = _templates.get_template("vm-config.mako")
         await self.resolve_networking()
+        # Instantiate the network technology class when we don't have enough information to
+        # determine the interface without access to it. Links are instantiated either when
+        # carthage.libvirt needs to get the bridge name from the BridgeNetwork, or when
+        # carthage.libvirt is expected to manage the bridge.
         for i, link in self.network_links.items():
-            await link.instantiate(carthage.network.BridgeNetwork)
+            if getattr(link, 'host_interface', None) is None and getattr(link, 'other', None) is None:
+                await link.instantiate(carthage.network.BridgeNetwork)
         await self.gen_volume()
         layout = await self.ainjector.get_instance_async(InjectionKey(CarthageLayout, _ready=False, _optional=True))
         if layout:

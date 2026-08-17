@@ -134,15 +134,52 @@ def is_vnc():
     </filesystem>
     %endfor
 %for i, link in links.items():
-    <% if link.local_type: continue %>\
-        <interface type='bridge'>
+    %if not link.local_type:
+        <%
+            # Determine libvirt_type and interface_name  
+            host_iface = getattr(link, 'host_interface', None)
+            other_link = getattr(link, 'other', None)
+            
+            if host_iface:
+                libvirt_type = 'direct'
+                interface_name = host_iface
+            elif other_link:
+                other_local_type = getattr(other_link, 'local_type', None)
+                if other_local_type == 'bridge':
+                    libvirt_type = 'bridge'
+                    interface_name = other_link.interface
+                elif hasattr(other_link, 'macvlan_mode'):  
+                    # Support macvlan passthrough via hypervisor's physical port
+                    libvirt_type = 'direct'
+                    interface_name = other_link.interface
+                else:
+                    libvirt_type = 'direct'
+                    interface_name = other_link.interface
+            else:
+                libvirt_type = 'bridge'
+                interface_name = link.net_instance.bridge_name
+            
+            # Read macvlan_mode from link if explicitly set, otherwise use passthrough for direct type  
+            macvlan_mode = getattr(link, 'macvlan_mode', None)
+            if macvlan_mode is None and libvirt_type == 'direct':
+                macvlan_mode = 'passthrough'
+
+            model = getattr(link, 'model', None) or 'virtio'
+        %>
+        
+        <interface type='${libvirt_type}'>
 %if link.mac is not None:
       <mac address='${link.mac}'/>
-      % endif
-      <source bridge='${link.net_instance.bridge_name}'/>
-      <model type='virtio'/>
-      <target dev="${if_name(link.net)}" />
-    </interface>
+%endif
+%if libvirt_type == 'direct':
+            <source dev='${interface_name}' mode='${macvlan_mode}'/>
+%else:
+            <source bridge='${interface_name}'/>
+%endif
+            <model type='${model}'/>
+            <target dev="${if_name(link.net)}" />
+        </interface>
+    %endif
 % endfor
 <serial type='pty'>
       <target port='0'/>

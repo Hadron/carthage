@@ -59,6 +59,12 @@ class NoLocalLink(NetworkLink):
 
 
 @dataclasses.dataclass(init=False, eq=False)
+class MacvlanLink(NetworkLink):
+    '''A link corresponding to a macvlan interface created on the guest side'''
+    local_type = 'macvlan'
+
+
+@dataclasses.dataclass(init=False, eq=False)
 class XfrmLocalLink(NetworkLink):
 
     '''A link corresponding to a linux xfrm interface'''
