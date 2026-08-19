@@ -112,15 +112,13 @@ class layout(CarthageLayout):
             @setup_task("Configure qemu user and group")
             async def configure_qemu_user(self):
                 with (self.path/"etc/libvirt/qemu.conf").open("a") as f:
-                    f.write("""user = "root"\ngroup = "root"\nremember_owner = 0\n""") 
+                    f.write("""user = "root"\ngroup = "root"\nremember_owner = 0\n""")
 
             @setup_task("Configure qemu to allow access to default network")
             async def configure_qemu_default_network(self):
                 qemu_path = self.path/"etc/qemu"
                 qemu_path.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(_dir/"bridge.conf", qemu_path/"bridge.conf")
-
-
 
         class customize_for_oci_fs(FilesystemCustomization):
 
@@ -142,4 +140,9 @@ class layout(CarthageLayout):
                 await self.run_command(
                     'systemctl', 'mask',
                     'systemd-networkd-wait-online')
-                
+
+        class customize_for_guestfs(FilesystemCustomization):
+
+            @setup_task("Install kernel for the guestfs VM")
+            async def install_kernel(self):
+                await self.run_command('apt', '-y', 'install', 'linux-image-amd64')
