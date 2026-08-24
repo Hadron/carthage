@@ -115,7 +115,9 @@ async def install_deb(*, injector, **kwargs):
 @inject(injector=Injector)
 async def install_pypi(*, sudo=True,
                        allow_system=True,
+                       ignore_installed=True,
                        injector, **kwargs):
+    plugins = list(injector(plugin_iterator))
     stem = sh
     foreground = True
     if sudo:
@@ -125,8 +127,9 @@ async def install_pypi(*, sudo=True,
         if 'pypi' in dependency: requirements.append(dependency['pypi'])
     options = []
     if allow_system: options.append('--break-system-packages')
+    if ignore_installed: options.append('--ignore-installed')
     if requirements:
-        await stem.pip3(
+        stem.pip3(
             'install',
             *options,
             *requirements,
@@ -139,6 +142,10 @@ async def install_carthage_dependencies(
         *, ainjector):
     await ainjector(
         install_deb,
+        minimize_os_packages=minimize_os_packages,
+        valid_dependency_types=valid_dependency_types)
+    await ainjector(
+        install_pypi,
         minimize_os_packages=minimize_os_packages,
         valid_dependency_types=valid_dependency_types)
     
