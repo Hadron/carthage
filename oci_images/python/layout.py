@@ -145,4 +145,4 @@ class layout(CarthageLayout):
 
             @setup_task("Install kernel for the guestfs VM")
             async def install_kernel(self):
-                await self.run_command('apt', '-y', 'install', 'linux-image-amd64')
+                await self.run_command('apt', '-y', 'install', 'linux-image-generic')
