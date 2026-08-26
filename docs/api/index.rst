@@ -8,6 +8,7 @@ API Documentation
    modeling
    setup
    networking
+   events
    machines
    oci
    images

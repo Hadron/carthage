@@ -8,6 +8,8 @@ Dependency Injection Module
 .. automodule:: carthage.dependency_injection.introspection
    :members:
                   
+.. _injection-events:
+
 Events
 ******
 
