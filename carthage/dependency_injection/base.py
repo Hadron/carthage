@@ -526,7 +526,7 @@ Return the first injector in our parent chain containing *k* or None if there is
         is an error if the injector hierarchy provides no dependency
         for *key* at the time *get_instance* is called. If *defer_dependencies* is false, then *key.defer* is ignored. *defer_dependencies* is True when *get_instance* is called while instantiating a class and handling its dependencies.
         
-        Note that If any of *loop* or *futures*,  are provided, both must be provided.  If *loop* is provided, then the return may be a future.
+        Note that If any of *loop* or *futures*  are provided, both must be provided.  If *loop* is provided, then the return may be a future.
 
         '''
         if loop:
