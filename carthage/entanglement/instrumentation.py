@@ -1,4 +1,4 @@
-# Copyright (C)  2022, 2023, Hadron Industries, Inc.
+# Copyright (C)  2022, 2023, 2026, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -26,6 +26,25 @@ from ..dependency_injection import InjectionKey, Injector, is_obj_ready, get_dep
 from ..setup_tasks import SetupTaskMixin, _iso_time
 
 __all__ = []
+
+
+_instrumentation_callbacks = []
+
+
+def entanglement_instrumentation(cls):
+    '''Register a callback to instrument instances of *cls*.
+
+    The callback receives the instantiated value and the
+    :class:`CarthageRegistry` handling its update.
+    '''
+    def register(callback):
+        _instrumentation_callbacks.append((cls, callback))
+        return callback
+    return register
+
+
+__all__ += ['entanglement_instrumentation']
+
 
 def encode_injection_key(k):
     # Note that encoding and decoding an InjectionKey is not an identity.  In particular, the type will become a string.
@@ -90,7 +109,7 @@ class CarthageRegistry(SyncStoreRegistry):
             provider_info.state = InstantiationProgress.in_progress
 
         else: #dependency_final
-            if is_obj_ready(inspector.get_value(ready=False)):
+            if is_obj_ready(inspector.get_value_no_instantiate()):
                 provider_info.state = InstantiationProgress.ready
             else: provider_info.state = InstantiationProgress.not_ready
         try: provider_info.value_injector_id = id(inspector.get_value_no_instantiate().injector)
@@ -99,6 +118,9 @@ class CarthageRegistry(SyncStoreRegistry):
         value = inspector.get_value_no_instantiate()
         if isinstance(value, SetupTaskMixin):
             asyncio.ensure_future(self.handle_tasks(value))
+        for cls, callback in _instrumentation_callbacks:
+            if isinstance(value, cls):
+                callback(value, self)
 
     async def handle_task(self, inspector, running=False, should_run=None, exception=None):
         task_info = self.get_or_create(
