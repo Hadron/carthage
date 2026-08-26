@@ -14,7 +14,7 @@ from carthage import inject, Injector
 
 class EntanglementConfig(ConfigSchema, prefix='entanglement'):
 
-    run_server: bool = True
+    run_server: bool = False
     ws_port:int = None
     ws_address:str = "127.0.0.1"
     port:int = 39102
