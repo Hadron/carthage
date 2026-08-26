@@ -13,6 +13,8 @@ Carthage Networking Module
 	       
 .. autoclass:: carthage.network.V4Config
 
+.. _network-events:
+
 Network Events
 ______________
 

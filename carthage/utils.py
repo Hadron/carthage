@@ -304,13 +304,41 @@ def carthage_main_setup(parser=None, unknown_ok=False, ignore_import_errors=Fals
     return result
 
 
+def carthage_main_register_loop(base_injector, loop=None):
+    '''Register the asyncio event loop on *base_injector* and emit the *loop_ready* event.
+
+    If *loop* is None, use the loop already registered on *base_injector* if
+    there is one.  If none is registered, create a new one.
+
+    The loop is registered under ``InjectionKey(asyncio.AbstractEventLoop)``.
+    Once the loop is registered, a ``loop_ready`` event is emitted toward
+    ``InjectionKey(asyncio.AbstractEventLoop)`` with *loop* as the target.
+    The event is also dispatched to ``InjectionKey(Injector)``.
+
+    If a loop is already registered, this is a no-op and the existing loop is
+    returned without emitting an event.
+    '''
+    from . import InjectionKey, Injector
+    if loop is None:
+        loop = base_injector.loop
+    if loop is None:
+        loop = asyncio.new_event_loop()
+    if base_injector.loop is None:
+        base_injector.add_provider(
+            InjectionKey(asyncio.AbstractEventLoop), loop, close=False)
+        base_injector.emit_event(
+            InjectionKey(asyncio.AbstractEventLoop),
+            'loop_ready', loop,
+            adl_keys={InjectionKey(Injector)},
+            loop=loop)
+    return loop
+
+
 def carthage_main_run(func, *args, **kwargs):
-    from . import base_injector, AsyncInjector, shutdown_injector, InjectionKey
+    from . import base_injector, AsyncInjector, shutdown_injector, Injector
     from .config import inject_config
     inject_config(base_injector)
-    if not base_injector.loop:
-        base_injector.add_provider(InjectionKey(asyncio.AbstractEventLoop), asyncio.new_event_loop(), close=False)
-    loop = base_injector.loop
+    loop = carthage_main_register_loop(base_injector)
     ainjector = base_injector(AsyncInjector)
     try:
         return loop.run_until_complete(ainjector(func, *args, **kwargs))
@@ -467,7 +495,8 @@ def source_filename_for(obj):
 
 __all__ = ['when_needed', 'possibly_async', 'permute_identifier', 'memoproperty',
            'add_carthage_arguments', 'carthage_main_argparser',
-           'carthage_main_setup', 'carthage_main_run',
+           'carthage_main_setup', 'carthage_main_register_loop',
+           'carthage_main_run',
            'validate_shell_safe',
            'is_optional_type',
            'TemporaryMountPoint',
