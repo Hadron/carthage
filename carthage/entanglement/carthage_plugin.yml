@@ -1,0 +1,5 @@
+name: carthage.entanglement
+# We don't have a great way to specify the entanglement dependency
+# Some of uor projects use internal Debian packages
+# Some use the git repo.
+# Leae that to the caller.
