@@ -43,7 +43,7 @@ def is_vnc():
   <vcpu placement='static' >${cpus}</vcpu>
 %if arch == 'aarch64':
 <cpu mode='custom' match='exact' check='none'>
-  <model fallback='allow'>cortex-a57</model>
+  <model fallback='allow'>cortex-a53</model>
   <topology sockets='1' cores='${cpus}' threads='1'/>
 </cpu>
 %elif emulator_type == 'kvm':
