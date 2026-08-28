@@ -41,17 +41,22 @@ def is_vnc():
 %endif
 
   <vcpu placement='static' >${cpus}</vcpu>
-%if emulator_type == 'kvm':
-<cpu mode='host-model'>
-  <topology sockets='1' cores='${cpus}' threads='1' />
-     %if nested_virt:
-     <feature policy='require' name='vmx' />
-     %endif
+%if arch == 'aarch64':
+<cpu mode='custom' match='exact' check='none'>
+  <model fallback='allow'>cortex-a57</model>
+  <topology sockets='1' cores='${cpus}' threads='1'/>
 </cpu>
-%elif arch == 'aarch64':
-<cpu mode="custom" match="exact" check="none">
-    <model fallback="allow">cortex-a57</model>
-  </cpu>
+%elif emulator_type == 'kvm':
+<cpu mode='host-model'>
+  <topology sockets='1' cores='${cpus}' threads='1'/>
+  %if nested_virt:
+  <feature policy='require' name='vmx'/>
+  %endif
+</cpu>
+%else:
+<cpu mode='maximum'>
+  <topology sockets='1' cores='${cpus}' threads='1'/>
+</cpu>
 %endif
 <os ${"firmware='efi'" if firmware.startswith('efi') else ""} >
     <type arch='${arch}' machine='${machine}'>hvm</type>
