@@ -33,7 +33,7 @@ try:
         return False
     force_override_await = _asyncio.run(test_return_cmd())
 except AttributeError:
-    _sh_context = _sh(_bg=True, _bg_exc=False)
+    _sh_context = _sh(_bg=True, _bg_exc=False, _truncate_exc=False)
     force_override_await = False
 
 def __getattr__(name):
