@@ -75,7 +75,8 @@ async def test_gre_networking(ainjector):
         @provides("net_1")
         class net_1(NetworkModel):
             v4_config = V4Config(
-                network='10.0.0.0/8')
+                network='10.0.0.0/8',
+                gateway='10.0.0.1')
 
         @provides('tunnel_net')
         class tunnel_net(NetworkModel):
@@ -93,10 +94,85 @@ async def test_gre_networking(ainjector):
                     key="34",
                     v4_config=V4Config(
                         address='172.31.0.1'),
-                    routes=[injector_access(net_1)])
+                    destinations=[injector_access(net_1)])
     ainjector.add_provider(layout)
     l = await ainjector.get_instance_async(layout)
-    assert l.net_1 in l.machine.network_links['gre0'].routes
+    link = l.machine.network_links['gre0']
+    assert l.net_1 in link.destinations
+    assert link.routes is None
+    # The link's own network gets a [Route] block, as does each tunnel
+    # destination (through the destination's gateway).
+    rendering = _render_network(link)
+    assert rendering.count('[Route]') == 2
+    assert 'Destination=172.31.0.0/29' in rendering
+    assert 'Destination=10.0.0.0/8' in rendering
+    assert 'Gateway=10.0.0.1' in rendering
+
+
+def _render_network(link):
+    '''Render the systemd network file for *link*.'''
+    import logging
+    from carthage.systemd import templates_for_link, NotNeeded
+    from carthage.utils import mako_lookup
+    template = mako_lookup.get_template(templates_for_link(link)['network'])
+    return template.render(link=link, logger=logging, NotNeeded=NotNeeded)
+
+
+@async_test
+async def test_link_routes(ainjector):
+    '''Static routes: (Network, gateway) and (IPv4Network, IPv4Address)
+    pairs render [Route] blocks with the network's v4_config.network as
+    the destination.'''
+    class layout(CarthageLayout):
+
+        @provides("net")
+        class net(NetworkModel):
+            v4_config = V4Config(network='10.0.0.0/8')
+
+        class machine(MachineModel):
+            class net_config(NetworkConfigModel):
+                add('eth0', net=net,
+                    mac=None,
+                    v4_config=V4Config(address='10.0.0.5'),
+                    routes=[
+                        (injector_access(net), '10.0.0.1'),
+                        (IPv4Network('192.168.0.0/16'),
+                         IPv4Address('10.0.0.2')),
+                    ])
+
+    l = await ainjector(layout)
+    link = l.machine.network_links['eth0']
+    # resolve_deferred turns tuples into lists
+    assert [l.net, '10.0.0.1'] in link.routes
+    assert [IPv4Network('192.168.0.0/16'), IPv4Address('10.0.0.2')] in link.routes
+
+    rendering = _render_network(link)
+    assert rendering.count('[Route]') == 2
+    assert 'Destination=10.0.0.0/8' in rendering
+    assert 'Gateway=10.0.0.1' in rendering
+    assert 'Destination=192.168.0.0/16' in rendering
+    assert 'Gateway=10.0.0.2' in rendering
+
+
+@async_test
+async def test_link_no_routes_omits_route_block(ainjector):
+    '''A link with no routes and no gateway renders no [Route] block.'''
+    class layout(CarthageLayout):
+
+        @provides("net")
+        class net(NetworkModel):
+            v4_config = V4Config(network='10.0.0.0/8')
+
+        class machine(MachineModel):
+            class net_config(NetworkConfigModel):
+                add('eth0', net=net,
+                    mac=None,
+                    v4_config=V4Config(address='10.0.0.5'))
+
+    l = await ainjector(layout)
+    link = l.machine.network_links['eth0']
+    assert link.routes is None
+    assert '[Route]' not in _render_network(link)
     
 @async_test
 async def test_address_within(ainjector):

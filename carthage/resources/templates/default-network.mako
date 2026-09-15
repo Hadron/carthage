@@ -2,6 +2,7 @@
 
 <%block name="network" args="link">
 <%
+from carthage.network import Network
 from carthage.systemd import NotNeeded
 v4_config = link.merged_v4_config
 if v4_config.pool:
@@ -43,6 +44,18 @@ Gateway=${v4_config.gateway}
 %if v4_config.metric:
 Metric=${v4_config.metric}
 %endif
+%endif
+%if link.routes:
+<%nontrivial = True%>
+% for route in link.routes:
+[Route]
+% if isinstance(route[0], Network):
+Destination=${str(route[0].v4_config.network)}
+% else:
+Destination=${str(route[0])}
+% endif
+Gateway=${str(route[1])}
+% endfor
 %endif
 <%if not nontrivial:
     raise NotNeeded

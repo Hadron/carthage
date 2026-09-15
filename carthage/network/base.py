@@ -639,6 +639,11 @@ class NetworkLink:
     untagged_vlan: typing.Optional[int]
     allowed_vlans: typing.Optional[VlanList]
     v4_config: typing.Optional[V4Config] = dataclasses.field(default=None, repr=False)
+    #: Static routes for this link: a sequence of (destination, gateway)
+    #: pairs, where *destination* is either a :class:`Network` (its
+    #: ``v4_config.network`` is used as the destination) or an
+    #: ``IPv4Network``, and *gateway* is an ``IPv4Address``.
+    routes: typing.Optional[typing.Sequence] = None
     lldp: typing.Optional[bool] = dataclasses.field(default=True, repr=False)
     required: typing.Optional[bool] = dataclasses.field(default=True, repr=False)
     #: If true, this interface is essential and networkd should keep it up even if a dhcp lease expires or networkd is stopped
@@ -992,6 +997,10 @@ def hash_network_links(network_links: dict[str, NetworkLink]):
             result += v.untagged_vlan
         if v.v4_config:
             result += hash_subitem(v.v4_config.__dict__.values())
+        if v.routes:
+            for dest, gateway in v.routes:
+                result += hash_subitem(str(getattr(dest, 'name', dest)))
+                result += hash_subitem(str(gateway))
         for attr in ('speed', 'portchannel_member', 'breakout_mode'):
             result += hash_subitem(getattr(v, attr, ''))
         try:

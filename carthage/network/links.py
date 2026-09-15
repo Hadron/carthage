@@ -21,7 +21,7 @@ class GRELink(NetworkLink):
     key: str = None
     local_type = "gre"
     required  = False
-    routes: list[Network] = dataclasses.field(default_factory=lambda: [])
+    destinations: list[Network] = dataclasses.field(default_factory=lambda: [])
 
 class BondLink(NetworkLink):
 
