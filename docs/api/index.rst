@@ -14,3 +14,4 @@ API Documentation
    images
    ssh
    files
+   plugins

@@ -1,10 +1,72 @@
-# Copyright (C) 2021, 2022, 2023, 2024, Hadron Industries, Inc.
+# Copyright (C) 2021, 2022, 2023, 2024, 2026, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the file
 # LICENSE for details.
+
+'''
+Carthage Plugins
+================
+
+A Carthage plugin is a package that adds functionality to Carthage: new
+roles, customizations, images, or other model classes, typically
+alongside resource files (templates, playbooks, and the like) and a
+configuration fragment applied to the :class:`~carthage.ConfigLayout`.
+A plugin is described by a ``carthage_plugin.yml`` file and optionally
+contains python code.
+
+The ``carthage_plugin.yml`` file has the following fields:
+
+* ``name``:  The name of the plugin.  The name must be unique; it is
+  used to identify an already loaded plugin.
+
+* ``dependencies``:  A list of system dependencies of the plugin, in
+  the same form as a :class:`~carthage.ConfigLayout` configuration.
+
+* ``config``:  A fragment of :class:`~carthage.ConfigLayout`
+  configuration that is loaded when the plugin is loaded.
+
+* ``python``:  A relative path, under the plugin directory, that is
+  added to ``sys.path`` before the plugin's python code is imported.
+  This is how a plugin that declares a *package* makes that package
+  importable.
+
+* ``package``:  The name of a python package to import in order to
+  load the plugin's python code.
+
+* ``resource_dir``:  The directory containing the plugin's resource
+  files.  Defaults to the plugin directory.
+
+If ``package`` is not given, the plugin directory itself is treated
+as the root of the python code: ``carthage_plugin.py`` is imported as
+the plugin's root module, and modules under a ``python`` directory in
+the plugin directory are its submodules.  The plugin's
+:meth:`~carthage.plugins.CarthagePlugin.package` attribute is ``None``
+when the plugin has no python code at all.
+
+A plugin's python code may define a ``carthage_plugin(injector)``
+function (in ``carthage_plugin.py``, or in a module named
+``carthage_plugin`` within the declared package).  When present, the
+function is invoked with the :class:`~carthage.dependency_injection.Injector`
+the plugin is being loaded into and may either return a
+:class:`~carthage.plugins.CarthagePlugin` object to be registered or
+otherwise set up the plugin in the injector.  Otherwise a
+:class:`~carthage.plugins.CarthagePlugin` object is constructed from
+the metadata.
+
+Plugins are loaded with :func:`~carthage.plugins.load_plugin`, which
+returns a :class:`~carthage.plugins.CarthagePlugin` object.  Loading
+a plugin that is already loaded returns the existing object.  The
+:class:`~carthage.plugins.PluginMappings` mechanism, configured in the
+:class:`~carthage.ConfigLayout`, can rewrite plugin specifications
+before they are loaded, which is useful for proprietary plugins or
+choosing between https and ssh access to a git server.
+
+For use in tests, :func:`~carthage.pytest.load_test_plugin` loads a
+plugin relative to a test file.
+'''
 
 from __future__ import annotations
 import dataclasses
@@ -95,9 +157,9 @@ class PluginMappings(Injectable):
         else:
             self.late_mappings.insert(0, PluginMapping(**mapping))
 
-    def map(self, spec):
+    def map(self, spec, relative_to: typing.Optional[Path] = None):
         '''
-        Map the URL in *spec*.
+        Map the URL in *spec*.  *relative_to* is a directory that a relative path resulting from mapping is interpreted against, if any.
         If after mapping there is no ``:`` in the URL, convert to a path spec.
         '''
         if 'url' not in  spec:
@@ -110,7 +172,7 @@ class PluginMappings(Injectable):
             url, matched = mapping.map_url(url)
             if matched and mapping.stop: break
         if url != spec['url']:
-            result = _parse_plugin_spec(url)
+            result = _parse_plugin_spec(url, relative_to=relative_to)
             result.update({k:spec[k] for k in spec.keys() if (k not in result) and k != 'url'})
             return result
         return spec
@@ -151,6 +213,18 @@ class CarthagePlugin(Injectable):
     def contains_resource(self, resource):
         return bool(self._get_resource(resource))
 
+    def import_module(self, name: str):
+        '''
+        Import a module of this plugin, relative to the plugin's root python module.  For a plugin that declares a package, *name* is a module within that package.  For a plugin without a declared package, submodules are resolved relative to the directory the plugin was loaded from.
+
+        :returns: the imported module.
+        :raises ImportError: if this plugin has no python module, or *name* cannot be imported.
+        '''
+        if self.package is None:
+            raise ImportError(f"plugin {self.name} has no python package to import from")
+        name = re.sub(r'^\.+/?', '', name)
+        return importlib.import_module(f'.{name}', package=self.package.__name__)
+
     # Yes this fails for zips and similar.
     # If we care, we'd need to go to a lot of trouble to unpack things,
     # because we do need to make directories available for things like ansible
@@ -159,11 +233,11 @@ class CarthagePlugin(Injectable):
         return self._get_resource(resource)
 plugin_spec = Union[str, dict, Path]
 
-def _parse_plugin_spec(spec: plugin_spec):
+def _parse_plugin_spec(spec: plugin_spec, relative_to: typing.Optional[Path] = None):
     if isinstance(spec, dict):
         return spec
     if hasattr(spec, '__fspath__'):
-        return dict(type='path', path=spec.resolve())
+        return dict(type='path', path=_resolve_spec_path(spec, relative_to))
     assert isinstance(spec, str)
     if ':' in spec:
         prefix = spec.partition(':')[0]
@@ -171,13 +245,24 @@ def _parse_plugin_spec(spec: plugin_spec):
             return dict(type='git', url=spec)
         raise NotImplementedError(f'unrecognized plugin specification: {spec}')
     if '/' in spec or spec == '.' or spec == '..':
-        return dict(type='path', path=Path(spec).resolve())
+        return dict(type='path', path=_resolve_spec_path(spec, relative_to))
     return dict(type='module', name=spec)
+
+def _resolve_spec_path(spec, relative_to: typing.Optional[Path] = None) -> Path:
+    '''
+    Resolve the path of a path-style plugin specification.  A relative path is interpreted relative to *relative_to* when supplied, otherwise relative to the current working directory.
+    '''
+    path = Path(spec)
+    if not path.is_absolute():
+        if relative_to is not None:
+            path = Path(relative_to).joinpath(path)
+    return path.resolve()
 
 @inject(injector=Injector)
 def load_plugin(spec: plugin_spec,
                 *, injector,
-                ignore_import_errors=False):
+                ignore_import_errors=False,
+                relative_to: typing.Optional[Path] = None):
 
     '''
     Load a plugin from a plugin specification:
@@ -190,12 +275,20 @@ def load_plugin(spec: plugin_spec,
 
     * A ``git+ssh`` URL to a git repository
 
+    :param spec:
+        The plugin specification.  If it is a relative path, it is interpreted relative to *relative_to*.
+
     :param ignore_import_errors:  If True, succeed and register the plugin even if the python code raises.  This is intended to allow the plugin to be loaded so its metadata can be examined to determine dependencies.  Obviously the plugin is unlikely to be functional in such a state.
+
+    :param relative_to:
+        A directory that a relative path specification is interpreted against.  If None, relative paths are interpreted against the current working directory.
+
+    :returns: the :class:`CarthagePlugin` representing the loaded plugin, whether it was loaded by this call or was already loaded.
     '''
-    spec = _parse_plugin_spec(spec)
+    spec = _parse_plugin_spec(spec, relative_to=relative_to)
     orig_spec = spec
     plugin_mappings = injector.get_instance(PluginMappings)
-    spec = plugin_mappings.map(spec)
+    spec = plugin_mappings.map(spec, relative_to=relative_to)
     if spec != orig_spec:
         logger.debug('Mapped %s to %s', orig_spec, spec)
     
@@ -229,11 +322,12 @@ def handle_path_url(spec: dict, injector, ignore_import_errors):
         raise ValueError(f'metadata must contain a name when loading plugin from path')
     # Stop early if already loaded
     try:
-        injector.get_instance(InjectionKey(CarthagePlugin, name=metadata['name']))
-        logger.debug(f'Plugin {metadata["name"]} already loaded')
-        return
+        plugin = injector.get_instance(InjectionKey(CarthagePlugin, name=metadata['name']))
     except KeyError:
         pass
+    else:
+        logger.debug(f'Plugin {metadata["name"]} already loaded')
+        return plugin
     _handle_plugin_config(injector, metadata, metadata_path, ignore_import_errors=ignore_import_errors)
     try:
         python_path = metadata['python']
@@ -373,9 +467,11 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
     else:
         name = package.__name__
     try:
-        injector.get_instance(InjectionKey(CarthagePlugin, name=name))
-        return # already loaded
-    except KeyError: pass
+        plugin = injector.get_instance(InjectionKey(CarthagePlugin, name=name))
+    except KeyError:
+        pass
+    else:
+        return plugin # already loaded
     if not config_handled:
         _handle_plugin_config(injector=injector, metadata=metadata, path=metadata_path, ignore_import_errors=ignore_import_errors)
     try:
@@ -407,6 +503,7 @@ def load_plugin_from_package(package: typing.Optional[types.ModuleTyp],
     injector.add_provider(
         InjectionKey(CarthagePlugin, name=plugin_object.name),
         plugin_object)
+    return plugin_object
 
 
 def _handle_plugin_config(injector, metadata, path, ignore_import_errors):

@@ -1,4 +1,4 @@
-# Copyright (C) 2018, 2019, 2021, 2022, Hadron Industries, Inc.
+# Copyright (C) 2018, 2019, 2021, 2022, 2026, Hadron Industries, Inc.
 # Carthage is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License version 3
 # as published by the Free Software Foundation. It is distributed
@@ -13,8 +13,11 @@ import json
 import pytest
 import sys
 import time
+from pathlib import Path
 
+from . import base_injector
 from .dependency_injection import inject, InjectionKey
+from .plugins import load_plugin, plugin_spec
 
 from _pytest.reports import TestReport
 from _pytest.nodes import Node
@@ -196,4 +199,32 @@ async def subtest_controller(request, target, pytest_args,
             n.ihook.pytest_runtest_logreport(report=report)
 
 
-__all__ = ['async_test', 'subtest_controller', 'TestTiming']
+def load_test_plugin(test_file, spec: plugin_spec, *,
+                     injector=base_injector):
+    '''
+    Load a Carthage plugin for use in tests.  *test_file* is the path to the
+    source file from which this function is called, typically
+    ``__file__``.  *spec* is a plugin specification in the same form accepted
+    by :funcref:`carthage.plugins.load_plugin`.  A relative path in *spec* is
+    interpreted relative to the directory containing *test_file* rather than
+    the current working directory, so a plugin checked out next to the test
+    tree can be referenced without dependence on where pytest was invoked.
+
+    The plugin is loaded, and its configuration applied, into *injector*
+    before anything else runs with that injector.  This function is
+    intended to be called at module level in a ``conftest.py`` file, so that
+    plugin modules are available while test modules are collected and
+    imported, including from the bodies of test modules that use them to
+    define layouts.
+
+    :returns: the :class:`carthage.plugins.CarthagePlugin` for the loaded
+        plugin, which may be used to access the plugin's resources and
+        python modules, e.g. via :funcref:`carthage.plugins.CarthagePlugin.import_module`.
+
+    '''
+    test_file = Path(test_file)
+    return injector(load_plugin, spec,
+                    relative_to=test_file.parent)
+
+
+__all__ = ['async_test', 'subtest_controller', 'TestTiming', 'load_test_plugin']
