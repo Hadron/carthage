@@ -70,7 +70,6 @@ class ListMachines(MachineCommand):
     async def run(self, args):
         machines = self.ainjector.filter(Machine, ['host'])
         for m in machines:
-            breakpoint()
             print(m.host)
 
 class SleepCommand(CarthageRunnerCommand):
