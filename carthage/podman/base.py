@@ -46,6 +46,8 @@ def podman_port_option(p: OciExposedPort):
     return res
 
 async def podman_secret_option(ainjector: AsyncInjector, s: PodmanSecret):
+    if s.source:
+        await s.provision(ainjector)
     res = f'--secret={s.name}'
     for k in ['type', 'target', 'uid', 'gid', 'mode']:
         if (v := getattr(s, k, None)) is not None:
@@ -1235,6 +1237,8 @@ class PodmanSecretType(Enum):
 class PodmanSecret(Injectable):
 
     name: str
+    source: object = None
+
     type: PodmanSecretType = PodmanSecretType.mount
     target: str = None
     uid: str = '0'
@@ -1248,14 +1252,27 @@ class PodmanSecret(Injectable):
     def default_class_injection_key(self):
         return InjectionKey(PodmanSecret, type=self.type, target=self.target)
 
+    async def store(self, value):
+        r = await sh.podman('secret', 'exists', self.name, _ok_code=[0, 1], _async=True, _return_cmd=True)
+        if r.exit_code == 0:
+            await sh.podman('secret', 'create', '--replace', self.name, '-', _in=value, _async=True)
+        else:
+            await sh.podman('secret', 'create', self.name, '-', _in=value, _async=True)
+
+    async def provision(self, ainjector):
+        value = await self.source_resolve(ainjector)
+        if not isinstance(value, str):
+            raise ValueError(f'unrecognized secret value: {value}')
+        await self.store(value)
+
     async def source_resolve(self, ainjector):
         if self.source is None: return None
         if isinstance(self.source, str):
             return self.source
         elif isinstance(self.source, InjectionKey):
-            return await ainjector.get_instance_async(self.source)
+            return await ainjector.get_instance_async(self.source, self.name)
         elif callable(self.source):
-            return await ainjector(self.source)
+            return await ainjector(self.source, ainjector, self.name)
         else:
             return self.source
 
